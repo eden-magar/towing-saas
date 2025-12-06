@@ -25,8 +25,25 @@ export default function LoginPage() {
       return
     }
 
-    // התחברות הצליחה - מעבר לדף הראשי
-    window.location.href = '/dashboard'
+    // בדוק את התפקיד של המשתמש
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    if (userError || !userData) {
+      setError('לא נמצא משתמש במערכת')
+      setLoading(false)
+      return
+    }
+
+    // הפנה לפי תפקיד
+    if (userData.role === 'driver') {
+      window.location.href = '/driver'
+    } else {
+      window.location.href = '/dashboard'
+    }
   }
 
   return (
