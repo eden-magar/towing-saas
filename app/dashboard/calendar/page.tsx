@@ -1,107 +1,120 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
+import { useAuth } from '../../lib/AuthContext'
+import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
+import { getDrivers } from '../../lib/queries/drivers'
+import { TowWithDetails } from '../../lib/queries/tows'
+import { DriverWithDetails } from '../../lib/types'
 import { 
   ChevronRight,
   ChevronLeft,
   Plus,
-  Calendar as CalendarIcon,
   Clock,
   MapPin,
   Truck,
-  User,
   X,
   GripVertical,
   Check,
-  Search
+  RefreshCw
 } from 'lucide-react'
+import Link from 'next/link'
 
-interface TowEvent {
-  id: number
-  driver: string
-  day: number // 0 = today, 1 = tomorrow, etc.
-  startHour: number
-  duration: number
-  customer: string
-  from: string
-  to: string
-  vehicle: string
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed'
-}
+// צבעים לנהגים
+const DRIVER_COLORS = [
+  '#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444',
+  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'
+]
 
-interface Driver {
-  id: string
-  name: string
-  color: string
-}
-
-interface NewTowSlot {
-  day: number
-  hour: number
-  driver?: string
+// מיפוי סטטוסים
+const statusLabels: Record<string, string> = {
+  pending: 'ממתינה',
+  assigned: 'שובצה',
+  in_progress: 'בביצוע',
+  completed: 'הושלמה',
+  cancelled: 'בוטלה'
 }
 
 export default function CalendarPage() {
+  const { companyId, loading: authLoading } = useAuth()
   const [view, setView] = useState<'week' | 'day'>('week')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>(['all'])
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [newTowSlot, setNewTowSlot] = useState<NewTowSlot | null>(null)
-  const [draggedTow, setDraggedTow] = useState<TowEvent | null>(null)
-  const [selectedTow, setSelectedTow] = useState<TowEvent | null>(null)
-  const [currentWeekStart, setCurrentWeekStart] = useState(new Date())
-  
-  // Form state for new tow
-  const [newTowForm, setNewTowForm] = useState({
-    customer: '',
-    vehicle: '',
-    from: '',
-    to: '',
-    driver: '',
-    duration: 1
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day
+    return new Date(today.setDate(diff))
   })
-
-  const [tows, setTows] = useState<TowEvent[]>([
-    { id: 1, driver: 'd1', day: 0, startHour: 8, duration: 1.5, customer: 'יוסי כהן', from: 'תל אביב', to: 'רמת גן', vehicle: '12-345-67', status: 'assigned' },
-    { id: 2, driver: 'd1', day: 0, startHour: 10, duration: 2, customer: 'מוסך רמט', from: 'חולון', to: 'בת ים', vehicle: '23-456-78', status: 'in_progress' },
-    { id: 3, driver: 'd2', day: 0, startHour: 7, duration: 1, customer: 'שרה לוי', from: 'ראשל"צ', to: 'חולון', vehicle: '34-567-89', status: 'pending' },
-    { id: 4, driver: 'd2', day: 0, startHour: 9, duration: 2.5, customer: 'ליסינג ישיר', from: 'פ"ת', to: 'ת"א', vehicle: '45-678-90', status: 'assigned' },
-    { id: 5, driver: 'd3', day: 0, startHour: 8.5, duration: 1.5, customer: 'דני רוזן', from: 'גבעתיים', to: 'ב"ב', vehicle: '56-789-01', status: 'completed' },
-    { id: 6, driver: 'd1', day: 1, startHour: 9, duration: 1, customer: 'מיכל גולן', from: 'הרצליה', to: 'ר"ג', vehicle: '67-890-12', status: 'pending' },
-    { id: 7, driver: 'd3', day: 1, startHour: 11, duration: 2, customer: 'אופק רנט', from: 'נתניה', to: 'ת"א', vehicle: '78-901-23', status: 'assigned' },
-    { id: 8, driver: 'd4', day: 0, startHour: 7.5, duration: 1.5, customer: 'יובל כץ', from: 'אשדוד', to: 'ראשל"צ', vehicle: '89-012-34', status: 'in_progress' },
-    { id: 9, driver: 'd4', day: 0, startHour: 10, duration: 1, customer: 'נועה שלום', from: 'יפו', to: 'חולון', vehicle: '90-123-45', status: 'pending' },
-    { id: 10, driver: 'd5', day: 2, startHour: 8, duration: 2, customer: 'מוסך אבי', from: 'לוד', to: 'רמלה', vehicle: '01-234-56', status: 'assigned' },
-    { id: 11, driver: 'd2', day: 3, startHour: 14, duration: 1.5, customer: 'חברת השכרה', from: 'מודיעין', to: 'ת"א', vehicle: '12-345-67', status: 'pending' },
-    { id: 12, driver: 'd1', day: 4, startHour: 16, duration: 1, customer: 'גיא לוי', from: 'כ"ס', to: 'ירושלים', vehicle: '23-456-78', status: 'pending' },
-  ])
+  
+  const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
+  const [tows, setTows] = useState<TowWithDetails[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  
+  const [selectedTow, setSelectedTow] = useState<TowWithDetails | null>(null)
+  const [draggedTow, setDraggedTow] = useState<TowWithDetails | null>(null)
 
   const hours = Array.from({ length: 15 }, (_, i) => i + 6) // 06:00 - 20:00
 
-  const drivers: Driver[] = [
-    { id: 'd1', name: 'דוד אברהם', color: '#22c55e' },
-    { id: 'd2', name: 'יעקב מזרחי', color: '#3b82f6' },
-    { id: 'd3', name: 'אבי גולן', color: '#f59e0b' },
-    { id: 'd4', name: 'משה לוי', color: '#8b5cf6' },
-    { id: 'd5', name: 'רון דוד', color: '#ef4444' },
-  ]
+  // טעינת נתונים
+  const loadData = async () => {
+    if (!companyId) return
+    
+    try {
+      const [driversData, towsData] = await Promise.all([
+        getDrivers(companyId),
+        getWeekTows(companyId, currentWeekStart)
+      ])
+      setDrivers(driversData)
+      setTows(towsData)
+    } catch (error) {
+      console.error('Error loading calendar data:', error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
-  // Generate week days based on currentWeekStart
+  useEffect(() => {
+    if (!authLoading) {
+      if (companyId) {
+        loadData()
+      } else {
+        setLoading(false)
+      }
+    }
+  }, [companyId, authLoading, currentWeekStart])
+
+  const handleRefresh = () => {
+    setRefreshing(true)
+    loadData()
+  }
+
+  // מיפוי צבעים לנהגים
+  const getDriverColor = (driverId: string) => {
+    const index = drivers.findIndex(d => d.id === driverId)
+    return DRIVER_COLORS[index % DRIVER_COLORS.length] || '#6b7280'
+  }
+
+  const getDriverName = (driverId: string) => {
+    return drivers.find(d => d.id === driverId)?.user?.full_name || ''
+  }
+
+  // יצירת ימי השבוע
   const getWeekDays = () => {
     const days = []
     const today = new Date()
-    const startOfWeek = new Date(currentWeekStart)
     
-    // Start from Saturday (day 6) going back to Sunday (day 0)
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(startOfWeek)
-      date.setDate(startOfWeek.getDate() + i)
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(currentWeekStart)
+      date.setDate(currentWeekStart.getDate() + i)
       const isToday = date.toDateString() === today.toDateString()
       days.push({
         day: ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][date.getDay()],
         date: date.getDate().toString(),
         fullDate: date,
         isToday,
-        dayIndex: 6 - i
+        dayIndex: i
       })
     }
     return days
@@ -109,9 +122,7 @@ export default function CalendarPage() {
 
   const weekDays = getWeekDays()
 
-  const getDriverColor = (driverId: string) => drivers.find(d => d.id === driverId)?.color || '#6b7280'
-  const getDriverName = (driverId: string) => drivers.find(d => d.id === driverId)?.name || ''
-
+  // פילטור נהגים
   const toggleDriver = (driverId: string) => {
     if (driverId === 'all') {
       setSelectedDrivers(['all'])
@@ -130,65 +141,64 @@ export default function CalendarPage() {
     }
   }
 
-  const isDriverSelected = (driverId: string) => selectedDrivers.includes('all') || selectedDrivers.includes(driverId)
+  const isDriverSelected = (driverId: string) => 
+    selectedDrivers.includes('all') || selectedDrivers.includes(driverId)
 
-  const filteredTows = selectedDrivers.includes('all') ? tows : tows.filter(t => selectedDrivers.includes(t.driver))
+  // פילטור גרירות
+  const filteredTows = selectedDrivers.includes('all') 
+    ? tows 
+    : tows.filter(t => t.driver_id && selectedDrivers.includes(t.driver_id))
 
-  const handleCellClick = (day: number, hour: number, driver?: string) => {
-    setNewTowSlot({ day, hour, driver })
-    setNewTowForm({
-      customer: '',
-      vehicle: '',
-      from: '',
-      to: '',
-      driver: driver || '',
-      duration: 1
-    })
-    setShowAddModal(true)
-  }
-
-  const handleDragStart = (e: React.DragEvent, tow: TowEvent) => {
-    setDraggedTow(tow)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', tow.id.toString())
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-
-  const handleDrop = (e: React.DragEvent, day: number, hour: number, driver?: string) => {
-    e.preventDefault()
-    if (draggedTow) {
-      setTows(tows.map(t => 
-        t.id === draggedTow.id 
-          ? { ...t, day, startHour: hour, driver: driver || t.driver }
-          : t
-      ))
-      setDraggedTow(null)
-    }
-  }
-
-  const handleAddTow = () => {
-    if (!newTowSlot || !newTowForm.customer || !newTowForm.vehicle) return
+  // חישוב מיקום גרירה בלוח
+  const getTowPosition = (tow: TowWithDetails) => {
+    const towDate = new Date(tow.scheduled_at || tow.created_at)
+    const dayIndex = weekDays.findIndex(d => 
+      d.fullDate.toDateString() === towDate.toDateString()
+    )
+    const hour = towDate.getHours() + towDate.getMinutes() / 60
     
-    const newTow: TowEvent = {
-      id: Math.max(...tows.map(t => t.id)) + 1,
-      driver: newTowForm.driver || 'd1',
-      day: newTowSlot.day,
-      startHour: newTowSlot.hour,
-      duration: newTowForm.duration,
-      customer: newTowForm.customer,
-      from: newTowForm.from,
-      to: newTowForm.to,
-      vehicle: newTowForm.vehicle,
-      status: 'pending'
+    return { dayIndex, hour }
+  }
+
+  // קבלת מידע מהגרירה
+  const getRoute = (tow: TowWithDetails) => {
+    if (tow.legs && tow.legs.length > 0) {
+      const firstLeg = tow.legs.find(l => l.from_address)
+      const lastLeg = [...tow.legs].reverse().find(l => l.to_address)
+      return {
+        from: firstLeg?.from_address?.split(',')[0] || '-',
+        to: lastLeg?.to_address?.split(',')[0] || '-'
+      }
     }
-    
-    setTows([...tows, newTow])
-    setShowAddModal(false)
-    setNewTowSlot(null)
+    return { from: '-', to: '-' }
+  }
+
+  const getFirstVehicle = (tow: TowWithDetails) => {
+    return tow.vehicles?.[0]?.plate_number || '-'
+  }
+
+  // ניווט בין שבועות
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentWeekStart)
+    newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
+    setCurrentWeekStart(newDate)
+  }
+
+  const goToToday = () => {
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day
+    setCurrentWeekStart(new Date(today.setDate(diff)))
+  }
+
+  const getMonthYear = () => {
+    const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+    return `${months[currentWeekStart.getMonth()]} ${currentWeekStart.getFullYear()}`
+  }
+
+  const getCurrentTime = () => {
+    const now = new Date()
+    return now.getHours() + now.getMinutes() / 60
   }
 
   const formatHour = (hour: number) => {
@@ -197,24 +207,54 @@ export default function CalendarPage() {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
   }
 
-  const getMonthYear = () => {
-    const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
-    return `${months[currentWeekStart.getMonth()]} ${currentWeekStart.getFullYear()}`
+  // Drag & Drop
+  const handleDragStart = (e: React.DragEvent, tow: TowWithDetails) => {
+    setDraggedTow(tow)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', tow.id)
   }
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentWeekStart)
-    newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
-    setCurrentWeekStart(newDate)
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
   }
 
-  const goToToday = () => {
-    setCurrentWeekStart(new Date())
+  const handleDrop = async (e: React.DragEvent, dayIndex: number, hour: number, driverId?: string) => {
+    e.preventDefault()
+    if (!draggedTow) return
+
+    const newDate = new Date(weekDays[dayIndex].fullDate)
+    newDate.setHours(Math.floor(hour), (hour % 1) * 60, 0, 0)
+
+    try {
+      await updateTowSchedule(draggedTow.id, newDate, driverId)
+      
+      // עדכון מקומי
+      setTows(tows.map(t => 
+        t.id === draggedTow.id 
+          ? { 
+              ...t, 
+              scheduled_at: newDate.toISOString(),
+              driver_id: driverId || t.driver_id
+            }
+          : t
+      ))
+    } catch (error) {
+      console.error('Error updating tow schedule:', error)
+    }
+    
+    setDraggedTow(null)
   }
 
-  const getCurrentTime = () => {
-    const now = new Date()
-    return now.getHours() + now.getMinutes() / 60
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex items-center gap-2 text-gray-500">
+          <RefreshCw className="animate-spin" size={20} />
+          <span>טוען...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -247,6 +287,14 @@ export default function CalendarPage() {
             >
               היום
             </button>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              title="רענן"
+            >
+              <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+            </button>
           </div>
 
           <div className="flex items-center gap-3">
@@ -270,64 +318,69 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <button
-              onClick={() => { setNewTowSlot({ day: 0, hour: 9 }); setShowAddModal(true) }}
+            <Link
+              href="/dashboard/tows/new"
               className="hidden lg:flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
             >
               <Plus size={18} />
               גרירה חדשה
-            </button>
+            </Link>
           </div>
         </div>
         
         {/* Mobile Add Button */}
-        <button
-          onClick={() => { setNewTowSlot({ day: 0, hour: 9 }); setShowAddModal(true) }}
+        <Link
+          href="/dashboard/tows/new"
           className="lg:hidden flex items-center justify-center gap-2 px-4 py-3 bg-[#33d4ff] text-white rounded-xl font-medium w-full"
         >
           <Plus size={20} />
           גרירה חדשה
-        </button>
+        </Link>
       </div>
 
       {/* Driver Filter */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 mb-4">
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-sm text-gray-500">נהגים:</span>
-          <button
-            onClick={() => toggleDriver('all')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors border-2 ${
-              selectedDrivers.includes('all')
-                ? 'border-[#33d4ff] bg-[#33d4ff]/10 text-[#33d4ff]'
-                : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-            }`}
-          >
-            <span className="font-medium">הכל</span>
-            {selectedDrivers.includes('all') && <Check size={16} />}
-          </button>
-          <div className="w-px h-6 bg-gray-200 hidden sm:block"></div>
-          {drivers.map(driver => (
+      {drivers.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="text-sm text-gray-500">נהגים:</span>
             <button
-              key={driver.id}
-              onClick={() => toggleDriver(driver.id)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all border-2"
-              style={{
-                backgroundColor: isDriverSelected(driver.id) ? driver.color + '20' : '#f3f4f6',
-                color: isDriverSelected(driver.id) ? driver.color : '#6b7280',
-                borderColor: isDriverSelected(driver.id) && !selectedDrivers.includes('all') ? driver.color : 'transparent'
-              }}
+              onClick={() => toggleDriver('all')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors border-2 ${
+                selectedDrivers.includes('all')
+                  ? 'border-[#33d4ff] bg-[#33d4ff]/10 text-[#33d4ff]'
+                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
+              }`}
             >
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: driver.color }}></div>
-              <span className="font-medium hidden sm:inline">{driver.name}</span>
-              <span className="font-medium sm:hidden">{driver.name.split(' ')[0]}</span>
-              {isDriverSelected(driver.id) && !selectedDrivers.includes('all') && <Check size={14} />}
+              <span className="font-medium">הכל</span>
+              {selectedDrivers.includes('all') && <Check size={16} />}
             </button>
-          ))}
+            <div className="w-px h-6 bg-gray-200 hidden sm:block"></div>
+            {drivers.map((driver, index) => {
+              const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
+              return (
+                <button
+                  key={driver.id}
+                  onClick={() => toggleDriver(driver.id)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all border-2"
+                  style={{
+                    backgroundColor: isDriverSelected(driver.id) ? color + '20' : '#f3f4f6',
+                    color: isDriverSelected(driver.id) ? color : '#6b7280',
+                    borderColor: isDriverSelected(driver.id) && !selectedDrivers.includes('all') ? color : 'transparent'
+                  }}
+                >
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
+                  <span className="font-medium hidden sm:inline">{driver.user?.full_name}</span>
+                  <span className="font-medium sm:hidden">{driver.user?.full_name?.split(' ')[0]}</span>
+                  {isDriverSelected(driver.id) && !selectedDrivers.includes('all') && <Check size={14} />}
+                </button>
+              )
+            })}
+          </div>
+          {!selectedDrivers.includes('all') && (
+            <p className="text-xs text-gray-500 mt-2">{selectedDrivers.length} נהגים נבחרו</p>
+          )}
         </div>
-        {!selectedDrivers.includes('all') && (
-          <p className="text-xs text-gray-500 mt-2">{selectedDrivers.length} נהגים נבחרו</p>
-        )}
-      </div>
+      )}
 
       {/* Calendar Grid */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -366,15 +419,17 @@ export default function CalendarPage() {
                         className={`border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group ${
                           day.isToday ? 'bg-[#33d4ff]/5' : ''
                         }`}
-                        onClick={() => handleCellClick(day.dayIndex, hour)}
                         onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, day.dayIndex, hour)}
+                        onDrop={(e) => handleDrop(e, dayIdx, hour)}
                       >
-                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        <Link
+                          href="/dashboard/tows/new"
+                          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
                           <div className="w-7 h-7 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
                             <Plus size={16} className="text-white" />
                           </div>
-                        </div>
+                        </Link>
                       </div>
                     ))}
                   </div>
@@ -383,10 +438,15 @@ export default function CalendarPage() {
                 {/* Tow Events */}
                 <div className="absolute top-0 right-[12.5%] left-0 bottom-0 pointer-events-none">
                   {filteredTows.map((tow) => {
-                    const top = (tow.startHour - 6) * 60
-                    const height = tow.duration * 60
+                    const { dayIndex, hour } = getTowPosition(tow)
+                    if (dayIndex === -1 || hour < 6 || hour > 20) return null
+                    
+                    const top = (hour - 6) * 60
+                    const height = 60 // שעה אחת כברירת מחדל
                     const dayWidth = 100 / 7
-                    const right = (6 - tow.day) * dayWidth
+                    const right = dayIndex * dayWidth
+                    const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
+                    const route = getRoute(tow)
 
                     return (
                       <div
@@ -402,16 +462,15 @@ export default function CalendarPage() {
                           height: `${Math.max(height - 4, 24)}px`,
                           right: `${right + 0.3}%`,
                           width: `${dayWidth - 0.6}%`,
-                          backgroundColor: getDriverColor(tow.driver),
-                          borderRightColor: getDriverColor(tow.driver),
+                          backgroundColor: driverColor,
+                          borderRightColor: driverColor,
                         }}
                       >
-                        <div className="font-bold truncate text-[11px] sm:text-xs">{tow.customer}</div>
-                        {height > 40 && <div className="truncate opacity-90 text-[10px] sm:text-xs">{tow.from} ← {tow.to}</div>}
-                        {height > 60 && <div className="truncate opacity-75 font-mono text-[10px]">{tow.vehicle}</div>}
-                        {/* Resize Handle */}
-                        <div className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize bg-white/20 hover:bg-white/40 transition-colors rounded-b">
-                          <div className="w-6 h-0.5 bg-white/60 rounded mx-auto mt-0.5"></div>
+                        <div className="font-bold truncate text-[11px] sm:text-xs">
+                          {tow.customer?.name || 'ללא לקוח'}
+                        </div>
+                        <div className="truncate opacity-90 text-[10px] sm:text-xs">
+                          {route.from} ← {route.to}
                         </div>
                       </div>
                     )
@@ -419,7 +478,7 @@ export default function CalendarPage() {
                 </div>
 
                 {/* Current Time Line */}
-                {weekDays.some(d => d.isToday) && (
+                {weekDays.some(d => d.isToday) && getCurrentTime() >= 6 && getCurrentTime() <= 20 && (
                   <div
                     className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
                     style={{ top: `${(getCurrentTime() - 6) * 60}px` }}
@@ -438,9 +497,9 @@ export default function CalendarPage() {
             {/* Day Header */}
             <div className="p-4 border-b border-gray-200 bg-[#33d4ff]/10">
               <p className="text-center">
-                <span className="text-lg text-gray-600">{weekDays.find(d => d.isToday)?.day || weekDays[6].day}, </span>
+                <span className="text-lg text-gray-600">{weekDays.find(d => d.isToday)?.day || weekDays[0].day}, </span>
                 <span className="text-2xl font-bold text-[#33d4ff]">
-                  {weekDays.find(d => d.isToday)?.date || weekDays[6].date} ב{getMonthYear()}
+                  {weekDays.find(d => d.isToday)?.date || weekDays[0].date} ב{getMonthYear()}
                 </span>
               </p>
             </div>
@@ -456,18 +515,21 @@ export default function CalendarPage() {
                   <div className="p-3 text-center text-sm text-gray-500 border-l border-gray-200">
                     <Clock size={16} className="mx-auto" />
                   </div>
-                  {(selectedDrivers.includes('all') ? drivers : drivers.filter(d => selectedDrivers.includes(d.id))).map(driver => (
-                    <div
-                      key={driver.id}
-                      className="p-3 text-center border-l border-gray-200"
-                      style={{ backgroundColor: driver.color + '15' }}
-                    >
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: driver.color }}></div>
-                        <span className="font-medium text-gray-800 text-sm">{driver.name}</span>
+                  {(selectedDrivers.includes('all') ? drivers : drivers.filter(d => selectedDrivers.includes(d.id))).map((driver, index) => {
+                    const color = DRIVER_COLORS[drivers.indexOf(driver) % DRIVER_COLORS.length]
+                    return (
+                      <div
+                        key={driver.id}
+                        className="p-3 text-center border-l border-gray-200"
+                        style={{ backgroundColor: color + '15' }}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
+                          <span className="font-medium text-gray-800 text-sm">{driver.user?.full_name}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 {/* Time Grid */}
@@ -484,77 +546,60 @@ export default function CalendarPage() {
                       <div className="p-2 text-sm text-gray-400 text-center border-l border-gray-200">
                         {hour.toString().padStart(2, '0')}:00
                       </div>
-                      {(selectedDrivers.includes('all') ? drivers : drivers.filter(d => selectedDrivers.includes(d.id))).map(driver => (
-                        <div
-                          key={driver.id}
-                          className="border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group"
-                          style={{ backgroundColor: driver.color + '05' }}
-                          onClick={() => handleCellClick(0, hour, driver.id)}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, 0, hour, driver.id)}
-                        >
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                            <div className="w-6 h-6 bg-[#33d4ff] rounded-full flex items-center justify-center shadow">
-                              <Plus size={14} className="text-white" />
-                            </div>
+                      {(selectedDrivers.includes('all') ? drivers : drivers.filter(d => selectedDrivers.includes(d.id))).map((driver) => {
+                        const color = DRIVER_COLORS[drivers.indexOf(driver) % DRIVER_COLORS.length]
+                        return (
+                          <div
+                            key={driver.id}
+                            className="border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group"
+                            style={{ backgroundColor: color + '05' }}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, weekDays.findIndex(d => d.isToday) || 0, hour, driver.id)}
+                          >
+                            <Link
+                              href="/dashboard/tows/new"
+                              className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <div className="w-6 h-6 bg-[#33d4ff] rounded-full flex items-center justify-center shadow">
+                                <Plus size={14} className="text-white" />
+                              </div>
+                            </Link>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ))}
 
-                  {/* Tow Events for today */}
-                  {filteredTows.filter(t => t.day === 0).map((tow) => {
-                    const displayDrivers = selectedDrivers.includes('all') ? drivers : drivers.filter(d => selectedDrivers.includes(d.id))
-                    const driverIndex = displayDrivers.findIndex(d => d.id === tow.driver)
-                    if (driverIndex === -1) return null
-
-                    const top = (tow.startHour - 6) * 60
-                    const height = tow.duration * 60
-                    const columnWidth = 100 / displayDrivers.length
-                    const right = driverIndex * columnWidth
-
-                    return (
-                      <div
-                        key={tow.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, tow)}
-                        onClick={(e) => { e.stopPropagation(); setSelectedTow(tow) }}
-                        className={`absolute cursor-grab active:cursor-grabbing rounded-lg p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
-                          draggedTow?.id === tow.id ? 'opacity-50' : ''
-                        }`}
-                        style={{
-                          top: `${top}px`,
-                          height: `${Math.max(height - 4, 24)}px`,
-                          right: `calc(60px + ${right + 0.5}%)`,
-                          width: `calc(${columnWidth - 1}% - 10px)`,
-                          backgroundColor: getDriverColor(tow.driver),
-                          borderRightColor: getDriverColor(tow.driver),
-                        }}
-                      >
-                        <div className="font-bold truncate">{tow.customer}</div>
-                        {height > 40 && <div className="truncate opacity-90">{tow.from} ← {tow.to}</div>}
-                        {height > 60 && <div className="truncate opacity-75 font-mono">{tow.vehicle}</div>}
-                        <div className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize bg-white/20 hover:bg-white/40 transition-colors rounded-b">
-                          <div className="w-6 h-0.5 bg-white/60 rounded mx-auto mt-0.5"></div>
-                        </div>
-                      </div>
-                    )
-                  })}
-
                   {/* Current Time Line */}
-                  <div
-                    className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
-                    style={{ top: `${(getCurrentTime() - 6) * 60}px` }}
-                  >
-                    <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
-                  </div>
+                  {getCurrentTime() >= 6 && getCurrentTime() <= 20 && (
+                    <div
+                      className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
+                      style={{ top: `${(getCurrentTime() - 6) * 60}px` }}
+                    >
+                      <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Empty State */}
+      {tows.length === 0 && !loading && (
+        <div className="mt-6 text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Truck size={48} className="mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 mb-4">אין גרירות מתוזמנות לשבוע זה</p>
+          <Link
+            href="/dashboard/tows/new"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
+          >
+            <Plus size={18} />
+            צור גרירה חדשה
+          </Link>
+        </div>
+      )}
 
       {/* Instructions */}
       <div className="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
@@ -574,130 +619,9 @@ export default function CalendarPage() {
           <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0">
             <Clock size={16} className="text-white" />
           </div>
-          <p className="text-gray-700"><strong>משך:</strong> משוך קצה תחתון</p>
+          <p className="text-gray-700"><strong>פרטים:</strong> לחץ על גרירה</p>
         </div>
       </div>
-
-      {/* Add Tow Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white w-full sm:rounded-2xl sm:max-w-md sm:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
-              <div>
-                <h2 className="font-bold text-lg">גרירה חדשה</h2>
-                {newTowSlot && (
-                  <p className="text-white/80 text-sm">
-                    {weekDays[6 - newTowSlot.day]?.day} {weekDays[6 - newTowSlot.day]?.date}/{currentWeekStart.getMonth() + 1} • {formatHour(newTowSlot.hour)}
-                  </p>
-                )}
-              </div>
-              <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-white/20 rounded-lg">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto flex-1 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">לקוח *</label>
-                <input
-                  type="text"
-                  value={newTowForm.customer}
-                  onChange={(e) => setNewTowForm({ ...newTowForm, customer: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                  placeholder="שם לקוח או חברה"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">לוחית רישוי *</label>
-                <input
-                  type="text"
-                  value={newTowForm.vehicle}
-                  onChange={(e) => setNewTowForm({ ...newTowForm, vehicle: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                  placeholder="00-000-00"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">מוצא</label>
-                  <input
-                    type="text"
-                    value={newTowForm.from}
-                    onChange={(e) => setNewTowForm({ ...newTowForm, from: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                    placeholder="כתובת איסוף"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">יעד</label>
-                  <input
-                    type="text"
-                    value={newTowForm.to}
-                    onChange={(e) => setNewTowForm({ ...newTowForm, to: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                    placeholder="כתובת יעד"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">נהג</label>
-                <select
-                  value={newTowForm.driver}
-                  onChange={(e) => setNewTowForm({ ...newTowForm, driver: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                >
-                  <option value="">בחר נהג...</option>
-                  {drivers.map(driver => (
-                    <option key={driver.id} value={driver.id}>{driver.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">משך משוער (שעות)</label>
-                <div className="flex items-center gap-2">
-                  {[0.5, 1, 1.5, 2, 2.5, 3].map(dur => (
-                    <button
-                      key={dur}
-                      onClick={() => setNewTowForm({ ...newTowForm, duration: dur })}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        newTowForm.duration === dur
-                          ? 'bg-[#33d4ff] text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {dur}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={handleAddTow}
-                disabled={!newTowForm.customer || !newTowForm.vehicle}
-                className={`flex-1 py-3 rounded-xl font-medium ${
-                  newTowForm.customer && newTowForm.vehicle
-                    ? 'bg-[#33d4ff] text-white hover:bg-[#21b8e6]'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                הוסף גרירה
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Tow Detail Modal */}
       {selectedTow && (
@@ -705,11 +629,13 @@ export default function CalendarPage() {
           <div className="bg-white w-full sm:rounded-2xl sm:max-w-md sm:mx-4 overflow-hidden rounded-t-2xl">
             <div
               className="px-5 py-4 text-white flex items-center justify-between"
-              style={{ backgroundColor: getDriverColor(selectedTow.driver) }}
+              style={{ backgroundColor: selectedTow.driver_id ? getDriverColor(selectedTow.driver_id) : '#6b7280' }}
             >
               <div>
-                <h2 className="font-bold text-lg">{selectedTow.customer}</h2>
-                <p className="text-white/80 text-sm">{getDriverName(selectedTow.driver)}</p>
+                <h2 className="font-bold text-lg">{selectedTow.customer?.name || 'ללא לקוח'}</h2>
+                <p className="text-white/80 text-sm">
+                  {selectedTow.driver_id ? getDriverName(selectedTow.driver_id) : 'לא שובץ נהג'}
+                </p>
               </div>
               <button onClick={() => setSelectedTow(null)} className="p-2 hover:bg-white/20 rounded-lg">
                 <X size={20} />
@@ -721,7 +647,7 @@ export default function CalendarPage() {
                 <Truck size={20} className="text-gray-400" />
                 <div>
                   <p className="text-sm text-gray-500">רכב</p>
-                  <p className="font-mono font-medium text-gray-800">{selectedTow.vehicle}</p>
+                  <p className="font-mono font-medium text-gray-800">{getFirstVehicle(selectedTow)}</p>
                 </div>
               </div>
 
@@ -729,18 +655,31 @@ export default function CalendarPage() {
                 <MapPin size={20} className="text-gray-400" />
                 <div className="flex-1">
                   <p className="text-sm text-gray-500">מסלול</p>
-                  <p className="font-medium text-gray-800">{selectedTow.from} ← {selectedTow.to}</p>
+                  <p className="font-medium text-gray-800">
+                    {getRoute(selectedTow).from} ← {getRoute(selectedTow).to}
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                 <Clock size={20} className="text-gray-400" />
                 <div>
-                  <p className="text-sm text-gray-500">זמן</p>
+                  <p className="text-sm text-gray-500">זמן מתוזמן</p>
                   <p className="font-medium text-gray-800">
-                    {formatHour(selectedTow.startHour)} - {formatHour(selectedTow.startHour + selectedTow.duration)}
-                    <span className="text-gray-500 mr-2">({selectedTow.duration} שעות)</span>
+                    {new Date(selectedTow.scheduled_at || selectedTow.created_at).toLocaleString('he-IL')}
                   </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="w-5 h-5 rounded-full" style={{ 
+                  backgroundColor: selectedTow.status === 'completed' ? '#22c55e' : 
+                    selectedTow.status === 'in_progress' ? '#3b82f6' : 
+                    selectedTow.status === 'pending' ? '#f59e0b' : '#6b7280'
+                }}></div>
+                <div>
+                  <p className="text-sm text-gray-500">סטטוס</p>
+                  <p className="font-medium text-gray-800">{statusLabels[selectedTow.status]}</p>
                 </div>
               </div>
             </div>
@@ -752,12 +691,12 @@ export default function CalendarPage() {
               >
                 סגור
               </button>
-              <button
-                onClick={() => { /* Navigate to tow details */ }}
-                className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6]"
+              <Link
+                href={`/dashboard/tows/${selectedTow.id}`}
+                className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] text-center"
               >
                 פרטים מלאים
-              </button>
+              </Link>
             </div>
           </div>
         </div>

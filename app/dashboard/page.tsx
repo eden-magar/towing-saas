@@ -1,66 +1,139 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft } from 'lucide-react'
+import { useAuth } from '../lib/AuthContext'
+import { getDashboardStats, getRecentTows, DashboardStats } from '../lib/queries/dashboard'
+import { TowWithDetails } from '../lib/queries/tows'
+import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 
+// מיפוי סטטוסים לעברית וצבעים
+const statusMap: Record<string, { label: string; color: string }> = {
+  pending: { label: 'ממתינה', color: 'bg-amber-100 text-amber-700' },
+  assigned: { label: 'שובצה', color: 'bg-blue-100 text-blue-700' },
+  in_progress: { label: 'בביצוע', color: 'bg-indigo-100 text-indigo-700' },
+  completed: { label: 'הושלמה', color: 'bg-emerald-100 text-emerald-700' },
+  cancelled: { label: 'בוטלה', color: 'bg-red-100 text-red-700' }
+}
+
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null)
+  const { user, companyId, loading: authLoading } = useAuth()
+  console.log('Auth state:', { user, companyId, authLoading })
+  const [stats, setStats] = useState<DashboardStats>({
+    towsToday: 0,
+    pendingTows: 0,
+    completedToday: 0,
+    availableDrivers: 0
+  })
+  const [recentTows, setRecentTows] = useState<TowWithDetails[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const loadData = async () => {
+    if (!companyId) return
+    
+    try {
+      const [statsData, towsData] = await Promise.all([
+        getDashboardStats(companyId),
+        getRecentTows(companyId, 5)
+      ])
+      setStats(statsData)
+      setRecentTows(towsData)
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+  if (!authLoading) {
+    if (companyId) {
+      loadData()
+    } else {
       setLoading(false)
-      
-      if (!user) {
-        window.location.href = '/login'
-      }
     }
-    getUser()
-  }, [])
+  }
+}, [companyId, authLoading])
 
-  if (loading) {
+  const handleRefresh = () => {
+    setRefreshing(true)
+    loadData()
+  }
+
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-500">טוען...</p>
+        <div className="flex items-center gap-2 text-gray-500">
+          <RefreshCw className="animate-spin" size={20} />
+          <span>טוען...</span>
+        </div>
       </div>
     )
   }
 
-  const stats = [
-    { label: 'גרירות היום', value: '0', icon: Truck, color: 'bg-[#33d4ff]' },
-    { label: 'ממתינות לשיבוץ', value: '0', icon: Clock, color: 'bg-amber-400' },
-    { label: 'הושלמו היום', value: '0', icon: CheckCircle, color: 'bg-emerald-400' },
-    { label: 'נהגים זמינים', value: '0', icon: Users, color: 'bg-violet-400' },
+  const statCards = [
+    { label: 'גרירות היום', value: stats.towsToday, icon: Truck, color: 'bg-[#33d4ff]' },
+    { label: 'ממתינות לשיבוץ', value: stats.pendingTows, icon: Clock, color: 'bg-amber-400' },
+    { label: 'הושלמו היום', value: stats.completedToday, icon: CheckCircle, color: 'bg-emerald-400' },
+    { label: 'נהגים זמינים', value: stats.availableDrivers, icon: Users, color: 'bg-violet-400' },
   ]
 
-  const recentTows = [
-    { id: 1, number: 'T-001', vehicle: '12-345-67', customer: 'יוסי כהן', status: 'בביצוע', statusColor: 'bg-blue-100 text-blue-700', from: 'תל אביב', to: 'חיפה' },
-    { id: 2, number: 'T-002', vehicle: '23-456-78', customer: 'שרה ישראלי', status: 'ממתינה', statusColor: 'bg-amber-100 text-amber-700', from: 'ירושלים', to: 'תל אביב' },
-    { id: 3, number: 'T-003', vehicle: '34-567-89', customer: 'מוסך רמט', status: 'הושלמה', statusColor: 'bg-emerald-100 text-emerald-700', from: 'נתניה', to: 'הרצליה' },
-  ]
+  // פונקציה לקבלת כתובות מהרגליים
+  const getRoute = (tow: TowWithDetails) => {
+    if (tow.legs && tow.legs.length > 0) {
+      const firstLeg = tow.legs.find(l => l.from_address)
+      const lastLeg = [...tow.legs].reverse().find(l => l.to_address)
+      
+      const from = firstLeg?.from_address?.split(',')[0] || '-'
+      const to = lastLeg?.to_address?.split(',')[0] || '-'
+      
+      return { from, to }
+    }
+    return { from: '-', to: '-' }
+  }
+
+  // פונקציה לקבלת מספר רכב ראשון
+  const getFirstVehicle = (tow: TowWithDetails) => {
+    if (tow.vehicles && tow.vehicles.length > 0) {
+      return tow.vehicles[0].plate_number
+    }
+    return '-'
+  }
 
   return (
     <div>
+      {/* כותרת */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-800">דשבורד</h1>
-          <p className="text-gray-500 text-sm mt-1 truncate hidden lg:block">ברוך הבא, {user?.email}</p>
+          <p className="text-gray-500 text-sm mt-1 truncate hidden lg:block">
+          ברוך הבא, {user?.full_name || user?.email}
+          </p>
         </div>
-        <Link
-          href="/dashboard/tows/new"
-          className="hidden lg:flex items-center justify-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2.5 rounded-xl transition-colors flex-shrink-0"
-        >
-          <Plus size={20} />
-          <span>גרירה חדשה</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
+            title="רענן נתונים"
+          >
+            <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+          <Link
+            href="/dashboard/tows/new"
+            className="hidden lg:flex items-center justify-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2.5 rounded-xl transition-colors flex-shrink-0"
+          >
+            <Plus size={20} />
+            <span>גרירה חדשה</span>
+          </Link>
+        </div>
       </div>
 
+      {/* כרטיסי סטטיסטיקה */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        {stats.map((stat, index) => {
+        {statCards.map((stat, index) => {
           const Icon = stat.icon
           return (
             <div key={index} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -78,6 +151,7 @@ export default function DashboardPage() {
         })}
       </div>
 
+      {/* גרירות אחרונות */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-base sm:text-lg font-semibold text-gray-800">גרירות אחרונות</h2>
@@ -92,61 +166,83 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
+            {/* תצוגת טבלה - דסקטופ */}
             <div className="hidden sm:block">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מספר</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">רכב</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מסלול</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">נהג</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סטטוס</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {recentTows.map((tow) => (
-                    <tr key={tow.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-800">{tow.number}</td>
-                      <td className="px-4 py-3 font-mono text-gray-600">{tow.vehicle}</td>
-                      <td className="px-4 py-3 text-gray-600">{tow.customer}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <span>{tow.from}</span>
-                          <ChevronLeft size={14} />
-                          <span>{tow.to}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${tow.statusColor}`}>
-                          {tow.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {recentTows.map((tow) => {
+                    const route = getRoute(tow)
+                    const status = statusMap[tow.status] || { label: tow.status, color: 'bg-gray-100 text-gray-700' }
+                    
+                    return (
+                      <tr 
+                        key={tow.id} 
+                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => window.location.href = `/dashboard/tows/${tow.id}`}
+                      >
+                        <td className="px-4 py-3 text-gray-600 text-sm">
+                          {new Date(tow.created_at).toLocaleDateString('he-IL')}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-gray-600">{getFirstVehicle(tow)}</td>
+                        <td className="px-4 py-3 text-gray-600">{tow.customer?.name || '-'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <span className="truncate max-w-[100px]">{route.from}</span>
+                            <ChevronLeft size={14} className="flex-shrink-0" />
+                            <span className="truncate max-w-[100px]">{route.to}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {tow.driver?.user?.full_name || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
+                            {status.label}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
 
+            {/* תצוגת כרטיסים - מובייל */}
             <div className="sm:hidden divide-y divide-gray-100">
-              {recentTows.map((tow) => (
-                <Link
-                  key={tow.id}
-                  href={`/dashboard/tows/${tow.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-gray-800">{tow.number}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tow.statusColor}`}>
-                        {tow.status}
-                      </span>
+              {recentTows.map((tow) => {
+                const route = getRoute(tow)
+                const status = statusMap[tow.status] || { label: tow.status, color: 'bg-gray-100 text-gray-700' }
+                
+                return (
+                  <Link
+                    key={tow.id}
+                    href={`/dashboard/tows/${tow.id}`}
+                    className="flex items-center justify-between p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-gray-800">{getFirstVehicle(tow)}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">{tow.customer?.name || 'ללא לקוח'}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{route.from} ← {route.to}</p>
                     </div>
-                    <p className="text-sm text-gray-600">{tow.customer}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{tow.from} ← {tow.to}</p>
-                  </div>
-                  <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
-                </Link>
-              ))}
+                    <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
+                  </Link>
+                )
+              })}
             </div>
           </>
         )}

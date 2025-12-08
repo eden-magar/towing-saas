@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "./lib/AuthContext";
 
 export const metadata: Metadata = {
   title: "מערכת ניהול גרירות",
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <body className="bg-slate-900 text-white min-h-screen" suppressHydrationWarning>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

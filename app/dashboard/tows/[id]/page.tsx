@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
 import { 
   ArrowRight, 
   Edit2, 
@@ -21,41 +22,49 @@ import {
   Plus,
   Trash2,
   Save,
-  RefreshCw
+  RefreshCw,
+  Receipt
 } from 'lucide-react'
+import { useAuth } from '../../../lib/AuthContext'
+import { getTow, updateTow, updateTowStatus, assignDriver, TowWithDetails } from '../../../lib/queries/tows'
+import { getDrivers } from '../../../lib/queries/drivers'
+import { getTrucks } from '../../../lib/queries/trucks'
+import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
+import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
+import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
 
-interface Driver {
-  id: number
-  name: string
-  phone: string
-  status: 'available' | 'busy' | 'offline'
-  trucks: { id: number; name: string; plate: string; capacity: number }[]
-  currentTows: number
-}
-
-interface Vehicle {
-  id: number
-  plate: string
+interface EditVehicle {
+  id: string
+  plateNumber: string
   manufacturer: string
   model: string
   year: number
+  vehicleType: string
   color: string
-  type: string
-  defects: string[]
+  towReason: string
 }
 
 export default function TowDetailsPage() {
+  const params = useParams()
+  const router = useRouter()
+  const { user, companyId } = useAuth()
+  const towId = params.id as string
+  
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [tow, setTow] = useState<TowWithDetails | null>(null)
+  const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
+  const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
+  const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
+  
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'images'>('details')
   const [isEditing, setIsEditing] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showChangeDriverModal, setShowChangeDriverModal] = useState(false)
-  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
-  const [selectedTruck, setSelectedTruck] = useState<number | null>(null)
-  const [driverFilter, setDriverFilter] = useState<'all' | 'available'>('all')
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
+  const [selectedTruckId, setSelectedTruckId] = useState<string | null>(null)
   const [driverSearch, setDriverSearch] = useState('')
-  const [showBusyWarning, setShowBusyWarning] = useState(false)
-  const [showCapacityWarning, setShowCapacityWarning] = useState(false)
-  const [capacityWarningMessage, setCapacityWarningMessage] = useState('')
   const [showCantEditModal, setShowCantEditModal] = useState(false)
   const [showRemoveDriverConfirm, setShowRemoveDriverConfirm] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -63,99 +72,26 @@ export default function TowDetailsPage() {
   const [cancelReason, setCancelReason] = useState('')
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
+  const [assigning, setAssigning] = useState(false)
 
-  const [towData, setTowData] = useState({
-    id: 'T-1003',
-    status: 'pending',
-    createdAt: '06/12/2024 10:00',
-    customer: {
-      id: 1,
-      name: 'שרה לוי',
-      phone: '052-9876543',
-      type: 'private' as 'private' | 'business'
-    },
-    vehicles: [
-      {
-        id: 1,
-        plate: '34-567-89',
-        manufacturer: 'יונדאי',
-        model: 'i20',
-        year: 2020,
-        color: 'כחול',
-        type: 'רכב קטן',
-        defects: ['מנוע', 'לא מניע']
-      }
-    ] as Vehicle[],
-    route: {
-      from: 'גבעתיים, רח׳ כצנלסון 23',
-      to: 'תל אביב, נמל יפו',
-      distance: '15 ק"מ',
-      duration: '25 דקות'
-    },
-    contacts: {
-      source: { name: 'שרה לוי', phone: '052-9876543' },
-      destination: { name: 'מוסך יפו', phone: '03-6543210' }
-    },
-    driver: null as { id: number; name: string; phone: string; truck: string } | null,
-    pricing: {
-      base: 150,
-      distance: 180,
-      surcharge: 0,
-      discount: 0,
-      total: 330
-    },
-    payment: {
-      method: 'cash' as 'cash' | 'credit' | 'invoice',
-      invoiceName: 'שרה לוי',
-      status: 'pending',
-      hasInvoice: false,
-      invoicePaid: false
-    },
-    notes: 'הלקוחה מבקשת להתקשר 10 דקות לפני ההגעה',
-    statusHistory: [
-      { status: 'pending', time: '10:00', user: 'מערכת' },
-    ],
+  // Invoice state
+  const [hasInvoice, setHasInvoice] = useState(false)
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [creatingInvoice, setCreatingInvoice] = useState(false)
+  const [invoiceData, setInvoiceData] = useState({
+    description: '',
+    amount: ''
   })
 
-  const [editForm, setEditForm] = useState({
-    customerName: towData.customer.name,
-    customerPhone: towData.customer.phone,
-    customerType: towData.customer.type,
-    routeFrom: towData.route.from,
-    routeTo: towData.route.to,
-    sourceContactName: towData.contacts.source.name,
-    sourceContactPhone: towData.contacts.source.phone,
-    destContactName: towData.contacts.destination.name,
-    destContactPhone: towData.contacts.destination.phone,
-    vehicles: [...towData.vehicles],
-    pricingBase: towData.pricing.base,
-    pricingDistance: towData.pricing.distance,
-    pricingSurcharge: towData.pricing.surcharge,
-    pricingDiscount: towData.pricing.discount,
-    pricingTotal: towData.pricing.total,
-    paymentMethod: towData.payment.method,
-    invoiceName: towData.payment.invoiceName,
-    notes: towData.notes,
-  })
-
-  const drivers: Driver[] = [
-    { id: 1, name: 'יוסי כהן', phone: '050-1234567', status: 'available', currentTows: 2, trucks: [
-      { id: 1, name: 'גרר משטח', plate: '12-345-67', capacity: 2 }
-    ]},
-    { id: 2, name: 'משה לוי', phone: '052-9876543', status: 'busy', currentTows: 4, trucks: [
-      { id: 2, name: 'גרר הרמה', plate: '23-456-78', capacity: 1 }
-    ]},
-    { id: 3, name: 'דוד אברהם', phone: '054-5551234', status: 'offline', currentTows: 0, trucks: []},
-    { id: 4, name: 'אבי ישראלי', phone: '050-7778899', status: 'available', currentTows: 1, trucks: [
-      { id: 3, name: 'גרר כבד', plate: '34-567-89', capacity: 3 }
-    ]},
-  ]
-
-  const mockCustomers = [
-    { id: 1, name: 'שרה לוי', phone: '052-9876543', type: 'private' as const },
-    { id: 2, name: 'מוסך רמט', phone: '03-5551234', type: 'business' as const },
-    { id: 3, name: 'ליסינג ישיר', phone: '03-9876543', type: 'business' as const },
-  ]
+  // Edit form state
+  const [editCustomerId, setEditCustomerId] = useState<string | null>(null)
+  const [editCustomerSearch, setEditCustomerSearch] = useState('')
+  const [showCustomerResults, setShowCustomerResults] = useState(false)
+  const [editNotes, setEditNotes] = useState('')
+  const [editVehicles, setEditVehicles] = useState<EditVehicle[]>([])
+  const [editFromAddress, setEditFromAddress] = useState('')
+  const [editToAddress, setEditToAddress] = useState('')
+  const [editFinalPrice, setEditFinalPrice] = useState(0)
 
   const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
@@ -171,44 +107,91 @@ export default function TowDetailsPage() {
     cancelled: { label: 'בוטל', color: 'bg-gray-100 text-gray-500 border-gray-200' },
   }
 
-  const driverStatusConfig: Record<string, { label: string; color: string; dot: string }> = {
-    available: { label: 'זמין', color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
-    busy: { label: 'בגרירה', color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
-    offline: { label: 'לא זמין', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
+  // טעינת נתונים
+  useEffect(() => {
+    if (companyId && towId) {
+      loadData()
+    }
+  }, [companyId, towId])
+
+  const loadData = async () => {
+    if (!companyId) return
+    setLoading(true)
+    try {
+      const [towData, driversData, trucksData, customersData] = await Promise.all([
+        getTow(towId),
+        getDrivers(companyId),
+        getTrucks(companyId),
+        getCustomers(companyId)
+      ])
+      setTow(towData)
+      setDrivers(driversData)
+      setTrucks(trucksData)
+      setCustomers(customersData)
+      
+      // בדיקה אם יש חשבונית לגרירה
+      if (towData) {
+        const invoiceExists = await towHasInvoice(towId)
+        setHasInvoice(invoiceExists)
+      }
+    } catch (err) {
+      console.error('Error loading tow:', err)
+      setError('שגיאה בטעינת הגרירה')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const canEdit = towData.status !== 'completed' && towData.status !== 'cancelled'
+  const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
 
   const filteredDrivers = drivers.filter(driver => {
-    const matchesSearch = driver.name.includes(driverSearch) || driver.phone.includes(driverSearch)
-    const matchesFilter = driverFilter === 'all' || driver.status === 'available'
-    return matchesSearch && matchesFilter
+    const matchesSearch = driver.user.full_name.toLowerCase().includes(driverSearch.toLowerCase()) || 
+                          (driver.user.phone && driver.user.phone.includes(driverSearch))
+    return matchesSearch
   })
+
+  const filteredCustomers = customers.filter(c => {
+    if (!editCustomerSearch) return false
+    const query = editCustomerSearch.toLowerCase()
+    return c.name.toLowerCase().includes(query) || 
+           (c.phone && c.phone.includes(query))
+  })
+
+  const getDriverTrucks = (driverId: string) => {
+    return trucks.filter(t => t.assigned_driver?.id === driverId)
+  }
+
+  const getFromAddress = () => {
+    if (!tow?.legs || tow.legs.length === 0) return 'לא צוין'
+    return tow.legs[0].from_address || 'לא צוין'
+  }
+
+  const getToAddress = () => {
+    if (!tow?.legs || tow.legs.length === 0) return 'לא צוין'
+    return tow.legs[tow.legs.length - 1].to_address || 'לא צוין'
+  }
 
   const handleEditClick = () => {
     if (!canEdit) {
       setShowCantEditModal(true)
-    } else {
-      setEditForm({
-        customerName: towData.customer.name,
-        customerPhone: towData.customer.phone,
-        customerType: towData.customer.type,
-        routeFrom: towData.route.from,
-        routeTo: towData.route.to,
-        sourceContactName: towData.contacts.source.name,
-        sourceContactPhone: towData.contacts.source.phone,
-        destContactName: towData.contacts.destination.name,
-        destContactPhone: towData.contacts.destination.phone,
-        vehicles: towData.vehicles.map(v => ({ ...v, defects: [...v.defects] })),
-        pricingBase: towData.pricing.base,
-        pricingDistance: towData.pricing.distance,
-        pricingSurcharge: towData.pricing.surcharge,
-        pricingDiscount: towData.pricing.discount,
-        pricingTotal: towData.pricing.total,
-        paymentMethod: towData.payment.method,
-        invoiceName: towData.payment.invoiceName,
-        notes: towData.notes,
-      })
+    } else if (tow) {
+      // Initialize edit form with current values
+      setEditCustomerId(tow.customer_id)
+      setEditCustomerSearch(tow.customer?.name || '')
+      setEditNotes(tow.notes || '')
+      setEditFinalPrice(tow.final_price || 0)
+      setEditFromAddress(getFromAddress())
+      setEditToAddress(getToAddress())
+      setEditVehicles(tow.vehicles?.map((v: any) => ({
+        id: v.id,
+        plateNumber: v.plate_number,
+        manufacturer: v.manufacturer || '',
+        model: v.model || '',
+        year: v.year || new Date().getFullYear(),
+        vehicleType: v.vehicle_type || '',
+        color: v.color || '',
+        towReason: v.tow_reason || ''
+      })) || [])
       setIsEditing(true)
     }
   }
@@ -217,168 +200,107 @@ export default function TowDetailsPage() {
     setIsEditing(false)
   }
 
-  const recalculatePrice = () => {
-    const base = editForm.pricingBase
-    const distance = editForm.pricingDistance
-    const surcharge = editForm.pricingSurcharge
-    const discount = editForm.pricingDiscount
-    const total = base + distance + surcharge - discount
-    setEditForm({ ...editForm, pricingTotal: total })
-  }
-
-  const handleSaveChanges = () => {
-    if (editForm.vehicles.length === 0) {
+  const handleSaveChanges = async () => {
+    if (!tow) return
+    
+    if (editVehicles.length === 0) {
       alert('חייב להיות לפחות רכב אחד בגרירה')
       return
     }
 
-    setTowData({
-      ...towData,
-      customer: {
-        ...towData.customer,
-        name: editForm.customerName,
-        phone: editForm.customerPhone,
-        type: editForm.customerType,
-      },
-      vehicles: editForm.vehicles,
-      route: {
-        ...towData.route,
-        from: editForm.routeFrom,
-        to: editForm.routeTo,
-      },
-      contacts: {
-        source: { name: editForm.sourceContactName, phone: editForm.sourceContactPhone },
-        destination: { name: editForm.destContactName, phone: editForm.destContactPhone },
-      },
-      pricing: {
-        base: editForm.pricingBase,
-        distance: editForm.pricingDistance,
-        surcharge: editForm.pricingSurcharge,
-        discount: editForm.pricingDiscount,
-        total: editForm.pricingTotal,
-      },
-      payment: {
-        ...towData.payment,
-        method: editForm.paymentMethod,
-        invoiceName: editForm.invoiceName,
-      },
-      notes: editForm.notes,
-    })
-
-    setIsEditing(false)
+    setSaving(true)
+    try {
+      await updateTow({
+        towId: tow.id,
+        customerId: editCustomerId,
+        notes: editNotes || null,
+        finalPrice: editFinalPrice || null,
+        vehicles: editVehicles.map(v => ({
+          plateNumber: v.plateNumber,
+          manufacturer: v.manufacturer || undefined,
+          model: v.model || undefined,
+          year: v.year || undefined,
+          vehicleType: v.vehicleType as any || undefined,
+          color: v.color || undefined,
+          towReason: v.towReason || undefined
+        })),
+        legs: [{
+          legType: 'pickup',
+          fromAddress: editFromAddress,
+          toAddress: editToAddress
+        }]
+      })
+      await loadData()
+      setIsEditing(false)
+    } catch (err) {
+      console.error('Error saving changes:', err)
+      alert('שגיאה בשמירת השינויים')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const addVehicle = () => {
-    const newId = Math.max(...editForm.vehicles.map(v => v.id), 0) + 1
-    setEditForm({
-      ...editForm,
-      vehicles: [...editForm.vehicles, {
-        id: newId,
-        plate: '',
-        manufacturer: '',
-        model: '',
-        year: new Date().getFullYear(),
-        color: '',
-        type: 'רכב קטן',
-        defects: []
-      }]
-    })
+    setEditVehicles([...editVehicles, {
+      id: crypto.randomUUID(),
+      plateNumber: '',
+      manufacturer: '',
+      model: '',
+      year: new Date().getFullYear(),
+      vehicleType: '',
+      color: '',
+      towReason: ''
+    }])
   }
 
-  const removeVehicle = (id: number) => {
-    if (editForm.vehicles.length <= 1) {
+  const removeVehicle = (id: string) => {
+    if (editVehicles.length <= 1) {
       alert('חייב להיות לפחות רכב אחד')
       return
     }
-    setEditForm({
-      ...editForm,
-      vehicles: editForm.vehicles.filter(v => v.id !== id)
-    })
+    setEditVehicles(editVehicles.filter(v => v.id !== id))
   }
 
-  const updateVehicle = (id: number, field: keyof Vehicle, value: any) => {
-    setEditForm({
-      ...editForm,
-      vehicles: editForm.vehicles.map(v => v.id === id ? { ...v, [field]: value } : v)
-    })
+  const updateVehicle = (id: string, field: keyof EditVehicle, value: any) => {
+    setEditVehicles(editVehicles.map(v => v.id === id ? { ...v, [field]: value } : v))
   }
 
-  const toggleVehicleDefect = (vehicleId: number, defect: string) => {
-    setEditForm({
-      ...editForm,
-      vehicles: editForm.vehicles.map(v => {
-        if (v.id === vehicleId) {
-          const hasDefect = v.defects.includes(defect)
-          return {
-            ...v,
-            defects: hasDefect ? v.defects.filter(d => d !== defect) : [...v.defects, defect]
-          }
-        }
-        return v
-      })
-    })
-  }
-
-  const handleSelectDriver = (driver: Driver) => {
-    setSelectedDriver(driver)
-    setSelectedTruck(null)
-    setShowCapacityWarning(false)
-    if (driver.status === 'busy') {
-      setShowBusyWarning(true)
-    } else {
-      setShowBusyWarning(false)
+  const handleAssignDriver = async () => {
+    if (!selectedDriverId || !selectedTruckId || !tow) return
+    
+    setAssigning(true)
+    try {
+      await assignDriver(tow.id, selectedDriverId, selectedTruckId)
+      await loadData()
+      closeDriverModal()
+    } catch (err) {
+      console.error('Error assigning driver:', err)
+      alert('שגיאה בשיבוץ הנהג')
+    } finally {
+      setAssigning(false)
     }
   }
 
-  const handleSelectTruck = (truck: { id: number; name: string; plate: string; capacity: number }) => {
-    setSelectedTruck(truck.id)
-    const vehicleCount = towData.vehicles.length
-    if (truck.capacity < vehicleCount) {
-      setShowCapacityWarning(true)
-      setCapacityWarningMessage(`הגרר יכול לקחת ${truck.capacity} רכבים, אבל הגרירה כוללת ${vehicleCount} רכבים`)
-    } else {
-      setShowCapacityWarning(false)
+  const handleRemoveDriver = async () => {
+    if (!tow) return
+    try {
+      await assignDriver(tow.id, null as any, null as any)
+      await updateTowStatus(tow.id, 'pending')
+      await loadData()
+      setShowRemoveDriverConfirm(false)
+    } catch (err) {
+      console.error('Error removing driver:', err)
     }
-  }
-
-  const handleAssign = () => {
-    if (selectedDriver && selectedTruck) {
-      const truck = selectedDriver.trucks.find(t => t.id === selectedTruck)
-      setTowData({
-        ...towData,
-        driver: {
-          id: selectedDriver.id,
-          name: selectedDriver.name,
-          phone: selectedDriver.phone,
-          truck: truck ? `${truck.name} - ${truck.plate}` : ''
-        },
-        status: 'assigned'
-      })
-      setShowAssignModal(false)
-      setShowChangeDriverModal(false)
-      setSelectedDriver(null)
-      setSelectedTruck(null)
-      setShowBusyWarning(false)
-      setShowCapacityWarning(false)
-    }
-  }
-
-  const handleRemoveDriver = () => {
-    setTowData({
-      ...towData,
-      driver: null,
-      status: 'pending'
-    })
-    setShowRemoveDriverConfirm(false)
   }
 
   const handleCancelClick = () => {
-    if (towData.status === 'completed') {
+    if (!tow) return
+    if (tow.status === 'completed') {
       setShowCantCancelModal(true)
       return
     }
     
-    if (['in_progress', 'driver_on_way', 'arrived_pickup', 'loading'].includes(towData.status)) {
+    if (['in_progress', 'driver_on_way', 'arrived_pickup', 'loading'].includes(tow.status)) {
       setCancelStep('warning')
     } else {
       setCancelStep('reason')
@@ -386,15 +308,17 @@ export default function TowDetailsPage() {
     setShowCancelModal(true)
   }
 
-  const handleConfirmCancel = () => {
-    setTowData({
-      ...towData,
-      status: 'cancelled',
-      driver: null
-    })
-    setShowCancelModal(false)
-    setCancelReason('')
-    setCancelStep('reason')
+  const handleConfirmCancel = async () => {
+    if (!tow) return
+    try {
+      await updateTowStatus(tow.id, 'cancelled')
+      await loadData()
+      setShowCancelModal(false)
+      setCancelReason('')
+      setCancelStep('reason')
+    } catch (err) {
+      console.error('Error cancelling tow:', err)
+    }
   }
 
   const closeCancelModal = () => {
@@ -406,24 +330,55 @@ export default function TowDetailsPage() {
   const closeDriverModal = () => {
     setShowAssignModal(false)
     setShowChangeDriverModal(false)
-    setSelectedDriver(null)
-    setSelectedTruck(null)
-    setShowBusyWarning(false)
-    setShowCapacityWarning(false)
+    setSelectedDriverId(null)
+    setSelectedTruckId(null)
+  }
+
+  // ==================== Invoice Functions ====================
+  
+  const openInvoiceModal = () => {
+    if (!tow) return
+    setInvoiceData({
+      description: `גרירה - ${getFromAddress()} → ${getToAddress()}`,
+      amount: tow.final_price?.toString() || ''
+    })
+    setShowInvoiceModal(true)
+  }
+
+  const handleCreateInvoice = async () => {
+    if (!tow || !companyId || !invoiceData.amount) return
+    setCreatingInvoice(true)
+    try {
+      await createInvoiceFromTow(
+        companyId,
+        tow.id,
+        tow.customer_id,
+        parseFloat(invoiceData.amount),
+        invoiceData.description || `גרירה - ${getFromAddress()} → ${getToAddress()}`
+      )
+      setHasInvoice(true)
+      setShowInvoiceModal(false)
+      alert('החשבונית נוצרה בהצלחה!')
+    } catch (error) {
+      console.error('Error creating invoice:', error)
+      alert('שגיאה ביצירת חשבונית')
+    } finally {
+      setCreatingInvoice(false)
+    }
   }
 
   const renderDriverModal = () => (
     <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
       <div className="bg-white w-full lg:max-w-lg lg:rounded-2xl lg:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
-          <h2 className="font-bold text-lg">{towData.driver ? 'שינוי נהג' : 'שיבוץ נהג'}</h2>
+          <h2 className="font-bold text-lg">{tow?.driver ? 'שינוי נהג' : 'שיבוץ נהג'}</h2>
           <button onClick={closeDriverModal} className="p-2 hover:bg-white/20 rounded-lg">
             <X size={20} />
           </button>
         </div>
 
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
-          <div className="relative mb-3">
+          <div className="relative">
             <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -433,70 +388,47 @@ export default function TowDetailsPage() {
               className="w-full pr-10 pl-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
             />
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setDriverFilter('all')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                driverFilter === 'all' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              הכל
-            </button>
-            <button
-              onClick={() => setDriverFilter('available')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                driverFilter === 'available' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              זמינים בלבד
-            </button>
-          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {!selectedDriver ? (
+          {!selectedDriverId ? (
             <div className="space-y-2">
-              {filteredDrivers.map((driver) => (
-                <button
-                  key={driver.id}
-                  onClick={() => handleSelectDriver(driver)}
-                  disabled={driver.status === 'offline'}
-                  className={`w-full p-4 rounded-xl border text-right transition-colors ${
-                    driver.status === 'offline' 
-                      ? 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
-                      : 'bg-white border-gray-200 hover:border-[#33d4ff] hover:bg-[#33d4ff]/5'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
+              {filteredDrivers.map((driver) => {
+                const driverTrucks = getDriverTrucks(driver.id)
+                return (
+                  <button
+                    key={driver.id}
+                    onClick={() => driverTrucks.length > 0 && setSelectedDriverId(driver.id)}
+                    disabled={driverTrucks.length === 0}
+                    className={`w-full p-4 rounded-xl border text-right transition-colors ${
+                      driverTrucks.length === 0 
+                        ? 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
+                        : 'bg-white border-gray-200 hover:border-[#33d4ff] hover:bg-[#33d4ff]/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                         <User size={24} className="text-gray-400" />
                       </div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white ${driverStatusConfig[driver.status].dot}`}></div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-gray-800">{driver.name}</p>
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${driverStatusConfig[driver.status].color}`}>
-                          {driverStatusConfig[driver.status].label}
-                        </span>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">{driver.user.full_name}</p>
+                        <p className="text-sm text-gray-500">{driver.user.phone}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {driverTrucks.length > 0 ? `${driverTrucks.length} גררים` : 'אין גרר משויך'}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-500">{driver.phone}</p>
-                      <p className="text-xs text-gray-400 mt-1">{driver.currentTows} גרירות היום</p>
+                      <ChevronLeft size={20} className="text-gray-400" />
                     </div>
-                    <ChevronLeft size={20} className="text-gray-400" />
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
           ) : (
             <div className="space-y-4">
               <button
                 onClick={() => {
-                  setSelectedDriver(null)
-                  setSelectedTruck(null)
-                  setShowBusyWarning(false)
-                  setShowCapacityWarning(false)
+                  setSelectedDriverId(null)
+                  setSelectedTruckId(null)
                 }}
                 className="flex items-center gap-2 text-[#33d4ff] text-sm font-medium"
               >
@@ -510,79 +442,47 @@ export default function TowDetailsPage() {
                     <User size={24} className="text-gray-400" />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-800">{selectedDriver.name}</p>
-                    <p className="text-sm text-gray-500">{selectedDriver.phone}</p>
+                    <p className="font-bold text-gray-800">
+                      {drivers.find(d => d.id === selectedDriverId)?.user.full_name}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {drivers.find(d => d.id === selectedDriverId)?.user.phone}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {showBusyWarning && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex gap-3">
-                  <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-amber-800">הנהג כרגע בגרירה</p>
-                    <p className="text-sm text-amber-600 mt-1">האם לשבץ אותו בכל זאת?</p>
-                  </div>
-                </div>
-              )}
-
-              {selectedDriver.trucks.length > 0 ? (
-                <div>
-                  <h3 className="font-medium text-gray-800 mb-3">בחר גרר:</h3>
-                  <div className="space-y-2">
-                    {selectedDriver.trucks.map((truck) => (
-                      <button
-                        key={truck.id}
-                        onClick={() => handleSelectTruck(truck)}
-                        className={`w-full p-4 rounded-xl border text-right transition-colors ${
-                          selectedTruck === truck.id
-                            ? 'border-[#33d4ff] bg-[#33d4ff]/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            selectedTruck === truck.id ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-400'
-                          }`}>
-                            <Truck size={20} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-800">{truck.name}</p>
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm text-gray-500 font-mono">{truck.plate}</p>
-                              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                                קיבולת: {truck.capacity} רכבים
-                              </span>
-                            </div>
-                          </div>
-                          {selectedTruck === truck.id && (
-                            <CheckCircle size={20} className="text-[#33d4ff]" />
-                          )}
+              <div>
+                <h3 className="font-medium text-gray-800 mb-3">בחר גרר:</h3>
+                <div className="space-y-2">
+                  {getDriverTrucks(selectedDriverId).map((truck) => (
+                    <button
+                      key={truck.id}
+                      onClick={() => setSelectedTruckId(truck.id)}
+                      className={`w-full p-4 rounded-xl border text-right transition-colors ${
+                        selectedTruckId === truck.id
+                          ? 'border-[#33d4ff] bg-[#33d4ff]/5'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          selectedTruckId === truck.id ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          <Truck size={20} />
                         </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {showCapacityWarning && (
-                    <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-xl flex gap-3">
-                      <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-medium text-amber-800">בעיית קיבולת</p>
-                        <p className="text-sm text-amber-600 mt-1">{capacityWarningMessage}</p>
-                        <p className="text-sm text-amber-700 mt-2 font-medium">להמשיך בכל זאת?</p>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">{truck.truck_type}</p>
+                          <p className="text-sm text-gray-500 font-mono">{truck.plate_number}</p>
+                        </div>
+                        {selectedTruckId === truck.id && (
+                          <CheckCircle size={20} className="text-[#33d4ff]" />
+                        )}
                       </div>
-                    </div>
-                  )}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex gap-3">
-                  <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-red-800">אין גרר משויך</p>
-                    <p className="text-sm text-red-600 mt-1">יש לשייך גרר לנהג לפני השיבוץ</p>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
         </div>
@@ -595,16 +495,38 @@ export default function TowDetailsPage() {
             ביטול
           </button>
           <button
-            onClick={handleAssign}
-            disabled={!selectedDriver || !selectedTruck}
+            onClick={handleAssignDriver}
+            disabled={!selectedDriverId || !selectedTruckId || assigning}
             className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
           >
-            {towData.driver ? 'שנה נהג' : 'שבץ נהג'}
+            {assigning ? 'משבץ...' : tow?.driver ? 'שנה נהג' : 'שבץ נהג'}
           </button>
         </div>
       </div>
     </div>
   )
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-500">טוען גרירה...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !tow) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{error || 'הגרירה לא נמצאה'}</p>
+          <Link href="/dashboard/tows" className="text-[#33d4ff]">חזרה לרשימת גרירות</Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -617,12 +539,12 @@ export default function TowDetailsPage() {
               </Link>
               <div>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <h1 className="font-bold text-gray-800 text-base sm:text-lg font-mono">{towData.id}</h1>
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${statusConfig[towData.status]?.color}`}>
-                    {statusConfig[towData.status]?.label}
+                  <h1 className="font-bold text-gray-800 text-base sm:text-lg font-mono">{tow.id.slice(0, 8)}</h1>
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${statusConfig[tow.status]?.color}`}>
+                    {statusConfig[tow.status]?.label}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 hidden sm:block">נוצר ב-{towData.createdAt}</p>
+                <p className="text-xs text-gray-500 hidden sm:block">נוצר ב-{new Date(tow.created_at).toLocaleString('he-IL')}</p>
               </div>
             </div>
 
@@ -631,6 +553,7 @@ export default function TowDetailsPage() {
                 <>
                   <button 
                     onClick={handleCancelEdit}
+                    disabled={saving}
                     className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm flex items-center gap-2"
                   >
                     <X size={18} />
@@ -638,10 +561,11 @@ export default function TowDetailsPage() {
                   </button>
                   <button 
                     onClick={handleSaveChanges}
-                    className="p-2 sm:px-3 sm:py-2 bg-[#33d4ff] text-white hover:bg-[#21b8e6] rounded-lg text-sm flex items-center gap-2"
+                    disabled={saving}
+                    className="p-2 sm:px-3 sm:py-2 bg-[#33d4ff] text-white hover:bg-[#21b8e6] rounded-lg text-sm flex items-center gap-2 disabled:bg-gray-300"
                   >
                     <Save size={18} />
-                    <span className="hidden sm:inline">שמור</span>
+                    <span className="hidden sm:inline">{saving ? 'שומר...' : 'שמור'}</span>
                   </button>
                 </>
               ) : (
@@ -701,6 +625,7 @@ export default function TowDetailsPage() {
         {activeTab === 'details' && (
           <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
             <div className="flex-1 space-y-4 sm:space-y-6">
+              {/* פרטי לקוח */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
                   <h2 className="font-bold text-gray-800 flex items-center gap-2">
@@ -711,72 +636,62 @@ export default function TowDetailsPage() {
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm text-gray-600 mb-1">שם לקוח</label>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">חיפוש לקוח</label>
+                        <div className="relative">
                           <input
                             type="text"
-                            value={editForm.customerName}
-                            onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            placeholder="שם או טלפון..."
+                            value={editCustomerSearch}
+                            onChange={(e) => {
+                              setEditCustomerSearch(e.target.value)
+                              setShowCustomerResults(e.target.value.length > 0)
+                            }}
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-600 mb-1">טלפון</label>
-                          <input
-                            type="tel"
-                            value={editForm.customerPhone}
-                            onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">סוג לקוח</label>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditForm({ ...editForm, customerType: 'private' })}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              editForm.customerType === 'private' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            פרטי
-                          </button>
-                          <button
-                            onClick={() => setEditForm({ ...editForm, customerType: 'business' })}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              editForm.customerType === 'business' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            עסקי
-                          </button>
+                          {showCustomerResults && filteredCustomers.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden max-h-48 overflow-y-auto">
+                              {filteredCustomers.map((customer) => (
+                                <div
+                                  key={customer.id}
+                                  onClick={() => {
+                                    setEditCustomerId(customer.id)
+                                    setEditCustomerSearch(customer.name)
+                                    setShowCustomerResults(false)
+                                  }}
+                                  className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                >
+                                  <p className="font-medium text-gray-800">{customer.name}</p>
+                                  <p className="text-sm text-gray-500">{customer.phone}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-gray-800">{towData.customer.name}</p>
-                        <a href={`tel:${towData.customer.phone}`} className="text-[#33d4ff] text-sm flex items-center gap-1 mt-1">
-                          <Phone size={14} />
-                          {towData.customer.phone}
-                        </a>
+                        <p className="font-medium text-gray-800">{tow.customer?.name || 'לא צוין'}</p>
+                        {tow.customer?.phone && (
+                          <a href={`tel:${tow.customer.phone}`} className="text-[#33d4ff] text-sm flex items-center gap-1 mt-1">
+                            <Phone size={14} />
+                            {tow.customer.phone}
+                          </a>
+                        )}
                       </div>
-                      <span className={`px-2 py-1 text-xs rounded-lg ${
-                        towData.customer.type === 'business' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {towData.customer.type === 'business' ? 'עסקי' : 'פרטי'}
-                      </span>
                     </div>
                   )}
                 </div>
               </div>
 
+              {/* רכבים */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
                   <h2 className="font-bold text-gray-800 flex items-center gap-2">
                     <Truck size={18} />
-                    רכבים ({isEditing ? editForm.vehicles.length : towData.vehicles.length})
+                    רכבים ({isEditing ? editVehicles.length : tow.vehicles?.length || 0})
                   </h2>
                   {isEditing && (
                     <button 
@@ -791,11 +706,11 @@ export default function TowDetailsPage() {
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
                     <div className="space-y-4">
-                      {editForm.vehicles.map((vehicle, idx) => (
+                      {editVehicles.map((vehicle, idx) => (
                         <div key={vehicle.id} className="p-4 border border-gray-200 rounded-xl">
                           <div className="flex items-center justify-between mb-3">
                             <span className="font-medium text-gray-800">רכב {idx + 1}</span>
-                            {editForm.vehicles.length > 1 && (
+                            {editVehicles.length > 1 && (
                               <button 
                                 onClick={() => removeVehicle(vehicle.id)}
                                 className="text-red-500 hover:text-red-600"
@@ -809,8 +724,8 @@ export default function TowDetailsPage() {
                               <label className="block text-xs text-gray-500 mb-1">מספר רישוי</label>
                               <input
                                 type="text"
-                                value={vehicle.plate}
-                                onChange={(e) => updateVehicle(vehicle.id, 'plate', e.target.value)}
+                                value={vehicle.plateNumber}
+                                onChange={(e) => updateVehicle(vehicle.id, 'plateNumber', e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                               />
                             </div>
@@ -843,53 +758,54 @@ export default function TowDetailsPage() {
                             </div>
                           </div>
                           <div className="mt-3">
-                            <label className="block text-xs text-gray-500 mb-2">תקלות</label>
-                            <div className="flex flex-wrap gap-2">
-                              {defectOptions.map((defect) => (
-                                <button
-                                  key={defect}
-                                  onClick={() => toggleVehicleDefect(vehicle.id, defect)}
-                                  className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                                    vehicle.defects.includes(defect)
-                                      ? 'bg-red-100 text-red-600 border border-red-200'
-                                      : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                  }`}
-                                >
-                                  {defect}
-                                </button>
-                              ))}
-                            </div>
+                            <label className="block text-xs text-gray-500 mb-1">תקלה</label>
+                            <input
+                              type="text"
+                              value={vehicle.towReason}
+                              onChange={(e) => updateVehicle(vehicle.id, 'towReason', e.target.value)}
+                              placeholder="למשל: מנוע, תקר, סוללה..."
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            />
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {towData.vehicles.map((vehicle, idx) => (
+                      {tow.vehicles && tow.vehicles.length > 0 ? tow.vehicles.map((vehicle: any, idx: number) => (
                         <div key={vehicle.id} className={idx > 0 ? 'pt-4 border-t border-gray-100' : ''}>
                           <div className="flex items-center gap-4 mb-3">
                             <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
                               <Truck size={24} className="text-gray-400" />
                             </div>
                             <div>
-                              <p className="font-mono text-lg font-bold text-gray-800">{vehicle.plate}</p>
-                              <p className="text-sm text-gray-500">{vehicle.manufacturer} {vehicle.model}, {vehicle.year}</p>
+                              <p className="font-mono text-lg font-bold text-gray-800">{vehicle.plate_number}</p>
+                              <p className="text-sm text-gray-500">
+                                {vehicle.manufacturer} {vehicle.model}{vehicle.year ? `, ${vehicle.year}` : ''}
+                              </p>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.type}</span>
-                            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.color}</span>
-                            {vehicle.defects.map((defect, defIdx) => (
-                              <span key={defIdx} className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-sm">{defect}</span>
-                            ))}
+                            {vehicle.vehicle_type && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.vehicle_type}</span>
+                            )}
+                            {vehicle.color && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.color}</span>
+                            )}
+                            {vehicle.tow_reason && (
+                              <span className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-sm">{vehicle.tow_reason}</span>
+                            )}
                           </div>
                         </div>
-                      ))}
+                      )) : (
+                        <p className="text-gray-500">אין רכבים</p>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
 
+              {/* מסלול */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
                   <h2 className="font-bold text-gray-800 flex items-center gap-2">
@@ -904,104 +820,44 @@ export default function TowDetailsPage() {
                         <label className="block text-sm text-gray-600 mb-1">כתובת מוצא</label>
                         <input
                           type="text"
-                          value={editForm.routeFrom}
-                          onChange={(e) => setEditForm({ ...editForm, routeFrom: e.target.value })}
+                          value={editFromAddress}
+                          onChange={(e) => setEditFromAddress(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                         />
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">איש קשר במוצא</label>
-                          <input
-                            type="text"
-                            value={editForm.sourceContactName}
-                            onChange={(e) => setEditForm({ ...editForm, sourceContactName: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">טלפון</label>
-                          <input
-                            type="tel"
-                            value={editForm.sourceContactPhone}
-                            onChange={(e) => setEditForm({ ...editForm, sourceContactPhone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                          />
-                        </div>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 mb-1">כתובת יעד</label>
                         <input
                           type="text"
-                          value={editForm.routeTo}
-                          onChange={(e) => setEditForm({ ...editForm, routeTo: e.target.value })}
+                          value={editToAddress}
+                          onChange={(e) => setEditToAddress(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                         />
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">איש קשר ביעד</label>
-                          <input
-                            type="text"
-                            value={editForm.destContactName}
-                            onChange={(e) => setEditForm({ ...editForm, destContactName: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">טלפון</label>
-                          <input
-                            type="tel"
-                            value={editForm.destContactPhone}
-                            onChange={(e) => setEditForm({ ...editForm, destContactPhone: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                          />
-                        </div>
-                      </div>
-                      <button
-                        onClick={recalculatePrice}
-                        className="flex items-center gap-2 text-[#33d4ff] text-sm font-medium hover:text-[#21b8e6]"
-                      >
-                        <RefreshCw size={16} />
-                        חשב מרחק ומחיר מחדש
-                      </button>
                     </div>
                   ) : (
-                    <>
-                      <div className="flex gap-3 sm:gap-4">
-                        <div className="flex flex-col items-center pt-1">
-                          <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                          <div className="w-0.5 flex-1 bg-gray-200 my-1"></div>
-                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <div className="flex gap-3 sm:gap-4">
+                      <div className="flex flex-col items-center pt-1">
+                        <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
+                        <div className="w-0.5 flex-1 bg-gray-200 my-1"></div>
+                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <div>
+                          <p className="text-sm text-gray-500">מוצא</p>
+                          <p className="font-medium text-gray-800">{getFromAddress()}</p>
                         </div>
-                        <div className="flex-1 space-y-4">
-                          <div>
-                            <p className="text-sm text-gray-500">מוצא</p>
-                            <p className="font-medium text-gray-800">{towData.route.from}</p>
-                            <p className="text-sm text-gray-500 mt-1">איש קשר: {towData.contacts.source.name}, {towData.contacts.source.phone}</p>
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-500">יעד</p>
-                            <p className="font-medium text-gray-800">{towData.route.to}</p>
-                            <p className="text-sm text-gray-500 mt-1">איש קשר: {towData.contacts.destination.name}, {towData.contacts.destination.phone}</p>
-                          </div>
+                        <div>
+                          <p className="text-sm text-gray-500">יעד</p>
+                          <p className="font-medium text-gray-800">{getToAddress()}</p>
                         </div>
                       </div>
-                      <div className="flex gap-4 mt-4 pt-4 border-t border-gray-100">
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">מרחק</p>
-                          <p className="font-bold text-gray-800">{towData.route.distance}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-sm text-gray-500">זמן משוער</p>
-                          <p className="font-bold text-gray-800">{towData.route.duration}</p>
-                        </div>
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
 
+              {/* הערות */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
                   <h2 className="font-bold text-gray-800">הערות</h2>
@@ -1009,34 +865,41 @@ export default function TowDetailsPage() {
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
                     <textarea
-                      value={editForm.notes}
-                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
                       rows={3}
+                      placeholder="הערות לגרירה..."
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
                   ) : (
-                    <p className="text-gray-600">{towData.notes || 'אין הערות'}</p>
+                    <p className="text-gray-600">{tow.notes || 'אין הערות'}</p>
                   )}
                 </div>
               </div>
             </div>
 
+            {/* סיידבר */}
             <div className="lg:w-80 space-y-4 sm:space-y-6">
+              {/* נהג */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-[#33d4ff] text-white">
                   <h2 className="font-bold">נהג</h2>
                 </div>
                 <div className="p-4 sm:p-5">
-                  {towData.driver ? (
+                  {tow.driver ? (
                     <div>
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                           <User size={24} className="text-gray-400" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800">{towData.driver.name}</p>
-                          <a href={`tel:${towData.driver.phone}`} className="text-[#33d4ff] text-sm">{towData.driver.phone}</a>
-                          <p className="text-xs text-gray-500 mt-1">{towData.driver.truck}</p>
+                          <p className="font-medium text-gray-800">{tow.driver.user?.full_name}</p>
+                          {tow.driver.user?.phone && (
+                            <a href={`tel:${tow.driver.user.phone}`} className="text-[#33d4ff] text-sm">{tow.driver.user.phone}</a>
+                          )}
+                          {tow.truck && (
+                            <p className="text-xs text-gray-500 mt-1">{tow.truck.plate_number}</p>
+                          )}
                         </div>
                       </div>
                       {canEdit && (
@@ -1073,171 +936,71 @@ export default function TowDetailsPage() {
                 </div>
               </div>
 
+              {/* מחיר */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-800 text-white">
                   <h2 className="font-bold">מחיר</h2>
                 </div>
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <label className="text-sm text-gray-500">מחיר בסיס</label>
-                        <input
-                          type="number"
-                          value={editForm.pricingBase}
-                          onChange={(e) => setEditForm({ ...editForm, pricingBase: Number(e.target.value) })}
-                          className="w-24 px-2 py-1 border border-gray-200 rounded text-left text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <label className="text-sm text-gray-500">מרחק</label>
-                        <input
-                          type="number"
-                          value={editForm.pricingDistance}
-                          onChange={(e) => setEditForm({ ...editForm, pricingDistance: Number(e.target.value) })}
-                          className="w-24 px-2 py-1 border border-gray-200 rounded text-left text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <label className="text-sm text-gray-500">תוספות</label>
-                        <input
-                          type="number"
-                          value={editForm.pricingSurcharge}
-                          onChange={(e) => setEditForm({ ...editForm, pricingSurcharge: Number(e.target.value) })}
-                          className="w-24 px-2 py-1 border border-gray-200 rounded text-left text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <label className="text-sm text-gray-500">הנחה</label>
-                        <input
-                          type="number"
-                          value={editForm.pricingDiscount}
-                          onChange={(e) => setEditForm({ ...editForm, pricingDiscount: Number(e.target.value) })}
-                          className="w-24 px-2 py-1 border border-gray-200 rounded text-left text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
-                      </div>
-                      <button
-                        onClick={recalculatePrice}
-                        className="w-full py-2 border border-[#33d4ff] text-[#33d4ff] rounded-lg text-sm font-medium hover:bg-[#33d4ff]/5"
-                      >
-                        חשב סה״כ
-                      </button>
-                      <div className="border-t border-gray-200 pt-3">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-gray-800">סה״כ</span>
-                          <span className="text-xl font-bold text-gray-800">{editForm.pricingTotal} ש״ח</span>
-                        </div>
-                      </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">מחיר סופי</label>
+                      <input
+                        type="number"
+                        value={editFinalPrice}
+                        onChange={(e) => setEditFinalPrice(Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
                     </div>
                   ) : (
-                    <>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">מחיר בסיס</span>
-                          <span className="text-gray-700">{towData.pricing.base} ש״ח</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">מרחק ({towData.route.distance})</span>
-                          <span className="text-gray-700">{towData.pricing.distance} ש״ח</span>
-                        </div>
-                        {towData.pricing.surcharge > 0 && (
-                          <div className="flex justify-between text-amber-600">
-                            <span>תוספות</span>
-                            <span>{towData.pricing.surcharge} ש״ח</span>
-                          </div>
-                        )}
-                        {towData.pricing.discount > 0 && (
-                          <div className="flex justify-between text-emerald-600">
-                            <span>הנחה</span>
-                            <span>-{towData.pricing.discount} ש״ח</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="border-t border-gray-200 mt-4 pt-4">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-gray-800">סה״כ</span>
-                          <span className="text-2xl font-bold text-gray-800">{towData.pricing.total} ש״ח</span>
-                        </div>
-                      </div>
-                    </>
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-gray-800">סה״כ</span>
+                      <span className="text-2xl font-bold text-gray-800">{tow.final_price || 0} ש״ח</span>
+                    </div>
                   )}
                 </div>
               </div>
 
+              {/* חשבונית */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
-                  <h2 className="font-bold text-gray-800">תשלום</h2>
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-emerald-500 text-white">
+                  <h2 className="font-bold flex items-center gap-2">
+                    <Receipt size={18} />
+                    חשבונית
+                  </h2>
                 </div>
-                <div className="p-4 sm:p-5 space-y-3">
-                  {isEditing ? (
-                    <>
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-2">אמצעי תשלום</label>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEditForm({ ...editForm, paymentMethod: 'cash' })}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              editForm.paymentMethod === 'cash' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            מזומן
-                          </button>
-                          <button
-                            onClick={() => setEditForm({ ...editForm, paymentMethod: 'credit' })}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              editForm.paymentMethod === 'credit' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            אשראי
-                          </button>
-                          <button
-                            onClick={() => setEditForm({ ...editForm, paymentMethod: 'invoice' })}
-                            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              editForm.paymentMethod === 'invoice' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            חשבונית
-                          </button>
-                        </div>
+                <div className="p-4 sm:p-5">
+                  {hasInvoice ? (
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <CheckCircle size={24} className="text-emerald-600" />
                       </div>
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-1">שם לחשבונית</label>
-                        <input
-                          type="text"
-                          value={editForm.invoiceName}
-                          onChange={(e) => setEditForm({ ...editForm, invoiceName: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">אמצעי תשלום</span>
-                        <span className="text-gray-700">
-                          {towData.payment.method === 'cash' && 'מזומן'}
-                          {towData.payment.method === 'credit' && 'אשראי'}
-                          {towData.payment.method === 'invoice' && 'חשבונית ס״ח'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">שם לחשבונית</span>
-                        <span className="text-gray-700">{towData.payment.invoiceName}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">סטטוס</span>
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          towData.payment.status === 'paid' 
-                            ? 'bg-emerald-100 text-emerald-700' 
-                            : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {towData.payment.status === 'paid' ? 'שולם' : 'טרם שולם'}
-                        </span>
-                      </div>
-                      <button className="w-full mt-2 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors">
+                      <p className="text-gray-700 mb-3">חשבונית הופקה</p>
+                      <Link
+                        href={`/dashboard/invoices?tow=${tow.id}`}
+                        className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <FileText size={18} />
+                        צפה בחשבונית
+                      </Link>
+                    </div>
+                  ) : tow.status === 'completed' ? (
+                    <div className="text-center">
+                      <p className="text-gray-500 mb-4">לא הופקה חשבונית</p>
+                      <button
+                        onClick={openInvoiceModal}
+                        className="w-full py-3 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Receipt size={18} />
                         הפק חשבונית
                       </button>
-                    </>
+                    </div>
+                  ) : (
+                    <div className="text-center py-2">
+                      <p className="text-gray-400 text-sm">
+                        ניתן להפיק חשבונית לאחר השלמת הגרירה
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1251,26 +1014,18 @@ export default function TowDetailsPage() {
               <h2 className="font-bold text-gray-800">היסטוריית סטטוסים</h2>
             </div>
             <div className="p-4 sm:p-5">
-              <div className="relative">
-                {towData.statusHistory.map((item, idx) => (
-                  <div key={idx} className="flex gap-4 pb-6 last:pb-0">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-3 h-3 rounded-full ${idx === towData.statusHistory.length - 1 ? 'bg-[#33d4ff]' : 'bg-gray-300'}`}></div>
-                      {idx < towData.statusHistory.length - 1 && (
-                        <div className="w-0.5 h-full bg-gray-200 mt-1"></div>
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusConfig[item.status]?.color}`}>
-                          {statusConfig[item.status]?.label}
-                        </span>
-                        <span className="text-sm text-gray-500">{item.time}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">על ידי {item.user}</p>
-                    </div>
+              <div className="flex gap-4 pb-6">
+                <div className="flex flex-col items-center">
+                  <div className="w-3 h-3 rounded-full bg-[#33d4ff]"></div>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusConfig[tow.status]?.color}`}>
+                      {statusConfig[tow.status]?.label}
+                    </span>
+                    <span className="text-sm text-gray-500">{new Date(tow.created_at).toLocaleString('he-IL')}</span>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>
@@ -1291,6 +1046,7 @@ export default function TowDetailsPage() {
         )}
       </div>
 
+      {/* מודלים */}
       {(showAssignModal || showChangeDriverModal) && renderDriverModal()}
 
       {showCantEditModal && (
@@ -1324,7 +1080,6 @@ export default function TowDetailsPage() {
               </div>
               <h2 className="text-lg font-bold text-gray-800 mb-2">הסרת נהג</h2>
               <p className="text-gray-600">האם להסיר את הנהג מהגרירה?</p>
-              <p className="text-sm text-gray-500 mt-2">הנהג יקבל התראה על ההסרה</p>
             </div>
             <div className="flex gap-3 px-5 pb-5">
               <button
@@ -1376,8 +1131,7 @@ export default function TowDetailsPage() {
                     <AlertTriangle size={32} className="text-amber-600" />
                   </div>
                   <h2 className="text-lg font-bold text-gray-800 mb-2">הגרירה בביצוע</h2>
-                  <p className="text-gray-600">הגרירה כבר בביצוע, הנהג בדרך או באיסוף.</p>
-                  <p className="text-gray-600 mt-2">האם לבטל בכל זאת?</p>
+                  <p className="text-gray-600">הגרירה כבר בביצוע. האם לבטל בכל זאת?</p>
                 </div>
                 <div className="flex gap-3 px-5 pb-5">
                   <button
@@ -1405,15 +1159,11 @@ export default function TowDetailsPage() {
                   <div className="p-4 bg-gray-50 rounded-xl">
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-gray-500">מספר גרירה</span>
-                      <span className="font-mono font-bold text-gray-800">{towData.id}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-gray-500">לקוח</span>
-                      <span className="text-gray-800">{towData.customer.name}</span>
+                      <span className="font-mono font-bold text-gray-800">{tow.id.slice(0, 8)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">סה״כ</span>
-                      <span className="font-bold text-gray-800">{towData.pricing.total} ש״ח</span>
+                      <span className="text-gray-500">לקוח</span>
+                      <span className="text-gray-800">{tow.customer?.name || 'לא צוין'}</span>
                     </div>
                   </div>
 
@@ -1427,28 +1177,6 @@ export default function TowDetailsPage() {
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
-
-                  {towData.driver && (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm">
-                      <p className="text-amber-800">
-                        <strong>שים לב:</strong> הנהג {towData.driver.name} ישוחרר מהמשימה ויקבל התראה
-                      </p>
-                    </div>
-                  )}
-
-                  {towData.payment.hasInvoice && (
-                    <div className={`p-3 rounded-xl text-sm ${towData.payment.invoicePaid ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
-                      {towData.payment.invoicePaid ? (
-                        <p className="text-red-800">
-                          <strong>שים לב:</strong> קיימת חשבונית ששולמה. יש לטפל בזיכוי בנפרד.
-                        </p>
-                      ) : (
-                        <p className="text-blue-800">
-                          החשבונית תבוטל אוטומטית
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   <div className="flex items-center gap-3">
                     <button
@@ -1488,7 +1216,6 @@ export default function TowDetailsPage() {
                   </div>
                   <h2 className="text-lg font-bold text-gray-800 mb-2">אישור ביטול</h2>
                   <p className="text-gray-600">האם אתה בטוח שברצונך לבטל את הגרירה?</p>
-                  <p className="text-sm text-gray-500 mt-2">פעולה זו לא ניתנת לביטול</p>
                 </div>
                 <div className="flex gap-3 px-5 pb-5">
                   <button
@@ -1506,6 +1233,101 @@ export default function TowDetailsPage() {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* מודל הפקת חשבונית */}
+      {showInvoiceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+          <div className="bg-white w-full sm:rounded-2xl sm:max-w-md sm:mx-4 overflow-hidden rounded-t-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-emerald-500 text-white">
+              <h2 className="font-bold text-lg">הפקת חשבונית</h2>
+              <button
+                onClick={() => setShowInvoiceModal(false)}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* פרטי לקוח */}
+              <div className="p-3 bg-gray-50 rounded-xl">
+                <p className="text-sm text-gray-500">לקוח</p>
+                <p className="font-medium text-gray-800">
+                  {tow.customer?.name || 'לקוח מזדמן'}
+                </p>
+              </div>
+
+              {/* תיאור */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">תיאור</label>
+                <input
+                  type="text"
+                  value={invoiceData.description}
+                  onChange={(e) => setInvoiceData({ ...invoiceData, description: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              {/* סכום */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  סכום (לפני מע״מ) <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">₪</span>
+                  <input
+                    type="number"
+                    value={invoiceData.amount}
+                    onChange={(e) => setInvoiceData({ ...invoiceData, amount: e.target.value })}
+                    className="w-full pr-8 pl-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* סיכום */}
+              {invoiceData.amount && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">סכום לפני מע״מ</span>
+                    <span>₪{parseFloat(invoiceData.amount).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">מע״מ (17%)</span>
+                    <span>₪{(parseFloat(invoiceData.amount) * 0.17).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between font-bold border-t border-emerald-200 pt-2">
+                    <span>סה״כ</span>
+                    <span className="text-emerald-700">₪{(parseFloat(invoiceData.amount) * 1.17).toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setShowInvoiceModal(false)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={handleCreateInvoice}
+                disabled={!invoiceData.amount || creatingInvoice}
+                className="flex-1 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 disabled:bg-gray-300 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                {creatingInvoice ? (
+                  'יוצר...'
+                ) : (
+                  <>
+                    <Receipt size={18} />
+                    צור חשבונית
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

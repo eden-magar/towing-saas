@@ -1,10 +1,22 @@
-import Sidebar from '../components/Sidebar'
+'use client'
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+import Sidebar from '../components/Sidebar'
+import { AuthProvider, useAuth } from '../lib/AuthContext'
+
+function DashboardContent({ children }: { children: React.ReactNode }) {
+  const { loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500">טוען...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar />
@@ -12,5 +24,17 @@ export default function DashboardLayout({
         {children}
       </main>
     </div>
+  )
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <AuthProvider>
+      <DashboardContent>{children}</DashboardContent>
+    </AuthProvider>
   )
 }

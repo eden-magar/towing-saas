@@ -1,6 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useAuth } from '../../lib/AuthContext'
+import { getDriverByUserId, updateDriverStatus, DriverInfo } from '../../lib/queries/driver-tasks'
+import { supabase } from '../../lib/supabase'
 import { 
   User,
   Truck,
@@ -17,24 +20,45 @@ import {
   Wrench,
   AlertTriangle,
   Coffee,
-  Car,
   UserX,
   MessageSquare,
-  Timer
+  Timer,
+  Loader2
 } from 'lucide-react'
 
 type DriverStatus = 'available' | 'busy' | 'unavailable'
 type UnavailabilityReason = 'break' | 'end_of_day' | 'vehicle_issue' | 'personal' | 'other'
 
+interface TruckDetails {
+  id: string
+  plate_number: string
+  truck_type: string | null
+  manufacturer: string | null
+  model: string | null
+  year: number | null
+  color: string | null
+  vehicle_capacity: number | null
+  max_weight_kg: number | null
+  license_expiry: string | null
+  insurance_expiry: string | null
+  test_expiry: string | null
+}
+
 interface HistoryItem {
-  id: number
-  date: string
-  customer: string
-  from: string
-  to: string
-  vehicle: string
-  status: 'completed' | 'cancelled'
-  price: number
+  id: string
+  created_at: string
+  status: string
+  final_price: number | null
+  customer: { name: string } | null
+  vehicles: { plate_number: string }[]
+  legs: { from_address: string | null; to_address: string | null }[]
+}
+
+interface DriverStats {
+  weekTows: number
+  monthTows: number
+  completedPercent: number
+  totalKm: number
 }
 
 const unavailabilityReasons: { key: UnavailabilityReason; label: string; icon: React.ReactNode }[] = [
@@ -54,6 +78,16 @@ const returnTimeOptions = [
 ]
 
 export default function DriverProfilePage() {
+  const { user, loading: authLoading } = useAuth()
+  
+  // Data state
+  const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null)
+  const [truck, setTruck] = useState<TruckDetails | null>(null)
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [stats, setStats] = useState<DriverStats>({ weekTows: 0, monthTows: 0, completedPercent: 0, totalKm: 0 })
+  const [loading, setLoading] = useState(true)
+  
+  // UI state
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'truck'>('stats')
   const [status, setStatus] = useState<DriverStatus>('available')
   const [showStatusModal, setShowStatusModal] = useState(false)
@@ -63,38 +97,120 @@ export default function DriverProfilePage() {
   const [customNote, setCustomNote] = useState('')
   const [isUpdating, setIsUpdating] = useState(false)
 
-  // Mock driver data
-  const driver = {
-    name: 'דוד אברהם',
-    phone: '050-1234567',
-    email: 'david@example.com',
-    license: '12345678',
-    rating: 4.8,
-    totalTows: 523,
-    memberSince: '2022',
+  // טעינת נתונים
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadData()
+    }
+  }, [authLoading, user])
+
+  const loadData = async () => {
+    if (!user) return
+    setLoading(true)
+
+    try {
+      // שליפת פרטי נהג
+      const driver = await getDriverByUserId(user.id)
+      if (driver) {
+        setDriverInfo(driver)
+        setStatus(driver.status || 'unavailable')
+
+        // שליפת פרטי גרר מלאים
+        if (driver.truck?.id) {
+          const { data: truckData } = await supabase
+            .from('tow_trucks')
+            .select('*')
+            .eq('id', driver.truck.id)
+            .single()
+          
+          if (truckData) setTruck(truckData)
+        }
+
+        // שליפת היסטוריה
+        const { data: historyData } = await supabase
+          .from('tows')
+          .select(`
+            id,
+            created_at,
+            status,
+            final_price,
+            customer:customers(name),
+            vehicles:tow_vehicles(plate_number),
+            legs:tow_legs(from_address, to_address)
+          `)
+          .eq('driver_id', driver.id)
+          .in('status', ['completed', 'cancelled'])
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        if (historyData) {
+          setHistory(historyData as any)
+        }
+
+        // שליפת סטטיסטיקות
+        await loadStats(driver.id)
+      }
+    } catch (err) {
+      console.error('Error loading profile data:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Mock truck data
-  const truck = {
-    plate: '12-345-67',
-    type: 'גרר מתקפל',
-    model: 'איסוזו NQR',
-    year: 2021,
-    capacity: '3.5 טון',
-    maxWeight: '7,000 ק"ג',
-    nextService: '15/02/2025',
-    insurance: '30/06/2025',
-  }
+  const loadStats = async (driverId: string) => {
+    const now = new Date()
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-  // Mock history
-  const history: HistoryItem[] = [
-    { id: 1, date: '05/12/2024', customer: 'יוסי כהן', from: 'תל אביב', to: 'רמת גן', vehicle: '12-345-67', status: 'completed', price: 350 },
-    { id: 2, date: '04/12/2024', customer: 'מוסך רמט', from: 'חולון', to: 'בת ים', vehicle: '23-456-78', status: 'completed', price: 280 },
-    { id: 3, date: '04/12/2024', customer: 'שרה לוי', from: 'הרצליה', to: 'רעננה', vehicle: '34-567-89', status: 'cancelled', price: 0 },
-    { id: 4, date: '03/12/2024', customer: 'אבי ישראלי', from: 'פתח תקווה', to: 'בני ברק', vehicle: '45-678-90', status: 'completed', price: 320 },
-    { id: 5, date: '02/12/2024', customer: 'רונית דהן', from: 'ראשל"צ', to: 'נס ציונה', vehicle: '56-789-01', status: 'completed', price: 250 },
-    { id: 6, date: '01/12/2024', customer: 'מוסך השרון', from: 'נתניה', to: 'כפר סבא', vehicle: '67-890-12', status: 'completed', price: 400 },
-  ]
+    // גרירות השבוע
+    const { count: weekCount } = await supabase
+      .from('tows')
+      .select('*', { count: 'exact', head: true })
+      .eq('driver_id', driverId)
+      .gte('created_at', weekAgo)
+
+    // גרירות החודש
+    const { count: monthCount } = await supabase
+      .from('tows')
+      .select('*', { count: 'exact', head: true })
+      .eq('driver_id', driverId)
+      .gte('created_at', monthAgo)
+
+    // אחוז השלמה (מתוך החודש)
+    const { count: completedCount } = await supabase
+      .from('tows')
+      .select('*', { count: 'exact', head: true })
+      .eq('driver_id', driverId)
+      .eq('status', 'completed')
+      .gte('created_at', monthAgo)
+
+    const completedPercent = monthCount ? Math.round((completedCount || 0) / monthCount * 100) : 0
+
+    // סה"כ ק"מ החודש
+    const { data: legsData } = await supabase
+      .from('tow_legs')
+      .select('distance_km, tow_id')
+      .gte('created_at', monthAgo)
+
+    // סינון רק רגליים של הנהג הזה (דרך tows)
+    const { data: driverTows } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('driver_id', driverId)
+      .gte('created_at', monthAgo)
+
+    const driverTowIds = driverTows?.map(t => t.id) || []
+    const totalKm = legsData
+      ?.filter(l => driverTowIds.includes(l.tow_id))
+      ?.reduce((sum, l) => sum + (l.distance_km || 0), 0) || 0
+
+    setStats({
+      weekTows: weekCount || 0,
+      monthTows: monthCount || 0,
+      completedPercent,
+      totalKm: Math.round(totalKm)
+    })
+  }
 
   const getStatusInfo = (s: DriverStatus) => {
     switch (s) {
@@ -106,35 +222,44 @@ export default function DriverProfilePage() {
 
   const statusInfo = getStatusInfo(status)
 
-  const handleStatusChange = (newStatus: DriverStatus) => {
+  const handleStatusChange = async (newStatus: DriverStatus) => {
     if (newStatus === 'unavailable') {
       setShowStatusModal(false)
       setShowUnavailableModal(true)
     } else {
-      setStatus(newStatus)
-      setShowStatusModal(false)
+      setIsUpdating(true)
+      try {
+        if (driverInfo) {
+          await updateDriverStatus(driverInfo.id, newStatus)
+          setStatus(newStatus)
+        }
+      } catch (err) {
+        console.error('Error updating status:', err)
+        alert('שגיאה בעדכון הסטטוס')
+      } finally {
+        setIsUpdating(false)
+        setShowStatusModal(false)
+      }
     }
   }
 
   const handleConfirmUnavailable = async () => {
-    if (!selectedReason) return
+    if (!selectedReason || !driverInfo) return
     
     setIsUpdating(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // In production: send to server
-    console.log('Unavailable:', {
-      reason: selectedReason,
-      returnTime: selectedReturnTime,
-      note: customNote
-    })
-    
-    setStatus('unavailable')
-    setShowUnavailableModal(false)
-    setSelectedReason(null)
-    setSelectedReturnTime(null)
-    setCustomNote('')
-    setIsUpdating(false)
+    try {
+      await updateDriverStatus(driverInfo.id, 'unavailable')
+      setStatus('unavailable')
+      setShowUnavailableModal(false)
+      setSelectedReason(null)
+      setSelectedReturnTime(null)
+      setCustomNote('')
+    } catch (err) {
+      console.error('Error updating status:', err)
+      alert('שגיאה בעדכון הסטטוס')
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   const handleCancelUnavailable = () => {
@@ -145,6 +270,34 @@ export default function DriverProfilePage() {
     setCustomNote('')
   }
 
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('he-IL')
+  }
+
+  const getTruckTypeName = (type: string | null) => {
+    switch (type) {
+      case 'flatbed': return 'גרר מתקפל'
+      case 'wheel_lift': return 'גרר הרמה'
+      case 'integrated': return 'גרר משולב'
+      case 'heavy_duty': return 'גרר כבד'
+      default: return type || 'לא צוין'
+    }
+  }
+
+  // מצב טעינה
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
+      </div>
+    )
+  }
+
+  // פרטי נהג
+  const driverName = driverInfo?.user?.full_name || user?.full_name || 'נהג'
+  const driverPhone = user?.phone || ''
+  const driverEmail = user?.email || ''
+
   return (
     <div className="pb-24">
       {/* Header */}
@@ -154,12 +307,9 @@ export default function DriverProfilePage() {
             <User size={40} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">{driver.name}</h1>
+            <h1 className="text-2xl font-bold">{driverName}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <Star size={16} className="fill-yellow-400 text-yellow-400" />
-              <span className="font-medium">{driver.rating}</span>
-              <span className="text-white/70">•</span>
-              <span className="text-white/70">{driver.totalTows} גרירות</span>
+              <span className="text-white/70">{stats.monthTows} גרירות החודש</span>
             </div>
           </div>
         </div>
@@ -230,7 +380,7 @@ export default function DriverProfilePage() {
                   </div>
                   <span className="text-sm text-gray-500">השבוע</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-800">12</p>
+                <p className="text-2xl font-bold text-gray-800">{stats.weekTows}</p>
                 <p className="text-xs text-gray-500">גרירות</p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -240,7 +390,7 @@ export default function DriverProfilePage() {
                   </div>
                   <span className="text-sm text-gray-500">החודש</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-800">47</p>
+                <p className="text-2xl font-bold text-gray-800">{stats.monthTows}</p>
                 <p className="text-xs text-gray-500">גרירות</p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -250,7 +400,7 @@ export default function DriverProfilePage() {
                   </div>
                   <span className="text-sm text-gray-500">אחוז השלמה</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-800">98%</p>
+                <p className="text-2xl font-bold text-gray-800">{stats.completedPercent}%</p>
                 <p className="text-xs text-gray-500">מוצלח</p>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -260,7 +410,7 @@ export default function DriverProfilePage() {
                   </div>
                   <span className="text-sm text-gray-500">סה"כ</span>
                 </div>
-                <p className="text-2xl font-bold text-gray-800">1,250</p>
+                <p className="text-2xl font-bold text-gray-800">{stats.totalKm.toLocaleString()}</p>
                 <p className="text-xs text-gray-500">ק"מ החודש</p>
               </div>
             </div>
@@ -269,22 +419,18 @@ export default function DriverProfilePage() {
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <h3 className="font-bold text-gray-800 mb-3">פרטי קשר</h3>
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Phone size={18} className="text-gray-400" />
-                  <span className="text-gray-700 font-mono">{driver.phone}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Mail size={18} className="text-gray-400" />
-                  <span className="text-gray-700">{driver.email}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <FileText size={18} className="text-gray-400" />
-                  <span className="text-gray-700">רישיון: {driver.license}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Calendar size={18} className="text-gray-400" />
-                  <span className="text-gray-700">חבר מאז {driver.memberSince}</span>
-                </div>
+                {driverPhone && (
+                  <div className="flex items-center gap-3">
+                    <Phone size={18} className="text-gray-400" />
+                    <span className="text-gray-700 font-mono">{driverPhone}</span>
+                  </div>
+                )}
+                {driverEmail && (
+                  <div className="flex items-center gap-3">
+                    <Mail size={18} className="text-gray-400" />
+                    <span className="text-gray-700">{driverEmail}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -293,98 +439,139 @@ export default function DriverProfilePage() {
         {/* History Tab */}
         {activeTab === 'history' && (
           <div className="space-y-3">
-            {history.map((item) => (
-              <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="font-bold text-gray-800">{item.customer}</p>
-                    <p className="text-sm text-gray-500 font-mono">{item.vehicle}</p>
-                  </div>
-                  <div className="text-left">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      item.status === 'completed' 
-                        ? 'bg-emerald-100 text-emerald-700' 
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      {item.status === 'completed' ? 'הושלם' : 'בוטל'}
-                    </span>
-                    <p className="text-sm text-gray-500 mt-1">{item.date}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin size={14} className="text-gray-400" />
-                  <span>{item.from}</span>
-                  <ChevronLeft size={14} className="text-gray-400" />
-                  <span>{item.to}</span>
-                </div>
-                {item.price > 0 && (
-                  <p className="text-left font-bold text-emerald-600 mt-2">₪{item.price}</p>
-                )}
+            {history.length === 0 ? (
+              <div className="bg-gray-50 rounded-xl p-8 text-center">
+                <p className="text-gray-500">אין היסטוריית גרירות</p>
               </div>
-            ))}
+            ) : (
+              history.map((item) => {
+                const fromAddress = item.legs?.[0]?.from_address || 'לא צוין'
+                const toAddress = item.legs?.[item.legs.length - 1]?.to_address || 'לא צוין'
+                const vehiclePlate = item.vehicles?.[0]?.plate_number || ''
+                
+                return (
+                  <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-bold text-gray-800">{item.customer?.name || 'לקוח לא ידוע'}</p>
+                        {vehiclePlate && (
+                          <p className="text-sm text-gray-500 font-mono">{vehiclePlate}</p>
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          item.status === 'completed' 
+                            ? 'bg-emerald-100 text-emerald-700' 
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {item.status === 'completed' ? 'הושלם' : 'בוטל'}
+                        </span>
+                        <p className="text-sm text-gray-500 mt-1">{formatDate(item.created_at)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <MapPin size={14} className="text-gray-400" />
+                      <span className="truncate">{fromAddress}</span>
+                      <ChevronLeft size={14} className="text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{toAddress}</span>
+                    </div>
+                    {item.final_price && item.final_price > 0 && (
+                      <p className="text-left font-bold text-emerald-600 mt-2">₪{item.final_price}</p>
+                    )}
+                  </div>
+                )
+              })
+            )}
           </div>
         )}
 
         {/* Truck Tab */}
         {activeTab === 'truck' && (
           <div className="space-y-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Truck size={24} className="text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-bold text-lg text-gray-800">{truck.model}</p>
-                  <p className="text-[#33d4ff] font-mono font-bold">{truck.plate}</p>
-                </div>
+            {!truck ? (
+              <div className="bg-gray-50 rounded-xl p-8 text-center">
+                <Truck size={48} className="text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">אין גרר משויך</p>
+                <p className="text-gray-400 text-sm mt-1">פנה למנהל לשיוך גרר</p>
               </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">סוג</p>
-                  <p className="font-medium text-gray-800">{truck.type}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">שנה</p>
-                  <p className="font-medium text-gray-800">{truck.year}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">קיבולת</p>
-                  <p className="font-medium text-gray-800">{truck.capacity}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500">משקל מקסימלי</p>
-                  <p className="font-medium text-gray-800">{truck.maxWeight}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Maintenance */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <h3 className="font-bold text-gray-800 mb-3">תחזוקה</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Wrench size={18} className="text-amber-600" />
-                    <span className="text-amber-800">טיפול הבא</span>
+            ) : (
+              <>
+                <div className="bg-white rounded-xl border border-gray-200 p-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                      <Truck size={24} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-lg text-gray-800">
+                        {truck.manufacturer} {truck.model}
+                      </p>
+                      <p className="text-[#33d4ff] font-mono font-bold">{truck.plate_number}</p>
+                    </div>
                   </div>
-                  <span className="font-bold text-amber-800">{truck.nextService}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <FileText size={18} className="text-blue-600" />
-                    <span className="text-blue-800">ביטוח בתוקף עד</span>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">סוג</p>
+                      <p className="font-medium text-gray-800">{getTruckTypeName(truck.truck_type)}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">שנה</p>
+                      <p className="font-medium text-gray-800">{truck.year || 'לא צוין'}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">קיבולת רכבים</p>
+                      <p className="font-medium text-gray-800">{truck.vehicle_capacity || 1}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">משקל מקסימלי</p>
+                      <p className="font-medium text-gray-800">
+                        {truck.max_weight_kg ? `${truck.max_weight_kg.toLocaleString()} ק"ג` : 'לא צוין'}
+                      </p>
+                    </div>
                   </div>
-                  <span className="font-bold text-blue-800">{truck.insurance}</span>
                 </div>
-              </div>
-            </div>
 
-            {/* Report Issue */}
-            <button className="w-full flex items-center justify-center gap-2 p-4 bg-red-50 text-red-600 rounded-xl font-medium border border-red-200">
-              <AlertTriangle size={20} />
-              דווח על תקלה
-            </button>
+                {/* Maintenance */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4">
+                  <h3 className="font-bold text-gray-800 mb-3">תחזוקה ותוקף</h3>
+                  <div className="space-y-3">
+                    {truck.test_expiry && (
+                      <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Wrench size={18} className="text-amber-600" />
+                          <span className="text-amber-800">טסט עד</span>
+                        </div>
+                        <span className="font-bold text-amber-800">{formatDate(truck.test_expiry)}</span>
+                      </div>
+                    )}
+                    {truck.insurance_expiry && (
+                      <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <FileText size={18} className="text-blue-600" />
+                          <span className="text-blue-800">ביטוח עד</span>
+                        </div>
+                        <span className="font-bold text-blue-800">{formatDate(truck.insurance_expiry)}</span>
+                      </div>
+                    )}
+                    {truck.license_expiry && (
+                      <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <FileText size={18} className="text-green-600" />
+                          <span className="text-green-800">רישיון עד</span>
+                        </div>
+                        <span className="font-bold text-green-800">{formatDate(truck.license_expiry)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Report Issue */}
+                <button className="w-full flex items-center justify-center gap-2 p-4 bg-red-50 text-red-600 rounded-xl font-medium border border-red-200">
+                  <AlertTriangle size={20} />
+                  דווח על תקלה
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -399,6 +586,7 @@ export default function DriverProfilePage() {
             <div className="p-4 space-y-3">
               <button
                 onClick={() => handleStatusChange('available')}
+                disabled={isUpdating}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors ${
                   status === 'available' ? 'bg-emerald-100 border-2 border-emerald-500' : 'bg-gray-50'
                 }`}
@@ -417,6 +605,7 @@ export default function DriverProfilePage() {
 
               <button
                 onClick={() => handleStatusChange('busy')}
+                disabled={isUpdating}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors ${
                   status === 'busy' ? 'bg-amber-100 border-2 border-amber-500' : 'bg-gray-50'
                 }`}
@@ -435,6 +624,7 @@ export default function DriverProfilePage() {
 
               <button
                 onClick={() => handleStatusChange('unavailable')}
+                disabled={isUpdating}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors ${
                   status === 'unavailable' ? 'bg-red-100 border-2 border-red-500' : 'bg-gray-50'
                 }`}
@@ -569,7 +759,7 @@ export default function DriverProfilePage() {
                   className="flex-1 py-4 bg-red-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isUpdating ? (
-                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <Loader2 className="w-6 h-6 animate-spin" />
                   ) : (
                     'אישור'
                   )}

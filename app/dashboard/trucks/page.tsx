@@ -1,219 +1,57 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, MoreHorizontal, Calendar, Settings } from 'lucide-react'
-
-interface Driver {
-  id: number
-  name: string
-  phone: string
-  hasTruck: boolean
-}
-
-interface TruckData {
-  id: number
-  plate: string
-  type: 'flatbed' | 'lift' | 'heavy' | 'combined'
-  typeName: string
-  manufacturer: string
-  model: string
-  year: number
-  color: string
-  vin: string
-  maxWeight: number
-  platformLength: number
-  vehicleCapacity: number
-  licenseExpiry: string
-  insuranceExpiry: string
-  testExpiry: string
-  status: 'available' | 'busy' | 'maintenance' | 'inactive'
-  driverId: number | null
-  driverName: string | null
-  currentTask: string | null
-  maintenanceReason: string
-  todayTows: number
-  totalTows: number
-  notes: string
-  isActive: boolean
-}
+import { useState, useEffect } from 'react'
+import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle } from 'lucide-react'
+import { useAuth } from '../../lib/AuthContext'
+import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate } from '../../lib/queries/trucks'
+import { TruckWithDetails } from '../../lib/types'
+import { getDrivers } from '../../lib/queries/drivers'
+import { DriverWithDetails } from '../../lib/types'
 
 export default function TrucksPage() {
+  const { companyId } = useAuth()
+
+  // Data states
+  const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
+  const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
+  const [pageLoading, setPageLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  // UI states
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'flatbed' | 'lift' | 'heavy' | 'combined'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'flatbed' | 'wheel_lift' | 'heavy_duty' | 'integrated'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'busy' | 'maintenance'>('all')
   const [showModal, setShowModal] = useState(false)
-  const [editingTruck, setEditingTruck] = useState<TruckData | null>(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+  const [editingTruck, setEditingTruck] = useState<TruckWithDetails | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [showExpiryWarning, setShowExpiryWarning] = useState(false)
   const [expiryWarningMessage, setExpiryWarningMessage] = useState('')
 
   const [formData, setFormData] = useState({
     plate: '',
-    type: '' as '' | 'flatbed' | 'lift' | 'heavy' | 'combined',
+    type: '' as '' | 'flatbed' | 'wheel_lift' | 'heavy_duty' | 'integrated',
     manufacturer: '',
     model: '',
     year: new Date().getFullYear(),
     color: '',
-    vin: '',
     maxWeight: 0,
-    platformLength: 0,
     vehicleCapacity: 1,
     licenseExpiry: '',
     insuranceExpiry: '',
     testExpiry: '',
     driverAssignment: 'none' as 'existing' | 'none',
-    selectedDriverId: null as number | null,
+    selectedDriverId: null as string | null,
     initialStatus: 'available' as 'available' | 'inactive',
-    maintenanceReason: '',
     notes: '',
   })
 
-  const [drivers] = useState<Driver[]>([
-    { id: 1, name: 'משה לוי', phone: '050-1234567', hasTruck: false },
-    { id: 2, name: 'דוד אברהם', phone: '052-2345678', hasTruck: true },
-    { id: 3, name: 'יעקב מזרחי', phone: '054-3456789', hasTruck: true },
-    { id: 4, name: 'עמית שלום', phone: '054-6789012', hasTruck: false },
-  ])
-
-  const [trucks, setTrucks] = useState<TruckData[]>([
-    {
-      id: 1,
-      plate: '12-345-67',
-      type: 'flatbed',
-      typeName: 'משטח',
-      manufacturer: 'מרצדס',
-      model: 'אקטרוס',
-      year: 2021,
-      color: 'לבן',
-      vin: 'WDB1234567890123',
-      maxWeight: 3500,
-      platformLength: 5.5,
-      vehicleCapacity: 2,
-      licenseExpiry: '2025-06-15',
-      insuranceExpiry: '2025-03-20',
-      testExpiry: '2025-04-01',
-      status: 'available',
-      driverId: null,
-      driverName: null,
-      currentTask: null,
-      maintenanceReason: '',
-      todayTows: 2,
-      totalTows: 156,
-      notes: '',
-      isActive: true
-    },
-    {
-      id: 2,
-      plate: '23-456-78',
-      type: 'lift',
-      typeName: 'הרמה',
-      manufacturer: 'איווקו',
-      model: 'דיילי',
-      year: 2020,
-      color: 'כחול',
-      vin: 'ZCF1234567890456',
-      maxWeight: 2500,
-      platformLength: 4.5,
-      vehicleCapacity: 1,
-      licenseExpiry: '2025-08-10',
-      insuranceExpiry: '2025-07-15',
-      testExpiry: '2025-05-20',
-      status: 'busy',
-      driverId: 2,
-      driverName: 'דוד אברהם',
-      currentTask: 'T-1002',
-      maintenanceReason: '',
-      todayTows: 1,
-      totalTows: 203,
-      notes: '',
-      isActive: true
-    },
-    {
-      id: 3,
-      plate: '34-567-89',
-      type: 'flatbed',
-      typeName: 'משטח',
-      manufacturer: 'מאן',
-      model: 'TGL',
-      year: 2022,
-      color: 'לבן',
-      vin: 'WMA1234567890789',
-      maxWeight: 4000,
-      platformLength: 6.0,
-      vehicleCapacity: 2,
-      licenseExpiry: '2025-12-22',
-      insuranceExpiry: '2025-11-30',
-      testExpiry: '2025-10-15',
-      status: 'busy',
-      driverId: 3,
-      driverName: 'יעקב מזרחי',
-      currentTask: 'T-1003',
-      maintenanceReason: '',
-      todayTows: 3,
-      totalTows: 89,
-      notes: '',
-      isActive: true
-    },
-    {
-      id: 4,
-      plate: '45-678-90',
-      type: 'heavy',
-      typeName: 'כבד',
-      manufacturer: 'סקניה',
-      model: 'R450',
-      year: 2019,
-      color: 'אדום',
-      vin: 'YS21234567890012',
-      maxWeight: 12000,
-      platformLength: 8.0,
-      vehicleCapacity: 3,
-      licenseExpiry: '2025-04-05',
-      insuranceExpiry: '2025-02-10',
-      testExpiry: '2025-03-01',
-      status: 'available',
-      driverId: null,
-      driverName: null,
-      currentTask: null,
-      maintenanceReason: '',
-      todayTows: 1,
-      totalTows: 312,
-      notes: '',
-      isActive: true
-    },
-    {
-      id: 5,
-      plate: '78-901-23',
-      type: 'flatbed',
-      typeName: 'משטח',
-      manufacturer: 'מאן',
-      model: 'TGM',
-      year: 2018,
-      color: 'לבן',
-      vin: 'WMA9876543210321',
-      maxWeight: 3500,
-      platformLength: 5.0,
-      vehicleCapacity: 2,
-      licenseExpiry: '2025-07-12',
-      insuranceExpiry: '2025-06-20',
-      testExpiry: '2025-08-01',
-      status: 'maintenance',
-      driverId: null,
-      driverName: null,
-      currentTask: null,
-      maintenanceReason: 'החלפת בלמים',
-      todayTows: 0,
-      totalTows: 267,
-      notes: '',
-      isActive: true
-    },
-  ])
-
   const typeConfig = {
     flatbed: { label: 'משטח', color: 'bg-blue-100 text-blue-600', iconBg: 'bg-blue-100' },
-    lift: { label: 'הרמה', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
-    heavy: { label: 'כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
-    combined: { label: 'משולב', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
+    wheel_lift: { label: 'הרמה', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
+    heavy_duty: { label: 'כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
+    integrated: { label: 'משולב', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
   }
 
   const statusConfig = {
@@ -223,34 +61,68 @@ export default function TrucksPage() {
     inactive: { label: 'לא פעיל', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
   }
 
+  // טעינת נתונים
+  useEffect(() => {
+    if (companyId) {
+      loadData()
+    }
+  }, [companyId])
+
+  const loadData = async () => {
+    if (!companyId) return
+
+    setPageLoading(true)
+    try {
+      const [trucksData, driversData] = await Promise.all([
+        getTrucks(companyId),
+        getDrivers(companyId)
+      ])
+      setTrucks(trucksData)
+      setDrivers(driversData)
+    } catch (err) {
+      console.error('Error loading data:', err)
+      setError('שגיאה בטעינת הנתונים')
+    } finally {
+      setPageLoading(false)
+    }
+  }
+
+  const getTruckStatus = (truck: TruckWithDetails): 'available' | 'busy' | 'maintenance' | 'inactive' => {
+    if (!truck.is_active) return 'inactive'
+    // כרגע אין לנו מעקב אחרי סטטוס דינמי, אז נחזיר available או busy לפי שיוך נהג
+    if (truck.assigned_driver) return 'busy'
+    return 'available'
+  }
+
   const stats = {
     total: trucks.length,
-    available: trucks.filter(t => t.status === 'available').length,
-    busy: trucks.filter(t => t.status === 'busy').length,
-    maintenance: trucks.filter(t => t.status === 'maintenance').length,
+    available: trucks.filter(t => t.is_active && !t.assigned_driver).length,
+    busy: trucks.filter(t => t.is_active && t.assigned_driver).length,
+    maintenance: 0, // יתעדכן כשנוסיף מעקב טיפולים
   }
 
   const filteredTrucks = trucks.filter(truck => {
-    if (typeFilter !== 'all' && truck.type !== typeFilter) return false
-    if (statusFilter !== 'all' && truck.status !== statusFilter) return false
+    const status = getTruckStatus(truck)
+    if (typeFilter !== 'all' && truck.truck_type !== typeFilter) return false
+    if (statusFilter !== 'all' && status !== statusFilter) return false
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      if (!truck.plate.includes(query) && 
-          !truck.manufacturer.toLowerCase().includes(query) &&
-          !truck.model.toLowerCase().includes(query)) {
+      if (!truck.plate_number.toLowerCase().includes(query) &&
+          !(truck.manufacturer?.toLowerCase().includes(query)) &&
+          !(truck.model?.toLowerCase().includes(query))) {
         return false
       }
     }
     return true
   })
 
-  const isExpired = (dateStr: string) => {
+  const isExpired = (dateStr: string | null) => {
     if (!dateStr) return false
     const date = new Date(dateStr)
     return date < new Date()
   }
 
-  const isExpiringSoon = (dateStr: string) => {
+  const isExpiringSoon = (dateStr: string | null) => {
     if (!dateStr) return false
     const date = new Date(dateStr)
     const today = new Date()
@@ -258,7 +130,7 @@ export default function TrucksPage() {
     return date > today && date <= thirtyDays
   }
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
     const date = new Date(dateStr)
     return date.toLocaleDateString('he-IL')
@@ -272,9 +144,7 @@ export default function TrucksPage() {
       model: '',
       year: new Date().getFullYear(),
       color: '',
-      vin: '',
       maxWeight: 0,
-      platformLength: 0,
       vehicleCapacity: 1,
       licenseExpiry: '',
       insuranceExpiry: '',
@@ -282,11 +152,11 @@ export default function TrucksPage() {
       driverAssignment: 'none',
       selectedDriverId: null,
       initialStatus: 'available',
-      maintenanceReason: '',
       notes: '',
     })
     setShowExpiryWarning(false)
     setShowDuplicateWarning(false)
+    setError('')
   }
 
   const openAddModal = () => {
@@ -295,37 +165,26 @@ export default function TrucksPage() {
     setShowModal(true)
   }
 
-  const openEditModal = (truck: TruckData) => {
+  const openEditModal = (truck: TruckWithDetails) => {
     setEditingTruck(truck)
     setFormData({
-      plate: truck.plate,
-      type: truck.type,
-      manufacturer: truck.manufacturer,
-      model: truck.model,
-      year: truck.year,
-      color: truck.color,
-      vin: truck.vin,
-      maxWeight: truck.maxWeight,
-      platformLength: truck.platformLength,
-      vehicleCapacity: truck.vehicleCapacity,
-      licenseExpiry: truck.licenseExpiry,
-      insuranceExpiry: truck.insuranceExpiry,
-      testExpiry: truck.testExpiry,
-      driverAssignment: truck.driverId ? 'existing' : 'none',
-      selectedDriverId: truck.driverId,
-      initialStatus: truck.status === 'inactive' ? 'inactive' : 'available',
-      maintenanceReason: truck.maintenanceReason,
-      notes: truck.notes,
+      plate: truck.plate_number,
+      type: truck.truck_type as any,
+      manufacturer: truck.manufacturer || '',
+      model: truck.model || '',
+      year: truck.year || new Date().getFullYear(),
+      color: truck.color || '',
+      maxWeight: truck.max_weight_kg || 0,
+      vehicleCapacity: truck.vehicle_capacity,
+      licenseExpiry: truck.license_expiry || '',
+      insuranceExpiry: truck.insurance_expiry || '',
+      testExpiry: truck.test_expiry || '',
+      driverAssignment: truck.assigned_driver ? 'existing' : 'none',
+      selectedDriverId: truck.assigned_driver?.id || null,
+      initialStatus: truck.is_active ? 'available' : 'inactive',
+      notes: truck.notes || '',
     })
     setShowModal(true)
-  }
-
-  const checkDuplicates = () => {
-    const duplicate = trucks.find(t => {
-      if (editingTruck && t.id === editingTruck.id) return false
-      return t.plate === formData.plate
-    })
-    return !!duplicate
   }
 
   const checkExpiryDates = () => {
@@ -339,10 +198,17 @@ export default function TrucksPage() {
     return false
   }
 
-  const handleSave = () => {
-    if (!formData.plate || !formData.type) return
+  const handleSave = async () => {
+    if (!formData.plate || !formData.type || !companyId) return
 
-    if (checkDuplicates()) {
+    // בדיקת כפילויות
+    const isDuplicate = await checkTruckDuplicate(
+      companyId,
+      formData.plate,
+      editingTruck?.id
+    )
+
+    if (isDuplicate) {
       setShowDuplicateWarning(true)
       return
     }
@@ -352,77 +218,94 @@ export default function TrucksPage() {
       return
     }
 
-    const typeName = typeConfig[formData.type as keyof typeof typeConfig]?.label || ''
-    const selectedDriver = drivers.find(d => d.id === formData.selectedDriverId)
+    setSaving(true)
+    setError('')
 
-    if (editingTruck) {
-      setTrucks(trucks.map(t => 
-        t.id === editingTruck.id 
-          ? { 
-              ...t,
-              plate: formData.plate,
-              type: formData.type as TruckData['type'],
-              typeName,
-              manufacturer: formData.manufacturer,
-              model: formData.model,
-              year: formData.year,
-              color: formData.color,
-              vin: formData.vin,
-              maxWeight: formData.maxWeight,
-              platformLength: formData.platformLength,
-              vehicleCapacity: formData.vehicleCapacity,
-              licenseExpiry: formData.licenseExpiry,
-              insuranceExpiry: formData.insuranceExpiry,
-              testExpiry: formData.testExpiry,
-              driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
-              driverName: formData.driverAssignment === 'existing' && selectedDriver ? selectedDriver.name : null,
-              maintenanceReason: formData.maintenanceReason,
-              notes: formData.notes,
-            }
-          : t
-      ))
-    } else {
-      const newTruck: TruckData = {
-        id: Math.max(...trucks.map(t => t.id), 0) + 1,
-        plate: formData.plate,
-        type: formData.type as TruckData['type'],
-        typeName,
-        manufacturer: formData.manufacturer,
-        model: formData.model,
-        year: formData.year,
-        color: formData.color,
-        vin: formData.vin,
-        maxWeight: formData.maxWeight,
-        platformLength: formData.platformLength,
-        vehicleCapacity: formData.vehicleCapacity,
-        licenseExpiry: formData.licenseExpiry,
-        insuranceExpiry: formData.insuranceExpiry,
-        testExpiry: formData.testExpiry,
-        status: formData.initialStatus,
-        driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
-        driverName: formData.driverAssignment === 'existing' && selectedDriver ? selectedDriver.name : null,
-        currentTask: null,
-        maintenanceReason: '',
-        todayTows: 0,
-        totalTows: 0,
-        notes: formData.notes,
-        isActive: formData.initialStatus !== 'inactive',
+    try {
+      if (editingTruck) {
+        await updateTruck({
+          truckId: editingTruck.id,
+          plateNumber: formData.plate,
+          truckType: formData.type,
+          manufacturer: formData.manufacturer || undefined,
+          model: formData.model || undefined,
+          year: formData.year || undefined,
+          color: formData.color || undefined,
+          vehicleCapacity: formData.vehicleCapacity,
+          maxWeightKg: formData.maxWeight || undefined,
+          licenseExpiry: formData.licenseExpiry || undefined,
+          insuranceExpiry: formData.insuranceExpiry || undefined,
+          testExpiry: formData.testExpiry || undefined,
+          notes: formData.notes || undefined,
+          isActive: formData.initialStatus === 'available',
+          driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
+        })
+      } else {
+        await createTruck({
+          companyId,
+          plateNumber: formData.plate,
+          truckType: formData.type,
+          manufacturer: formData.manufacturer || undefined,
+          model: formData.model || undefined,
+          year: formData.year || undefined,
+          color: formData.color || undefined,
+          vehicleCapacity: formData.vehicleCapacity,
+          maxWeightKg: formData.maxWeight || undefined,
+          licenseExpiry: formData.licenseExpiry || undefined,
+          insuranceExpiry: formData.insuranceExpiry || undefined,
+          testExpiry: formData.testExpiry || undefined,
+          notes: formData.notes || undefined,
+          isActive: formData.initialStatus === 'available',
+          driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId || undefined : undefined,
+        })
       }
-      setTrucks([...trucks, newTruck])
+
+      await loadData()
+      setShowModal(false)
+      resetForm()
+    } catch (err) {
+      console.error('Error saving truck:', err)
+      setError('שגיאה בשמירת הגרר')
+    } finally {
+      setSaving(false)
     }
-    setShowModal(false)
-    resetForm()
   }
 
-  const handleDelete = (id: number) => {
-    setTrucks(trucks.filter(t => t.id !== id))
-    setShowDeleteConfirm(null)
+  const handleDelete = async (truckId: string) => {
+    try {
+      await deleteTruck(truckId)
+      await loadData()
+      setShowDeleteConfirm(null)
+    } catch (err) {
+      console.error('Error deleting truck:', err)
+      setError('שגיאה במחיקת הגרר')
+    }
   }
 
-  const availableDrivers = drivers.filter(d => !d.hasTruck || d.id === formData.selectedDriverId)
+  // נהגים פנויים (בלי גרר משויך או משויכים לגרר הנוכחי)
+  const availableDrivers = drivers.filter(d => 
+    !d.current_truck || d.current_truck.id === editingTruck?.id
+  )
+
+  if (pageLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500">טוען גררים...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+          {error}
+        </div>
+      )}
+
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4 lg:mb-0">
           <div>
@@ -446,6 +329,7 @@ export default function TrucksPage() {
         </button>
       </div>
 
+      {/* סטטיסטיקות */}
       <div className="grid grid-cols-4 gap-2 sm:gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-1">
@@ -477,6 +361,7 @@ export default function TrucksPage() {
         </div>
       </div>
 
+      {/* סינון וחיפוש */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1 relative">
@@ -494,8 +379,8 @@ export default function TrucksPage() {
               {[
                 { id: 'all', label: 'הכל' },
                 { id: 'flatbed', label: 'משטח' },
-                { id: 'lift', label: 'הרמה' },
-                { id: 'heavy', label: 'כבד' },
+                { id: 'wheel_lift', label: 'הרמה' },
+                { id: 'heavy_duty', label: 'כבד' },
               ].map((filter) => (
                 <button
                   key={filter.id}
@@ -510,143 +395,121 @@ export default function TrucksPage() {
                 </button>
               ))}
             </div>
-            <div className="flex gap-1">
-              {[
-                { id: 'all', label: 'כל הסטטוסים' },
-                { id: 'available', label: 'פנוי' },
-                { id: 'busy', label: 'בפעילות' },
-                { id: 'maintenance', label: 'בטיפול' },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setStatusFilter(filter.id as any)}
-                  className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors ${
-                    statusFilter === filter.id
-                      ? 'bg-gray-800 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </div>
 
+      {/* רשימת גררים */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredTrucks.map((truck) => (
-          <div
-            key={truck.id}
-            className={`bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow border-r-4 ${
-              truck.status === 'available' ? 'border-r-emerald-500' :
-              truck.status === 'busy' ? 'border-r-blue-500' :
-              truck.status === 'maintenance' ? 'border-r-amber-500' :
-              'border-r-gray-400'
-            } ${!truck.isActive ? 'opacity-60' : ''}`}
-          >
-            <div className="p-5">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${typeConfig[truck.type]?.iconBg || 'bg-gray-100'}`}>
-                    <Truck size={24} className={truck.type === 'flatbed' ? 'text-blue-600' : truck.type === 'lift' ? 'text-purple-600' : 'text-amber-600'} />
+        {filteredTrucks.map((truck) => {
+          const status = getTruckStatus(truck)
+          return (
+            <div
+              key={truck.id}
+              className={`bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow border-r-4 ${
+                status === 'available' ? 'border-r-emerald-500' :
+                status === 'busy' ? 'border-r-blue-500' :
+                status === 'maintenance' ? 'border-r-amber-500' :
+                'border-r-gray-400'
+              } ${!truck.is_active ? 'opacity-60' : ''}`}
+            >
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${typeConfig[truck.truck_type as keyof typeof typeConfig]?.iconBg || 'bg-gray-100'}`}>
+                      <Truck size={24} className={
+                        truck.truck_type === 'flatbed' ? 'text-blue-600' : 
+                        truck.truck_type === 'wheel_lift' ? 'text-purple-600' : 
+                        'text-amber-600'
+                      } />
+                    </div>
+                    <div>
+                      <h3 className="font-mono font-bold text-gray-800 text-lg">{truck.plate_number}</h3>
+                      <p className="text-sm text-gray-500">{typeConfig[truck.truck_type as keyof typeof typeConfig]?.label || truck.truck_type}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-mono font-bold text-gray-800 text-lg">{truck.plate}</h3>
-                    <p className="text-sm text-gray-500">{truck.typeName}</p>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-lg ${statusConfig[status]?.color}`}>
+                    {statusConfig[status]?.label}
+                  </span>
+                </div>
+
+                <div className="mb-4 p-3 bg-gray-100 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">רכב:</span>
+                    <span className="text-gray-800 font-medium">
+                      {truck.manufacturer || '-'} {truck.model || ''}{truck.year ? `, ${truck.year}` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm mt-1">
+                    <span className="text-gray-500">קיבולת:</span>
+                    <span className="text-gray-800 font-medium">{truck.vehicle_capacity} רכבים</span>
                   </div>
                 </div>
-                <span className={`px-2 py-1 text-xs font-medium rounded-lg ${statusConfig[truck.status]?.color}`}>
-                  {statusConfig[truck.status]?.label}
-                </span>
-              </div>
 
-              <div className="mb-4 p-3 bg-gray-100 rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">רכב:</span>
-                  <span className="text-gray-800 font-medium">{truck.manufacturer} {truck.model}, {truck.year}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm mt-1">
-                  <span className="text-gray-500">קיבולת:</span>
-                  <span className="text-gray-800 font-medium">{truck.vehicleCapacity} רכבים</span>
-                </div>
-              </div>
-
-              {truck.status === 'busy' && truck.driverName && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                  <div className="flex items-center justify-between">
+                {truck.assigned_driver && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
                         <User size={14} className="text-blue-700" />
                       </div>
-                      <span className="text-sm font-medium text-blue-800">{truck.driverName}</span>
+                      <span className="text-sm font-medium text-blue-800">{truck.assigned_driver.user.full_name}</span>
                     </div>
-                    <span className="text-xs font-mono text-blue-600">{truck.currentTask}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">רישיון רכב:</span>
+                    <span className={`font-medium ${isExpired(truck.license_expiry) ? 'text-red-600' : isExpiringSoon(truck.license_expiry) ? 'text-amber-600' : 'text-gray-700'}`}>
+                      {formatDate(truck.license_expiry)}
+                      {isExpired(truck.license_expiry) && (
+                        <span className="mr-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">פג</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">טסט:</span>
+                    <span className={`font-medium ${isExpired(truck.test_expiry) ? 'text-red-600' : isExpiringSoon(truck.test_expiry) ? 'text-amber-600' : 'text-gray-700'}`}>
+                      {formatDate(truck.test_expiry)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">ביטוח:</span>
+                    <span className={`font-medium ${isExpired(truck.insurance_expiry) ? 'text-red-600' : 'text-gray-700'}`}>
+                      {formatDate(truck.insurance_expiry)}
+                    </span>
                   </div>
                 </div>
-              )}
 
-              {truck.status === 'maintenance' && truck.maintenanceReason && (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Wrench size={16} className="text-amber-600" />
-                    <span className="text-sm text-amber-700">{truck.maintenanceReason}</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
+                    <p className="text-xl font-bold text-gray-800">{truck.today_tows_count || 0}</p>
+                    <p className="text-xs text-gray-500">גרירות היום</p>
                   </div>
-                </div>
-              )}
-
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">רישיון רכב:</span>
-                  <span className={`font-medium ${isExpired(truck.licenseExpiry) ? 'text-red-600' : isExpiringSoon(truck.licenseExpiry) ? 'text-amber-600' : 'text-gray-700'}`}>
-                    {formatDate(truck.licenseExpiry)}
-                    {isExpired(truck.licenseExpiry) && (
-                      <span className="mr-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">פג</span>
-                    )}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">טסט:</span>
-                  <span className={`font-medium ${isExpired(truck.testExpiry) ? 'text-red-600' : isExpiringSoon(truck.testExpiry) ? 'text-amber-600' : 'text-gray-700'}`}>
-                    {formatDate(truck.testExpiry)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-500">ביטוח:</span>
-                  <span className={`font-medium ${isExpired(truck.insuranceExpiry) ? 'text-red-600' : 'text-gray-700'}`}>
-                    {formatDate(truck.insuranceExpiry)}
-                  </span>
+                  <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
+                    <p className="text-xl font-bold text-gray-800">-</p>
+                    <p className="text-xs text-gray-500">סה״כ גרירות</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
-                  <p className="text-xl font-bold text-gray-800">{truck.todayTows}</p>
-                  <p className="text-xs text-gray-500">גרירות היום</p>
-                </div>
-                <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
-                  <p className="text-xl font-bold text-gray-800">{truck.totalTows}</p>
-                  <p className="text-xs text-gray-500">סה״כ גרירות</p>
-                </div>
+              <div className="px-5 py-3 bg-gray-100/80 border-t border-gray-200 flex items-center justify-end gap-1">
+                <button
+                  onClick={() => openEditModal(truck)}
+                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <Edit2 size={18} />
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(truck.id)}
+                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
               </div>
             </div>
-
-            <div className="px-5 py-3 bg-gray-100/80 border-t border-gray-200 flex items-center justify-end gap-1">
-              <button
-                onClick={() => openEditModal(truck)}
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-              >
-                <Edit2 size={18} />
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(truck.id)}
-                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {filteredTrucks.length === 0 && (
@@ -657,6 +520,7 @@ export default function TrucksPage() {
         </div>
       )}
 
+      {/* Modal הוספה/עריכה */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
           <div className="bg-white w-full lg:rounded-2xl lg:max-w-2xl lg:mx-4 overflow-hidden max-h-[95vh] flex flex-col rounded-t-2xl">
@@ -673,6 +537,7 @@ export default function TrucksPage() {
             </div>
 
             <div className="p-5 space-y-5 overflow-y-auto flex-1">
+              {/* פרטי רכב */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">1</span>
@@ -699,9 +564,9 @@ export default function TrucksPage() {
                       >
                         <option value="">בחר סוג</option>
                         <option value="flatbed">משטח</option>
-                        <option value="lift">הרמה</option>
-                        <option value="heavy">כבד</option>
-                        <option value="combined">משולב</option>
+                        <option value="wheel_lift">הרמה</option>
+                        <option value="heavy_duty">כבד</option>
+                        <option value="integrated">משולב</option>
                       </select>
                     </div>
                   </div>
@@ -754,44 +619,44 @@ export default function TrucksPage() {
                 </div>
               </div>
 
+              {/* תוקף רישיונות */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">2</span>
                   תוקף רישיונות
                 </h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
-                      <input
-                        type="date"
-                        value={formData.licenseExpiry}
-                        onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">תוקף טסט</label>
-                      <input
-                        type="date"
-                        value={formData.testExpiry}
-                        onChange={(e) => setFormData({ ...formData, testExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">תוקף ביטוח</label>
-                      <input
-                        type="date"
-                        value={formData.insuranceExpiry}
-                        onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                      />
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
+                    <input
+                      type="date"
+                      value={formData.licenseExpiry}
+                      onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">תוקף טסט</label>
+                    <input
+                      type="date"
+                      value={formData.testExpiry}
+                      onChange={(e) => setFormData({ ...formData, testExpiry: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">תוקף ביטוח</label>
+                    <input
+                      type="date"
+                      value={formData.insuranceExpiry}
+                      onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
                   </div>
                 </div>
               </div>
 
+              {/* שיוך נהג */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
@@ -830,8 +695,6 @@ export default function TrucksPage() {
                             className={`flex items-center gap-4 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
                               formData.selectedDriverId === driver.id
                                 ? 'border-[#33d4ff] bg-cyan-50'
-                                : driver.hasTruck
-                                ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
                                 : 'border-gray-200 hover:border-gray-300'
                             }`}
                           >
@@ -840,35 +703,24 @@ export default function TrucksPage() {
                               name="driver"
                               checked={formData.selectedDriverId === driver.id}
                               onChange={() => setFormData({ ...formData, selectedDriverId: driver.id })}
-                              disabled={driver.hasTruck && driver.id !== formData.selectedDriverId}
                               className="w-4 h-4 text-[#33d4ff]"
                             />
                             <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                               <User size={18} className="text-gray-600" />
                             </div>
                             <div className="flex-1">
-                              <span className="font-medium text-gray-800">{driver.name}</span>
-                              <p className="text-sm text-gray-500">{driver.phone}</p>
+                              <span className="font-medium text-gray-800">{driver.user.full_name}</span>
+                              <p className="text-sm text-gray-500">{driver.user.phone}</p>
                             </div>
-                            <span className={`px-2 py-1 text-xs rounded-lg ${
-                              driver.hasTruck ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'
-                            }`}>
-                              {driver.hasTruck ? 'משויך' : 'ללא גרר'}
-                            </span>
                           </label>
                         ))
                       )}
                     </div>
                   )}
-
-                  {formData.driverAssignment === 'none' && (
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                      <p className="text-sm text-gray-600">תוכל לשייך נהג לגרר בכל עת דרך עריכת הגרר או הנהג.</p>
-                    </div>
-                  )}
                 </div>
               </div>
 
+              {/* סטטוס התחלתי */}
               {!editingTruck && (
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
@@ -902,6 +754,7 @@ export default function TrucksPage() {
                 </div>
               )}
 
+              {/* הערות */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">
@@ -928,16 +781,17 @@ export default function TrucksPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={!formData.plate || !formData.type}
+                disabled={!formData.plate || !formData.type || saving}
                 className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 transition-colors font-medium"
               >
-                {editingTruck ? 'שמור' : 'הוסף גרר'}
+                {saving ? 'שומר...' : editingTruck ? 'שמור' : 'הוסף גרר'}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* אזהרת כפילות */}
       {showDuplicateWarning && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
@@ -960,6 +814,7 @@ export default function TrucksPage() {
         </div>
       )}
 
+      {/* אזהרת תוקף */}
       {showExpiryWarning && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
@@ -992,6 +847,7 @@ export default function TrucksPage() {
         </div>
       )}
 
+      {/* אישור מחיקה */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">

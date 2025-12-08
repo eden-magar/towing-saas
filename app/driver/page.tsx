@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useAuth } from '../lib/AuthContext'
+import { 
+  getDriverByUserId, 
+  getDriverTasks, 
+  getDriverStats,
+  acceptTask,
+  rejectTask,
+  DriverTask,
+  DriverInfo
+} from '../lib/queries/driver-tasks'
 import { 
   MapPin, 
   Clock, 
@@ -16,24 +26,10 @@ import {
   X,
   XCircle,
   MessageSquare,
-  Bell
+  Bell,
+  Loader2,
+  RefreshCw
 } from 'lucide-react'
-
-interface Task {
-  id: number
-  status: 'new' | 'pending' | 'accepted' | 'on_way' | 'arrived' | 'loading' | 'in_transit' | 'completed'
-  customer: string
-  customerPhone: string
-  vehicle: string
-  vehicleInfo: string
-  from: string
-  to: string
-  scheduledTime: string
-  distance: string
-  estimatedDuration: string
-  notes?: string
-  isUrgent?: boolean
-}
 
 type RejectReason = 'break' | 'vehicle_issue' | 'too_far' | 'personal' | 'other'
 
@@ -46,99 +42,151 @@ const rejectReasons: { key: RejectReason; label: string; icon: string }[] = [
 ]
 
 export default function DriverTasksPage() {
+  const { user, loading: authLoading } = useAuth()
+  console.log('Component render - authLoading:', authLoading, 'user:', user?.id)  // הוסיפי כאן
+
+  
+  // State
+  const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null)
+  const [tasks, setTasks] = useState<DriverTask[]>([])
+  const [stats, setStats] = useState({ todayTasks: 0, weekCompleted: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
   const [activeTab, setActiveTab] = useState<'active' | 'upcoming'>('active')
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
-  const [newTask, setNewTask] = useState<Task | null>(null)
+  const [selectedTask, setSelectedTask] = useState<DriverTask | null>(null)
   const [selectedRejectReason, setSelectedRejectReason] = useState<RejectReason | null>(null)
   const [rejectNote, setRejectNote] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: 1,
-      status: 'on_way',
-      customer: 'יוסי כהן',
-      customerPhone: '050-1234567',
-      vehicle: '12-345-67',
-      vehicleInfo: 'טויוטה קורולה 2020, לבן',
-      from: 'רחוב הרצל 50, תל אביב',
-      to: 'רחוב ויצמן 12, רמת גן',
-      scheduledTime: '09:00',
-      distance: '8.5 ק"מ',
-      estimatedDuration: '25 דקות',
-      notes: 'הלקוח מחכה ליד הרכב',
-      isUrgent: true
-    },
-    {
-      id: 2,
-      status: 'pending',
-      customer: 'מוסך רמט',
-      customerPhone: '03-5551234',
-      vehicle: '23-456-78',
-      vehicleInfo: 'מאזדה 3 2019, אפור',
-      from: 'רחוב סוקולוב 15, חולון',
-      to: 'אזור התעשייה, בת ים',
-      scheduledTime: '11:30',
-      distance: '5.2 ק"מ',
-      estimatedDuration: '15 דקות',
-    },
-    {
-      id: 3,
-      status: 'pending',
-      customer: 'שרה לוי',
-      customerPhone: '052-9876543',
-      vehicle: '34-567-89',
-      vehicleInfo: 'יונדאי i20 2021, אדום',
-      from: 'קניון עזריאלי, תל אביב',
-      to: 'רחוב בן גוריון 80, הרצליה',
-      scheduledTime: '14:00',
-      distance: '12 ק"מ',
-      estimatedDuration: '35 דקות',
-    },
-  ])
-
-  // Simulate new task notification
+  // טעינת נתונים
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const incomingTask: Task = {
-        id: 99,
-        status: 'new',
-        customer: 'דני רוזן',
-        customerPhone: '054-7654321',
-        vehicle: '99-888-77',
-        vehicleInfo: 'הונדה סיוויק 2022, שחור',
-        from: 'רחוב דיזנגוף 100, תל אביב',
-        to: 'רחוב רוטשילד 50, ראשל"צ',
-        scheduledTime: '15:30',
-        distance: '15 ק"מ',
-        estimatedDuration: '40 דקות',
-        notes: 'רכב לא מניע, צריך גרירה מלאה',
-        isUrgent: true
-      }
-      setNewTask(incomingTask)
-      setShowNewTaskModal(true)
-    }, 3000)
+    if (!authLoading && user) {
+      loadData()
+    }
+  }, [authLoading, user])
 
-    return () => clearTimeout(timer)
-  }, [])
+  const loadData = async () => {
+  if (!user) return
+  
+  setLoading(true)
+  setError(null)
 
-  const activeTasks = tasks.filter(t => !['completed', 'new'].includes(t.status))
-  const upcomingTasks = tasks.filter(t => t.status === 'pending')
-  const currentTask = tasks.find(t => ['on_way', 'arrived', 'loading', 'in_transit', 'accepted'].includes(t.status))
+  console.log('1. Starting loadData, user:', user.id)
 
-  const getStatusInfo = (status: Task['status']) => {
+  try {
+    // שליפת פרטי הנהג
+    console.log('2. Calling getDriverByUserId')
+    const driver = await getDriverByUserId(user.id)
+    console.log('3. Got driver:', driver)
+    
+    if (!driver) {
+      console.log('4. No driver found, setting error')
+      setError('לא נמצא פרופיל נהג עבור המשתמש')
+      setLoading(false)
+      return
+    }
+    setDriverInfo(driver)
+
+    // שליפת משימות
+    console.log('5. Calling getDriverTasks')
+    const driverTasks = await getDriverTasks(driver.id)
+    console.log('6. Got tasks:', driverTasks)
+    setTasks(driverTasks)
+
+    // שליפת סטטיסטיקות
+    console.log('7. Calling getDriverStats')
+    const driverStats = await getDriverStats(driver.id)
+    console.log('8. Got stats:', driverStats)
+    setStats(driverStats)
+
+    console.log('9. Done loading!')
+
+  } catch (err) {
+    console.error('Error loading data:', err)
+    setError('שגיאה בטעינת הנתונים')
+  } finally {
+    setLoading(false)
+  }
+}
+
+  // const loadData = async () => {
+  //   if (!user) return
+    
+  //   setLoading(true)
+  //   setError(null)
+
+  //   console.log('1. Starting loadData, user:', user.id)  // הוסיפי
+
+    
+  //   try {
+  //     // שליפת פרטי הנהג
+  //     const driver = await getDriverByUserId(user.id)
+  //     if (!driver) {
+  //       setError('לא נמצא פרופיל נהג עבור המשתמש')
+  //       setLoading(false)
+  //       return
+  //     }
+  //     setDriverInfo(driver)
+
+  //     // שליפת משימות
+  //     const driverTasks = await getDriverTasks(driver.id)
+  //     setTasks(driverTasks)
+
+  //     // שליפת סטטיסטיקות
+  //     const driverStats = await getDriverStats(driver.id)
+  //     setStats(driverStats)
+
+  //   } catch (err) {
+  //     console.error('Error loading data:', err)
+  //     setError('שגיאה בטעינת הנתונים')
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
+
+  // פילטור משימות
+  const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
+  const upcomingTasks = tasks.filter(t => t.status === 'assigned' && t.scheduled_at)
+  const currentTask = tasks.find(t => t.status === 'in_progress')
+  const newTasks = tasks.filter(t => t.status === 'assigned')
+
+  // פונקציות עזר
+  const getStatusInfo = (status: DriverTask['status']) => {
     switch (status) {
-      case 'new': return { text: 'חדש', color: 'bg-blue-100 text-blue-700', icon: Bell }
-      case 'pending': return { text: 'ממתין', color: 'bg-amber-100 text-amber-700', icon: Clock }
-      case 'accepted': return { text: 'התקבל', color: 'bg-blue-100 text-blue-700', icon: CheckCircle2 }
-      case 'on_way': return { text: 'בדרך לאיסוף', color: 'bg-blue-100 text-blue-700', icon: Navigation }
-      case 'arrived': return { text: 'הגעתי', color: 'bg-purple-100 text-purple-700', icon: MapPin }
-      case 'loading': return { text: 'טוען', color: 'bg-purple-100 text-purple-700', icon: Truck }
-      case 'in_transit': return { text: 'בדרך ליעד', color: 'bg-indigo-100 text-indigo-700', icon: Navigation }
+      case 'assigned': return { text: 'ממתין', color: 'bg-amber-100 text-amber-700', icon: Clock }
+      case 'in_progress': return { text: 'בביצוע', color: 'bg-blue-100 text-blue-700', icon: Navigation }
       case 'completed': return { text: 'הושלם', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 }
+      case 'cancelled': return { text: 'בוטל', color: 'bg-red-100 text-red-700', icon: XCircle }
       default: return { text: status, color: 'bg-gray-100 text-gray-700', icon: Circle }
     }
+  }
+
+  const getVehicleInfo = (task: DriverTask) => {
+    if (task.vehicles.length === 0) return 'אין פרטי רכב'
+    const v = task.vehicles[0]
+    const parts = [v.plate_number]
+    if (v.manufacturer) parts.push(v.manufacturer)
+    if (v.model) parts.push(v.model)
+    if (v.year) parts.push(v.year.toString())
+    if (v.color) parts.push(v.color)
+    return parts.join(' • ')
+  }
+
+  const getAddresses = (task: DriverTask) => {
+    const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
+    const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
+    return {
+      from: pickupLeg?.from_address || task.legs[0]?.from_address || 'לא צוין',
+      to: deliveryLeg?.to_address || task.legs[task.legs.length - 1]?.to_address || 'לא צוין'
+    }
+  }
+
+  const formatTime = (dateStr: string | null) => {
+    if (!dateStr) return '--:--'
+    return new Date(dateStr).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
   }
 
   const openWaze = (address: string) => {
@@ -150,31 +198,46 @@ export default function DriverTasksPage() {
     window.open(`tel:${phone}`, '_self')
   }
 
+  // קבלת משימה
   const handleAcceptTask = async () => {
-    if (!newTask) return
+    if (!selectedTask) return
     setIsProcessing(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setTasks([...tasks, { ...newTask, status: 'accepted' }])
-    setShowNewTaskModal(false)
-    setNewTask(null)
-    setIsProcessing(false)
+    try {
+      await acceptTask(selectedTask.id)
+      setShowNewTaskModal(false)
+      setSelectedTask(null)
+      await loadData() // רענון
+    } catch (err) {
+      console.error('Error accepting task:', err)
+      alert('שגיאה בקבלת המשימה')
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
+  // דחיית משימה
   const handleRejectTask = () => {
     setShowNewTaskModal(false)
     setShowRejectModal(true)
   }
 
   const handleConfirmReject = async () => {
-    if (!selectedRejectReason) return
+    if (!selectedRejectReason || !selectedTask) return
     setIsProcessing(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    console.log('Rejected:', newTask?.id, selectedRejectReason, rejectNote)
-    setShowRejectModal(false)
-    setNewTask(null)
-    setSelectedRejectReason(null)
-    setRejectNote('')
-    setIsProcessing(false)
+    try {
+      const reasonLabel = rejectReasons.find(r => r.key === selectedRejectReason)?.label || selectedRejectReason
+      await rejectTask(selectedTask.id, reasonLabel, rejectNote || undefined)
+      setShowRejectModal(false)
+      setSelectedTask(null)
+      setSelectedRejectReason(null)
+      setRejectNote('')
+      await loadData() // רענון
+    } catch (err) {
+      console.error('Error rejecting task:', err)
+      alert('שגיאה בדחיית המשימה')
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleCancelReject = () => {
@@ -184,9 +247,54 @@ export default function DriverTasksPage() {
     setRejectNote('')
   }
 
+  const openTaskModal = (task: DriverTask) => {
+    setSelectedTask(task)
+    setShowNewTaskModal(true)
+  }
+
+  // מצבי טעינה ושגיאה
+  if (authLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan-500 mx-auto mb-2" />
+          <p className="text-gray-500">טוען משימות...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+          <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+          <p className="text-red-700 font-medium">{error}</p>
+          <button 
+            onClick={loadData}
+            className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium"
+          >
+            נסה שוב
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-4">
-      {/* Current Active Task */}
+      {/* כפתור רענון */}
+      <div className="flex justify-end mb-4">
+        <button 
+          onClick={loadData}
+          className="flex items-center gap-2 px-3 py-2 text-gray-500 hover:text-cyan-600 text-sm"
+        >
+          <RefreshCw size={16} />
+          רענן
+        </button>
+      </div>
+
+      {/* משימה פעילה נוכחית */}
       {currentTask && (
         <div className="mb-6">
           <h2 className="text-lg font-bold text-gray-800 mb-3">משימה פעילה</h2>
@@ -194,187 +302,190 @@ export default function DriverTasksPage() {
             <div className="bg-gradient-to-br from-[#33d4ff] to-[#21b8e6] rounded-2xl p-4 text-white shadow-lg">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  {currentTask.isUrgent && (
-                    <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-medium animate-pulse">
-                      דחוף
-                    </span>
-                  )}
                   <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">
                     {getStatusInfo(currentTask.status).text}
                   </span>
                 </div>
-                <ChevronLeft size={20} className="text-white/70" />
+                <ChevronLeft size={20} className="opacity-70" />
               </div>
 
-              <h3 className="font-bold text-lg mb-1">{currentTask.customer}</h3>
-              <p className="text-white/80 text-sm font-mono mb-3">{currentTask.vehicle} • {currentTask.vehicleInfo.split(',')[0]}</p>
+              <h3 className="font-bold text-xl mb-1">
+                {currentTask.customer?.name || 'לקוח לא ידוע'}
+              </h3>
+              <p className="text-white/80 text-sm mb-3 font-mono">
+                {getVehicleInfo(currentTask)}
+              </p>
 
-              <div className="space-y-2 mb-4">
-                <div className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full bg-emerald-400 flex items-center justify-center mt-0.5">
-                    <div className="w-2 h-2 bg-white rounded-full"></div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-white/60">איסוף</p>
-                    <p className="text-sm">{currentTask.from}</p>
-                  </div>
+              <div className="bg-white/10 rounded-xl p-3 mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-emerald-400 rounded-full"></div>
+                  <span className="text-sm">{getAddresses(currentTask).from}</span>
                 </div>
-                <div className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full bg-red-400 flex items-center justify-center mt-0.5">
-                    <MapPin size={12} className="text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs text-white/60">יעד</p>
-                    <p className="text-sm">{currentTask.to}</p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                  <span className="text-sm">{getAddresses(currentTask).to}</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1">
-                    <Timer size={14} />
-                    {currentTask.estimatedDuration}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Navigation size={14} />
-                    {currentTask.distance}
-                  </span>
+              <div className="flex items-center gap-4 text-sm text-white/80">
+                <div className="flex items-center gap-1">
+                  <Clock size={14} />
+                  <span>{formatTime(currentTask.scheduled_at || currentTask.created_at)}</span>
                 </div>
-                <span className="text-white/70">{currentTask.scheduledTime}</span>
               </div>
             </div>
           </Link>
-
-          <div className="flex gap-3 mt-3">
-            <button 
-              onClick={(e) => { e.preventDefault(); openWaze(currentTask.from); }}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl font-medium"
-            >
-              <Navigation size={18} />
-              נווט לאיסוף
-            </button>
-            <button 
-              onClick={(e) => { e.preventDefault(); openPhone(currentTask.customerPhone); }}
-              className="flex items-center justify-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-xl font-medium"
-            >
-              <Phone size={18} />
-            </button>
-          </div>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* טאבים */}
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setActiveTab('active')}
-          className={`flex-1 py-2.5 rounded-xl font-medium text-sm ${
-            activeTab === 'active' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+          className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
+            activeTab === 'active'
+              ? 'bg-cyan-500 text-white'
+              : 'bg-gray-100 text-gray-600'
           }`}
         >
-          משימות היום ({activeTasks.length})
+          פעילות ({activeTasks.length})
         </button>
         <button
           onClick={() => setActiveTab('upcoming')}
-          className={`flex-1 py-2.5 rounded-xl font-medium text-sm ${
-            activeTab === 'upcoming' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+          className={`flex-1 py-2.5 rounded-xl font-medium transition-colors ${
+            activeTab === 'upcoming'
+              ? 'bg-cyan-500 text-white'
+              : 'bg-gray-100 text-gray-600'
           }`}
         >
-          ממתינות ({upcomingTasks.length})
+          קרובות ({upcomingTasks.length})
         </button>
       </div>
 
-      {/* Task List */}
+      {/* רשימת משימות */}
       <div className="space-y-3">
-        {(activeTab === 'active' ? activeTasks : upcomingTasks).map((task) => {
-          const statusInfo = getStatusInfo(task.status)
-          const StatusIcon = statusInfo.icon
-          const isCurrentTask = task.id === currentTask?.id
-
-          if (isCurrentTask && activeTab === 'active') return null
-
-          return (
-            <Link key={task.id} href={`/driver/task/${task.id}`}>
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${statusInfo.color}`}>
+        {(activeTab === 'active' ? activeTasks : upcomingTasks).length === 0 ? (
+          <div className="bg-gray-50 rounded-xl p-8 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 size={32} className="text-gray-300" />
+            </div>
+            <p className="text-gray-500 font-medium">אין משימות {activeTab === 'active' ? 'פעילות' : 'קרובות'}</p>
+            <p className="text-gray-400 text-sm mt-1">משימות חדשות יופיעו כאן</p>
+          </div>
+        ) : (
+          (activeTab === 'active' ? activeTasks : upcomingTasks).map((task) => {
+            const statusInfo = getStatusInfo(task.status)
+            const StatusIcon = statusInfo.icon
+            const addresses = getAddresses(task)
+            
+            return (
+              <div
+                key={task.id}
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+              >
+                {/* Header */}
+                <div className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-bold text-gray-800">
+                        {task.customer?.name || 'לקוח לא ידוע'}
+                      </h3>
+                      <p className="text-gray-500 text-sm font-mono">
+                        {getVehicleInfo(task)}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${statusInfo.color}`}>
                       <StatusIcon size={12} />
                       {statusInfo.text}
                     </span>
-                    {task.isUrgent && (
-                      <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1">
-                        <AlertCircle size={12} />
-                        דחוף
-                      </span>
+                  </div>
+
+                  {/* Addresses */}
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-start gap-2">
+                      <div className="w-5 h-5 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                      </div>
+                      <span className="text-gray-600">{addresses.from}</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <div className="w-5 h-5 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <MapPin size={12} className="text-red-500" />
+                      </div>
+                      <span className="text-gray-600">{addresses.to}</span>
+                    </div>
+                  </div>
+
+                  {/* Time & Notes */}
+                  <div className="flex items-center gap-3 mt-3 text-xs text-gray-400">
+                    <div className="flex items-center gap-1">
+                      <Clock size={12} />
+                      <span>{formatTime(task.scheduled_at || task.created_at)}</span>
+                    </div>
+                    {task.notes && (
+                      <div className="flex items-center gap-1">
+                        <MessageSquare size={12} />
+                        <span>יש הערות</span>
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 text-gray-400">
-                    <Clock size={14} />
-                    <span className="text-sm">{task.scheduledTime}</span>
-                  </div>
                 </div>
 
-                <h3 className="font-bold text-gray-800 mb-1">{task.customer}</h3>
-                <p className="text-sm text-gray-500 font-mono mb-3">{task.vehicle}</p>
-
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <div className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
-                    </div>
-                    <span className="truncate">{task.from}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <div className="w-4 h-4 rounded-full bg-red-100 flex items-center justify-center">
-                      <MapPin size={10} className="text-red-500" />
-                    </div>
-                    <span className="truncate">{task.to}</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                  <div className="flex items-center gap-3 text-sm text-gray-500">
-                    <span>{task.distance}</span>
-                    <span>•</span>
-                    <span>{task.estimatedDuration}</span>
-                  </div>
-                  <ChevronLeft size={18} className="text-gray-400" />
+                {/* Actions */}
+                <div className="flex border-t border-gray-100">
+                  {task.customer?.phone && (
+                    <button
+                      onClick={() => openPhone(task.customer!.phone!)}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      <Phone size={16} />
+                      <span className="text-sm">התקשר</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => openWaze(addresses.from)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 text-cyan-600 hover:bg-cyan-50 transition-colors border-r border-gray-100"
+                  >
+                    <Navigation size={16} />
+                    <span className="text-sm">נווט</span>
+                  </button>
+                  {task.status === 'assigned' && (
+                    <button
+                      onClick={() => openTaskModal(task)}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 text-emerald-600 hover:bg-emerald-50 transition-colors border-r border-gray-100"
+                    >
+                      <CheckCircle2 size={16} />
+                      <span className="text-sm">קבל</span>
+                    </button>
+                  )}
+                  <Link
+                    href={`/driver/task/${task.id}`}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 text-gray-600 hover:bg-gray-50 transition-colors border-r border-gray-100"
+                  >
+                    <ChevronLeft size={16} />
+                    <span className="text-sm">פרטים</span>
+                  </Link>
                 </div>
               </div>
-            </Link>
-          )
-        })}
-
-        {((activeTab === 'active' && activeTasks.length === 0) || 
-          (activeTab === 'upcoming' && upcomingTasks.length === 0)) && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={32} className="text-gray-400" />
-            </div>
-            <p className="text-gray-500">אין משימות {activeTab === 'active' ? 'פעילות' : 'ממתינות'}</p>
-          </div>
+            )
+          })
         )}
       </div>
 
-      {/* Summary Stats */}
-      <div className="mt-6 grid grid-cols-3 gap-3">
+      {/* סטטיסטיקות */}
+      <div className="grid grid-cols-2 gap-3 mt-6">
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
-          <p className="text-2xl font-bold text-[#33d4ff]">{activeTasks.length}</p>
+          <p className="text-2xl font-bold text-cyan-500">{stats.todayTasks}</p>
           <p className="text-xs text-gray-500">משימות היום</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-600">5</p>
+          <p className="text-2xl font-bold text-gray-700">{stats.weekCompleted}</p>
           <p className="text-xs text-gray-500">הושלמו השבוע</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
-          <p className="text-2xl font-bold text-gray-700">127</p>
-          <p className="text-xs text-gray-500">ק"מ היום</p>
         </div>
       </div>
 
       {/* New Task Modal */}
-      {showNewTaskModal && newTask && (
+      {showNewTaskModal && selectedTask && (
         <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50">
           <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
             {/* Header */}
@@ -386,20 +497,17 @@ export default function DriverTasksPage() {
                   </div>
                   <span className="font-bold text-lg">משימה חדשה!</span>
                 </div>
-                {newTask.isUrgent && (
-                  <span className="bg-red-500 text-white text-xs px-3 py-1 rounded-full font-bold animate-pulse">
-                    דחוף
-                  </span>
-                )}
               </div>
-              <p className="text-white/80 text-sm">התקבלה משימה חדשה - אשר או דחה</p>
+              <p className="text-white/80 text-sm">אשר או דחה את המשימה</p>
             </div>
 
             {/* Content */}
             <div className="p-5 overflow-y-auto flex-1">
               <div className="mb-4">
-                <h3 className="font-bold text-xl text-gray-800">{newTask.customer}</h3>
-                <p className="text-gray-500 font-mono">{newTask.vehicle} • {newTask.vehicleInfo.split(',')[0]}</p>
+                <h3 className="font-bold text-xl text-gray-800">
+                  {selectedTask.customer?.name || 'לקוח לא ידוע'}
+                </h3>
+                <p className="text-gray-500 font-mono">{getVehicleInfo(selectedTask)}</p>
               </div>
 
               <div className="bg-gray-50 rounded-xl p-4 mb-4">
@@ -410,7 +518,7 @@ export default function DriverTasksPage() {
                     </div>
                     <div>
                       <p className="text-xs text-emerald-600 font-medium">איסוף</p>
-                      <p className="text-gray-800 font-medium">{newTask.from}</p>
+                      <p className="text-gray-800 font-medium">{getAddresses(selectedTask).from}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -419,7 +527,7 @@ export default function DriverTasksPage() {
                     </div>
                     <div>
                       <p className="text-xs text-red-600 font-medium">יעד</p>
-                      <p className="text-gray-800 font-medium">{newTask.to}</p>
+                      <p className="text-gray-800 font-medium">{getAddresses(selectedTask).to}</p>
                     </div>
                   </div>
                 </div>
@@ -428,23 +536,15 @@ export default function DriverTasksPage() {
               <div className="flex items-center justify-between text-sm mb-4">
                 <div className="flex items-center gap-2 text-gray-600">
                   <Clock size={16} className="text-gray-400" />
-                  <span>{newTask.scheduledTime}</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Navigation size={16} className="text-gray-400" />
-                  <span>{newTask.distance}</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Timer size={16} className="text-gray-400" />
-                  <span>{newTask.estimatedDuration}</span>
+                  <span>{formatTime(selectedTask.scheduled_at || selectedTask.created_at)}</span>
                 </div>
               </div>
 
-              {newTask.notes && (
+              {selectedTask.notes && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
                   <div className="flex items-start gap-2">
                     <MessageSquare size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-800">{newTask.notes}</p>
+                    <p className="text-sm text-amber-800">{selectedTask.notes}</p>
                   </div>
                 </div>
               )}
@@ -467,7 +567,7 @@ export default function DriverTasksPage() {
                   className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (
-                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <Loader2 className="w-6 h-6 animate-spin" />
                   ) : (
                     <>
                       <CheckCircle2 size={22} />
@@ -555,7 +655,7 @@ export default function DriverTasksPage() {
                   className="flex-1 py-4 bg-red-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {isProcessing ? (
-                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <Loader2 className="w-6 h-6 animate-spin" />
                   ) : (
                     'אשר דחייה'
                   )}

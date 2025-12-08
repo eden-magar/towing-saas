@@ -1,11 +1,17 @@
 'use client'
 
-import { useState, use } from 'react'
+import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '../../../lib/AuthContext'
+import { 
+  getTaskDetail, 
+  updateTaskStatusWithHistory,
+  updateLegStatus,
+  type TaskDetailFull 
+} from '../../../lib/queries/driver-tasks'
 import { 
   ArrowRight,
   MapPin, 
-  Clock, 
   Phone,
   Navigation,
   MessageCircle,
@@ -14,75 +20,126 @@ import {
   AlertCircle,
   Locate,
   Plus,
-  Minus
+  Minus,
+  Loader2
 } from 'lucide-react'
-
-interface TaskLocation {
-  address: string
-  contact: string
-  phone: string
-  notes?: string
-}
-
-interface Task {
-  id: number
-  status: string
-  vehicle: string
-  source: TaskLocation
-  destination: TaskLocation
-  eta: string
-  distance: string
-  isUrgent?: boolean
-}
 
 export default function DriverNavigationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { user } = useAuth()
+  
+  const [task, setTask] = useState<TaskDetailFull | null>(null)
+  const [loading, setLoading] = useState(true)
   const [navigatingTo, setNavigatingTo] = useState<'source' | 'destination'>('source')
   const [isUpdating, setIsUpdating] = useState(false)
 
-  // Mock task data
-  const task: Task = {
-    id: parseInt(id),
-    status: 'on_way',
-    vehicle: '12-345-67',
-    source: {
-      address: 'רחוב הרצל 50, תל אביב',
-      contact: 'יוסי כהן',
-      phone: '050-1234567',
-      notes: 'חניון תת קרקעי, קומה -2'
-    },
-    destination: {
-      address: 'רחוב ויצמן 12, רמת גן',
-      contact: 'מוסך רמט - קבלה',
-      phone: '03-5551234',
-    },
-    eta: '12 דקות',
-    distance: '8.5 ק"מ',
-    isUrgent: true
+  // Load task data
+  useEffect(() => {
+    if (id) {
+      loadTask()
+    }
+  }, [id])
+
+  // Auto-determine navigation target based on task status
+  useEffect(() => {
+    if (task) {
+      const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
+      const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
+      
+      // אם רגל האיסוף הושלמה, מנווטים ליעד
+      if (pickupLeg?.status === 'completed' || deliveryLeg?.status === 'in_progress') {
+        setNavigatingTo('destination')
+      } else {
+        setNavigatingTo('source')
+      }
+    }
+  }, [task])
+
+  const loadTask = async () => {
+    setLoading(true)
+    try {
+      const data = await getTaskDetail(id)
+      setTask(data)
+    } catch (error) {
+      console.error('Error loading task:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const currentTarget = navigatingTo === 'source' ? task.source : task.destination
+  // Get addresses and contacts
+  const getNavigationData = () => {
+    if (!task) return { address: '', contact: '', phone: '', notes: '' }
+    
+    const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
+    const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
+    
+    if (navigatingTo === 'source') {
+      return {
+        address: pickupLeg?.from_address || 'לא צוין',
+        contact: task.customer?.name || 'לקוח',
+        phone: task.customer?.phone || '',
+        notes: task.notes || ''
+      }
+    } else {
+      return {
+        address: deliveryLeg?.to_address || pickupLeg?.to_address || 'לא צוין',
+        contact: 'יעד',
+        phone: task.customer?.phone || '',
+        notes: ''
+      }
+    }
+  }
 
+  const navData = getNavigationData()
+
+  // Calculate ETA and distance
+  const getRouteInfo = () => {
+    if (!task) return { eta: '-- דק\'', distance: '-- ק"מ' }
+    
+    const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
+    const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
+    
+    const leg = navigatingTo === 'source' ? pickupLeg : deliveryLeg
+    const distanceKm = leg?.distance_km || 0
+    
+    // הערכת זמן: 2 דקות לק"מ בעיר
+    const estimatedMinutes = Math.round(distanceKm * 2)
+    
+    return {
+      eta: `${estimatedMinutes || 15} דק'`,
+      distance: `${distanceKm.toFixed(1)} ק"מ`
+    }
+  }
+
+  const routeInfo = getRouteInfo()
+
+  // External navigation
   const openWaze = () => {
-    const encoded = encodeURIComponent(currentTarget.address)
+    const encoded = encodeURIComponent(navData.address)
     window.open(`https://waze.com/ul?q=${encoded}&navigate=yes`, '_blank')
   }
 
   const openGoogleMaps = () => {
-    const encoded = encodeURIComponent(currentTarget.address)
+    const encoded = encodeURIComponent(navData.address)
     window.open(`https://www.google.com/maps/dir/?api=1&destination=${encoded}`, '_blank')
   }
 
   const openPhone = () => {
-    window.open(`tel:${currentTarget.phone}`, '_self')
+    if (navData.phone) {
+      window.open(`tel:${navData.phone}`, '_self')
+    }
   }
 
   const openWhatsApp = () => {
-    const phoneClean = currentTarget.phone.replace(/^0/, '972').replace(/-/g, '')
+    if (!navData.phone || !task) return
+    
+    const phoneClean = navData.phone.replace(/^0/, '972').replace(/-/g, '')
+    const vehicle = task.vehicles[0]?.plate_number || ''
     const message = navigatingTo === 'source' 
-      ? `שלום, אני בדרך לאסוף את הרכב ${task.vehicle}. אגיע בעוד ${task.eta} בערך.`
-      : `שלום, אני בדרך עם הרכב ${task.vehicle}. אגיע בעוד ${task.eta} בערך.`
+      ? `שלום, אני בדרך לאסוף את הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
+      : `שלום, אני בדרך עם הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
     window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
@@ -90,31 +147,79 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     if (navigator.share) {
       navigator.share({
         title: 'המיקום שלי',
-        text: `אני בדרך ל${navigatingTo === 'source' ? 'איסוף' : 'יעד'}: ${currentTarget.address}`,
+        text: `אני בדרך ל${navigatingTo === 'source' ? 'איסוף' : 'יעד'}: ${navData.address}`,
         url: window.location.href
       })
     }
   }
 
   const handleArrived = async () => {
-    setIsUpdating(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    if (!task || !user) return
     
-    if (navigatingTo === 'source') {
-      // Switch to destination navigation
-      setNavigatingTo('destination')
+    setIsUpdating(true)
+    try {
+      const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
+      const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
+      
+      if (navigatingTo === 'source') {
+        // הגעתי לאיסוף
+        if (pickupLeg) {
+          await updateLegStatus(pickupLeg.id, 'in_progress')
+        }
+        await updateTaskStatusWithHistory(task.id, 'in_progress', user.id, pickupLeg?.id, 'הגיע לאיסוף')
+        
+        // עוברים לניווט ליעד
+        setNavigatingTo('destination')
+        await loadTask()
+      } else {
+        // הגעתי ליעד
+        if (deliveryLeg) {
+          await updateLegStatus(deliveryLeg.id, 'completed')
+        }
+        await updateTaskStatusWithHistory(task.id, 'in_progress', user.id, deliveryLeg?.id, 'הגיע ליעד')
+        
+        // חוזרים לדף פרטי המשימה
+        router.push(`/driver/task/${id}`)
+      }
+    } catch (error) {
+      console.error('Error updating status:', error)
+      alert('שגיאה בעדכון הסטטוס')
+    } finally {
       setIsUpdating(false)
-    } else {
-      // Go back to task details
-      router.push(`/driver/task/${id}`)
     }
   }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-800 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-white" />
+      </div>
+    )
+  }
+
+  // Not found
+  if (!task) {
+    return (
+      <div className="min-h-screen bg-slate-800 flex flex-col items-center justify-center p-4">
+        <AlertCircle size={48} className="text-gray-400 mb-4" />
+        <p className="text-gray-300">המשימה לא נמצאה</p>
+        <button 
+          onClick={() => router.back()}
+          className="mt-4 text-[#33d4ff] font-medium"
+        >
+          חזרה
+        </button>
+      </div>
+    )
+  }
+
+  const vehicle = task.vehicles[0]
 
   return (
     <div dir="rtl" className="min-h-screen bg-slate-800 relative">
       {/* Map Placeholder */}
       <div className="absolute inset-0 bg-slate-700">
-        {/* Simulated Map Grid */}
         <div className="w-full h-full relative overflow-hidden">
           <svg className="w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -181,13 +286,11 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
         </button>
 
         <div className="bg-white rounded-2xl shadow-lg px-4 py-2.5 flex items-center gap-2">
-          <span className="font-mono font-bold text-slate-800">#{id}</span>
-          <span className="text-slate-300">•</span>
-          <span className="font-mono text-[#33d4ff] font-bold">{task.vehicle}</span>
-          {task.isUrgent && (
+          <span className="font-mono font-bold text-slate-800">#{id.slice(0, 8)}</span>
+          {vehicle && (
             <>
               <span className="text-slate-300">•</span>
-              <span className="text-red-500 text-xs font-bold">דחוף</span>
+              <span className="font-mono text-[#33d4ff] font-bold">{vehicle.plate_number}</span>
             </>
           )}
         </div>
@@ -203,11 +306,11 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-500">זמן הגעה משוער</p>
-              <p className="text-3xl font-bold text-slate-800">{task.eta}</p>
+              <p className="text-3xl font-bold text-slate-800">{routeInfo.eta}</p>
             </div>
             <div className="text-left">
               <p className="text-sm text-slate-500">מרחק</p>
-              <p className="text-xl font-bold text-slate-800">{task.distance}</p>
+              <p className="text-xl font-bold text-slate-800">{routeInfo.distance}</p>
             </div>
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
               navigatingTo === 'source' ? 'bg-emerald-100' : 'bg-red-100'
@@ -280,17 +383,20 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
                 }`}>
                   {navigatingTo === 'source' ? 'איסוף' : 'יעד'}
                 </p>
-                <p className="font-bold text-slate-800 text-lg">{currentTarget.address}</p>
-                <p className="text-sm text-slate-500">{currentTarget.contact} • {currentTarget.phone}</p>
+                <p className="font-bold text-slate-800 text-lg">{navData.address}</p>
+                <p className="text-sm text-slate-500">
+                  {navData.contact}
+                  {navData.phone && ` • ${navData.phone}`}
+                </p>
               </div>
             </div>
 
             {/* Notes Alert */}
-            {currentTarget.notes && (
+            {navData.notes && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
                 <div className="flex items-start gap-2">
                   <AlertCircle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-amber-800">{currentTarget.notes}</p>
+                  <p className="text-sm text-amber-800">{navData.notes}</p>
                 </div>
               </div>
             )}
@@ -299,7 +405,8 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
             <div className="grid grid-cols-4 gap-3 mb-4">
               <button 
                 onClick={openPhone}
-                className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95"
+                disabled={!navData.phone}
+                className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95 disabled:opacity-50"
               >
                 <div className="w-11 h-11 bg-emerald-100 rounded-full flex items-center justify-center">
                   <Phone size={20} className="text-emerald-600" />
@@ -308,7 +415,8 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
               </button>
               <button 
                 onClick={openWhatsApp}
-                className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95"
+                disabled={!navData.phone}
+                className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95 disabled:opacity-50"
               >
                 <div className="w-11 h-11 bg-green-100 rounded-full flex items-center justify-center">
                   <MessageCircle size={20} className="text-green-600" />
@@ -329,7 +437,7 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
                 className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95"
               >
                 <div className="w-11 h-11 bg-purple-100 rounded-full flex items-center justify-center">
-                  <Clock size={20} className="text-purple-600" />
+                  <AlertCircle size={20} className="text-purple-600" />
                 </div>
                 <span className="text-xs text-slate-600 font-medium">פרטים</span>
               </button>
@@ -359,14 +467,14 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
             <button 
               onClick={handleArrived}
               disabled={isUpdating}
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 active:scale-98 ${
+              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50 ${
                 navigatingTo === 'source' 
                   ? 'bg-emerald-600 text-white'
                   : 'bg-blue-600 text-white'
               }`}
             >
               {isUpdating ? (
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <Loader2 size={22} className="animate-spin" />
               ) : (
                 <>
                   <CheckCircle2 size={22} />
