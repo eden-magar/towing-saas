@@ -41,6 +41,8 @@ export default function LoginPage() {
     // הפנה לפי תפקיד
     if (userData.role === 'driver') {
       window.location.href = '/driver'
+    } else if (userData.role === 'super_admin') {
+      window.location.href = '/superadmin'
     } else {
       window.location.href = '/dashboard'
     }
