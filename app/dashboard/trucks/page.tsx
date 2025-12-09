@@ -362,6 +362,21 @@ export default function TrucksPage() {
     !d.current_truck || d.current_truck.id === editingTruck?.id
   )
 
+  // מחיקת קובץ מה-state
+  const handleFileDelete = (docType: string) => {
+    switch (docType) {
+      case 'license':
+        setFormData(prev => ({ ...prev, licensePhotoUrl: '' }))
+        break
+      case 'tachograph':
+        setFormData(prev => ({ ...prev, tachographPhotoUrl: '' }))
+        break
+      case 'engineer_report':
+        setFormData(prev => ({ ...prev, engineerReportPhotoUrl: '' }))
+        break
+    }
+  }
+
   // קומפוננטת העלאת קובץ
   const FileUploadField = ({ 
     label, 
@@ -405,19 +420,29 @@ export default function TrucksPage() {
             <Upload size={16} />
           )}
           <span className="text-sm">
-            {uploading === docType ? 'מעלה...' : currentUrl ? 'הועלה ✓' : 'העלה קובץ'}
+            {uploading === docType ? 'מעלה...' : currentUrl ? 'החלף קובץ' : 'העלה קובץ'}
           </span>
         </button>
         {currentUrl && (
-          <a
-            href={currentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 text-[#33d4ff] hover:bg-cyan-50 rounded-lg transition-colors"
-            title="צפה בקובץ"
-          >
-            <Eye size={18} />
-          </a>
+          <>
+            <a
+              href={currentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 text-[#33d4ff] hover:bg-cyan-50 rounded-lg transition-colors"
+              title="צפה בקובץ"
+            >
+              <Eye size={18} />
+            </a>
+            <button
+              type="button"
+              onClick={() => handleFileDelete(docType)}
+              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="מחק קובץ"
+            >
+              <Trash2 size={18} />
+            </button>
+          </>
         )}
       </div>
       {!formData.plate && (
