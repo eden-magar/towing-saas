@@ -37,10 +37,12 @@ export default function TrucksPage() {
     year: new Date().getFullYear(),
     color: '',
     maxWeight: 0,
+    permittedWeight: 0,
+    upperPlatformWeight: 0,
+    lowerPlatformWeight: 0,
     vehicleCapacity: 1,
     licenseExpiry: '',
     insuranceExpiry: '',
-    testExpiry: '',
     driverAssignment: 'none' as 'existing' | 'none',
     selectedDriverId: null as string | null,
     initialStatus: 'available' as 'available' | 'inactive',
@@ -149,10 +151,12 @@ export default function TrucksPage() {
       year: new Date().getFullYear(),
       color: '',
       maxWeight: 0,
+      permittedWeight: 0,
+      upperPlatformWeight: 0,
+      lowerPlatformWeight: 0,
       vehicleCapacity: 1,
       licenseExpiry: '',
       insuranceExpiry: '',
-      testExpiry: '',
       driverAssignment: 'none',
       selectedDriverId: null,
       initialStatus: 'available',
@@ -179,10 +183,12 @@ export default function TrucksPage() {
       year: truck.year || new Date().getFullYear(),
       color: truck.color || '',
       maxWeight: truck.max_weight_kg || 0,
+      permittedWeight: (truck as any).permitted_weight_kg || 0,
+      upperPlatformWeight: (truck as any).upper_platform_weight_kg || 0,
+      lowerPlatformWeight: (truck as any).lower_platform_weight_kg || 0,
       vehicleCapacity: truck.vehicle_capacity,
       licenseExpiry: truck.license_expiry || '',
       insuranceExpiry: truck.insurance_expiry || '',
-      testExpiry: truck.test_expiry || '',
       driverAssignment: truck.assigned_driver ? 'existing' : 'none',
       selectedDriverId: truck.assigned_driver?.id || null,
       initialStatus: truck.is_active ? 'available' : 'inactive',
@@ -194,7 +200,6 @@ export default function TrucksPage() {
   const checkExpiryDates = () => {
     const warnings = []
     if (isExpired(formData.licenseExpiry)) warnings.push('רישיון רכב')
-    if (isExpired(formData.testExpiry)) warnings.push('טסט')
     if (warnings.length > 0) {
       setExpiryWarningMessage(warnings.join(' ו') + ' פג תוקף!')
       return true
@@ -237,9 +242,11 @@ export default function TrucksPage() {
           color: formData.color || undefined,
           vehicleCapacity: formData.vehicleCapacity,
           maxWeightKg: formData.maxWeight || undefined,
+          permittedWeightKg: formData.permittedWeight || undefined,
+          upperPlatformWeightKg: formData.upperPlatformWeight || undefined,
+          lowerPlatformWeightKg: formData.lowerPlatformWeight || undefined,
           licenseExpiry: formData.licenseExpiry || undefined,
           insuranceExpiry: formData.insuranceExpiry || undefined,
-          testExpiry: formData.testExpiry || undefined,
           notes: formData.notes || undefined,
           isActive: formData.initialStatus === 'available',
           driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
@@ -255,9 +262,11 @@ export default function TrucksPage() {
           color: formData.color || undefined,
           vehicleCapacity: formData.vehicleCapacity,
           maxWeightKg: formData.maxWeight || undefined,
+          permittedWeightKg: formData.permittedWeight || undefined,
+          upperPlatformWeightKg: formData.upperPlatformWeight || undefined,
+          lowerPlatformWeightKg: formData.lowerPlatformWeight || undefined,
           licenseExpiry: formData.licenseExpiry || undefined,
           insuranceExpiry: formData.insuranceExpiry || undefined,
-          testExpiry: formData.testExpiry || undefined,
           notes: formData.notes || undefined,
           isActive: formData.initialStatus === 'available',
           driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId || undefined : undefined,
@@ -463,12 +472,6 @@ export default function TrucksPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">טסט:</span>
-                    <span className={`font-medium ${isExpired(truck.test_expiry) ? 'text-red-600' : isExpiringSoon(truck.test_expiry) ? 'text-amber-600' : 'text-gray-700'}`}>
-                      {formatDate(truck.test_expiry)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">ביטוח:</span>
                     <span className={`font-medium ${isExpired(truck.insurance_expiry) ? 'text-red-600' : 'text-gray-700'}`}>
                       {formatDate(truck.insurance_expiry)}
@@ -610,7 +613,7 @@ export default function TrucksPage() {
                         value={formData.vehicleCapacity}
                         onChange={(e) => setFormData({ ...formData, vehicleCapacity: Number(e.target.value) })}
                         min="1"
-                        max="5"
+                        max="20"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
                     </div>
@@ -618,28 +621,69 @@ export default function TrucksPage() {
                 </div>
               </div>
 
-              {/* תוקף רישיונות */}
+              {/* משקלים */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">2</span>
+                  משקלים (ק״ג)
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משקל כולל</label>
+                    <input
+                      type="number"
+                      value={formData.maxWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, maxWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משקל מורשה</label>
+                    <input
+                      type="number"
+                      value={formData.permittedWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, permittedWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משטח עליון</label>
+                    <input
+                      type="number"
+                      value={formData.upperPlatformWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, upperPlatformWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משטח תחתון</label>
+                    <input
+                      type="number"
+                      value={formData.lowerPlatformWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, lowerPlatformWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* תוקף רישיונות */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
                   תוקף רישיונות
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
                     <input
                       type="date"
                       value={formData.licenseExpiry}
                       onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">תוקף טסט</label>
-                    <input
-                      type="date"
-                      value={formData.testExpiry}
-                      onChange={(e) => setFormData({ ...formData, testExpiry: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
                   </div>
@@ -658,7 +702,7 @@ export default function TrucksPage() {
               {/* שיוך נהג */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">4</span>
                   שיוך נהג
                 </h3>
                 <div className="space-y-4">
@@ -723,7 +767,7 @@ export default function TrucksPage() {
               {!editingTruck && (
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">4</span>
+                    <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">5</span>
                     סטטוס התחלתי
                   </h3>
                   <div className="flex gap-3">
@@ -757,7 +801,7 @@ export default function TrucksPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">
-                    {editingTruck ? '4' : '5'}
+                    {editingTruck ? '5' : '6'}
                   </span>
                   הערות
                 </h3>

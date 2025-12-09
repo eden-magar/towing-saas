@@ -78,9 +78,11 @@ interface CreateTruckInput {
   color?: string
   vehicleCapacity: number
   maxWeightKg?: number
+  permittedWeightKg?: number
+  upperPlatformWeightKg?: number
+  lowerPlatformWeightKg?: number
   licenseExpiry?: string
   insuranceExpiry?: string
-  testExpiry?: string
   notes?: string
   isActive: boolean
   driverId?: string
@@ -99,9 +101,11 @@ export async function createTruck(input: CreateTruckInput) {
       color: input.color || null,
       vehicle_capacity: input.vehicleCapacity,
       max_weight_kg: input.maxWeightKg || null,
+      permitted_weight_kg: input.permittedWeightKg || null,
+      upper_platform_weight_kg: input.upperPlatformWeightKg || null,
+      lower_platform_weight_kg: input.lowerPlatformWeightKg || null,
       license_expiry: input.licenseExpiry || null,
       insurance_expiry: input.insuranceExpiry || null,
-      test_expiry: input.testExpiry || null,
       notes: input.notes || null,
       is_active: input.isActive
     })
@@ -140,9 +144,11 @@ interface UpdateTruckInput {
   color?: string
   vehicleCapacity?: number
   maxWeightKg?: number
+  permittedWeightKg?: number
+  upperPlatformWeightKg?: number
+  lowerPlatformWeightKg?: number
   licenseExpiry?: string
   insuranceExpiry?: string
-  testExpiry?: string
   notes?: string
   isActive?: boolean
   driverId?: string | null
@@ -160,9 +166,11 @@ export async function updateTruck(input: UpdateTruckInput) {
       color: input.color,
       vehicle_capacity: input.vehicleCapacity,
       max_weight_kg: input.maxWeightKg,
+      permitted_weight_kg: input.permittedWeightKg,
+      upper_platform_weight_kg: input.upperPlatformWeightKg,
+      lower_platform_weight_kg: input.lowerPlatformWeightKg,
       license_expiry: input.licenseExpiry || null,
       insurance_expiry: input.insuranceExpiry || null,
-      test_expiry: input.testExpiry || null,
       notes: input.notes,
       is_active: input.isActive
     })
