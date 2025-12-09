@@ -88,6 +88,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const [capturedImage, setCapturedImage] = useState<File | null>(null)
   const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [imageQueue, setImageQueue] = useState<{file: File; url: string; type: TowImageType}[]>([])
+
 
   // Load task data
   useEffect(() => {
@@ -248,43 +250,105 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
+  const files = e.target.files
+  if (!files || files.length === 0 || !selectedPhotoType) return
 
-    // אם יש רק קובץ אחד - flow רגיל
-    if (files.length === 1) {
-      setCapturedImage(files[0])
-      setCapturedImageUrl(URL.createObjectURL(files[0]))
-      setUploadStep('preview')
-      return
+  // הוספת כל הקבצים לתור
+  const newImages = Array.from(files).map(file => ({
+    file,
+    url: URL.createObjectURL(file),
+    type: selectedPhotoType
+  }))
+  
+  setImageQueue(prev => [...prev, ...newImages])
+  setUploadStep('preview')
+  
+  // איפוס ה-input
+  if (fileInputRef.current) fileInputRef.current.value = ''
+}
+
+const handleAddMorePhotos = () => {
+  setUploadStep('type')
+  setSelectedPhotoType(null)
+}
+
+const handleRemoveFromQueue = (index: number) => {
+  setImageQueue(prev => {
+    const newQueue = [...prev]
+    URL.revokeObjectURL(newQueue[index].url)
+    newQueue.splice(index, 1)
+    return newQueue
+  })
+}
+
+const handleSaveAllPhotos = async () => {
+  if (imageQueue.length === 0 || !task || !user) return
+
+  setUploadingImage(true)
+  try {
+    for (const img of imageQueue) {
+      await uploadTowImage(
+        task.id,
+        user.id,
+        img.type,
+        img.file,
+        undefined,
+        task.vehicles[0]?.id
+      )
     }
-
-    // אם יש מספר קבצים - העלאה ישירה
-    if (!selectedPhotoType || !task || !user) return
     
-    setUploadingImage(true)
-    try {
-      for (const file of Array.from(files)) {
-        await uploadTowImage(
-          task.id,
-          user.id,
-          selectedPhotoType,
-          file,
-          undefined,
-          task.vehicles[0]?.id
-        )
-      }
-      await loadTask()
-      handleCloseUpload()
-    } catch (error) {
-      console.error('Error uploading images:', error)
-      alert('שגיאה בהעלאת התמונות')
-    } finally {
-      setUploadingImage(false)
-      // איפוס ה-input
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
+    // ניקוי התור
+    imageQueue.forEach(img => URL.revokeObjectURL(img.url))
+    setImageQueue([])
+    
+    await loadTask()
+    handleCloseUpload()
+  } catch (error) {
+    console.error('Error uploading images:', error)
+    alert('שגיאה בהעלאת התמונות')
+  } finally {
+    setUploadingImage(false)
   }
+}
+
+  // const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const files = e.target.files
+  //   if (!files || files.length === 0) return
+
+  //   // אם יש רק קובץ אחד - flow רגיל
+  //   if (files.length === 1) {
+  //     setCapturedImage(files[0])
+  //     setCapturedImageUrl(URL.createObjectURL(files[0]))
+  //     setUploadStep('preview')
+  //     return
+  //   }
+
+  //   // אם יש מספר קבצים - העלאה ישירה
+  //   if (!selectedPhotoType || !task || !user) return
+    
+  //   setUploadingImage(true)
+  //   try {
+  //     for (const file of Array.from(files)) {
+  //       await uploadTowImage(
+  //         task.id,
+  //         user.id,
+  //         selectedPhotoType,
+  //         file,
+  //         undefined,
+  //         task.vehicles[0]?.id
+  //       )
+  //     }
+  //     await loadTask()
+  //     handleCloseUpload()
+  //   } catch (error) {
+  //     console.error('Error uploading images:', error)
+  //     alert('שגיאה בהעלאת התמונות')
+  //   } finally {
+  //     setUploadingImage(false)
+  //     // איפוס ה-input
+  //     if (fileInputRef.current) fileInputRef.current.value = ''
+  //   }
+  // }
 
   const handleSavePhoto = async () => {
     if (!selectedPhotoType || !capturedImage || !task || !user) return
@@ -335,13 +399,16 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const handleCloseUpload = () => {
-    setShowImageUpload(false)
-    setSelectedPhotoType(null)
-    setPhotoNote('')
-    setCapturedImage(null)
-    setCapturedImageUrl(null)
-    setUploadStep('type')
-  }
+  setShowImageUpload(false)
+  setSelectedPhotoType(null)
+  setPhotoNote('')
+  setCapturedImage(null)
+  setCapturedImageUrl(null)
+  setUploadStep('type')
+  // ניקוי התור
+  imageQueue.forEach(img => URL.revokeObjectURL(img.url))
+  setImageQueue([])
+}
 
   const getStatusColor = (index: number) => {
     if (index < currentFlowIndex) return 'bg-emerald-500 text-white'
@@ -768,7 +835,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           <div className="bg-white w-full rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center gap-3">
-                {uploadStep !== 'type' && (
+                {uploadStep !== 'type' && imageQueue.length === 0 && (
                   <button onClick={handleBackInUpload} className="p-1">
                     <ArrowRight size={20} className="text-gray-500" />
                   </button>
@@ -776,7 +843,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                 <h3 className="font-bold text-gray-800">
                   {uploadStep === 'type' && 'בחר סוג תמונה'}
                   {uploadStep === 'capture' && 'צלם תמונה'}
-                  {uploadStep === 'preview' && 'תצוגה מקדימה'}
+                  {uploadStep === 'preview' && `תמונות בתור (${imageQueue.length})`}
                 </h3>
               </div>
               <button onClick={handleCloseUpload} className="p-2 hover:bg-gray-100 rounded-lg">
@@ -787,6 +854,28 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
             <div className="flex-1 overflow-y-auto">
               {uploadStep === 'type' && (
                 <div className="p-4 space-y-2">
+                  {/* הצגת תור קיים */}
+                  {imageQueue.length > 0 && (
+                    <div className="mb-4 p-3 bg-emerald-50 rounded-xl">
+                      <p className="text-emerald-700 text-sm font-medium mb-2">
+                        {imageQueue.length} תמונות בתור - בחר סוג להוספה נוספת
+                      </p>
+                      <div className="flex gap-2 overflow-x-auto pb-2">
+                        {imageQueue.map((img, idx) => (
+                          <div key={idx} className="relative flex-shrink-0">
+                            <img src={img.url} className="w-16 h-16 object-cover rounded-lg" />
+                            <button
+                              onClick={() => handleRemoveFromQueue(idx)}
+                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   {photoTypes.map((type) => (
                     <button
                       key={type.key}
@@ -802,6 +891,24 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                       <ChevronDown size={20} className="text-gray-400 -rotate-90" />
                     </button>
                   ))}
+                  
+                  {/* כפתור שמירה אם יש תמונות בתור */}
+                  {imageQueue.length > 0 && (
+                    <button
+                      onClick={handleSaveAllPhotos}
+                      disabled={uploadingImage}
+                      className="w-full mt-4 py-4 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {uploadingImage ? (
+                        <Loader2 size={20} className="animate-spin" />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={20} />
+                          שמור {imageQueue.length} תמונות
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -821,64 +928,55 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                         <Camera size={24} className="text-white" />
                       </div>
                       <div className="text-right">
-                        <p className="font-medium text-gray-800">צלם / בחר תמונה</p>
-                        <p className="text-sm text-gray-500">פתח את המצלמה או הגלריה</p>
+                        <p className="font-medium text-gray-800">צלם / בחר תמונות</p>
+                        <p className="text-sm text-gray-500">ניתן לבחור מספר תמונות</p>
                       </div>
                     </button>
                   </div>
                 </div>
               )}
 
-              {uploadStep === 'preview' && capturedImageUrl && selectedPhotoType && (
+              {uploadStep === 'preview' && imageQueue.length > 0 && (
                 <div className="p-4">
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4 ${getPhotoTypeInfo(selectedPhotoType).color}`}>
-                    <span>{getPhotoTypeInfo(selectedPhotoType).icon}</span>
-                    <span className="text-sm font-medium">{getPhotoTypeInfo(selectedPhotoType).label}</span>
-                  </div>
-
-                  <div className="aspect-video bg-gray-200 rounded-xl mb-4 overflow-hidden">
-                    <img 
-                      src={capturedImageUrl} 
-                      alt="Preview" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      הערה לתמונה (אופציונלי)
-                    </label>
-                    <textarea
-                      value={photoNote}
-                      onChange={(e) => setPhotoNote(e.target.value)}
-                      placeholder='לדוגמה: "שריטה קיימת בפגוש"'
-                      rows={2}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
-                    />
+                  <p className="text-gray-600 mb-3">{imageQueue.length} תמונות מוכנות להעלאה</p>
+                  
+                  {/* גריד תמונות */}
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {imageQueue.map((img, idx) => (
+                      <div key={idx} className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden">
+                        <img src={img.url} className="w-full h-full object-cover" />
+                        <div className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-full ${getPhotoTypeInfo(img.type).color}`}>
+                          {getPhotoTypeInfo(img.type).icon} {getPhotoTypeInfo(img.type).label}
+                        </div>
+                        <button
+                          onClick={() => handleRemoveFromQueue(idx)}
+                          className="absolute top-2 left-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="flex gap-3">
                     <button
-                      onClick={() => {
-                        setUploadStep('capture')
-                        setCapturedImage(null)
-                        setCapturedImageUrl(null)
-                      }}
-                      className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium"
+                      onClick={handleAddMorePhotos}
+                      className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium flex items-center justify-center gap-2"
                     >
-                      צלם מחדש
+                      <Camera size={18} />
+                      צלם עוד
                     </button>
                     <button
-                      onClick={handleSavePhoto}
+                      onClick={handleSaveAllPhotos}
                       disabled={uploadingImage}
-                      className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {uploadingImage ? (
                         <Loader2 size={18} className="animate-spin" />
                       ) : (
                         <>
                           <CheckCircle2 size={18} />
-                          שמור
+                          שמור הכל
                         </>
                       )}
                     </button>
