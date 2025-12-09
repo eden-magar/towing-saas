@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3 } from 'lucide-react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../lib/AuthContext'
 import { createTow } from '../../../lib/queries/tows'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
@@ -18,8 +18,9 @@ interface PriceItem {
   price: number
 }
 
-export default function NewTowPage() {
+function NewTowForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, companyId } = useAuth()
   const [showAssignNowModal, setShowAssignNowModal] = useState(false)
   const [savedTowId, setSavedTowId] = useState('')
@@ -93,6 +94,23 @@ export default function NewTowPage() {
   const [creditCardId, setCreditCardId] = useState('')
 
   const defects = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'אחר']
+
+  // קריאת פרמטרים מהכתובת (מהיומן)
+  useEffect(() => {
+    const dateParam = searchParams.get('date')
+    const timeParam = searchParams.get('time')
+    
+    if (dateParam) {
+      setTowDate(dateParam)
+      // בדיקה אם זה היום
+      const today = new Date().toISOString().split('T')[0]
+      setIsToday(dateParam === today)
+    }
+    
+    if (timeParam) {
+      setTowTime(timeParam)
+    }
+  }, [searchParams])
 
   // טעינת נתונים
   useEffect(() => {
@@ -1294,5 +1312,18 @@ export default function NewTowPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// Wrapper component with Suspense for useSearchParams
+export default function NewTowPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">טוען...</div>
+      </div>
+    }>
+      <NewTowForm />
+    </Suspense>
   )
 }

@@ -435,25 +435,32 @@ export default function CalendarPage() {
                     <div className="p-2 text-sm text-gray-400 text-center border-l border-gray-200 flex items-start justify-center">
                       {hour.toString().padStart(2, '0')}:00
                     </div>
-                    {weekDays.map((day, dayIdx) => (
-                      <div
-                        key={dayIdx}
-                        className={`border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group ${
-                          day.isToday ? 'bg-[#33d4ff]/5' : ''
-                        }`}
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, dayIdx, hour)}
-                      >
-                        <Link
-                          href="/dashboard/tows/new"
-                          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    {weekDays.map((day, dayIdx) => {
+                      // יצירת URL עם פרמטרים של תאריך ושעה
+                      const dateStr = day.fullDate.toISOString().split('T')[0] // YYYY-MM-DD
+                      const timeStr = `${hour.toString().padStart(2, '0')}:00`
+                      const newTowUrl = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}`
+                      
+                      return (
+                        <div
+                          key={dayIdx}
+                          className={`border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group ${
+                            day.isToday ? 'bg-[#33d4ff]/5' : ''
+                          }`}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, dayIdx, hour)}
                         >
-                          <div className="w-7 h-7 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
-                            <Plus size={16} className="text-white" />
-                          </div>
-                        </Link>
-                      </div>
-                    ))}
+                          <Link
+                            href={newTowUrl}
+                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <div className="w-7 h-7 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
+                              <Plus size={16} className="text-white" />
+                            </div>
+                          </Link>
+                        </div>
+                      )
+                    })}
                   </div>
                 ))}
 
@@ -578,6 +585,12 @@ export default function CalendarPage() {
                       </div>
                       {(selectedDrivers.includes('all') ? drivers : drivers.filter(d => selectedDrivers.includes(d.id))).map((driver) => {
                         const color = DRIVER_COLORS[drivers.indexOf(driver) % DRIVER_COLORS.length]
+                        // יצירת URL עם פרמטרים של תאריך ושעה
+                        const todayDate = weekDays.find(d => d.isToday)?.fullDate || weekDays[0].fullDate
+                        const dateStr = todayDate.toISOString().split('T')[0]
+                        const timeStr = `${hour.toString().padStart(2, '0')}:00`
+                        const newTowUrl = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}`
+                        
                         return (
                           <div
                             key={driver.id}
@@ -587,7 +600,7 @@ export default function CalendarPage() {
                             onDrop={(e) => handleDrop(e, weekDays.findIndex(d => d.isToday) || 0, hour, driver.id)}
                           >
                             <Link
-                              href="/dashboard/tows/new"
+                              href={newTowUrl}
                               className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                             >
                               <div className="w-6 h-6 bg-[#33d4ff] rounded-full flex items-center justify-center shadow">
