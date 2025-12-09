@@ -85,25 +85,17 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
     return null
   }
 
-  // שליפת הגרר המשויך (אם יש)
-  const { data: assignment } = await supabase
-    .from('driver_truck_assignments')
-    .select(`
-      truck:tow_trucks (
-        id,
-        plate_number,
-        manufacturer,
-        model
-      )
-    `)
+  // שליפת הגרר המשויך (חיפוש בטבלת tow_trucks לפי driver_id)
+  const { data: truck } = await supabase
+    .from('tow_trucks')
+    .select('id, plate_number, manufacturer, model')
     .eq('driver_id', driver.id)
-    .eq('is_active', true)
     .single()
 
   return {
     id: driver.id,
     status: driver.status,
-    truck: assignment?.truck as any || null,
+    truck: truck || null,
     user: user
   }
 }
