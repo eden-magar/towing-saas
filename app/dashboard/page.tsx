@@ -22,6 +22,9 @@ const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link:
   truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
   truck_insurance: { label: 'ביטוח גרר', icon: Shield, link: '/dashboard/trucks' },
   driver_license: { label: 'רישיון נהיגה', icon: CreditCard, link: '/dashboard/drivers' },
+  tachograph: { label: 'כיול טכוגרף', icon: Clock, link: '/dashboard/trucks' },
+  engineer_report: { label: 'תסקיר מהנדס', icon: FileText, link: '/dashboard/trucks' },
+  winter_inspection: { label: 'בדיקת חורף', icon: Truck, link: '/dashboard/trucks' },
 }
 
 export default function DashboardPage() {
