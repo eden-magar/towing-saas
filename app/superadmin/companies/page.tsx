@@ -18,13 +18,20 @@ import {
   Users,
   Truck as TruckIcon,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Ban,
+  Trash2,
+  Shield,
+  CheckCircle
 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export default function SuperAdminCompaniesPage() {
   const [companies, setCompanies] = useState<CompanyWithSubscription[]>([])
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [loading, setLoading] = useState(true)
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
   
   // Filters
   const [statusFilter, setStatusFilter] = useState('all')
@@ -60,6 +67,86 @@ export default function SuperAdminCompaniesPage() {
       console.error('Error loading companies:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteCompany = async (companyId: string, companyName: string) => {
+    if (!confirm(`האם למחוק את "${companyName}" לצמיתות?\n\nפעולה זו תמחק את כל הנתונים של החברה ולא ניתן לשחזר.`)) {
+      return
+    }
+
+    setActionLoading(true)
+    try {
+      const response = await fetch(`/api/admin/delete-company?companyId=${companyId}`, {
+        method: 'DELETE'
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'שגיאה במחיקה')
+      }
+      
+      await loadData()
+    } catch (error: any) {
+      console.error('Error deleting company:', error)
+      alert(error.message || 'שגיאה במחיקת החברה')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSuspendCompany = async (companyId: string) => {
+    const reason = prompt('סיבת ההשעיה:')
+    if (!reason) return
+
+    setActionLoading(true)
+    try {
+      await supabase
+        .from('companies')
+        .update({ status: 'suspended', updated_at: new Date().toISOString() })
+        .eq('id', companyId)
+
+      await supabase
+        .from('company_subscriptions')
+        .update({ 
+          status: 'suspended',
+          suspended_at: new Date().toISOString(),
+          suspended_reason: reason
+        })
+        .eq('company_id', companyId)
+
+      await loadData()
+    } catch (error) {
+      console.error('Error suspending company:', error)
+      alert('שגיאה בהשעיית החברה')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleActivateCompany = async (companyId: string) => {
+    setActionLoading(true)
+    try {
+      await supabase
+        .from('companies')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('id', companyId)
+
+      await supabase
+        .from('company_subscriptions')
+        .update({ 
+          status: 'active',
+          suspended_at: null,
+          suspended_reason: null
+        })
+        .eq('company_id', companyId)
+
+      await loadData()
+    } catch (error) {
+      console.error('Error activating company:', error)
+      alert('שגיאה בהפעלת החברה')
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -301,7 +388,7 @@ export default function SuperAdminCompaniesPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="col-span-2 flex items-center gap-1">
+                  <div className="col-span-2 flex items-center gap-1 relative">
                     <Link
                       href={`/superadmin/companies/${company.id}`}
                       className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
@@ -316,12 +403,87 @@ export default function SuperAdminCompaniesPage() {
                     >
                       <Pencil size={18} />
                     </Link>
-                    <button
-                      className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                      title="עוד"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMenuOpen(menuOpen === company.id ? null : company.id)
+                        }}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                        title="עוד"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      
+                      {/* Dropdown Menu */}
+                      {menuOpen === company.id && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setMenuOpen(null)}>
+                          <div 
+                            className="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-72"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="px-5 py-4 border-b border-slate-700">
+                              <h3 className="text-lg font-bold text-white">{company.name}</h3>
+                              <p className="text-sm text-slate-400">{company.email}</p>
+                            </div>
+                            <div className="p-2">
+                              <Link
+                                href={`/superadmin/companies/${company.id}`}
+                                className="flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl"
+                                onClick={() => setMenuOpen(null)}
+                              >
+                                <Shield size={18} />
+                                היכנס למערכת
+                              </Link>
+                              {company.status !== 'suspended' ? (
+                                <button
+                                  className="flex items-center gap-3 px-4 py-3 text-amber-400 hover:bg-slate-700 w-full text-right rounded-xl"
+                                  disabled={actionLoading}
+                                  onClick={() => {
+                                    setMenuOpen(null)
+                                    handleSuspendCompany(company.id)
+                                  }}
+                                >
+                                  <Ban size={18} />
+                                  השעה חברה
+                                </button>
+                              ) : (
+                                <button
+                                  className="flex items-center gap-3 px-4 py-3 text-emerald-400 hover:bg-slate-700 w-full text-right rounded-xl"
+                                  disabled={actionLoading}
+                                  onClick={() => {
+                                    setMenuOpen(null)
+                                    handleActivateCompany(company.id)
+                                  }}
+                                >
+                                  <CheckCircle size={18} />
+                                  הפעל חברה
+                                </button>
+                              )}
+                              <button
+                                className="flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-slate-700 w-full text-right rounded-xl"
+                                disabled={actionLoading}
+                                onClick={() => {
+                                  setMenuOpen(null)
+                                  handleDeleteCompany(company.id, company.name)
+                                }}
+                              >
+                                <Trash2 size={18} />
+                                מחק חברה
+                              </button>
+                            </div>
+                            <div className="px-4 py-3 border-t border-slate-700">
+                              <button
+                                onClick={() => setMenuOpen(null)}
+                                className="w-full py-2 text-slate-400 hover:text-white text-sm"
+                              >
+                                סגור
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
   getSubscriptionPlans,
-  createCompany,
   type SubscriptionPlan
 } from '../../../lib/superadmin'
 import { supabase } from '../../../lib/supabase'
@@ -166,20 +165,30 @@ export default function NewCompanyPage() {
   const handleSubmit = async () => {
     setLoading(true)
     try {
-      await createCompany({
-        name: formData.name,
-        business_number: formData.business_number || undefined,
-        phone: formData.phone || undefined,
-        email: formData.email,
-        address: formData.address || undefined,
-        website: formData.website || undefined,
-        plan_id: formData.plan_id,
-        admin_name: formData.admin_name,
-        admin_email: formData.admin_email,
-        admin_phone: formData.admin_phone || undefined,
-        send_invite: formData.send_invite,
-        admin_password: formData.admin_password || undefined
+      const response = await fetch('/api/admin/create-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: formData.name,
+          companyEmail: formData.email,
+          companyPhone: formData.phone,
+          companyAddress: formData.address,
+          businessNumber: formData.business_number,
+          website: formData.website,
+          planId: formData.plan_id,
+          adminName: formData.admin_name,
+          adminEmail: formData.admin_email,
+          adminPhone: formData.admin_phone,
+          sendInvite: formData.send_invite,
+          adminPassword: formData.admin_password
+        })
       })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'שגיאה ביצירת החברה')
+      }
       
       router.push('/superadmin/companies')
     } catch (error: any) {
@@ -277,7 +286,7 @@ export default function NewCompanyPage() {
                     type="text"
                     value={formData.name}
                     onChange={(e) => updateField('name', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="לדוגמה: גרירות ישראל בע״מ"
                   />
                 </div>
@@ -295,7 +304,7 @@ export default function NewCompanyPage() {
                         updateField('business_number', e.target.value)
                         checkBusinessNumber(e.target.value)
                       }}
-                      className={`w-full bg-slate-700 border rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 ${
+                      className={`w-full bg-slate-900 border rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 ${
                         bnError ? 'border-red-500 focus:ring-red-500' : 'border-slate-600 focus:ring-violet-500'
                       }`}
                       placeholder="512345678"
@@ -318,7 +327,7 @@ export default function NewCompanyPage() {
                     type="email"
                     value={formData.email}
                     onChange={(e) => updateField('email', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="info@company.co.il"
                   />
                 </div>
@@ -332,7 +341,7 @@ export default function NewCompanyPage() {
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => updateField('phone', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="03-1234567"
                   />
                 </div>
@@ -346,7 +355,7 @@ export default function NewCompanyPage() {
                     type="text"
                     value={formData.address}
                     onChange={(e) => updateField('address', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="רחוב, עיר"
                   />
                 </div>
@@ -360,7 +369,7 @@ export default function NewCompanyPage() {
                     type="url"
                     value={formData.website}
                     onChange={(e) => updateField('website', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="https://www.company.co.il"
                   />
                 </div>
@@ -460,7 +469,7 @@ export default function NewCompanyPage() {
                     type="text"
                     value={formData.admin_name}
                     onChange={(e) => updateField('admin_name', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="ישראל ישראלי"
                   />
                 </div>
@@ -474,7 +483,7 @@ export default function NewCompanyPage() {
                     type="email"
                     value={formData.admin_email}
                     onChange={(e) => updateField('admin_email', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="admin@company.co.il"
                   />
                 </div>
@@ -488,7 +497,7 @@ export default function NewCompanyPage() {
                     type="tel"
                     value={formData.admin_phone}
                     onChange={(e) => updateField('admin_phone', e.target.value)}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="050-1234567"
                   />
                 </div>
@@ -535,7 +544,7 @@ export default function NewCompanyPage() {
                         type={showPassword ? 'text' : 'password'}
                         value={formData.admin_password}
                         onChange={(e) => updateField('admin_password', e.target.value)}
-                        className="w-full bg-slate-700 border border-slate-600 rounded-xl px-4 py-3 pl-12 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 pl-12 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                         placeholder="לפחות 8 תווים"
                       />
                       <button

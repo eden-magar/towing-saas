@@ -94,8 +94,7 @@ export default function SuperAdminLayout({
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-900 text-white">
-      {/* Impersonation Banner */}
+    <div dir="rtl" className="dark-theme min-h-screen bg-slate-900 text-white">      {/* Impersonation Banner */}
       {impersonation && (
         <div className="fixed top-0 left-0 right-0 bg-amber-500 text-amber-900 py-2 px-4 z-[100] flex items-center justify-center gap-4">
           <Shield size={18} />

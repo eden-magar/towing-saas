@@ -15,6 +15,18 @@ textarea::placeholder {
   color: #9ca3af;
 }
 
+/* Super Admin - dark theme inputs */
+.dark-theme input,
+.dark-theme select,
+.dark-theme textarea {
+  color: white !important;
+}
+
+.dark-theme input::placeholder,
+.dark-theme textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
 html {
   font-size: 16px; 
 }

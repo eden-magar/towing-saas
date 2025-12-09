@@ -48,7 +48,7 @@ export default function SuperAdminUsersPage() {
   // Password Reset Modal
   const [showResetModal, setShowResetModal] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithCompany | null>(null)
-  const [resetMethod, setResetMethod] = useState<'email' | 'manual'>('email')
+  const [resetMethod, setResetMethod] = useState<'email' | 'manual'>('manual')
   const [newPassword, setNewPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
@@ -121,7 +121,7 @@ export default function SuperAdminUsersPage() {
 
   const openResetModal = (user: UserWithCompany) => {
     setSelectedUser(user)
-    setResetMethod('email')
+    setResetMethod('manual')
     setNewPassword('')
     setResetSuccess(false)
     setShowResetModal(true)
@@ -132,30 +132,25 @@ export default function SuperAdminUsersPage() {
     
     setResetLoading(true)
     try {
-      if (resetMethod === 'email') {
-        // שליחת מייל איפוס סיסמה
-        const { error } = await supabase.auth.resetPasswordForEmail(selectedUser.email, {
-          redirectTo: `${window.location.origin}/reset-password`
+      const response = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUser.id,
+          method: resetMethod,
+          newPassword: resetMethod === 'manual' ? newPassword : undefined,
+          userEmail: selectedUser.email,
+          userName: selectedUser.full_name
         })
-        
-        if (error) throw error
-        setResetSuccess(true)
-      } else {
-        // הגדרת סיסמה ידנית (דורש Admin API)
-        if (newPassword.length < 6) {
-          alert('הסיסמה חייבת להכיל לפחות 6 תווים')
-          setResetLoading(false)
-          return
-        }
-        
-        const { error } = await supabase.auth.admin.updateUserById(
-          selectedUser.id,
-          { password: newPassword }
-        )
-        
-        if (error) throw error
-        setResetSuccess(true)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'שגיאה באיפוס הסיסמה')
       }
+
+      setResetSuccess(true)
     } catch (error: any) {
       console.error('Error resetting password:', error)
       alert(error.message || 'שגיאה באיפוס הסיסמה')

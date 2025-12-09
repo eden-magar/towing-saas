@@ -17,7 +17,6 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowUpRight,
-  Bell,
   RefreshCw,
   Loader2
 } from 'lucide-react'
@@ -167,12 +166,6 @@ export default function SuperAdminDashboard() {
               className="p-2 text-slate-400 hover:text-white bg-slate-700 rounded-xl"
             >
               <RefreshCw size={20} />
-            </button>
-
-            {/* Notifications */}
-            <button className="relative p-2 text-slate-400 hover:text-white bg-slate-700 rounded-xl">
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
           </div>
         </div>
@@ -360,7 +353,7 @@ export default function SuperAdminDashboard() {
         </div>
 
         {/* Bottom Row */}
-        <div className="grid grid-cols-2 gap-6">
+        <div>
           {/* Top Companies */}
           <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
@@ -394,32 +387,6 @@ export default function SuperAdminDashboard() {
                   אין נתונים
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* System Status */}
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-700">
-              <h3 className="font-bold text-white">סטטוס מערכת</h3>
-            </div>
-            <div className="p-5 grid grid-cols-2 gap-4">
-              {[
-                { name: 'API Server', status: 'operational', uptime: '99.9%' },
-                { name: 'Database', status: 'operational', uptime: '99.8%' },
-                { name: 'Google Maps API', status: 'operational', uptime: '100%' },
-                { name: 'SMS Gateway', status: 'operational', uptime: '99.5%' },
-              ].map((service) => (
-                <div key={service.name} className="bg-slate-700/50 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-slate-300 text-sm">{service.name}</span>
-                    <span className={`w-2 h-2 rounded-full ${
-                      service.status === 'operational' ? 'bg-emerald-500' : 'bg-amber-500'
-                    }`}></span>
-                  </div>
-                  <p className="text-lg font-bold text-white">{service.uptime}</p>
-                  <p className="text-xs text-slate-500">Uptime</p>
-                </div>
-              ))}
             </div>
           </div>
         </div>
