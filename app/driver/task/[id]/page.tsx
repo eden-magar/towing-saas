@@ -31,7 +31,6 @@ import {
   MessageSquare,
   MessageCircle,
   Map,
-  ChevronDown,
   Loader2,
   Trash2
 } from 'lucide-react'
@@ -54,15 +53,11 @@ const statusActions: Record<string, string> = {
   'arrived_dropoff': 'סיום משימה',
 }
 
-// מיפוי סוגי תמונות
-const photoTypes: { key: TowImageType; label: string; icon: string; color: string }[] = [
-  { key: 'before_pickup', label: 'לפני טעינה', icon: '📷', color: 'bg-blue-100 text-blue-700' },
-  { key: 'after_pickup', label: 'אחרי טעינה', icon: '📸', color: 'bg-emerald-100 text-emerald-700' },
-  { key: 'before_dropoff', label: 'לפני פריקה', icon: '🚗', color: 'bg-purple-100 text-purple-700' },
-  { key: 'after_dropoff', label: 'אחרי פריקה', icon: '✅', color: 'bg-teal-100 text-teal-700' },
-  { key: 'damage', label: 'נזק', icon: '⚠️', color: 'bg-red-100 text-red-700' },
-  { key: 'other', label: 'אחר', icon: '📎', color: 'bg-gray-100 text-gray-700' },
-]
+// רק 2 סוגי תמונות
+const photoCategories = {
+  before_pickup: { label: 'תמונות באיסוף', icon: '📷', color: 'bg-blue-100 text-blue-700' },
+  at_destination: { label: 'תמונות ביעד', icon: '📸', color: 'bg-emerald-100 text-emerald-700' },
+}
 
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -82,14 +77,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const [showPhotoPreview, setShowPhotoPreview] = useState<TowImage | null>(null)
   
   // Photo upload states
-  const [selectedPhotoType, setSelectedPhotoType] = useState<TowImageType | null>(null)
-  const [photoNote, setPhotoNote] = useState('')
-  const [uploadStep, setUploadStep] = useState<'type' | 'capture' | 'preview'>('type')
-  const [capturedImage, setCapturedImage] = useState<File | null>(null)
-  const [capturedImageUrl, setCapturedImageUrl] = useState<string | null>(null)
   const [uploadingImage, setUploadingImage] = useState(false)
-  const [imageQueue, setImageQueue] = useState<{file: File; url: string; type: TowImageType}[]>([])
-
+  const [imageQueue, setImageQueue] = useState<{file: File; url: string}[]>([])
 
   // Load task data
   useEffect(() => {
@@ -101,24 +90,22 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   // Determine flow index based on task status and legs
   useEffect(() => {
     if (task) {
-      // חישוב אינדקס ה-flow לפי סטטוס וסטטוס הרגליים
       if (task.status === 'assigned') {
         setCurrentFlowIndex(0)
       } else if (task.status === 'completed') {
         setCurrentFlowIndex(5)
       } else if (task.status === 'in_progress') {
-        // בודקים את הרגליים כדי לדעת איפה אנחנו
         const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
         const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
         
         if (deliveryLeg?.status === 'completed') {
-          setCurrentFlowIndex(4) // הגעתי ליעד
+          setCurrentFlowIndex(4)
         } else if (deliveryLeg?.status === 'in_progress') {
-          setCurrentFlowIndex(3) // בדרך ליעד
+          setCurrentFlowIndex(3)
         } else if (pickupLeg?.status === 'completed' || pickupLeg?.status === 'in_progress') {
-          setCurrentFlowIndex(2) // הגעתי לאיסוף
+          setCurrentFlowIndex(2)
         } else {
-          setCurrentFlowIndex(1) // בדרך לאיסוף
+          setCurrentFlowIndex(1)
         }
       }
     }
@@ -136,6 +123,28 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // קביעה אוטומטית של סוג התמונה לפי השלב
+  const getCurrentPhotoType = (): TowImageType => {
+    if (currentFlowIndex <= 2) {
+      return 'before_pickup'
+    }
+    return 'after_pickup' // נשתמש ב-after_pickup בתור "תמונות ביעד"
+  }
+  // ספירת תמונות לפי קטגוריה
+  const getPickupPhotosCount = () => {
+  if (!task) return 0
+  return task.images.filter(img => 
+    img.image_type === 'before_pickup'
+  ).length
+}
+
+  const getDestinationPhotosCount = () => {
+  if (!task) return 0
+  return task.images.filter(img => 
+    img.image_type === 'after_pickup'
+  ).length
+}
+
   const handleStatusUpdate = async () => {
     if (!task || !user) return
     
@@ -144,13 +153,18 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     
     // אם זה סיום משימה - מראים מודל אישור
     if (nextIndex === 5) {
+      // בדיקת 4 תמונות ביעד לפני סיום
+      if (getDestinationPhotosCount() < 4) {
+        alert(`יש לצלם לפחות 4 תמונות ביעד לפני סיום.\nכרגע יש ${getDestinationPhotosCount()} תמונות.`)
+        return
+      }
       setShowConfirmComplete(true)
       return
     }
 
-    // בדיקת 4 תמונות לפני יציאה ליעד (מ-arrived_pickup ל-on_way_dropoff)
-    if (currentFlowIndex === 2 && task.images.length < 4) {
-      alert(`יש לצלם לפחות 4 תמונות לפני יציאה ליעד.\nכרגע יש ${task.images.length} תמונות.`)
+    // בדיקת 4 תמונות באיסוף לפני יציאה ליעד (מ-arrived_pickup ל-on_way_dropoff)
+    if (currentFlowIndex === 2 && getPickupPhotosCount() < 4) {
+      alert(`יש לצלם לפחות 4 תמונות באיסוף לפני יציאה ליעד.\nכרגע יש ${getPickupPhotosCount()} תמונות.`)
       return
     }
 
@@ -158,27 +172,21 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     try {
       const nextStatus = statusFlow[nextIndex]
       
-      // עדכון סטטוס רגל אם רלוונטי
-      // עדכון סטטוס רגל אם רלוונטי
       if (nextIndex === 2) {
-        // הגעתי לאיסוף - רגל pickup מתחילה
         const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
         if (pickupLeg) {
           await updateLegStatus(pickupLeg.id, 'in_progress')
         }
       } else if (nextIndex === 3) {
-        // יציאה ליעד - רגל pickup הסתיימה, delivery מתחילה
         const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
         const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
         if (pickupLeg) await updateLegStatus(pickupLeg.id, 'completed')
         if (deliveryLeg) await updateLegStatus(deliveryLeg.id, 'in_progress')
       } else if (nextIndex === 4) {
-        // הגעתי ליעד - delivery הסתיימה
         const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
         if (deliveryLeg) await updateLegStatus(deliveryLeg.id, 'completed')
       }
       
-      // עדכון סטטוס הגרירה הראשי
       await updateTaskStatusWithHistory(
         task.id, 
         nextStatus.dbStatus, 
@@ -188,7 +196,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       )
       
       setCurrentFlowIndex(nextIndex)
-      await loadTask() // רענון הנתונים
+      await loadTask()
     } catch (error) {
       console.error('Error updating status:', error)
       alert('שגיאה בעדכון הסטטוס')
@@ -199,6 +207,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
   const handleComplete = async () => {
     if (!task || !user) return
+    
+    // בדיקה נוספת של תמונות ביעד
+    if (getDestinationPhotosCount() < 4) {
+      alert(`יש לצלם לפחות 4 תמונות ביעד לפני סיום.\nכרגע יש ${getDestinationPhotosCount()} תמונות.`)
+      setShowConfirmComplete(false)
+      return
+    }
     
     setUpdating(true)
     try {
@@ -230,145 +245,67 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
-  // Photo helpers
-  const getPhotoTypeInfo = (type: TowImageType) => {
-    return photoTypes.find(p => p.key === type) || photoTypes[5]
-  }
-
+  // פתיחת צילום - ישר לבחירת קבצים בלי בחירת סוג
   const handleOpenUpload = () => {
     setShowImageUpload(true)
-    setUploadStep('type')
-    setSelectedPhotoType(null)
-    setPhotoNote('')
-    setCapturedImage(null)
-    setCapturedImageUrl(null)
-  }
-
-  const handleSelectPhotoType = (type: TowImageType) => {
-    setSelectedPhotoType(type)
-    setUploadStep('capture')
+    setImageQueue([])
+    // פותח ישר את בחירת הקבצים
+    setTimeout(() => fileInputRef.current?.click(), 100)
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = e.target.files
-  if (!files || files.length === 0 || !selectedPhotoType) return
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-  // הוספת כל הקבצים לתור
-  const newImages = Array.from(files).map(file => ({
-    file,
-    url: URL.createObjectURL(file),
-    type: selectedPhotoType
-  }))
-  
-  setImageQueue(prev => [...prev, ...newImages])
-  setUploadStep('preview')
-  
-  // איפוס ה-input
-  if (fileInputRef.current) fileInputRef.current.value = ''
-}
-
-const handleAddMorePhotos = () => {
-  setUploadStep('type')
-  setSelectedPhotoType(null)
-}
-
-const handleRemoveFromQueue = (index: number) => {
-  setImageQueue(prev => {
-    const newQueue = [...prev]
-    URL.revokeObjectURL(newQueue[index].url)
-    newQueue.splice(index, 1)
-    return newQueue
-  })
-}
-
-const handleSaveAllPhotos = async () => {
-  if (imageQueue.length === 0 || !task || !user) return
-
-  setUploadingImage(true)
-  try {
-    for (const img of imageQueue) {
-      await uploadTowImage(
-        task.id,
-        user.id,
-        img.type,
-        img.file,
-        undefined,
-        task.vehicles[0]?.id
-      )
-    }
+    const newImages = Array.from(files).map(file => ({
+      file,
+      url: URL.createObjectURL(file)
+    }))
     
-    // ניקוי התור
-    imageQueue.forEach(img => URL.revokeObjectURL(img.url))
-    setImageQueue([])
+    setImageQueue(prev => [...prev, ...newImages])
     
-    await loadTask()
-    handleCloseUpload()
-  } catch (error) {
-    console.error('Error uploading images:', error)
-    alert('שגיאה בהעלאת התמונות')
-  } finally {
-    setUploadingImage(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
-}
 
-  // const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const files = e.target.files
-  //   if (!files || files.length === 0) return
+  const handleAddMorePhotos = () => {
+    fileInputRef.current?.click()
+  }
 
-  //   // אם יש רק קובץ אחד - flow רגיל
-  //   if (files.length === 1) {
-  //     setCapturedImage(files[0])
-  //     setCapturedImageUrl(URL.createObjectURL(files[0]))
-  //     setUploadStep('preview')
-  //     return
-  //   }
+  const handleRemoveFromQueue = (index: number) => {
+    setImageQueue(prev => {
+      const newQueue = [...prev]
+      URL.revokeObjectURL(newQueue[index].url)
+      newQueue.splice(index, 1)
+      return newQueue
+    })
+  }
 
-  //   // אם יש מספר קבצים - העלאה ישירה
-  //   if (!selectedPhotoType || !task || !user) return
-    
-  //   setUploadingImage(true)
-  //   try {
-  //     for (const file of Array.from(files)) {
-  //       await uploadTowImage(
-  //         task.id,
-  //         user.id,
-  //         selectedPhotoType,
-  //         file,
-  //         undefined,
-  //         task.vehicles[0]?.id
-  //       )
-  //     }
-  //     await loadTask()
-  //     handleCloseUpload()
-  //   } catch (error) {
-  //     console.error('Error uploading images:', error)
-  //     alert('שגיאה בהעלאת התמונות')
-  //   } finally {
-  //     setUploadingImage(false)
-  //     // איפוס ה-input
-  //     if (fileInputRef.current) fileInputRef.current.value = ''
-  //   }
-  // }
-
-  const handleSavePhoto = async () => {
-    if (!selectedPhotoType || !capturedImage || !task || !user) return
+  const handleSaveAllPhotos = async () => {
+    if (imageQueue.length === 0 || !task || !user) return
 
     setUploadingImage(true)
+    const photoType = getCurrentPhotoType()
+    
     try {
-      await uploadTowImage(
-        task.id,
-        user.id,
-        selectedPhotoType,
-        capturedImage,
-        photoNote || undefined,
-        task.vehicles[0]?.id
-      )
+      for (const img of imageQueue) {
+        await uploadTowImage(
+          task.id,
+          user.id,
+          photoType,
+          img.file,
+          undefined,
+          task.vehicles[0]?.id
+        )
+      }
       
-      await loadTask() // רענון התמונות
+      imageQueue.forEach(img => URL.revokeObjectURL(img.url))
+      setImageQueue([])
+      
+      await loadTask()
       handleCloseUpload()
     } catch (error) {
-      console.error('Error uploading image:', error)
-      alert('שגיאה בהעלאת התמונה')
+      console.error('Error uploading images:', error)
+      alert('שגיאה בהעלאת התמונות')
     } finally {
       setUploadingImage(false)
     }
@@ -387,28 +324,11 @@ const handleSaveAllPhotos = async () => {
     }
   }
 
-  const handleBackInUpload = () => {
-    if (uploadStep === 'capture') {
-      setUploadStep('type')
-      setSelectedPhotoType(null)
-    } else if (uploadStep === 'preview') {
-      setUploadStep('capture')
-      setCapturedImage(null)
-      setCapturedImageUrl(null)
-    }
-  }
-
   const handleCloseUpload = () => {
-  setShowImageUpload(false)
-  setSelectedPhotoType(null)
-  setPhotoNote('')
-  setCapturedImage(null)
-  setCapturedImageUrl(null)
-  setUploadStep('type')
-  // ניקוי התור
-  imageQueue.forEach(img => URL.revokeObjectURL(img.url))
-  setImageQueue([])
-}
+    setShowImageUpload(false)
+    imageQueue.forEach(img => URL.revokeObjectURL(img.url))
+    setImageQueue([])
+  }
 
   const getStatusColor = (index: number) => {
     if (index < currentFlowIndex) return 'bg-emerald-500 text-white'
@@ -416,7 +336,6 @@ const handleSaveAllPhotos = async () => {
     return 'bg-gray-200 text-gray-400'
   }
 
-  // Navigation conditions
   const showNavigationButton = task && ['assigned', 'in_progress'].includes(task.status) && currentFlowIndex < 6
 
   // Loading state
@@ -449,12 +368,16 @@ const handleSaveAllPhotos = async () => {
   const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
   const pickupAddress = pickupLeg?.from_address || 'לא צוין'
   const dropoffAddress = deliveryLeg?.to_address || pickupLeg?.to_address || 'לא צוין'
-  
-  // Calculate total distance
   const totalDistance = task.legs.reduce((sum, leg) => sum + (leg.distance_km || 0), 0)
-  
-  // Get first vehicle
   const vehicle = task.vehicles[0]
+
+  // חלוקת תמונות ל-2 קטגוריות
+  const pickupImages = task.images.filter(img => 
+  img.image_type === 'before_pickup'
+)
+  const destinationImages = task.images.filter(img => 
+  img.image_type === 'after_pickup'
+)
 
   return (
     <div className="pb-32">
@@ -694,7 +617,7 @@ const handleSaveAllPhotos = async () => {
           </div>
         )}
 
-        {/* Photos */}
+        {/* Photos - רק 2 קטגוריות */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-gray-800">תמונות</h3>
@@ -719,53 +642,86 @@ const handleSaveAllPhotos = async () => {
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {photoTypes.map(photoType => {
-                const imagesOfType = task.images.filter(img => img.image_type === photoType.key)
-                if (imagesOfType.length === 0) return null
-                
-                return (
-                  <div key={photoType.key}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">{photoType.icon}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${photoType.color}`}>
-                        {photoType.label}
-                      </span>
-                      <span className="text-xs text-gray-400">({imagesOfType.length})</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {imagesOfType.map((img) => (
-                        <button
-                          key={img.id}
-                          onClick={() => setShowPhotoPreview(img)}
-                          className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden group"
-                        >
-                          <img 
-                            src={img.image_url} 
-                            alt={photoType.label}
-                            className="w-full h-full object-cover"
-                          />
-                          {img.notes && (
-                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] p-1 truncate">
-                              {img.notes}
-                            </div>
-                          )}
-                          <div className="absolute top-1 right-1 text-[10px] bg-black/50 text-white px-1 rounded">
-                            {new Date(img.created_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+            <div className="space-y-4">
+              {/* תמונות באיסוף */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📷</span>
+                    <span className="text-sm font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                      תמונות באיסוף
+                    </span>
+                    <span className="text-xs text-gray-400">({pickupImages.length}/4)</span>
                   </div>
-                )
-              })}
+                  {pickupImages.length >= 4 && (
+                    <CheckCircle2 size={18} className="text-emerald-500" />
+                  )}
+                </div>
+                {pickupImages.length > 0 ? (
+                  <div className="grid grid-cols-4 gap-2">
+                    {pickupImages.map((img) => (
+                      <button
+                        key={img.id}
+                        onClick={() => setShowPhotoPreview(img)}
+                        className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden"
+                      >
+                        <img 
+                          src={img.image_url} 
+                          alt="תמונה באיסוף"
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 text-sm">לא צולמו עדיין</p>
+                )}
+              </div>
+
+              {/* תמונות ביעד */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📸</span>
+                    <span className="text-sm font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      תמונות ביעד
+                    </span>
+                    <span className="text-xs text-gray-400">({destinationImages.length}/4)</span>
+                  </div>
+                  {destinationImages.length >= 4 && (
+                    <CheckCircle2 size={18} className="text-emerald-500" />
+                  )}
+                </div>
+                {destinationImages.length > 0 ? (
+                  <div className="grid grid-cols-4 gap-2">
+                    {destinationImages.map((img) => (
+                      <button
+                        key={img.id}
+                        onClick={() => setShowPhotoPreview(img)}
+                        className="relative aspect-square bg-gray-100 rounded-lg overflow-hidden"
+                      >
+                        <img 
+                          src={img.image_url} 
+                          alt="תמונה ביעד"
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 text-sm">לא צולמו עדיין</p>
+                )}
+              </div>
               
+              {/* כפתור הוספה */}
               <button 
                 onClick={handleOpenUpload}
                 className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 hover:border-[#33d4ff] hover:text-[#33d4ff]"
               >
                 <Camera size={18} />
-                <span className="text-sm font-medium">הוסף תמונה נוספת</span>
+                <span className="text-sm font-medium">
+                  {currentFlowIndex <= 2 ? 'צלם תמונות באיסוף' : 'צלם תמונות ביעד'}
+                </span>
               </button>
             </div>
           )}
@@ -829,125 +785,46 @@ const handleSaveAllPhotos = async () => {
         className="hidden"
       />
 
-      {/* Image Upload Modal */}
+      {/* Image Upload Modal - פשוט וישיר */}
       {showImageUpload && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white w-full rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
               <div className="flex items-center gap-3">
-                {uploadStep !== 'type' && imageQueue.length === 0 && (
-                  <button onClick={handleBackInUpload} className="p-1">
-                    <ArrowRight size={20} className="text-gray-500" />
-                  </button>
-                )}
                 <h3 className="font-bold text-gray-800">
-                  {uploadStep === 'type' && 'בחר סוג תמונה'}
-                  {uploadStep === 'capture' && 'צלם תמונה'}
-                  {uploadStep === 'preview' && `תמונות בתור (${imageQueue.length})`}
+                  {currentFlowIndex <= 2 ? '📷 תמונות באיסוף' : '📸 תמונות ביעד'}
                 </h3>
+                {imageQueue.length > 0 && (
+                  <span className="bg-[#33d4ff] text-white text-xs px-2 py-1 rounded-full">
+                    {imageQueue.length} תמונות
+                  </span>
+                )}
               </div>
               <button onClick={handleCloseUpload} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X size={20} className="text-gray-500" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
-              {uploadStep === 'type' && (
-                <div className="p-4 space-y-2">
-                  {/* הצגת תור קיים */}
-                  {imageQueue.length > 0 && (
-                    <div className="mb-4 p-3 bg-emerald-50 rounded-xl">
-                      <p className="text-emerald-700 text-sm font-medium mb-2">
-                        {imageQueue.length} תמונות בתור - בחר סוג להוספה נוספת
-                      </p>
-                      <div className="flex gap-2 overflow-x-auto pb-2">
-                        {imageQueue.map((img, idx) => (
-                          <div key={idx} className="relative flex-shrink-0">
-                            <img src={img.url} className="w-16 h-16 object-cover rounded-lg" />
-                            <button
-                              onClick={() => handleRemoveFromQueue(idx)}
-                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {photoTypes.map((type) => (
-                    <button
-                      key={type.key}
-                      onClick={() => handleSelectPhotoType(type.key)}
-                      className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 active:scale-[0.99]"
-                    >
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${type.color}`}>
-                        <span className="text-2xl">{type.icon}</span>
-                      </div>
-                      <div className="text-right flex-1">
-                        <p className="font-medium text-gray-800">{type.label}</p>
-                      </div>
-                      <ChevronDown size={20} className="text-gray-400 -rotate-90" />
-                    </button>
-                  ))}
-                  
-                  {/* כפתור שמירה אם יש תמונות בתור */}
-                  {imageQueue.length > 0 && (
-                    <button
-                      onClick={handleSaveAllPhotos}
-                      disabled={uploadingImage}
-                      className="w-full mt-4 py-4 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {uploadingImage ? (
-                        <Loader2 size={20} className="animate-spin" />
-                      ) : (
-                        <>
-                          <CheckCircle2 size={20} />
-                          שמור {imageQueue.length} תמונות
-                        </>
-                      )}
-                    </button>
-                  )}
+            <div className="flex-1 overflow-y-auto p-4">
+              {imageQueue.length === 0 ? (
+                <div className="text-center py-8">
+                  <Camera size={48} className="text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">לחץ לצילום או בחירת תמונות</p>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-6 py-3 bg-[#33d4ff] text-white rounded-xl font-medium"
+                  >
+                    צלם / בחר תמונות
+                  </button>
                 </div>
-              )}
-
-              {uploadStep === 'capture' && selectedPhotoType && (
-                <div className="p-4">
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4 ${getPhotoTypeInfo(selectedPhotoType).color}`}>
-                    <span>{getPhotoTypeInfo(selectedPhotoType).icon}</span>
-                    <span className="text-sm font-medium">{getPhotoTypeInfo(selectedPhotoType).label}</span>
-                  </div>
-
-                  <div className="space-y-3">
-                    <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="w-full flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
-                    >
-                      <div className="w-12 h-12 bg-[#33d4ff] rounded-full flex items-center justify-center">
-                        <Camera size={24} className="text-white" />
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-gray-800">צלם / בחר תמונות</p>
-                        <p className="text-sm text-gray-500">ניתן לבחור מספר תמונות</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {uploadStep === 'preview' && imageQueue.length > 0 && (
-                <div className="p-4">
+              ) : (
+                <>
                   <p className="text-gray-600 mb-3">{imageQueue.length} תמונות מוכנות להעלאה</p>
                   
-                  {/* גריד תמונות */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     {imageQueue.map((img, idx) => (
                       <div key={idx} className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden">
                         <img src={img.url} className="w-full h-full object-cover" />
-                        <div className={`absolute top-2 right-2 text-xs px-2 py-1 rounded-full ${getPhotoTypeInfo(img.type).color}`}>
-                          {getPhotoTypeInfo(img.type).icon} {getPhotoTypeInfo(img.type).label}
-                        </div>
                         <button
                           onClick={() => handleRemoveFromQueue(idx)}
                           className="absolute top-2 left-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
@@ -981,7 +858,7 @@ const handleSaveAllPhotos = async () => {
                       )}
                     </button>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -992,9 +869,10 @@ const handleSaveAllPhotos = async () => {
       {showPhotoPreview && (
         <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
           <div className="flex items-center justify-between p-4">
-            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${getPhotoTypeInfo(showPhotoPreview.image_type).color}`}>
-              <span>{getPhotoTypeInfo(showPhotoPreview.image_type).icon}</span>
-              <span className="text-sm font-medium">{getPhotoTypeInfo(showPhotoPreview.image_type).label}</span>
+            <div className="text-white text-sm">
+              {showPhotoPreview.image_type === 'before_pickup' || showPhotoPreview.image_type === 'after_pickup' 
+                ? '📷 תמונה באיסוף' 
+                : '📸 תמונה ביעד'}
             </div>
             <div className="flex items-center gap-2">
               <button 
@@ -1017,12 +895,6 @@ const handleSaveAllPhotos = async () => {
             />
           </div>
 
-          {showPhotoPreview.notes && (
-            <div className="p-4 bg-black/50">
-              <p className="text-white text-center">{showPhotoPreview.notes}</p>
-            </div>
-          )}
-
           <div className="p-4 text-center text-gray-400 text-sm">
             {new Date(showPhotoPreview.created_at).toLocaleString('he-IL')}
           </div>
@@ -1039,7 +911,22 @@ const handleSaveAllPhotos = async () => {
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">סיום משימה</h3>
               <p className="text-gray-600">האם אתה בטוח שסיימת את המשימה?</p>
-              <p className="text-sm text-gray-500 mt-2">ודא שהעלית את כל התמונות הנדרשות</p>
+              
+              {/* סטטוס תמונות */}
+              <div className="mt-4 space-y-2 text-sm">
+                <div className={`flex items-center justify-between p-2 rounded-lg ${getPickupPhotosCount() >= 4 ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                  <span>תמונות באיסוף</span>
+                  <span className={getPickupPhotosCount() >= 4 ? 'text-emerald-600' : 'text-amber-600'}>
+                    {getPickupPhotosCount()}/4 {getPickupPhotosCount() >= 4 ? '✓' : ''}
+                  </span>
+                </div>
+                <div className={`flex items-center justify-between p-2 rounded-lg ${getDestinationPhotosCount() >= 4 ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+                  <span>תמונות ביעד</span>
+                  <span className={getDestinationPhotosCount() >= 4 ? 'text-emerald-600' : 'text-amber-600'}>
+                    {getDestinationPhotosCount()}/4 {getDestinationPhotosCount() >= 4 ? '✓' : ''}
+                  </span>
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 p-4 border-t border-gray-200 bg-gray-50">
               <button

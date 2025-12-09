@@ -8,11 +8,13 @@ export async function getCalendarTows(
   startDate: Date,
   endDate: Date
 ): Promise<TowWithDetails[]> {
-  const startISO = startDate.toISOString()
-  const endISO = endDate.toISOString()
+  console.log('=== getCalendarTows DEBUG ===')
+  console.log('companyId:', companyId)
+  console.log('startDate:', startDate.toISOString())
+  console.log('endDate:', endDate.toISOString())
 
-  // שאילתה שמביאה גרירות לפי scheduled_at או created_at
-  const { data: tows, error } = await supabase
+  // שאילתה פשוטה - מביאה את כל הגרירות של החברה
+  const { data: allTows, error } = await supabase
     .from('tows')
     .select(`
       *,
@@ -35,16 +37,31 @@ export async function getCalendarTows(
     `)
     .eq('company_id', companyId)
     .neq('status', 'cancelled')
-    .or(`scheduled_at.gte.${startISO},and(scheduled_at.is.null,created_at.gte.${startISO})`)
-    .or(`scheduled_at.lte.${endISO},and(scheduled_at.is.null,created_at.lte.${endISO})`)
-    .order('scheduled_at', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false })
 
   if (error) {
     console.error('Error fetching calendar tows:', error)
     throw error
   }
 
-  if (!tows || tows.length === 0) return []
+  console.log('All tows from DB:', allTows?.length || 0)
+  allTows?.forEach(t => {
+    console.log(`Tow ${t.id}: scheduled_at=${t.scheduled_at}, created_at=${t.created_at}`)
+  })
+
+  if (!allTows || allTows.length === 0) return []
+
+  // סינון בצד הקליינט
+  const tows = allTows.filter(tow => {
+    const towDate = new Date(tow.scheduled_at || tow.created_at)
+    const inRange = towDate >= startDate && towDate <= endDate
+    console.log(`Tow ${tow.id}: towDate=${towDate.toISOString()}, inRange=${inRange}`)
+    return inRange
+  })
+
+  console.log('Filtered tows:', tows.length)
+
+  if (tows.length === 0) return []
 
   // שליפת כלי רכב
   const towIds = tows.map(t => t.id)
