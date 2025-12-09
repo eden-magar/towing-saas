@@ -713,11 +713,11 @@ export default function NewTowPage() {
                         <div className="flex items-center gap-2 text-emerald-700">
                           <Check size={18} />
                           <span className="font-medium">{customerName}</span>
-                          {selectedCustomerPricing && (
-                            <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full mr-auto">
-                              יש מחירון מותאם
-                            </span>
-                          )}
+                          {selectedCustomerPricing && (selectedCustomerPricing.discount_percent > 0 || selectedCustomerPricing.price_items.length > 0) && (
+                          <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full mr-auto">
+                            יש מחירון מותאם
+                          </span>
+                        )}
                         </div>
                       </div>
                     )}

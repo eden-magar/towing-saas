@@ -41,7 +41,6 @@ const statusFlow = [
   { key: 'assigned', label: 'שויך', dbStatus: 'assigned' },
   { key: 'on_way_pickup', label: 'בדרך לאיסוף', dbStatus: 'in_progress' },
   { key: 'arrived_pickup', label: 'הגעתי לאיסוף', dbStatus: 'in_progress' },
-  { key: 'loading', label: 'טוען', dbStatus: 'in_progress' },
   { key: 'on_way_dropoff', label: 'בדרך ליעד', dbStatus: 'in_progress' },
   { key: 'arrived_dropoff', label: 'הגעתי ליעד', dbStatus: 'in_progress' },
   { key: 'completed', label: 'הושלם', dbStatus: 'completed' },
@@ -50,8 +49,7 @@ const statusFlow = [
 const statusActions: Record<string, string> = {
   'assigned': 'יציאה לאיסוף',
   'on_way_pickup': 'הגעתי לאיסוף',
-  'arrived_pickup': 'התחל טעינה',
-  'loading': 'סיימתי טעינה - יציאה ליעד',
+  'arrived_pickup': 'יציאה ליעד',
   'on_way_dropoff': 'הגעתי ליעד',
   'arrived_dropoff': 'סיום משימה',
 }
@@ -105,19 +103,17 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       if (task.status === 'assigned') {
         setCurrentFlowIndex(0)
       } else if (task.status === 'completed') {
-        setCurrentFlowIndex(6)
+        setCurrentFlowIndex(5)
       } else if (task.status === 'in_progress') {
         // בודקים את הרגליים כדי לדעת איפה אנחנו
         const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
         const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
         
         if (deliveryLeg?.status === 'completed') {
-          setCurrentFlowIndex(5) // הגעתי ליעד
+          setCurrentFlowIndex(4) // הגעתי ליעד
         } else if (deliveryLeg?.status === 'in_progress') {
-          setCurrentFlowIndex(4) // בדרך ליעד
-        } else if (pickupLeg?.status === 'completed') {
-          setCurrentFlowIndex(3) // טעינה הסתיימה
-        } else if (pickupLeg?.status === 'in_progress') {
+          setCurrentFlowIndex(3) // בדרך ליעד
+        } else if (pickupLeg?.status === 'completed' || pickupLeg?.status === 'in_progress') {
           setCurrentFlowIndex(2) // הגעתי לאיסוף
         } else {
           setCurrentFlowIndex(1) // בדרך לאיסוף
@@ -145,8 +141,14 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     if (nextIndex >= statusFlow.length) return
     
     // אם זה סיום משימה - מראים מודל אישור
-    if (nextIndex === 6) {
+    if (nextIndex === 5) {
       setShowConfirmComplete(true)
+      return
+    }
+
+    // בדיקת 4 תמונות לפני יציאה ליעד (מ-arrived_pickup ל-on_way_dropoff)
+    if (currentFlowIndex === 2 && task.images.length < 4) {
+      alert(`יש לצלם לפחות 4 תמונות לפני יציאה ליעד.\nכרגע יש ${task.images.length} תמונות.`)
       return
     }
 
@@ -155,19 +157,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       const nextStatus = statusFlow[nextIndex]
       
       // עדכון סטטוס רגל אם רלוונטי
+      // עדכון סטטוס רגל אם רלוונטי
       if (nextIndex === 2) {
         // הגעתי לאיסוף - רגל pickup מתחילה
         const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
         if (pickupLeg) {
           await updateLegStatus(pickupLeg.id, 'in_progress')
         }
-      } else if (nextIndex === 4) {
+      } else if (nextIndex === 3) {
         // יציאה ליעד - רגל pickup הסתיימה, delivery מתחילה
         const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
         const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
         if (pickupLeg) await updateLegStatus(pickupLeg.id, 'completed')
         if (deliveryLeg) await updateLegStatus(deliveryLeg.id, 'in_progress')
-      } else if (nextIndex === 5) {
+      } else if (nextIndex === 4) {
         // הגעתי ליעד - delivery הסתיימה
         const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
         if (deliveryLeg) await updateLegStatus(deliveryLeg.id, 'completed')
@@ -244,12 +247,42 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     setUploadStep('capture')
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setCapturedImage(file)
-      setCapturedImageUrl(URL.createObjectURL(file))
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    // אם יש רק קובץ אחד - flow רגיל
+    if (files.length === 1) {
+      setCapturedImage(files[0])
+      setCapturedImageUrl(URL.createObjectURL(files[0]))
       setUploadStep('preview')
+      return
+    }
+
+    // אם יש מספר קבצים - העלאה ישירה
+    if (!selectedPhotoType || !task || !user) return
+    
+    setUploadingImage(true)
+    try {
+      for (const file of Array.from(files)) {
+        await uploadTowImage(
+          task.id,
+          user.id,
+          selectedPhotoType,
+          file,
+          undefined,
+          task.vehicles[0]?.id
+        )
+      }
+      await loadTask()
+      handleCloseUpload()
+    } catch (error) {
+      console.error('Error uploading images:', error)
+      alert('שגיאה בהעלאת התמונות')
+    } finally {
+      setUploadingImage(false)
+      // איפוס ה-input
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -724,6 +757,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         ref={fileInputRef}
         accept="image/*"
         capture="environment"
+        multiple
         onChange={handleFileSelect}
         className="hidden"
       />
