@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { getDashboardStats, getRecentTows, DashboardStats } from '../lib/queries/dashboard'
 import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
+import { updateWinterInspection } from '../lib/queries/trucks'
 import { TowWithDetails } from '../lib/queries/tows'
-import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTriangle, FileText, Shield, CreditCard } from 'lucide-react'
+import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Gauge, ClipboardCheck, Snowflake, Check } from 'lucide-react'
 import Link from 'next/link'
 
 // מיפוי סטטוסים לעברית וצבעים
@@ -22,11 +23,13 @@ const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link:
   truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
   truck_insurance: { label: 'ביטוח גרר', icon: Shield, link: '/dashboard/trucks' },
   driver_license: { label: 'רישיון נהיגה', icon: CreditCard, link: '/dashboard/drivers' },
+  tachograph: { label: 'כיול טכוגרף', icon: Gauge, link: '/dashboard/trucks' },
+  engineer_report: { label: 'תסקיר מהנדס', icon: ClipboardCheck, link: '/dashboard/trucks' },
+  winter_inspection: { label: 'בדיקת חורף', icon: Snowflake, link: '/dashboard/trucks' },
 }
 
 export default function DashboardPage() {
   const { user, companyId, loading: authLoading } = useAuth()
-  console.log('Auth state:', { user, companyId, authLoading })
   const [stats, setStats] = useState<DashboardStats>({
     towsToday: 0,
     pendingTows: 0,
@@ -37,6 +40,7 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [markingWinter, setMarkingWinter] = useState<string | null>(null)
 
   const loadData = async () => {
     if (!companyId) return
@@ -59,18 +63,34 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-  if (!authLoading) {
-    if (companyId) {
-      loadData()
-    } else {
-      setLoading(false)
+    if (!authLoading) {
+      if (companyId) {
+        loadData()
+      } else {
+        setLoading(false)
+      }
     }
-  }
-}, [companyId, authLoading])
+  }, [companyId, authLoading])
 
   const handleRefresh = () => {
     setRefreshing(true)
     loadData()
+  }
+
+  const handleMarkWinterInspection = async (truckId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    setMarkingWinter(truckId)
+    try {
+      await updateWinterInspection(truckId, new Date().toISOString().split('T')[0])
+      // הסרת ההתראה מהרשימה
+      setAlerts(prev => prev.filter(a => a.id !== `winter_inspection_${truckId}`))
+    } catch (error) {
+      console.error('Error marking winter inspection:', error)
+    } finally {
+      setMarkingWinter(null)
+    }
   }
 
   if (authLoading || loading) {
@@ -119,7 +139,17 @@ export default function DashboardPage() {
   }
 
   // פונקציה לטקסט ימים
-  const getDaysText = (daysLeft: number) => {
+  const getDaysText = (daysLeft: number, type: string) => {
+    if (type === 'winter_inspection') {
+      if (daysLeft < 0) {
+        return `עבר מועד הבדיקה`
+      } else if (daysLeft === 0) {
+        return 'היום מועד אחרון!'
+      } else {
+        return `עוד ${daysLeft} ימים למועד`
+      }
+    }
+    
     if (daysLeft < 0) {
       return `פג לפני ${Math.abs(daysLeft)} ימים`
     } else if (daysLeft === 0) {
@@ -165,49 +195,77 @@ export default function DashboardPage() {
         <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center gap-2">
             <AlertTriangle size={20} className="text-amber-500" />
-            <h2 className="font-semibold text-gray-800">התראות תוקף ({alerts.length})</h2>
+            <h2 className="font-semibold text-gray-800">התראות ({alerts.length})</h2>
           </div>
           <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
             {alerts.map((alert) => {
               const config = alertTypeConfig[alert.type]
               const Icon = config.icon
+              const isWinterInspection = alert.type === 'winter_inspection'
               
               return (
-                <Link
+                <div
                   key={alert.id}
-                  href={config.link}
                   className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
                 >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    alert.severity === 'expired' ? 'bg-red-100' :
-                    alert.severity === 'critical' ? 'bg-orange-100' :
-                    'bg-amber-100'
-                  }`}>
-                    <Icon size={20} className={
-                      alert.severity === 'expired' ? 'text-red-600' :
-                      alert.severity === 'critical' ? 'text-orange-600' :
-                      'text-amber-600'
-                    } />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-800">{alert.entityName}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        alert.severity === 'expired' ? 'bg-red-100 text-red-700' :
-                        alert.severity === 'critical' ? 'bg-orange-100 text-orange-700' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>
-                        {alert.severity === 'expired' ? 'פג תוקף' :
-                         alert.severity === 'critical' ? 'דחוף' : 
-                         'בקרוב'}
-                      </span>
+                  <Link
+                    href={config.link}
+                    className="flex items-center gap-4 flex-1 min-w-0"
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      alert.severity === 'expired' ? 'bg-red-100' :
+                      alert.severity === 'critical' ? 'bg-orange-100' :
+                      alert.severity === 'warning' ? 'bg-amber-100' :
+                      'bg-blue-100'
+                    }`}>
+                      <Icon size={20} className={
+                        alert.severity === 'expired' ? 'text-red-600' :
+                        alert.severity === 'critical' ? 'text-orange-600' :
+                        alert.severity === 'warning' ? 'text-amber-600' :
+                        'text-blue-600'
+                      } />
                     </div>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      {config.label} • {formatExpiryDate(alert.expiryDate)} • {getDaysText(alert.daysLeft)}
-                    </p>
-                  </div>
-                  <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
-                </Link>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-gray-800">{alert.entityName}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          alert.severity === 'expired' ? 'bg-red-100 text-red-700' :
+                          alert.severity === 'critical' ? 'bg-orange-100 text-orange-700' :
+                          alert.severity === 'warning' ? 'bg-amber-100 text-amber-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {alert.severity === 'expired' ? 'פג תוקף' :
+                           alert.severity === 'critical' ? 'דחוף' : 
+                           alert.severity === 'warning' ? 'בקרוב' :
+                           'תזכורת'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {config.label} • {formatExpiryDate(alert.expiryDate)} • {getDaysText(alert.daysLeft, alert.type)}
+                      </p>
+                    </div>
+                  </Link>
+                  
+                  {/* כפתור סימון בדיקת חורף */}
+                  {isWinterInspection && (
+                    <button
+                      onClick={(e) => handleMarkWinterInspection(alert.entityId, e)}
+                      disabled={markingWinter === alert.entityId}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200 transition-colors flex-shrink-0"
+                    >
+                      {markingWinter === alert.entityId ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : (
+                        <Check size={14} />
+                      )}
+                      בוצע
+                    </button>
+                  )}
+                  
+                  {!isWinterInspection && (
+                    <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
+                  )}
+                </div>
               )
             })}
           </div>

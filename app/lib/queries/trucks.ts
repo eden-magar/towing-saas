@@ -1,6 +1,41 @@
 import { supabase } from '../supabase'
 import { TruckWithDetails } from '../types'
 
+// ==================== העלאת קבצים ====================
+
+export async function uploadTruckDocument(
+  file: File,
+  companyId: string,
+  truckPlate: string,
+  docType: string
+): Promise<string> {
+  const fileExt = file.name.split('.').pop()
+  const fileName = `${companyId}/${truckPlate}/${docType}_${Date.now()}.${fileExt}`
+
+  const { error } = await supabase.storage
+    .from('truck-documents')
+    .upload(fileName, file, { upsert: true })
+
+  if (error) {
+    console.error('Error uploading file:', error)
+    throw error
+  }
+
+  const { data } = supabase.storage
+    .from('truck-documents')
+    .getPublicUrl(fileName)
+
+  return data.publicUrl
+}
+
+export async function deleteTruckDocument(url: string): Promise<void> {
+  // מחלץ את הנתיב מה-URL
+  const path = url.split('/truck-documents/')[1]
+  if (path) {
+    await supabase.storage.from('truck-documents').remove([path])
+  }
+}
+
 // ==================== שליפת משאיות ====================
 
 export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> {
@@ -83,6 +118,15 @@ interface CreateTruckInput {
   lowerPlatformWeightKg?: number
   licenseExpiry?: string
   insuranceExpiry?: string
+  // שדות חדשים
+  licensePhotoUrl?: string
+  licenseAppendixPhotoUrl?: string
+  tachographExpiry?: string
+  tachographPhotoUrl?: string
+  engineerReportExpiry?: string
+  engineerReportPhotoUrl?: string
+  lastWinterInspection?: string
+  //
   notes?: string
   isActive: boolean
   driverId?: string
@@ -106,6 +150,15 @@ export async function createTruck(input: CreateTruckInput) {
       lower_platform_weight_kg: input.lowerPlatformWeightKg || null,
       license_expiry: input.licenseExpiry || null,
       insurance_expiry: input.insuranceExpiry || null,
+      // שדות חדשים
+      license_photo_url: input.licensePhotoUrl || null,
+      license_appendix_photo_url: input.licenseAppendixPhotoUrl || null,
+      tachograph_expiry: input.tachographExpiry || null,
+      tachograph_photo_url: input.tachographPhotoUrl || null,
+      engineer_report_expiry: input.engineerReportExpiry || null,
+      engineer_report_photo_url: input.engineerReportPhotoUrl || null,
+      last_winter_inspection: input.lastWinterInspection || null,
+      //
       notes: input.notes || null,
       is_active: input.isActive
     })
@@ -149,6 +202,15 @@ interface UpdateTruckInput {
   lowerPlatformWeightKg?: number
   licenseExpiry?: string
   insuranceExpiry?: string
+  // שדות חדשים
+  licensePhotoUrl?: string
+  licenseAppendixPhotoUrl?: string
+  tachographExpiry?: string
+  tachographPhotoUrl?: string
+  engineerReportExpiry?: string
+  engineerReportPhotoUrl?: string
+  lastWinterInspection?: string
+  //
   notes?: string
   isActive?: boolean
   driverId?: string | null
@@ -171,6 +233,15 @@ export async function updateTruck(input: UpdateTruckInput) {
       lower_platform_weight_kg: input.lowerPlatformWeightKg,
       license_expiry: input.licenseExpiry || null,
       insurance_expiry: input.insuranceExpiry || null,
+      // שדות חדשים
+      license_photo_url: input.licensePhotoUrl,
+      license_appendix_photo_url: input.licenseAppendixPhotoUrl,
+      tachograph_expiry: input.tachographExpiry || null,
+      tachograph_photo_url: input.tachographPhotoUrl,
+      engineer_report_expiry: input.engineerReportExpiry || null,
+      engineer_report_photo_url: input.engineerReportPhotoUrl,
+      last_winter_inspection: input.lastWinterInspection || null,
+      //
       notes: input.notes,
       is_active: input.isActive
     })
@@ -202,6 +273,22 @@ export async function updateTruck(input: UpdateTruckInput) {
         is_current: true,
         assigned_at: new Date().toISOString()
       })
+  }
+
+  return true
+}
+
+// ==================== עדכון בדיקת חורף ====================
+
+export async function updateWinterInspection(truckId: string, date: string) {
+  const { error } = await supabase
+    .from('tow_trucks')
+    .update({ last_winter_inspection: date })
+    .eq('id', truckId)
+
+  if (error) {
+    console.error('Error updating winter inspection:', error)
+    throw error
   }
 
   return true

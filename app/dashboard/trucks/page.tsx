@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye, Camera } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
-import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate } from '../../lib/queries/trucks'
+import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument } from '../../lib/queries/trucks'
 import { TruckWithDetails } from '../../lib/types'
 import { getDrivers } from '../../lib/queries/drivers'
 import { DriverWithDetails } from '../../lib/types'
@@ -28,10 +28,17 @@ export default function TrucksPage() {
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [showExpiryWarning, setShowExpiryWarning] = useState(false)
   const [expiryWarningMessage, setExpiryWarningMessage] = useState('')
+  const [uploading, setUploading] = useState<string | null>(null)
+
+  // File refs
+  const licensePhotoRef = useRef<HTMLInputElement>(null)
+  const licenseAppendixRef = useRef<HTMLInputElement>(null)
+  const tachographPhotoRef = useRef<HTMLInputElement>(null)
+  const engineerReportPhotoRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     plate: '',
-    type: '' as '' | 'flatbed' | 'wheel_lift' | 'heavy_duty' | 'integrated',
+    type: '' as '' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed_ramsa' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle',
     manufacturer: '',
     model: '',
     year: new Date().getFullYear(),
@@ -43,6 +50,15 @@ export default function TrucksPage() {
     vehicleCapacity: 1,
     licenseExpiry: '',
     insuranceExpiry: '',
+    // שדות חדשים
+    licensePhotoUrl: '',
+    licenseAppendixPhotoUrl: '',
+    tachographExpiry: '',
+    tachographPhotoUrl: '',
+    engineerReportExpiry: '',
+    engineerReportPhotoUrl: '',
+    lastWinterInspection: '',
+    //
     driverAssignment: 'none' as 'existing' | 'none',
     selectedDriverId: null as string | null,
     initialStatus: 'available' as 'available' | 'inactive',
@@ -50,15 +66,15 @@ export default function TrucksPage() {
   })
 
   const typeConfig: Record<string, { label: string; color: string; iconBg: string }> = {
-  carrier: { label: 'מובילית', color: 'bg-blue-100 text-blue-600', iconBg: 'bg-blue-100' },
-  carrier_large: { label: 'מובילית 10+', color: 'bg-indigo-100 text-indigo-600', iconBg: 'bg-indigo-100' },
-  crane_tow: { label: 'גרר מנוף', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
-  dolly: { label: 'דולי', color: 'bg-pink-100 text-pink-600', iconBg: 'bg-pink-100' },
-  flatbed_ramsa: { label: 'רמסע', color: 'bg-cyan-100 text-cyan-600', iconBg: 'bg-cyan-100' },
-  heavy_equipment: { label: 'ציוד כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
-  heavy_rescue: { label: 'חילוץ כבד', color: 'bg-red-100 text-red-600', iconBg: 'bg-red-100' },
-  wheel_lift_cradle: { label: 'משקפיים', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
-}
+    carrier: { label: 'מובילית', color: 'bg-blue-100 text-blue-600', iconBg: 'bg-blue-100' },
+    carrier_large: { label: 'מובילית 10+', color: 'bg-indigo-100 text-indigo-600', iconBg: 'bg-indigo-100' },
+    crane_tow: { label: 'גרר מנוף', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
+    dolly: { label: 'דולי', color: 'bg-pink-100 text-pink-600', iconBg: 'bg-pink-100' },
+    flatbed_ramsa: { label: 'רמסע', color: 'bg-cyan-100 text-cyan-600', iconBg: 'bg-cyan-100' },
+    heavy_equipment: { label: 'ציוד כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
+    heavy_rescue: { label: 'חילוץ כבד', color: 'bg-red-100 text-red-600', iconBg: 'bg-red-100' },
+    wheel_lift_cradle: { label: 'משקפיים', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
+  }
 
   const statusConfig = {
     available: { label: 'פנוי', color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
@@ -95,7 +111,6 @@ export default function TrucksPage() {
 
   const getTruckStatus = (truck: TruckWithDetails): 'available' | 'busy' | 'maintenance' | 'inactive' => {
     if (!truck.is_active) return 'inactive'
-    // כרגע אין לנו מעקב אחרי סטטוס דינמי, אז נחזיר available או busy לפי שיוך נהג
     if (truck.assigned_driver) return 'busy'
     return 'available'
   }
@@ -104,7 +119,7 @@ export default function TrucksPage() {
     total: trucks.length,
     available: trucks.filter(t => t.is_active && !t.assigned_driver).length,
     busy: trucks.filter(t => t.is_active && t.assigned_driver).length,
-    maintenance: 0, // יתעדכן כשנוסיף מעקב טיפולים
+    maintenance: 0,
   }
 
   const filteredTrucks = trucks.filter(truck => {
@@ -157,6 +172,13 @@ export default function TrucksPage() {
       vehicleCapacity: 1,
       licenseExpiry: '',
       insuranceExpiry: '',
+      licensePhotoUrl: '',
+      licenseAppendixPhotoUrl: '',
+      tachographExpiry: '',
+      tachographPhotoUrl: '',
+      engineerReportExpiry: '',
+      engineerReportPhotoUrl: '',
+      lastWinterInspection: '',
       driverAssignment: 'none',
       selectedDriverId: null,
       initialStatus: 'available',
@@ -175,6 +197,7 @@ export default function TrucksPage() {
 
   const openEditModal = (truck: TruckWithDetails) => {
     setEditingTruck(truck)
+    const truckData = truck as any
     setFormData({
       plate: truck.plate_number,
       type: truck.truck_type as any,
@@ -183,18 +206,57 @@ export default function TrucksPage() {
       year: truck.year || new Date().getFullYear(),
       color: truck.color || '',
       maxWeight: truck.max_weight_kg || 0,
-      permittedWeight: (truck as any).permitted_weight_kg || 0,
-      upperPlatformWeight: (truck as any).upper_platform_weight_kg || 0,
-      lowerPlatformWeight: (truck as any).lower_platform_weight_kg || 0,
+      permittedWeight: truckData.permitted_weight_kg || 0,
+      upperPlatformWeight: truckData.upper_platform_weight_kg || 0,
+      lowerPlatformWeight: truckData.lower_platform_weight_kg || 0,
       vehicleCapacity: truck.vehicle_capacity,
       licenseExpiry: truck.license_expiry || '',
       insuranceExpiry: truck.insurance_expiry || '',
+      licensePhotoUrl: truckData.license_photo_url || '',
+      licenseAppendixPhotoUrl: truckData.license_appendix_photo_url || '',
+      tachographExpiry: truckData.tachograph_expiry || '',
+      tachographPhotoUrl: truckData.tachograph_photo_url || '',
+      engineerReportExpiry: truckData.engineer_report_expiry || '',
+      engineerReportPhotoUrl: truckData.engineer_report_photo_url || '',
+      lastWinterInspection: truckData.last_winter_inspection || '',
       driverAssignment: truck.assigned_driver ? 'existing' : 'none',
       selectedDriverId: truck.assigned_driver?.id || null,
       initialStatus: truck.is_active ? 'available' : 'inactive',
       notes: truck.notes || '',
     })
     setShowModal(true)
+  }
+
+  const handleFileUpload = async (file: File, docType: string) => {
+    if (!companyId || !formData.plate) {
+      setError('יש להזין מספר רישוי לפני העלאת קבצים')
+      return
+    }
+
+    setUploading(docType)
+    try {
+      const url = await uploadTruckDocument(file, companyId, formData.plate, docType)
+      
+      switch (docType) {
+        case 'license':
+          setFormData(prev => ({ ...prev, licensePhotoUrl: url }))
+          break
+        case 'license_appendix':
+          setFormData(prev => ({ ...prev, licenseAppendixPhotoUrl: url }))
+          break
+        case 'tachograph':
+          setFormData(prev => ({ ...prev, tachographPhotoUrl: url }))
+          break
+        case 'engineer_report':
+          setFormData(prev => ({ ...prev, engineerReportPhotoUrl: url }))
+          break
+      }
+    } catch (err) {
+      console.error('Error uploading file:', err)
+      setError('שגיאה בהעלאת הקובץ')
+    } finally {
+      setUploading(null)
+    }
   }
 
   const checkExpiryDates = () => {
@@ -210,7 +272,6 @@ export default function TrucksPage() {
   const handleSave = async () => {
     if (!formData.plate || !formData.type || !companyId) return
 
-    // בדיקת כפילויות
     const isDuplicate = await checkTruckDuplicate(
       companyId,
       formData.plate,
@@ -247,6 +308,13 @@ export default function TrucksPage() {
           lowerPlatformWeightKg: formData.lowerPlatformWeight || undefined,
           licenseExpiry: formData.licenseExpiry || undefined,
           insuranceExpiry: formData.insuranceExpiry || undefined,
+          licensePhotoUrl: formData.licensePhotoUrl || undefined,
+          licenseAppendixPhotoUrl: formData.licenseAppendixPhotoUrl || undefined,
+          tachographExpiry: formData.tachographExpiry || undefined,
+          tachographPhotoUrl: formData.tachographPhotoUrl || undefined,
+          engineerReportExpiry: formData.engineerReportExpiry || undefined,
+          engineerReportPhotoUrl: formData.engineerReportPhotoUrl || undefined,
+          lastWinterInspection: formData.lastWinterInspection || undefined,
           notes: formData.notes || undefined,
           isActive: formData.initialStatus === 'available',
           driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
@@ -267,6 +335,13 @@ export default function TrucksPage() {
           lowerPlatformWeightKg: formData.lowerPlatformWeight || undefined,
           licenseExpiry: formData.licenseExpiry || undefined,
           insuranceExpiry: formData.insuranceExpiry || undefined,
+          licensePhotoUrl: formData.licensePhotoUrl || undefined,
+          licenseAppendixPhotoUrl: formData.licenseAppendixPhotoUrl || undefined,
+          tachographExpiry: formData.tachographExpiry || undefined,
+          tachographPhotoUrl: formData.tachographPhotoUrl || undefined,
+          engineerReportExpiry: formData.engineerReportExpiry || undefined,
+          engineerReportPhotoUrl: formData.engineerReportPhotoUrl || undefined,
+          lastWinterInspection: formData.lastWinterInspection || undefined,
           notes: formData.notes || undefined,
           isActive: formData.initialStatus === 'available',
           driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId || undefined : undefined,
@@ -295,9 +370,63 @@ export default function TrucksPage() {
     }
   }
 
-  // נהגים פנויים (בלי גרר משויך או משויכים לגרר הנוכחי)
   const availableDrivers = drivers.filter(d => 
     !d.current_truck || d.current_truck.id === editingTruck?.id
+  )
+
+  // קומפוננטת העלאת קובץ
+  const FileUploadField = ({ 
+    label, 
+    docType, 
+    currentUrl, 
+    inputRef 
+  }: { 
+    label: string
+    docType: string
+    currentUrl: string
+    inputRef: React.RefObject<HTMLInputElement>
+  }) => (
+    <div>
+      <label className="block text-sm text-gray-600 mb-1">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="file"
+          ref={inputRef}
+          accept="image/*,.pdf"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleFileUpload(file, docType)
+          }}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading === docType || !formData.plate}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          {uploading === docType ? (
+            <div className="w-4 h-4 border-2 border-[#33d4ff] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Upload size={16} className="text-gray-500" />
+          )}
+          <span className="text-sm text-gray-600">
+            {currentUrl ? 'החלף קובץ' : 'העלה קובץ'}
+          </span>
+        </button>
+        {currentUrl && (
+          <a
+            href={currentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 text-[#33d4ff] hover:bg-cyan-50 rounded-lg transition-colors"
+            title="צפה בקובץ"
+          >
+            <Eye size={18} />
+          </a>
+        )}
+      </div>
+    </div>
   )
 
   if (pageLoading) {
@@ -671,38 +800,116 @@ export default function TrucksPage() {
                 </div>
               </div>
 
-              {/* תוקף רישיונות */}
+              {/* רישיון רכב ומסמכים */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
-                  תוקף רישיונות
+                  רישיון רכב ומסמכים
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
-                    <input
-                      type="date"
-                      value={formData.licenseExpiry}
-                      onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
+                      <input
+                        type="date"
+                        value={formData.licenseExpiry}
+                        onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף ביטוח</label>
+                      <input
+                        type="date"
+                        value={formData.insuranceExpiry}
+                        onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FileUploadField
+                      label="צילום רישיון רכב"
+                      docType="license"
+                      currentUrl={formData.licensePhotoUrl}
+                      inputRef={licensePhotoRef as React.RefObject<HTMLInputElement>}
+                    />
+                    <FileUploadField
+                      label="צילום נספח רישיון"
+                      docType="license_appendix"
+                      currentUrl={formData.licenseAppendixPhotoUrl}
+                      inputRef={licenseAppendixRef as React.RefObject<HTMLInputElement>}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">תוקף ביטוח</label>
-                    <input
-                      type="date"
-                      value={formData.insuranceExpiry}
-                      onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                </div>
+              </div>
+
+              {/* טכוגרף ותסקיר מהנדס */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">4</span>
+                  טכוגרף ותסקיר מהנדס
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף כיול טכוגרף</label>
+                      <input
+                        type="date"
+                        value={formData.tachographExpiry}
+                        onChange={(e) => setFormData({ ...formData, tachographExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <FileUploadField
+                      label="צילום תעודת כיול"
+                      docType="tachograph"
+                      currentUrl={formData.tachographPhotoUrl}
+                      inputRef={tachographPhotoRef as React.RefObject<HTMLInputElement>}
                     />
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף תסקיר מהנדס</label>
+                      <input
+                        type="date"
+                        value={formData.engineerReportExpiry}
+                        onChange={(e) => setFormData({ ...formData, engineerReportExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <FileUploadField
+                      label="צילום תסקיר מהנדס"
+                      docType="engineer_report"
+                      currentUrl={formData.engineerReportPhotoUrl}
+                      inputRef={engineerReportPhotoRef as React.RefObject<HTMLInputElement>}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* בדיקת חורף */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">5</span>
+                  בדיקת חורף
+                </h3>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">תאריך בדיקת חורף אחרונה</label>
+                  <input
+                    type="date"
+                    value={formData.lastWinterInspection}
+                    onChange={(e) => setFormData({ ...formData, lastWinterInspection: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">תזכורת תופיע מ-1 בספטמבר כל שנה</p>
                 </div>
               </div>
 
               {/* שיוך נהג */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">4</span>
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">6</span>
                   שיוך נהג
                 </h3>
                 <div className="space-y-4">
@@ -767,7 +974,7 @@ export default function TrucksPage() {
               {!editingTruck && (
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                    <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">5</span>
+                    <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">7</span>
                     סטטוס התחלתי
                   </h3>
                   <div className="flex gap-3">
@@ -801,7 +1008,7 @@ export default function TrucksPage() {
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">
-                    {editingTruck ? '5' : '6'}
+                    {editingTruck ? '7' : '8'}
                   </span>
                   הערות
                 </h3>
