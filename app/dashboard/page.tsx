@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { getDashboardStats, getRecentTows, DashboardStats } from '../lib/queries/dashboard'
+import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
 import { TowWithDetails } from '../lib/queries/tows'
-import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw } from 'lucide-react'
+import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTriangle, FileText, Shield, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 
 // מיפוי סטטוסים לעברית וצבעים
@@ -14,6 +15,13 @@ const statusMap: Record<string, { label: string; color: string }> = {
   in_progress: { label: 'בביצוע', color: 'bg-indigo-100 text-indigo-700' },
   completed: { label: 'הושלמה', color: 'bg-emerald-100 text-emerald-700' },
   cancelled: { label: 'בוטלה', color: 'bg-red-100 text-red-700' }
+}
+
+// מיפוי סוגי התראות
+const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link: string }> = {
+  truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
+  truck_insurance: { label: 'ביטוח גרר', icon: Shield, link: '/dashboard/trucks' },
+  driver_license: { label: 'רישיון נהיגה', icon: CreditCard, link: '/dashboard/drivers' },
 }
 
 export default function DashboardPage() {
@@ -26,6 +34,7 @@ export default function DashboardPage() {
     availableDrivers: 0
   })
   const [recentTows, setRecentTows] = useState<TowWithDetails[]>([])
+  const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -33,12 +42,14 @@ export default function DashboardPage() {
     if (!companyId) return
     
     try {
-      const [statsData, towsData] = await Promise.all([
+      const [statsData, towsData, alertsData] = await Promise.all([
         getDashboardStats(companyId),
-        getRecentTows(companyId, 5)
+        getRecentTows(companyId, 5),
+        getExpiryAlerts(companyId)
       ])
       setStats(statsData)
       setRecentTows(towsData)
+      setAlerts(alertsData)
     } catch (error) {
       console.error('Error loading dashboard data:', error)
     } finally {
@@ -102,6 +113,24 @@ export default function DashboardPage() {
     return '-'
   }
 
+  // פונקציה לפורמט תאריך
+  const formatExpiryDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('he-IL')
+  }
+
+  // פונקציה לטקסט ימים
+  const getDaysText = (daysLeft: number) => {
+    if (daysLeft < 0) {
+      return `פג לפני ${Math.abs(daysLeft)} ימים`
+    } else if (daysLeft === 0) {
+      return 'פג היום!'
+    } else if (daysLeft === 1) {
+      return 'פג מחר!'
+    } else {
+      return `עוד ${daysLeft} ימים`
+    }
+  }
+
   return (
     <div>
       {/* כותרת */}
@@ -130,6 +159,60 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* התראות תוקף */}
+      {alerts.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 flex items-center gap-2">
+            <AlertTriangle size={20} className="text-amber-500" />
+            <h2 className="font-semibold text-gray-800">התראות תוקף ({alerts.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+            {alerts.map((alert) => {
+              const config = alertTypeConfig[alert.type]
+              const Icon = config.icon
+              
+              return (
+                <Link
+                  key={alert.id}
+                  href={config.link}
+                  className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    alert.severity === 'expired' ? 'bg-red-100' :
+                    alert.severity === 'critical' ? 'bg-orange-100' :
+                    'bg-amber-100'
+                  }`}>
+                    <Icon size={20} className={
+                      alert.severity === 'expired' ? 'text-red-600' :
+                      alert.severity === 'critical' ? 'text-orange-600' :
+                      'text-amber-600'
+                    } />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-800">{alert.entityName}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        alert.severity === 'expired' ? 'bg-red-100 text-red-700' :
+                        alert.severity === 'critical' ? 'bg-orange-100 text-orange-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>
+                        {alert.severity === 'expired' ? 'פג תוקף' :
+                         alert.severity === 'critical' ? 'דחוף' : 
+                         'בקרוב'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {config.label} • {formatExpiryDate(alert.expiryDate)} • {getDaysText(alert.daysLeft)}
+                    </p>
+                  </div>
+                  <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* כרטיסי סטטיסטיקה */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
