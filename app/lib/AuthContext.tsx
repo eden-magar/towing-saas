@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // האזנה לשינויים באימות
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event)
       if (event === 'SIGNED_IN' && session?.user) {
         await fetchUserData(session.user.id)
       } else if (event === 'SIGNED_OUT') {
@@ -40,7 +41,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkUser = async () => {
     try {
+      console.log('Checking existing session...')
       const { data: { session } } = await supabase.auth.getSession()
+      console.log('Session:', session ? 'exists' : 'none')
       if (session?.user) {
         await fetchUserData(session.user.id)
       }
@@ -52,25 +55,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const fetchUserData = async (authUserId: string) => {
-  console.log('Fetching user data for:', authUserId)
-  
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUserId)
-    .single()
+    console.log('Fetching user data for:', authUserId)
+    console.log('Starting query at:', new Date().toISOString())
+    
+    try {
+      // Add timeout to detect hanging queries
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout - possible RLS issue')), 10000)
+      )
+      
+      const queryPromise = supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUserId)
+        .single()
 
-  console.log('User data result:', { data, error })
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any
 
-  if (error) {
-    console.error('Error fetching user data:', error)
-    setUser(null)
-  } else {
-    console.log('Setting user:', data)
-    setUser(data as User)
+      console.log('Query completed at:', new Date().toISOString())
+      console.log('User data result:', { data, error })
+
+      if (error) {
+        console.error('Error fetching user data:', error)
+        setUser(null)
+      } else {
+        console.log('Setting user:', data)
+        setUser(data as User)
+      }
+    } catch (err) {
+      console.error('Fetch user error:', err)
+      setUser(null)
+    }
+    
+    setLoading(false)
   }
-  setLoading(false)
-}
 
   const signOut = async () => {
     await supabase.auth.signOut()
