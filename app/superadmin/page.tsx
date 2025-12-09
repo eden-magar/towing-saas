@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { supabase } from '../lib/supabase'
 import { 
   getDashboardStats, 
   getRecentCompanies, 
@@ -21,10 +22,19 @@ import {
   Loader2
 } from 'lucide-react'
 
+interface PlanDistribution {
+  name: string
+  display_name: string
+  count: number
+  percent: number
+  color: string
+}
+
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentCompanies, setRecentCompanies] = useState<CompanyWithSubscription[]>([])
   const [topCompanies, setTopCompanies] = useState<any[]>([])
+  const [planDistribution, setPlanDistribution] = useState<PlanDistribution[]>([])
   const [loading, setLoading] = useState(true)
   const [dateRange, setDateRange] = useState('month')
 
@@ -43,10 +53,44 @@ export default function SuperAdminDashboard() {
       setStats(statsData)
       setRecentCompanies(recent)
       setTopCompanies(top)
+      
+      // Load plan distribution
+      await loadPlanDistribution()
     } catch (error) {
       console.error('Error loading dashboard:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadPlanDistribution = async () => {
+    const { data } = await supabase
+      .from('subscription_plans')
+      .select(`
+        name,
+        display_name,
+        company_subscriptions (id)
+      `)
+      .eq('is_active', true)
+
+    if (data) {
+      const colors: Record<string, string> = {
+        'enterprise': 'bg-violet-500',
+        'pro': 'bg-blue-500',
+        'basic': 'bg-emerald-500'
+      }
+
+      const total = data.reduce((sum, plan) => sum + (plan.company_subscriptions?.length || 0), 0)
+
+      const distribution: PlanDistribution[] = data.map(plan => ({
+        name: plan.name,
+        display_name: plan.display_name,
+        count: plan.company_subscriptions?.length || 0,
+        percent: total > 0 ? Math.round(((plan.company_subscriptions?.length || 0) / total) * 100) : 0,
+        color: colors[plan.name] || 'bg-slate-500'
+      }))
+
+      setPlanDistribution(distribution)
     }
   }
 
@@ -66,6 +110,20 @@ export default function SuperAdminDashboard() {
       case 'suspended': return 'bg-red-500'
       default: return 'bg-slate-500'
     }
+  }
+
+  // Calculate pie chart segments
+  const getPieChartSegments = () => {
+    let offset = 0
+    return planDistribution.map(plan => {
+      const segment = {
+        ...plan,
+        offset: offset,
+        dashArray: `${plan.percent * 2.51} 251`
+      }
+      offset += plan.percent * 2.51
+      return segment
+    })
   }
 
   if (loading) {
@@ -169,7 +227,9 @@ export default function SuperAdminDashboard() {
               {stats && stats.tows.this_month > stats.tows.last_month && (
                 <span className="flex items-center gap-1 text-emerald-400 text-sm">
                   <TrendingUp size={16} />
-                  {Math.round(((stats.tows.this_month - stats.tows.last_month) / (stats.tows.last_month || 1)) * 100)}%
+                  {stats.tows.last_month > 0 
+                    ? Math.round(((stats.tows.this_month - stats.tows.last_month) / stats.tows.last_month) * 100)
+                    : 100}%
                 </span>
               )}
             </div>
@@ -214,9 +274,19 @@ export default function SuperAdminDashboard() {
               <div className="relative w-40 h-40">
                 <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                   <circle cx="50" cy="50" r="40" fill="none" stroke="#334155" strokeWidth="20" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#8b5cf6" strokeWidth="20" strokeDasharray="251.2" strokeDashoffset="50" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#3b82f6" strokeWidth="20" strokeDasharray="251.2" strokeDashoffset="150" />
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="#10b981" strokeWidth="20" strokeDasharray="251.2" strokeDashoffset="220" />
+                  {getPieChartSegments().map((segment, idx) => (
+                    <circle
+                      key={segment.name}
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke={segment.name === 'enterprise' ? '#8b5cf6' : segment.name === 'pro' ? '#3b82f6' : '#10b981'}
+                      strokeWidth="20"
+                      strokeDasharray={segment.dashArray}
+                      strokeDashoffset={-segment.offset}
+                    />
+                  ))}
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
@@ -227,18 +297,17 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
             <div className="space-y-3">
-              {[
-                { name: 'Enterprise', count: 8, color: 'bg-violet-500', percent: 17 },
-                { name: 'Pro', count: 24, color: 'bg-blue-500', percent: 51 },
-                { name: 'Basic', count: 15, color: 'bg-emerald-500', percent: 32 },
-              ].map((plan) => (
+              {planDistribution.map((plan) => (
                 <div key={plan.name} className="flex items-center gap-3">
                   <span className={`w-3 h-3 ${plan.color} rounded`}></span>
-                  <span className="flex-1 text-slate-300">{plan.name}</span>
+                  <span className="flex-1 text-slate-300">{plan.display_name}</span>
                   <span className="text-white font-medium">{plan.count}</span>
                   <span className="text-slate-500 text-sm">{plan.percent}%</span>
                 </div>
               ))}
+              {planDistribution.length === 0 && (
+                <p className="text-slate-500 text-center">אין נתונים</p>
+              )}
             </div>
           </div>
 
