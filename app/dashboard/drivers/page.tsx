@@ -288,14 +288,18 @@ export default function DriversPage() {
   const availableTrucks = trucks.filter(t => !assignedTruckIds.includes(t.id))
 
   const getTruckTypeLabel = (type: string) => {
-    const types: Record<string, string> = {
-      flatbed: 'משטח',
-      wheel_lift: 'הרמה',
-      integrated: 'משולב',
-      heavy_duty: 'כבד'
-    }
-    return types[type] || type
+  const types: Record<string, string> = {
+    carrier: 'מובילית',
+    carrier_large: 'מובילית 10+ רכבים',
+    crane_tow: 'גרר מנוף',
+    dolly: 'דולי (מערסל ידני)',
+    flatbed_ramsa: 'רמסע',
+    heavy_equipment: 'ציוד כבד/לובי',
+    heavy_rescue: 'חילוץ כבד',
+    wheel_lift_cradle: 'משקפיים (מערסל)',
   }
+  return types[type] || type
+}
 
   if (pageLoading) {
     return (

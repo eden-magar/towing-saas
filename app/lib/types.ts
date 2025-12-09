@@ -4,7 +4,7 @@ export type UserRole = 'super_admin' | 'company_admin' | 'dispatcher' | 'driver'
 
 export type DriverStatus = 'available' | 'on_way' | 'busy' | 'unavailable'
 
-export type TruckType = 'flatbed' | 'wheel_lift' | 'integrated' | 'heavy_duty'
+export type TruckType = 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed_ramsa' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle'
 
 export type CustomerType = 'private' | 'business'
 

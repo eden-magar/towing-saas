@@ -20,7 +20,7 @@ export default function TrucksPage() {
 
   // UI states
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'flatbed' | 'wheel_lift' | 'heavy_duty' | 'integrated'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed_ramsa' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle'>('all')  
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'busy' | 'maintenance'>('all')
   const [showModal, setShowModal] = useState(false)
   const [editingTruck, setEditingTruck] = useState<TruckWithDetails | null>(null)
@@ -47,12 +47,16 @@ export default function TrucksPage() {
     notes: '',
   })
 
-  const typeConfig = {
-    flatbed: { label: 'משטח', color: 'bg-blue-100 text-blue-600', iconBg: 'bg-blue-100' },
-    wheel_lift: { label: 'הרמה', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
-    heavy_duty: { label: 'כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
-    integrated: { label: 'משולב', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
-  }
+  const typeConfig: Record<string, { label: string; color: string; iconBg: string }> = {
+  carrier: { label: 'מובילית', color: 'bg-blue-100 text-blue-600', iconBg: 'bg-blue-100' },
+  carrier_large: { label: 'מובילית 10+', color: 'bg-indigo-100 text-indigo-600', iconBg: 'bg-indigo-100' },
+  crane_tow: { label: 'גרר מנוף', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
+  dolly: { label: 'דולי', color: 'bg-pink-100 text-pink-600', iconBg: 'bg-pink-100' },
+  flatbed_ramsa: { label: 'רמסע', color: 'bg-cyan-100 text-cyan-600', iconBg: 'bg-cyan-100' },
+  heavy_equipment: { label: 'ציוד כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
+  heavy_rescue: { label: 'חילוץ כבד', color: 'bg-red-100 text-red-600', iconBg: 'bg-red-100' },
+  wheel_lift_cradle: { label: 'משקפיים', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
+}
 
   const statusConfig = {
     available: { label: 'פנוי', color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
@@ -375,26 +379,21 @@ export default function TrucksPage() {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            <div className="flex gap-1">
-              {[
-                { id: 'all', label: 'הכל' },
-                { id: 'flatbed', label: 'משטח' },
-                { id: 'wheel_lift', label: 'הרמה' },
-                { id: 'heavy_duty', label: 'כבד' },
-              ].map((filter) => (
-                <button
-                  key={filter.id}
-                  onClick={() => setTypeFilter(filter.id as any)}
-                  className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors ${
-                    typeFilter === filter.id
-                      ? 'bg-[#33d4ff] text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as any)}
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white min-w-[140px]"
+            >
+              <option value="all">כל הסוגים</option>
+              <option value="crane_tow">גרר מנוף</option>
+              <option value="dolly">דולי (מערסל ידני)</option>
+              <option value="heavy_rescue">חילוץ כבד</option>
+              <option value="carrier">מובילית</option>
+              <option value="carrier_large">מובילית 10+ רכבים</option>
+              <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
+              <option value="heavy_equipment">ציוד כבד/לובי</option>
+              <option value="flatbed_ramsa">רמסע</option>
+            </select>
           </div>
         </div>
       </div>
@@ -417,11 +416,7 @@ export default function TrucksPage() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${typeConfig[truck.truck_type as keyof typeof typeConfig]?.iconBg || 'bg-gray-100'}`}>
-                      <Truck size={24} className={
-                        truck.truck_type === 'flatbed' ? 'text-blue-600' : 
-                        truck.truck_type === 'wheel_lift' ? 'text-purple-600' : 
-                        'text-amber-600'
-                      } />
+                      <Truck size={24} className={typeConfig[truck.truck_type]?.color?.split(' ')[1] || 'text-gray-600'} />
                     </div>
                     <div>
                       <h3 className="font-mono font-bold text-gray-800 text-lg">{truck.plate_number}</h3>
@@ -563,10 +558,14 @@ export default function TrucksPage() {
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
                       >
                         <option value="">בחר סוג</option>
-                        <option value="flatbed">משטח</option>
-                        <option value="wheel_lift">הרמה</option>
-                        <option value="heavy_duty">כבד</option>
-                        <option value="integrated">משולב</option>
+                        <option value="crane_tow">גרר מנוף</option>
+                        <option value="dolly">דולי (מערסל ידני)</option>
+                        <option value="heavy_rescue">חילוץ כבד</option>
+                        <option value="carrier">מובילית</option>
+                        <option value="carrier_large">מובילית 10+ רכבים</option>
+                        <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
+                        <option value="heavy_equipment">ציוד כבד/לובי</option>
+                        <option value="flatbed_ramsa">רמסע</option>
                       </select>
                     </div>
                   </div>

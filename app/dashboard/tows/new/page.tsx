@@ -914,9 +914,14 @@ export default function NewTowPage() {
                           className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
                         >
                           <option value="">בחר גרר</option>
-                          <option value="flatbed">משטח</option>
-                          <option value="wheel_lift">הרמה</option>
-                          <option value="heavy_duty">כבד</option>
+                          <option value="crane_tow">גרר מנוף</option>
+                          <option value="dolly">דולי (מערסל ידני)</option>
+                          <option value="heavy_rescue">חילוץ כבד</option>
+                          <option value="carrier">מובילית</option>
+                          <option value="carrier_large">מובילית 10+ רכבים</option>
+                          <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
+                          <option value="heavy_equipment">ציוד כבד/לובי</option>
+                          <option value="flatbed_ramsa">רמסע</option>
                         </select>
                       </div>
                     </div>

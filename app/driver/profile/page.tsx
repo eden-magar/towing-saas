@@ -275,14 +275,18 @@ export default function DriverProfilePage() {
   }
 
   const getTruckTypeName = (type: string | null) => {
-    switch (type) {
-      case 'flatbed': return 'גרר מתקפל'
-      case 'wheel_lift': return 'גרר הרמה'
-      case 'integrated': return 'גרר משולב'
-      case 'heavy_duty': return 'גרר כבד'
-      default: return type || 'לא צוין'
-    }
+  const types: Record<string, string> = {
+    carrier: 'מובילית',
+    carrier_large: 'מובילית 10+ רכבים',
+    crane_tow: 'גרר מנוף',
+    dolly: 'דולי (מערסל ידני)',
+    flatbed_ramsa: 'רמסע',
+    heavy_equipment: 'ציוד כבד/לובי',
+    heavy_rescue: 'חילוץ כבד',
+    wheel_lift_cradle: 'משקפיים (מערסל)',
   }
+  return type ? types[type] || type : 'לא צוין'
+}
 
   // מצב טעינה
   if (authLoading || loading) {

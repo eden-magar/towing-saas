@@ -113,10 +113,15 @@ export default function PriceListsPage() {
   ])
 
   const [towTruckPrices, setTowTruckPrices] = useState<TruckTypePrice[]>([
-    { id: 'flatbed', truck_type: 'flatbed', label: 'גרר משטח', surcharge: 0 },
-    { id: 'wheel_lift', truck_type: 'wheel_lift', label: 'גרר הרמה', surcharge: 50 },
-    { id: 'heavy_duty', truck_type: 'heavy_duty', label: 'גרר כבד', surcharge: 150 },
-  ])
+  { id: 'crane_tow', truck_type: 'crane_tow', label: 'גרר מנוף', surcharge: 0 },
+  { id: 'dolly', truck_type: 'dolly', label: 'דולי (מערסל ידני)', surcharge: 0 },
+  { id: 'heavy_rescue', truck_type: 'heavy_rescue', label: 'חילוץ כבד', surcharge: 0 },
+  { id: 'carrier', truck_type: 'carrier', label: 'מובילית', surcharge: 0 },
+  { id: 'carrier_large', truck_type: 'carrier_large', label: 'מובילית 10+ רכבים', surcharge: 0 },
+  { id: 'wheel_lift_cradle', truck_type: 'wheel_lift_cradle', label: 'משקפיים (מערסל)', surcharge: 0 },
+  { id: 'heavy_equipment', truck_type: 'heavy_equipment', label: 'ציוד כבד/לובי', surcharge: 0 },
+  { id: 'flatbed_ramsa', truck_type: 'flatbed_ramsa', label: 'רמסע', surcharge: 0 },
+])
 
   // Fixed price items state (מחירון כללי)
   const [fixedPriceItems, setFixedPriceItems] = useState<FixedPriceItemLocal[]>([])
