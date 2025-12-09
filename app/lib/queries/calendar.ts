@@ -8,10 +8,10 @@ export async function getCalendarTows(
   startDate: Date,
   endDate: Date
 ): Promise<TowWithDetails[]> {
-  // פורמט תאריכים ל-ISO
   const startISO = startDate.toISOString()
   const endISO = endDate.toISOString()
 
+  // שאילתה שמביאה גרירות לפי scheduled_at או created_at
   const { data: tows, error } = await supabase
     .from('tows')
     .select(`
@@ -35,8 +35,8 @@ export async function getCalendarTows(
     `)
     .eq('company_id', companyId)
     .neq('status', 'cancelled')
-    .gte('created_at', startISO)
-    .lte('created_at', endISO)
+    .or(`scheduled_at.gte.${startISO},and(scheduled_at.is.null,created_at.gte.${startISO})`)
+    .or(`scheduled_at.lte.${endISO},and(scheduled_at.is.null,created_at.lte.${endISO})`)
     .order('scheduled_at', { ascending: true, nullsFirst: false })
 
   if (error) {
