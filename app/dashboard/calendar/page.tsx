@@ -39,11 +39,16 @@ export default function CalendarPage() {
   const { companyId, loading: authLoading } = useAuth()
   const [view, setView] = useState<'week' | 'day'>('week')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>(['all'])
+  
+  // תיקון: יצירת תאריך תחילת שבוע בצורה נכונה
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date()
     const day = today.getDay()
     const diff = today.getDate() - day
-    return new Date(today.setDate(diff))
+    const weekStart = new Date(today)
+    weekStart.setDate(diff)
+    weekStart.setHours(0, 0, 0, 0)
+    return weekStart
   })
   
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
@@ -61,10 +66,20 @@ export default function CalendarPage() {
     if (!companyId) return
     
     try {
+      console.log('Loading calendar data for company:', companyId)
+      console.log('Week start:', currentWeekStart.toISOString())
+      
       const [driversData, towsData] = await Promise.all([
         getDrivers(companyId),
         getWeekTows(companyId, currentWeekStart)
       ])
+      
+      console.log('Loaded drivers:', driversData.length)
+      console.log('Loaded tows:', towsData.length)
+      towsData.forEach(t => {
+        console.log(`Tow ${t.id}: scheduled_at=${t.scheduled_at}, created_at=${t.created_at}`)
+      })
+      
       setDrivers(driversData)
       setTows(towsData)
     } catch (error) {
@@ -149,13 +164,15 @@ export default function CalendarPage() {
     ? tows 
     : tows.filter(t => t.driver_id && selectedDrivers.includes(t.driver_id))
 
-  // חישוב מיקום גרירה בלוח
+  // חישוב מיקום גרירה בלוח - תיקון!
   const getTowPosition = (tow: TowWithDetails) => {
     const towDate = new Date(tow.scheduled_at || tow.created_at)
     const dayIndex = weekDays.findIndex(d => 
       d.fullDate.toDateString() === towDate.toDateString()
     )
     const hour = towDate.getHours() + towDate.getMinutes() / 60
+    
+    console.log(`getTowPosition for tow ${tow.id}: dayIndex=${dayIndex}, hour=${hour}, towDate=${towDate.toISOString()}`)
     
     return { dayIndex, hour }
   }
@@ -177,18 +194,23 @@ export default function CalendarPage() {
     return tow.vehicles?.[0]?.plate_number || '-'
   }
 
-  // ניווט בין שבועות
+  // ניווט בין שבועות - תיקון
   const navigateWeek = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentWeekStart)
     newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
+    newDate.setHours(0, 0, 0, 0)
     setCurrentWeekStart(newDate)
   }
 
+  // תיקון goToToday
   const goToToday = () => {
     const today = new Date()
     const day = today.getDay()
     const diff = today.getDate() - day
-    setCurrentWeekStart(new Date(today.setDate(diff)))
+    const weekStart = new Date(today)
+    weekStart.setDate(diff)
+    weekStart.setHours(0, 0, 0, 0)
+    setCurrentWeekStart(weekStart)
   }
 
   const getMonthYear = () => {
@@ -435,18 +457,26 @@ export default function CalendarPage() {
                   </div>
                 ))}
 
-                {/* Tow Events */}
+                {/* Tow Events - תיקון! הסרת הגבלת שעות */}
                 <div className="absolute top-0 right-[12.5%] left-0 bottom-0 pointer-events-none">
                   {filteredTows.map((tow) => {
                     const { dayIndex, hour } = getTowPosition(tow)
-                    if (dayIndex === -1 || hour < 6 || hour > 20) return null
                     
-                    const top = (hour - 6) * 60
+                    // תיקון: בדיקה רק אם היום קיים בשבוע
+                    if (dayIndex === -1) {
+                      console.log(`Tow ${tow.id} not displayed: dayIndex is -1`)
+                      return null
+                    }
+                    
+                    // תיקון: הסרת הגבלת השעות 6-20, מציגים את כל הגרירות
+                    const top = hour * 60
                     const height = 60 // שעה אחת כברירת מחדל
                     const dayWidth = 100 / 7
                     const right = dayIndex * dayWidth
                     const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                     const route = getRoute(tow)
+
+                    console.log(`Rendering tow ${tow.id}: top=${top}px, right=${right}%, dayIndex=${dayIndex}, hour=${hour}`)
 
                     return (
                       <div
@@ -478,10 +508,10 @@ export default function CalendarPage() {
                 </div>
 
                 {/* Current Time Line */}
-                {weekDays.some(d => d.isToday) && getCurrentTime() >= 6 && getCurrentTime() <= 20 && (
+                {weekDays.some(d => d.isToday) && (
                   <div
                     className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
-                    style={{ top: `${(getCurrentTime() - 6) * 60}px` }}
+                    style={{ top: `${getCurrentTime() * 60}px` }}
                   >
                     <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
                   </div>
