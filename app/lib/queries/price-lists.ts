@@ -69,15 +69,15 @@ export interface CustomerWithPricing {
   price_items: CustomerPriceItem[]
 }
 
+// מעודכן לפי מאגרי משרד התחבורה
 export interface BasePriceList {
   id: string
   company_id: string
   name: string
-  base_price_motorcycle: number | null
-  base_price_small: number | null
-  base_price_medium: number | null
-  base_price_large: number | null
-  base_price_truck: number | null
+  base_price_private: number | null      // רכב פרטי
+  base_price_motorcycle: number | null   // דו גלגלי
+  base_price_heavy: number | null        // רכב כבד
+  base_price_machinery: number | null    // צמ"ה
   price_per_km: number | null
   minimum_price: number | null
   night_surcharge_percent: number | null
@@ -107,11 +107,10 @@ export async function getBasePriceList(companyId: string): Promise<BasePriceList
 export async function upsertBasePriceList(
   companyId: string,
   data: {
-    base_price_motorcycle?: number
-    base_price_small?: number
-    base_price_medium?: number
-    base_price_large?: number
-    base_price_truck?: number
+    base_price_private?: number      // רכב פרטי
+    base_price_motorcycle?: number   // דו גלגלי
+    base_price_heavy?: number        // רכב כבד
+    base_price_machinery?: number    // צמ"ה
     price_per_km?: number
     minimum_price?: number
   }

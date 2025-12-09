@@ -94,13 +94,12 @@ export default function PriceListsPage() {
   const [editingCustomer, setEditingCustomer] = useState<CustomerPriceListLocal | null>(null)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
 
-  // Base prices state
+  // Base prices state - מעודכן לפי מאגרי משרד התחבורה
   const [vehiclePrices, setVehiclePrices] = useState<VehiclePrice[]>([
-    { id: 'motorcycle', label: 'אופנוע', field: 'base_price_motorcycle', price: 100 },
-    { id: 'small', label: 'רכב קטן', field: 'base_price_small', price: 150 },
-    { id: 'medium', label: 'רכב בינוני', field: 'base_price_medium', price: 180 },
-    { id: 'large', label: 'רכב גדול / ג׳יפ', field: 'base_price_large', price: 220 },
-    { id: 'truck', label: 'משאית קלה', field: 'base_price_truck', price: 350 },
+    { id: 'private', label: 'רכב פרטי', field: 'base_price_private', price: 180 },
+    { id: 'motorcycle', label: 'דו גלגלי', field: 'base_price_motorcycle', price: 100 },
+    { id: 'heavy', label: 'רכב כבד', field: 'base_price_heavy', price: 350 },
+    { id: 'machinery', label: 'צמ"ה', field: 'base_price_machinery', price: 500 },
   ])
 
   const [pricePerKm, setPricePerKm] = useState(12)
@@ -165,15 +164,14 @@ export default function PriceListsPage() {
     try {
       const data = await getFullPriceList(companyId)
 
-      // מחירון בסיס
+      // מחירון בסיס - מעודכן לפי מאגרי משרד התחבורה
       if (data.basePriceList) {
         const bp = data.basePriceList
         setVehiclePrices([
-          { id: 'motorcycle', label: 'אופנוע', field: 'base_price_motorcycle', price: bp.base_price_motorcycle || 100 },
-          { id: 'small', label: 'רכב קטן', field: 'base_price_small', price: bp.base_price_small || 150 },
-          { id: 'medium', label: 'רכב בינוני', field: 'base_price_medium', price: bp.base_price_medium || 180 },
-          { id: 'large', label: 'רכב גדול / ג׳יפ', field: 'base_price_large', price: bp.base_price_large || 220 },
-          { id: 'truck', label: 'משאית קלה', field: 'base_price_truck', price: bp.base_price_truck || 350 },
+          { id: 'private', label: 'רכב פרטי', field: 'base_price_private', price: bp.base_price_private || 180 },
+          { id: 'motorcycle', label: 'דו גלגלי', field: 'base_price_motorcycle', price: bp.base_price_motorcycle || 100 },
+          { id: 'heavy', label: 'רכב כבד', field: 'base_price_heavy', price: bp.base_price_heavy || 350 },
+          { id: 'machinery', label: 'צמ"ה', field: 'base_price_machinery', price: bp.base_price_machinery || 500 },
         ])
         setPricePerKm(bp.price_per_km || 12)
         setMinimumPrice(bp.minimum_price || 250)

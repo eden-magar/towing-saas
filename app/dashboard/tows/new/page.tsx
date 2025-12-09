@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3 } from 'lucide-react'
+import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3, Search, Loader2, Car } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../lib/AuthContext'
@@ -10,7 +10,8 @@ import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customer
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
 import { getBasePriceList, getCustomersWithPricing, getFixedPriceItems, CustomerWithPricing, FixedPriceItem } from '../../../lib/queries/price-lists'
-import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
+import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../../../lib/types'
+import { lookupVehicle, getVehicleTypeLabel, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 
 interface PriceItem {
   id: string
@@ -59,10 +60,11 @@ function NewTowForm() {
   
   const [vehiclePlate, setVehiclePlate] = useState('')
   const [vehicleLoading, setVehicleLoading] = useState(false)
-  const [vehicleData, setVehicleData] = useState<any>(null)
-  const [vehicleType, setVehicleType] = useState('')
+  const [vehicleData, setVehicleData] = useState<VehicleLookupResult | null>(null)
+  const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
   const [towTruckType, setTowTruckType] = useState('')
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
+  const [vehicleNotFound, setVehicleNotFound] = useState(false)
   
   const [workingVehiclePlate, setWorkingVehiclePlate] = useState('')
   const [workingVehicleType, setWorkingVehicleType] = useState('')
@@ -218,19 +220,33 @@ function NewTowForm() {
   const recommendedPrice = calculateRecommendedPrice()
   const finalPrice = calculateFinalPrice()
 
-  const lookupVehicle = () => {
-    if (vehiclePlate.length >= 5) {
-      setVehicleLoading(true)
-      setTimeout(() => {
-        setVehicleData({
-          plate: vehiclePlate,
-          manufacturer: 'טויוטה',
-          model: 'קורולה',
-          year: 2021,
-          color: 'לבן'
-        })
-        setVehicleLoading(false)
-      }, 800)
+  // חיפוש פרטי רכב מ-data.gov.il
+  const handleVehicleLookup = async () => {
+    if (vehiclePlate.length < 5) {
+      return
+    }
+    
+    setVehicleLoading(true)
+    setVehicleNotFound(false)
+    setVehicleData(null)
+    
+    try {
+      const result = await lookupVehicle(vehiclePlate)
+      
+      if (result.found && result.data) {
+        setVehicleData(result)
+        setVehicleType(result.source || 'private')
+        setVehicleNotFound(false)
+      } else {
+        setVehicleNotFound(true)
+        setVehicleData(null)
+        setVehicleType('')
+      }
+    } catch (error) {
+      console.error('Error looking up vehicle:', error)
+      setVehicleNotFound(true)
+    } finally {
+      setVehicleLoading(false)
     }
   }
 
@@ -884,25 +900,65 @@ function NewTowForm() {
                           onChange={(e) => setVehiclePlate(e.target.value)}
                           placeholder="12-345-67"
                           className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono"
+                          onKeyDown={(e) => e.key === 'Enter' && handleVehicleLookup()}
                         />
                         <button
-                          onClick={lookupVehicle}
-                          disabled={vehicleLoading}
-                          className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+                          onClick={handleVehicleLookup}
+                          disabled={vehicleLoading || vehiclePlate.length < 5}
+                          className="px-4 py-2.5 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] transition-colors disabled:opacity-50 flex items-center gap-2"
                         >
                           {vehicleLoading ? (
-                            <div className="w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                            <Loader2 size={18} className="animate-spin" />
                           ) : (
-                            'חפש'
+                            <>
+                              <Search size={18} />
+                              חפש
+                            </>
                           )}
                         </button>
                       </div>
 
-                      {vehicleData && (
-                        <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                          <div className="flex items-center gap-2 text-emerald-700">
-                            <Check size={20} />
-                            <span className="font-medium text-sm">{vehicleData.manufacturer} {vehicleData.model}, {vehicleData.year}, {vehicleData.color}</span>
+                      {/* כרטיס פרטי רכב - כשנמצא */}
+                      {vehicleData?.found && vehicleData.data && (
+                        <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+                          <div className="flex items-start gap-3">
+                            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm">
+                              {getVehicleTypeIcon(vehicleData.source || 'private')}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-bold text-gray-800">
+                                  {vehicleData.data.manufacturer} {vehicleData.data.model}
+                                </span>
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+                                  {vehicleData.sourceLabel}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                                {vehicleData.data.year && (
+                                  <span>שנה: <strong>{vehicleData.data.year}</strong></span>
+                                )}
+                                {vehicleData.data.color && (
+                                  <span>צבע: <strong>{vehicleData.data.color}</strong></span>
+                                )}
+                                {vehicleData.data.fuelType && (
+                                  <span>דלק: <strong>{vehicleData.data.fuelType}</strong></span>
+                                )}
+                                {vehicleData.data.totalWeight && (
+                                  <span>משקל: <strong>{vehicleData.data.totalWeight.toLocaleString()} ק״ג</strong></span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* הודעה כשלא נמצא */}
+                      {vehicleNotFound && (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                          <div className="flex items-center gap-2 text-amber-700">
+                            <AlertTriangle size={18} />
+                            <span className="text-sm">הרכב לא נמצא במאגרי משרד התחבורה. יש לבחור סוג רכב ידנית.</span>
                           </div>
                         </div>
                       )}
@@ -913,16 +969,21 @@ function NewTowForm() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">סוג רכב</label>
                         <select
                           value={vehicleType}
-                          onChange={(e) => setVehicleType(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
+                          onChange={(e) => setVehicleType(e.target.value as VehicleType | '')}
+                          className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
+                            vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+                          }`}
+                          disabled={vehicleData?.found}
                         >
                           <option value="">בחר סוג</option>
-                          <option value="motorcycle">אופנוע</option>
-                          <option value="small">רכב קטן</option>
-                          <option value="medium">רכב בינוני</option>
-                          <option value="large">רכב גדול / ג׳יפ</option>
-                          <option value="truck">משאית קלה</option>
+                          <option value="private">🚗 רכב פרטי</option>
+                          <option value="motorcycle">🏍️ דו גלגלי</option>
+                          <option value="heavy">🚚 רכב כבד</option>
+                          <option value="machinery">🚜 צמ״ה</option>
                         </select>
+                        {vehicleData?.found && (
+                          <p className="text-xs text-emerald-600 mt-1">נקבע אוטומטית לפי מאגר משרד התחבורה</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">סוג גרר</label>
@@ -984,9 +1045,10 @@ function NewTowForm() {
                           <label className="block text-sm font-medium text-gray-700 mb-1">סוג רכב</label>
                           <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white">
                             <option value="">בחר סוג</option>
-                            <option value="small">רכב קטן</option>
-                            <option value="medium">רכב בינוני</option>
-                            <option value="large">רכב גדול</option>
+                            <option value="private">🚗 רכב פרטי</option>
+                            <option value="motorcycle">🏍️ דו גלגלי</option>
+                            <option value="heavy">🚚 רכב כבד</option>
+                            <option value="machinery">🚜 צמ״ה</option>
                           </select>
                         </div>
                         <div>
@@ -1015,9 +1077,10 @@ function NewTowForm() {
                           <label className="block text-sm font-medium text-gray-700 mb-1">סוג רכב</label>
                           <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white">
                             <option value="">בחר סוג</option>
-                            <option value="small">רכב קטן</option>
-                            <option value="medium">רכב בינוני</option>
-                            <option value="large">רכב גדול</option>
+                            <option value="private">🚗 רכב פרטי</option>
+                            <option value="motorcycle">🏍️ דו גלגלי</option>
+                            <option value="heavy">🚚 רכב כבד</option>
+                            <option value="machinery">🚜 צמ״ה</option>
                           </select>
                         </div>
                         <div>
@@ -1057,9 +1120,10 @@ function NewTowForm() {
                             <label className="block text-sm font-medium text-gray-700 mb-1">סוג רכב</label>
                             <select value={vehicle.type} onChange={(e) => updateVehicle(vehicle.id, 'type', e.target.value)} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white">
                               <option value="">בחר סוג</option>
-                              <option value="small">רכב קטן</option>
-                              <option value="medium">רכב בינוני</option>
-                              <option value="large">רכב גדול</option>
+                              <option value="private">🚗 רכב פרטי</option>
+                              <option value="motorcycle">🏍️ דו גלגלי</option>
+                              <option value="heavy">🚚 רכב כבד</option>
+                              <option value="machinery">🚜 צמ״ה</option>
                             </select>
                           </div>
                           <div>

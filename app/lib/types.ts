@@ -14,7 +14,8 @@ export type TowType = 'simple' | 'with_base' | 'transfer' | 'multi_vehicle'
 
 export type TowStatus = 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
 
-export type VehicleType = 'motorcycle' | 'small' | 'medium' | 'large' | 'truck'
+// סוגי רכב - מעודכן לפי מאגרי משרד התחבורה
+export type VehicleType = 'private' | 'motorcycle' | 'heavy' | 'machinery'
 
 export type LegType = 'empty_drive' | 'pickup' | 'delivery'
 
@@ -130,11 +131,11 @@ export interface PriceList {
   company_id: string
   customer_company_id: string | null
   name: string
+  // מעודכן לפי סוגי רכב חדשים
+  base_price_private: number | null
   base_price_motorcycle: number | null
-  base_price_small: number | null
-  base_price_medium: number | null
-  base_price_large: number | null
-  base_price_truck: number | null
+  base_price_heavy: number | null
+  base_price_machinery: number | null
   price_per_km: number | null
   minimum_price: number | null
   night_surcharge_percent: number | null
@@ -291,6 +292,25 @@ export interface CompanySettings {
   night_hours_end: string | null
   created_at: string
   updated_at: string
+}
+
+// ==================== VEHICLE LOOKUP (data.gov.il) ====================
+
+export interface VehicleLookupResult {
+  found: boolean
+  source: 'private' | 'motorcycle' | 'heavy' | 'machinery' | null
+  sourceLabel: string
+  data: {
+    plateNumber: string
+    manufacturer: string | null    // tozeret_nm
+    model: string | null           // kinuy_mishari / degem_nm
+    year: number | null            // shnat_yitzur
+    color: string | null           // tzeva_rechev
+    fuelType: string | null        // sug_delek_nm
+    totalWeight: number | null     // mishkal_kolel
+    vehicleType: string | null     // sug_rechev_nm
+  } | null
+  error?: string
 }
 
 // ==================== COMPOSITE TYPES (for JOINs) ====================
