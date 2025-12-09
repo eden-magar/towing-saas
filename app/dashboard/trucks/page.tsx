@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye, Camera } from 'lucide-react'
+import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument } from '../../lib/queries/trucks'
 import { TruckWithDetails } from '../../lib/types'
@@ -32,7 +32,6 @@ export default function TrucksPage() {
 
   // File refs
   const licensePhotoRef = useRef<HTMLInputElement>(null)
-  const licenseAppendixRef = useRef<HTMLInputElement>(null)
   const tachographPhotoRef = useRef<HTMLInputElement>(null)
   const engineerReportPhotoRef = useRef<HTMLInputElement>(null)
 
@@ -50,15 +49,12 @@ export default function TrucksPage() {
     vehicleCapacity: 1,
     licenseExpiry: '',
     insuranceExpiry: '',
-    // שדות חדשים
     licensePhotoUrl: '',
-    licenseAppendixPhotoUrl: '',
     tachographExpiry: '',
     tachographPhotoUrl: '',
     engineerReportExpiry: '',
     engineerReportPhotoUrl: '',
     lastWinterInspection: '',
-    //
     driverAssignment: 'none' as 'existing' | 'none',
     selectedDriverId: null as string | null,
     initialStatus: 'available' as 'available' | 'inactive',
@@ -83,7 +79,6 @@ export default function TrucksPage() {
     inactive: { label: 'לא פעיל', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
   }
 
-  // טעינת נתונים
   useEffect(() => {
     if (companyId) {
       loadData()
@@ -173,7 +168,6 @@ export default function TrucksPage() {
       licenseExpiry: '',
       insuranceExpiry: '',
       licensePhotoUrl: '',
-      licenseAppendixPhotoUrl: '',
       tachographExpiry: '',
       tachographPhotoUrl: '',
       engineerReportExpiry: '',
@@ -213,7 +207,6 @@ export default function TrucksPage() {
       licenseExpiry: truck.license_expiry || '',
       insuranceExpiry: truck.insurance_expiry || '',
       licensePhotoUrl: truckData.license_photo_url || '',
-      licenseAppendixPhotoUrl: truckData.license_appendix_photo_url || '',
       tachographExpiry: truckData.tachograph_expiry || '',
       tachographPhotoUrl: truckData.tachograph_photo_url || '',
       engineerReportExpiry: truckData.engineer_report_expiry || '',
@@ -240,9 +233,6 @@ export default function TrucksPage() {
       switch (docType) {
         case 'license':
           setFormData(prev => ({ ...prev, licensePhotoUrl: url }))
-          break
-        case 'license_appendix':
-          setFormData(prev => ({ ...prev, licenseAppendixPhotoUrl: url }))
           break
         case 'tachograph':
           setFormData(prev => ({ ...prev, tachographPhotoUrl: url }))
@@ -309,7 +299,6 @@ export default function TrucksPage() {
           licenseExpiry: formData.licenseExpiry || undefined,
           insuranceExpiry: formData.insuranceExpiry || undefined,
           licensePhotoUrl: formData.licensePhotoUrl || undefined,
-          licenseAppendixPhotoUrl: formData.licenseAppendixPhotoUrl || undefined,
           tachographExpiry: formData.tachographExpiry || undefined,
           tachographPhotoUrl: formData.tachographPhotoUrl || undefined,
           engineerReportExpiry: formData.engineerReportExpiry || undefined,
@@ -336,7 +325,6 @@ export default function TrucksPage() {
           licenseExpiry: formData.licenseExpiry || undefined,
           insuranceExpiry: formData.insuranceExpiry || undefined,
           licensePhotoUrl: formData.licensePhotoUrl || undefined,
-          licenseAppendixPhotoUrl: formData.licenseAppendixPhotoUrl || undefined,
           tachographExpiry: formData.tachographExpiry || undefined,
           tachographPhotoUrl: formData.tachographPhotoUrl || undefined,
           engineerReportExpiry: formData.engineerReportExpiry || undefined,
@@ -403,15 +391,21 @@ export default function TrucksPage() {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading === docType || !formData.plate}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 border rounded-lg transition-colors disabled:opacity-50 ${
+            currentUrl 
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700' 
+              : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+          }`}
         >
           {uploading === docType ? (
             <div className="w-4 h-4 border-2 border-[#33d4ff] border-t-transparent rounded-full animate-spin" />
+          ) : currentUrl ? (
+            <CheckCircle size={16} className="text-emerald-600" />
           ) : (
-            <Upload size={16} className="text-gray-500" />
+            <Upload size={16} />
           )}
-          <span className="text-sm text-gray-600">
-            {currentUrl ? 'החלף קובץ' : 'העלה קובץ'}
+          <span className="text-sm">
+            {uploading === docType ? 'מעלה...' : currentUrl ? 'הועלה ✓' : 'העלה קובץ'}
           </span>
         </button>
         {currentUrl && (
@@ -426,6 +420,9 @@ export default function TrucksPage() {
           </a>
         )}
       </div>
+      {!formData.plate && (
+        <p className="text-xs text-amber-600 mt-1">יש להזין מספר רישוי קודם</p>
+      )}
     </div>
   )
 
@@ -827,20 +824,12 @@ export default function TrucksPage() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FileUploadField
-                      label="צילום רישיון רכב"
-                      docType="license"
-                      currentUrl={formData.licensePhotoUrl}
-                      inputRef={licensePhotoRef as React.RefObject<HTMLInputElement>}
-                    />
-                    <FileUploadField
-                      label="צילום נספח רישיון"
-                      docType="license_appendix"
-                      currentUrl={formData.licenseAppendixPhotoUrl}
-                      inputRef={licenseAppendixRef as React.RefObject<HTMLInputElement>}
-                    />
-                  </div>
+                  <FileUploadField
+                    label="צילום רישיון רכב + נספח"
+                    docType="license"
+                    currentUrl={formData.licensePhotoUrl}
+                    inputRef={licensePhotoRef as React.RefObject<HTMLInputElement>}
+                  />
                 </div>
               </div>
 

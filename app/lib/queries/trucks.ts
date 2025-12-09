@@ -120,7 +120,6 @@ interface CreateTruckInput {
   insuranceExpiry?: string
   // שדות חדשים
   licensePhotoUrl?: string
-  licenseAppendixPhotoUrl?: string
   tachographExpiry?: string
   tachographPhotoUrl?: string
   engineerReportExpiry?: string
@@ -152,7 +151,6 @@ export async function createTruck(input: CreateTruckInput) {
       insurance_expiry: input.insuranceExpiry || null,
       // שדות חדשים
       license_photo_url: input.licensePhotoUrl || null,
-      license_appendix_photo_url: input.licenseAppendixPhotoUrl || null,
       tachograph_expiry: input.tachographExpiry || null,
       tachograph_photo_url: input.tachographPhotoUrl || null,
       engineer_report_expiry: input.engineerReportExpiry || null,
@@ -204,7 +202,6 @@ interface UpdateTruckInput {
   insuranceExpiry?: string
   // שדות חדשים
   licensePhotoUrl?: string
-  licenseAppendixPhotoUrl?: string
   tachographExpiry?: string
   tachographPhotoUrl?: string
   engineerReportExpiry?: string
@@ -235,7 +232,6 @@ export async function updateTruck(input: UpdateTruckInput) {
       insurance_expiry: input.insuranceExpiry || null,
       // שדות חדשים
       license_photo_url: input.licensePhotoUrl,
-      license_appendix_photo_url: input.licenseAppendixPhotoUrl,
       tachograph_expiry: input.tachographExpiry || null,
       tachograph_photo_url: input.tachographPhotoUrl,
       engineer_report_expiry: input.engineerReportExpiry || null,

@@ -1,393 +1,1123 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye, Camera } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
-import { getDashboardStats, getRecentTows, DashboardStats } from '../lib/queries/dashboard'
-import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
-import { updateWinterInspection } from '../lib/queries/trucks'
-import { TowWithDetails } from '../lib/queries/tows'
-import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Gauge, ClipboardCheck, Snowflake, Check } from 'lucide-react'
-import Link from 'next/link'
+import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument } from '../lib/queries/trucks'
+import { TruckWithDetails } from '../lib/types'
+import { getDrivers } from '../lib//queries/drivers'
+import { DriverWithDetails } from '../lib/types'
 
-// מיפוי סטטוסים לעברית וצבעים
-const statusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: 'ממתינה', color: 'bg-amber-100 text-amber-700' },
-  assigned: { label: 'שובצה', color: 'bg-blue-100 text-blue-700' },
-  in_progress: { label: 'בביצוע', color: 'bg-indigo-100 text-indigo-700' },
-  completed: { label: 'הושלמה', color: 'bg-emerald-100 text-emerald-700' },
-  cancelled: { label: 'בוטלה', color: 'bg-red-100 text-red-700' }
-}
+export default function TrucksPage() {
+  const { companyId } = useAuth()
 
-// מיפוי סוגי התראות
-const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link: string }> = {
-  truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
-  truck_insurance: { label: 'ביטוח גרר', icon: Shield, link: '/dashboard/trucks' },
-  driver_license: { label: 'רישיון נהיגה', icon: CreditCard, link: '/dashboard/drivers' },
-  tachograph: { label: 'כיול טכוגרף', icon: Gauge, link: '/dashboard/trucks' },
-  engineer_report: { label: 'תסקיר מהנדס', icon: ClipboardCheck, link: '/dashboard/trucks' },
-  winter_inspection: { label: 'בדיקת חורף', icon: Snowflake, link: '/dashboard/trucks' },
-}
+  // Data states
+  const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
+  const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
+  const [pageLoading, setPageLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-export default function DashboardPage() {
-  const { user, companyId, loading: authLoading } = useAuth()
-  const [stats, setStats] = useState<DashboardStats>({
-    towsToday: 0,
-    pendingTows: 0,
-    completedToday: 0,
-    availableDrivers: 0
+  // UI states
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed_ramsa' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle'>('all')  
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'busy' | 'maintenance'>('all')
+  const [showModal, setShowModal] = useState(false)
+  const [editingTruck, setEditingTruck] = useState<TruckWithDetails | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
+  const [showExpiryWarning, setShowExpiryWarning] = useState(false)
+  const [expiryWarningMessage, setExpiryWarningMessage] = useState('')
+  const [uploading, setUploading] = useState<string | null>(null)
+
+  // File refs
+  const licensePhotoRef = useRef<HTMLInputElement>(null)
+  const tachographPhotoRef = useRef<HTMLInputElement>(null)
+  const engineerReportPhotoRef = useRef<HTMLInputElement>(null)
+
+  const [formData, setFormData] = useState({
+    plate: '',
+    type: '',
+    manufacturer: '',
+    model: '',
+    year: new Date().getFullYear(),
+    color: '',
+    maxWeight: 0,
+    permittedWeight: 0,
+    upperPlatformWeight: 0,
+    lowerPlatformWeight: 0,
+    vehicleCapacity: 1,
+    licenseExpiry: '',
+    insuranceExpiry: '',
+    // שדות חדשים
+    licensePhotoUrl: '',
+    tachographExpiry: '',
+    tachographPhotoUrl: '',
+    engineerReportExpiry: '',
+    engineerReportPhotoUrl: '',
+    lastWinterInspection: '',
+    //
+    driverAssignment: 'none' as 'existing' | 'none',
+    selectedDriverId: null as string | null,
+    initialStatus: 'available' as 'available' | 'inactive',
+    notes: '',
   })
-  const [recentTows, setRecentTows] = useState<TowWithDetails[]>([])
-  const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [markingWinter, setMarkingWinter] = useState<string | null>(null)
+
+  const typeConfig: Record<string, { label: string; color: string; iconBg: string }> = {
+    carrier: { label: 'מובילית', color: 'bg-blue-100 text-blue-600', iconBg: 'bg-blue-100' },
+    carrier_large: { label: 'מובילית 10+', color: 'bg-indigo-100 text-indigo-600', iconBg: 'bg-indigo-100' },
+    crane_tow: { label: 'גרר מנוף', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
+    dolly: { label: 'דולי', color: 'bg-pink-100 text-pink-600', iconBg: 'bg-pink-100' },
+    flatbed_ramsa: { label: 'רמסע', color: 'bg-cyan-100 text-cyan-600', iconBg: 'bg-cyan-100' },
+    heavy_equipment: { label: 'ציוד כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
+    heavy_rescue: { label: 'חילוץ כבד', color: 'bg-red-100 text-red-600', iconBg: 'bg-red-100' },
+    wheel_lift_cradle: { label: 'משקפיים', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
+  }
+
+  const statusConfig = {
+    available: { label: 'פנוי', color: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' },
+    busy: { label: 'בפעילות', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
+    maintenance: { label: 'בטיפול', color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
+    inactive: { label: 'לא פעיל', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
+  }
+
+  // טעינת נתונים
+  useEffect(() => {
+    if (companyId) {
+      loadData()
+    }
+  }, [companyId])
 
   const loadData = async () => {
     if (!companyId) return
-    
+
+    setPageLoading(true)
     try {
-      const [statsData, towsData, alertsData] = await Promise.all([
-        getDashboardStats(companyId),
-        getRecentTows(companyId, 5),
-        getExpiryAlerts(companyId)
+      const [trucksData, driversData] = await Promise.all([
+        getTrucks(companyId),
+        getDrivers(companyId)
       ])
-      setStats(statsData)
-      setRecentTows(towsData)
-      setAlerts(alertsData)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
+      setTrucks(trucksData)
+      setDrivers(driversData)
+    } catch (err) {
+      console.error('Error loading data:', err)
+      setError('שגיאה בטעינת הנתונים')
     } finally {
-      setLoading(false)
-      setRefreshing(false)
+      setPageLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (!authLoading) {
-      if (companyId) {
-        loadData()
-      } else {
-        setLoading(false)
+  const getTruckStatus = (truck: TruckWithDetails): 'available' | 'busy' | 'maintenance' | 'inactive' => {
+    if (!truck.is_active) return 'inactive'
+    if (truck.assigned_driver) return 'busy'
+    return 'available'
+  }
+
+  const stats = {
+    total: trucks.length,
+    available: trucks.filter(t => t.is_active && !t.assigned_driver).length,
+    busy: trucks.filter(t => t.is_active && t.assigned_driver).length,
+    maintenance: 0,
+  }
+
+  const filteredTrucks = trucks.filter(truck => {
+    const status = getTruckStatus(truck)
+    if (typeFilter !== 'all' && truck.truck_type !== typeFilter) return false
+    if (statusFilter !== 'all' && status !== statusFilter) return false
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      if (!truck.plate_number.toLowerCase().includes(query) &&
+          !(truck.manufacturer?.toLowerCase().includes(query)) &&
+          !(truck.model?.toLowerCase().includes(query))) {
+        return false
       }
     }
-  }, [companyId, authLoading])
+    return true
+  })
 
-  const handleRefresh = () => {
-    setRefreshing(true)
-    loadData()
+  const isExpired = (dateStr: string | null) => {
+    if (!dateStr) return false
+    const date = new Date(dateStr)
+    return date < new Date()
   }
 
-  const handleMarkWinterInspection = async (truckId: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    
-    setMarkingWinter(truckId)
+  const isExpiringSoon = (dateStr: string | null) => {
+    if (!dateStr) return false
+    const date = new Date(dateStr)
+    const today = new Date()
+    const thirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+    return date > today && date <= thirtyDays
+  }
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('he-IL')
+  }
+
+  const resetForm = () => {
+    setFormData({
+      plate: '',
+      type: '',
+      manufacturer: '',
+      model: '',
+      year: new Date().getFullYear(),
+      color: '',
+      maxWeight: 0,
+      permittedWeight: 0,
+      upperPlatformWeight: 0,
+      lowerPlatformWeight: 0,
+      vehicleCapacity: 1,
+      licenseExpiry: '',
+      insuranceExpiry: '',
+      licensePhotoUrl: '',
+      tachographExpiry: '',
+      tachographPhotoUrl: '',
+      engineerReportExpiry: '',
+      engineerReportPhotoUrl: '',
+      lastWinterInspection: '',
+      driverAssignment: 'none',
+      selectedDriverId: null,
+      initialStatus: 'available',
+      notes: '',
+    })
+    setShowExpiryWarning(false)
+    setShowDuplicateWarning(false)
+    setError('')
+  }
+
+  const openAddModal = () => {
+    setEditingTruck(null)
+    resetForm()
+    setShowModal(true)
+  }
+
+  const openEditModal = (truck: TruckWithDetails) => {
+    setEditingTruck(truck)
+    const truckData = truck as any
+    setFormData({
+      plate: truck.plate_number,
+      type: truck.truck_type,
+      manufacturer: truck.manufacturer || '',
+      model: truck.model || '',
+      year: truck.year || new Date().getFullYear(),
+      color: truck.color || '',
+      maxWeight: truck.max_weight_kg || 0,
+      permittedWeight: truckData.permitted_weight_kg || 0,
+      upperPlatformWeight: truckData.upper_platform_weight_kg || 0,
+      lowerPlatformWeight: truckData.lower_platform_weight_kg || 0,
+      vehicleCapacity: truck.vehicle_capacity,
+      licenseExpiry: truck.license_expiry || '',
+      insuranceExpiry: truck.insurance_expiry || '',
+      licensePhotoUrl: truckData.license_photo_url || '',
+      tachographExpiry: truckData.tachograph_expiry || '',
+      tachographPhotoUrl: truckData.tachograph_photo_url || '',
+      engineerReportExpiry: truckData.engineer_report_expiry || '',
+      engineerReportPhotoUrl: truckData.engineer_report_photo_url || '',
+      lastWinterInspection: truckData.last_winter_inspection || '',
+      driverAssignment: truck.assigned_driver ? 'existing' : 'none',
+      selectedDriverId: truck.assigned_driver?.id || null,
+      initialStatus: truck.is_active ? 'available' : 'inactive',
+      notes: truck.notes || '',
+    })
+    setShowModal(true)
+  }
+
+  const handleFileUpload = async (file: File, docType: string) => {
+    if (!companyId || !formData.plate) {
+      setError('יש להזין מספר רישוי לפני העלאת קבצים')
+      return
+    }
+
+    setUploading(docType)
+    setError('')
     try {
-      await updateWinterInspection(truckId, new Date().toISOString().split('T')[0])
-      // הסרת ההתראה מהרשימה
-      setAlerts(prev => prev.filter(a => a.id !== `winter_inspection_${truckId}`))
-    } catch (error) {
-      console.error('Error marking winter inspection:', error)
+      const url = await uploadTruckDocument(file, companyId, formData.plate, docType)
+      
+      switch (docType) {
+        case 'license':
+          setFormData(prev => ({ ...prev, licensePhotoUrl: url }))
+          break
+        case 'tachograph':
+          setFormData(prev => ({ ...prev, tachographPhotoUrl: url }))
+          break
+        case 'engineer_report':
+          setFormData(prev => ({ ...prev, engineerReportPhotoUrl: url }))
+          break
+      }
+    } catch (err) {
+      console.error('Error uploading file:', err)
+      setError('שגיאה בהעלאת הקובץ')
     } finally {
-      setMarkingWinter(null)
+      setUploading(null)
     }
   }
 
-  if (authLoading || loading) {
+  const checkExpiryDates = () => {
+    const warnings = []
+    if (isExpired(formData.licenseExpiry)) warnings.push('רישיון רכב')
+    if (warnings.length > 0) {
+      setExpiryWarningMessage(warnings.join(' ו') + ' פג תוקף!')
+      return true
+    }
+    return false
+  }
+
+  const handleSave = async () => {
+    if (!formData.plate || !formData.type || !companyId) return
+
+    const isDuplicate = await checkTruckDuplicate(
+      companyId,
+      formData.plate,
+      editingTruck?.id
+    )
+
+    if (isDuplicate) {
+      setShowDuplicateWarning(true)
+      return
+    }
+
+    if (checkExpiryDates() && !showExpiryWarning) {
+      setShowExpiryWarning(true)
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try {
+      if (editingTruck) {
+        await updateTruck({
+          truckId: editingTruck.id,
+          plateNumber: formData.plate,
+          truckType: formData.type,
+          manufacturer: formData.manufacturer || undefined,
+          model: formData.model || undefined,
+          year: formData.year || undefined,
+          color: formData.color || undefined,
+          vehicleCapacity: formData.vehicleCapacity,
+          maxWeightKg: formData.maxWeight || undefined,
+          permittedWeightKg: formData.permittedWeight || undefined,
+          upperPlatformWeightKg: formData.upperPlatformWeight || undefined,
+          lowerPlatformWeightKg: formData.lowerPlatformWeight || undefined,
+          licenseExpiry: formData.licenseExpiry || undefined,
+          insuranceExpiry: formData.insuranceExpiry || undefined,
+          licensePhotoUrl: formData.licensePhotoUrl || undefined,
+          tachographExpiry: formData.tachographExpiry || undefined,
+          tachographPhotoUrl: formData.tachographPhotoUrl || undefined,
+          engineerReportExpiry: formData.engineerReportExpiry || undefined,
+          engineerReportPhotoUrl: formData.engineerReportPhotoUrl || undefined,
+          lastWinterInspection: formData.lastWinterInspection || undefined,
+          notes: formData.notes || undefined,
+          isActive: formData.initialStatus === 'available',
+          driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
+        })
+      } else {
+        await createTruck({
+          companyId,
+          plateNumber: formData.plate,
+          truckType: formData.type,
+          manufacturer: formData.manufacturer || undefined,
+          model: formData.model || undefined,
+          year: formData.year || undefined,
+          color: formData.color || undefined,
+          vehicleCapacity: formData.vehicleCapacity,
+          maxWeightKg: formData.maxWeight || undefined,
+          permittedWeightKg: formData.permittedWeight || undefined,
+          upperPlatformWeightKg: formData.upperPlatformWeight || undefined,
+          lowerPlatformWeightKg: formData.lowerPlatformWeight || undefined,
+          licenseExpiry: formData.licenseExpiry || undefined,
+          insuranceExpiry: formData.insuranceExpiry || undefined,
+          licensePhotoUrl: formData.licensePhotoUrl || undefined,
+          tachographExpiry: formData.tachographExpiry || undefined,
+          tachographPhotoUrl: formData.tachographPhotoUrl || undefined,
+          engineerReportExpiry: formData.engineerReportExpiry || undefined,
+          engineerReportPhotoUrl: formData.engineerReportPhotoUrl || undefined,
+          lastWinterInspection: formData.lastWinterInspection || undefined,
+          notes: formData.notes || undefined,
+          isActive: formData.initialStatus === 'available',
+          driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId || undefined : undefined,
+        })
+      }
+
+      await loadData()
+      setShowModal(false)
+      resetForm()
+    } catch (err) {
+      console.error('Error saving truck:', err)
+      setError('שגיאה בשמירת הגרר')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (truckId: string) => {
+    try {
+      await deleteTruck(truckId)
+      await loadData()
+      setShowDeleteConfirm(null)
+    } catch (err) {
+      console.error('Error deleting truck:', err)
+      setError('שגיאה במחיקת הגרר')
+    }
+  }
+
+  const availableDrivers = drivers.filter(d => 
+    !d.current_truck || d.current_truck.id === editingTruck?.id
+  )
+
+  // קומפוננטת העלאת קובץ
+  const FileUploadField = ({ 
+    label, 
+    docType, 
+    currentUrl, 
+    inputRef 
+  }: { 
+    label: string
+    docType: string
+    currentUrl: string
+    inputRef: React.RefObject<HTMLInputElement>
+  }) => (
+    <div>
+      <label className="block text-sm text-gray-600 mb-1">{label}</label>
+      <div className="flex items-center gap-2">
+        <input
+          type="file"
+          ref={inputRef}
+          accept="image/*,.pdf"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleFileUpload(file, docType)
+          }}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading === docType || !formData.plate}
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 border rounded-lg transition-colors ${
+            currentUrl 
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700' 
+              : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+          } disabled:opacity-50`}
+        >
+          {uploading === docType ? (
+            <div className="w-4 h-4 border-2 border-[#33d4ff] border-t-transparent rounded-full animate-spin" />
+          ) : currentUrl ? (
+            <CheckCircle size={16} className="text-emerald-600" />
+          ) : (
+            <Upload size={16} />
+          )}
+          <span className="text-sm">
+            {uploading === docType ? 'מעלה...' : currentUrl ? 'הועלה ✓' : 'העלה קובץ'}
+          </span>
+        </button>
+        {currentUrl && (
+          <a
+            href={currentUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 text-[#33d4ff] hover:bg-cyan-50 rounded-lg transition-colors"
+            title="צפה בקובץ"
+          >
+            <Eye size={18} />
+          </a>
+        )}
+      </div>
+      {!formData.plate && (
+        <p className="text-xs text-amber-600 mt-1">יש להזין מספר רישוי קודם</p>
+      )}
+    </div>
+  )
+
+  if (pageLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex items-center gap-2 text-gray-500">
-          <RefreshCw className="animate-spin" size={20} />
-          <span>טוען...</span>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+          <p className="text-gray-500">טוען גררים...</p>
         </div>
       </div>
     )
   }
 
-  const statCards = [
-    { label: 'גרירות היום', value: stats.towsToday, icon: Truck, color: 'bg-[#33d4ff]' },
-    { label: 'ממתינות לשיבוץ', value: stats.pendingTows, icon: Clock, color: 'bg-amber-400' },
-    { label: 'הושלמו היום', value: stats.completedToday, icon: CheckCircle, color: 'bg-emerald-400' },
-    { label: 'נהגים זמינים', value: stats.availableDrivers, icon: Users, color: 'bg-violet-400' },
-  ]
-
-  // פונקציה לקבלת כתובות מהרגליים
-  const getRoute = (tow: TowWithDetails) => {
-    if (tow.legs && tow.legs.length > 0) {
-      const firstLeg = tow.legs.find(l => l.from_address)
-      const lastLeg = [...tow.legs].reverse().find(l => l.to_address)
-      
-      const from = firstLeg?.from_address?.split(',')[0] || '-'
-      const to = lastLeg?.to_address?.split(',')[0] || '-'
-      
-      return { from, to }
-    }
-    return { from: '-', to: '-' }
-  }
-
-  // פונקציה לקבלת מספר רכב ראשון
-  const getFirstVehicle = (tow: TowWithDetails) => {
-    if (tow.vehicles && tow.vehicles.length > 0) {
-      return tow.vehicles[0].plate_number
-    }
-    return '-'
-  }
-
-  // פונקציה לפורמט תאריך
-  const formatExpiryDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('he-IL')
-  }
-
-  // פונקציה לטקסט ימים
-  const getDaysText = (daysLeft: number, type: string) => {
-    if (type === 'winter_inspection') {
-      if (daysLeft < 0) {
-        return `עבר מועד הבדיקה`
-      } else if (daysLeft === 0) {
-        return 'היום מועד אחרון!'
-      } else {
-        return `עוד ${daysLeft} ימים למועד`
-      }
-    }
-    
-    if (daysLeft < 0) {
-      return `פג לפני ${Math.abs(daysLeft)} ימים`
-    } else if (daysLeft === 0) {
-      return 'פג היום!'
-    } else if (daysLeft === 1) {
-      return 'פג מחר!'
-    } else {
-      return `עוד ${daysLeft} ימים`
-    }
-  }
-
   return (
     <div>
-      {/* כותרת */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">דשבורד</h1>
-          <p className="text-gray-500 text-sm mt-1 truncate hidden lg:block">
-          ברוך הבא, {user?.full_name || user?.email}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
-            title="רענן נתונים"
-          >
-            <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-          <Link
-            href="/dashboard/tows/new"
-            className="hidden lg:flex items-center justify-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2.5 rounded-xl transition-colors flex-shrink-0"
-          >
-            <Plus size={20} />
-            <span>גרירה חדשה</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* התראות תוקף */}
-      {alerts.length > 0 && (
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-            <AlertTriangle size={20} className="text-amber-500" />
-            <h2 className="font-semibold text-gray-800">התראות ({alerts.length})</h2>
-          </div>
-          <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
-            {alerts.map((alert) => {
-              const config = alertTypeConfig[alert.type]
-              const Icon = config.icon
-              const isWinterInspection = alert.type === 'winter_inspection'
-              
-              return (
-                <div
-                  key={alert.id}
-                  className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
-                >
-                  <Link
-                    href={config.link}
-                    className="flex items-center gap-4 flex-1 min-w-0"
-                  >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      alert.severity === 'expired' ? 'bg-red-100' :
-                      alert.severity === 'critical' ? 'bg-orange-100' :
-                      alert.severity === 'warning' ? 'bg-amber-100' :
-                      'bg-blue-100'
-                    }`}>
-                      <Icon size={20} className={
-                        alert.severity === 'expired' ? 'text-red-600' :
-                        alert.severity === 'critical' ? 'text-orange-600' :
-                        alert.severity === 'warning' ? 'text-amber-600' :
-                        'text-blue-600'
-                      } />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-gray-800">{alert.entityName}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          alert.severity === 'expired' ? 'bg-red-100 text-red-700' :
-                          alert.severity === 'critical' ? 'bg-orange-100 text-orange-700' :
-                          alert.severity === 'warning' ? 'bg-amber-100 text-amber-700' :
-                          'bg-blue-100 text-blue-700'
-                        }`}>
-                          {alert.severity === 'expired' ? 'פג תוקף' :
-                           alert.severity === 'critical' ? 'דחוף' : 
-                           alert.severity === 'warning' ? 'בקרוב' :
-                           'תזכורת'}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-0.5">
-                        {config.label} • {formatExpiryDate(alert.expiryDate)} • {getDaysText(alert.daysLeft, alert.type)}
-                      </p>
-                    </div>
-                  </Link>
-                  
-                  {/* כפתור סימון בדיקת חורף */}
-                  {isWinterInspection && (
-                    <button
-                      onClick={(e) => handleMarkWinterInspection(alert.entityId, e)}
-                      disabled={markingWinter === alert.entityId}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200 transition-colors flex-shrink-0"
-                    >
-                      {markingWinter === alert.entityId ? (
-                        <RefreshCw size={14} className="animate-spin" />
-                      ) : (
-                        <Check size={14} />
-                      )}
-                      בוצע
-                    </button>
-                  )}
-                  
-                  {!isWinterInspection && (
-                    <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
-                  )}
-                </div>
-              )
-            })}
-          </div>
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+          {error}
         </div>
       )}
 
-      {/* כרטיסי סטטיסטיקה */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        {statCards.map((stat, index) => {
-          const Icon = stat.icon
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4 lg:mb-0">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">ניהול גררים</h1>
+            <p className="text-gray-500 mt-1 text-sm hidden sm:block">צפייה וניהול צי הגררים</p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="hidden lg:flex items-center justify-center gap-2 px-4 py-2.5 bg-[#33d4ff] hover:bg-[#21b8e6] text-white rounded-xl transition-colors"
+          >
+            <Plus size={20} />
+            הוסף גרר
+          </button>
+        </div>
+        <button
+          onClick={openAddModal}
+          className="lg:hidden flex items-center justify-center gap-2 px-4 py-2.5 bg-[#33d4ff] hover:bg-[#21b8e6] text-white rounded-xl transition-colors w-full"
+        >
+          <Plus size={20} />
+          הוסף גרר
+        </button>
+      </div>
+
+      {/* סטטיסטיקות */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+            <Truck size={18} className="text-blue-600" />
+          </div>
+          <p className="text-lg sm:text-2xl font-bold text-gray-800">{stats.total}</p>
+          <p className="text-xs text-gray-500">סה״כ</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+            <CheckCircle size={18} className="text-emerald-600" />
+          </div>
+          <p className="text-lg sm:text-2xl font-bold text-gray-800">{stats.available}</p>
+          <p className="text-xs text-gray-500">פנויים</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+            <Clock size={18} className="text-blue-600" />
+          </div>
+          <p className="text-lg sm:text-2xl font-bold text-gray-800">{stats.busy}</p>
+          <p className="text-xs text-gray-500">בפעילות</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+            <Wrench size={18} className="text-amber-600" />
+          </div>
+          <p className="text-lg sm:text-2xl font-bold text-gray-800">{stats.maintenance}</p>
+          <p className="text-xs text-gray-500">בטיפול</p>
+        </div>
+      </div>
+
+      {/* סינון וחיפוש */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="חיפוש לפי מספר רישוי, יצרן או דגם..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as any)}
+              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white min-w-[140px]"
+            >
+              <option value="all">כל הסוגים</option>
+              <option value="crane_tow">גרר מנוף</option>
+              <option value="dolly">דולי (מערסל ידני)</option>
+              <option value="heavy_rescue">חילוץ כבד</option>
+              <option value="carrier">מובילית</option>
+              <option value="carrier_large">מובילית 10+ רכבים</option>
+              <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
+              <option value="heavy_equipment">ציוד כבד/לובי</option>
+              <option value="flatbed_ramsa">רמסע</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* רשימת גררים */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredTrucks.map((truck) => {
+          const status = getTruckStatus(truck)
           return (
-            <div key={index} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className={`${stat.color} p-2.5 sm:p-3 rounded-lg flex-shrink-0`}>
-                  <Icon size={20} className="text-white" />
+            <div
+              key={truck.id}
+              className={`bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow border-r-4 ${
+                status === 'available' ? 'border-r-emerald-500' :
+                status === 'busy' ? 'border-r-blue-500' :
+                status === 'maintenance' ? 'border-r-amber-500' :
+                'border-r-gray-400'
+              } ${!truck.is_active ? 'opacity-60' : ''}`}
+            >
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${typeConfig[truck.truck_type as keyof typeof typeConfig]?.iconBg || 'bg-gray-100'}`}>
+                      <Truck size={24} className={typeConfig[truck.truck_type]?.color?.split(' ')[1] || 'text-gray-600'} />
+                    </div>
+                    <div>
+                      <h3 className="font-mono font-bold text-gray-800 text-lg">{truck.plate_number}</h3>
+                      <p className="text-sm text-gray-500">{typeConfig[truck.truck_type as keyof typeof typeConfig]?.label || truck.truck_type}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-lg ${statusConfig[status]?.color}`}>
+                    {statusConfig[status]?.label}
+                  </span>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-gray-500 text-xs sm:text-sm truncate">{stat.label}</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-gray-800">{stat.value}</p>
+
+                <div className="mb-4 p-3 bg-gray-100 rounded-xl border border-gray-200">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">רכב:</span>
+                    <span className="text-gray-800 font-medium">
+                      {truck.manufacturer || '-'} {truck.model || ''}{truck.year ? `, ${truck.year}` : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm mt-1">
+                    <span className="text-gray-500">קיבולת:</span>
+                    <span className="text-gray-800 font-medium">{truck.vehicle_capacity} רכבים</span>
+                  </div>
                 </div>
+
+                {truck.assigned_driver && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
+                        <User size={14} className="text-blue-700" />
+                      </div>
+                      <span className="text-sm font-medium text-blue-800">{truck.assigned_driver.user.full_name}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">רישיון רכב:</span>
+                    <span className={`font-medium ${isExpired(truck.license_expiry) ? 'text-red-600' : isExpiringSoon(truck.license_expiry) ? 'text-amber-600' : 'text-gray-700'}`}>
+                      {formatDate(truck.license_expiry)}
+                      {isExpired(truck.license_expiry) && (
+                        <span className="mr-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">פג</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">ביטוח:</span>
+                    <span className={`font-medium ${isExpired(truck.insurance_expiry) ? 'text-red-600' : 'text-gray-700'}`}>
+                      {formatDate(truck.insurance_expiry)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
+                    <p className="text-xl font-bold text-gray-800">{truck.today_tows_count || 0}</p>
+                    <p className="text-xs text-gray-500">גרירות היום</p>
+                  </div>
+                  <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
+                    <p className="text-xl font-bold text-gray-800">-</p>
+                    <p className="text-xs text-gray-500">סה״כ גרירות</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 bg-gray-100/80 border-t border-gray-200 flex items-center justify-end gap-1">
+                <button
+                  onClick={() => openEditModal(truck)}
+                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  <Edit2 size={18} />
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(truck.id)}
+                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* גרירות אחרונות */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-800">גרירות אחרונות</h2>
-          <Link href="/dashboard/tows" className="text-[#33d4ff] text-sm hover:underline">
-            הצג הכל
-          </Link>
+      {filteredTrucks.length === 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">
+          <Truck size={48} className="mx-auto mb-4 text-gray-300" />
+          <h3 className="text-lg font-medium text-gray-800 mb-2">לא נמצאו גררים</h3>
+          <p className="text-gray-500">נסה לשנות את החיפוש או הסינון</p>
         </div>
-        
-        {recentTows.length === 0 ? (
-          <div className="p-6">
-            <p className="text-gray-400 text-center py-8">אין גרירות להצגה</p>
-          </div>
-        ) : (
-          <>
-            {/* תצוגת טבלה - דסקטופ */}
-            <div className="hidden sm:block">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">רכב</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מסלול</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">נהג</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סטטוס</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recentTows.map((tow) => {
-                    const route = getRoute(tow)
-                    const status = statusMap[tow.status] || { label: tow.status, color: 'bg-gray-100 text-gray-700' }
-                    
-                    return (
-                      <tr 
-                        key={tow.id} 
-                        className="hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => window.location.href = `/dashboard/tows/${tow.id}`}
-                      >
-                        <td className="px-4 py-3 text-gray-600 text-sm">
-                          {new Date(tow.created_at).toLocaleDateString('he-IL')}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-gray-600">{getFirstVehicle(tow)}</td>
-                        <td className="px-4 py-3 text-gray-600">{tow.customer?.name || '-'}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <span className="truncate max-w-[100px]">{route.from}</span>
-                            <ChevronLeft size={14} className="flex-shrink-0" />
-                            <span className="truncate max-w-[100px]">{route.to}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {tow.driver?.user?.full_name || '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
-                            {status.label}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+      )}
+
+      {/* Modal הוספה/עריכה */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+          <div className="bg-white w-full lg:rounded-2xl lg:max-w-2xl lg:mx-4 overflow-hidden max-h-[95vh] flex flex-col rounded-t-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
+              <h2 className="font-bold text-lg">
+                {editingTruck ? 'עריכת גרר' : 'הוספת גרר חדש'}
+              </h2>
+              <button
+                onClick={() => { setShowModal(false); resetForm(); }}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            {/* תצוגת כרטיסים - מובייל */}
-            <div className="sm:hidden divide-y divide-gray-100">
-              {recentTows.map((tow) => {
-                const route = getRoute(tow)
-                const status = statusMap[tow.status] || { label: tow.status, color: 'bg-gray-100 text-gray-700' }
-                
-                return (
-                  <Link
-                    key={tow.id}
-                    href={`/dashboard/tows/${tow.id}`}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-gray-800">{getFirstVehicle(tow)}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
-                          {status.label}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">{tow.customer?.name || 'ללא לקוח'}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{route.from} ← {route.to}</p>
+            <div className="p-5 space-y-5 overflow-y-auto flex-1">
+              {/* פרטי רכב */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">1</span>
+                  פרטי רכב
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">מספר רישוי *</label>
+                      <input
+                        type="text"
+                        value={formData.plate}
+                        onChange={(e) => setFormData({ ...formData, plate: e.target.value })}
+                        placeholder="12-345-67"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono"
+                      />
                     </div>
-                    <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
-                  </Link>
-                )
-              })}
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">סוג גרר *</label>
+                      <select
+                        value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
+                      >
+                        <option value="">בחר סוג</option>
+                        <option value="crane_tow">גרר מנוף</option>
+                        <option value="dolly">דולי (מערסל ידני)</option>
+                        <option value="heavy_rescue">חילוץ כבד</option>
+                        <option value="carrier">מובילית</option>
+                        <option value="carrier_large">מובילית 10+ רכבים</option>
+                        <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
+                        <option value="heavy_equipment">ציוד כבד/לובי</option>
+                        <option value="flatbed_ramsa">רמסע</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">יצרן</label>
+                      <input
+                        type="text"
+                        value={formData.manufacturer}
+                        onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                        placeholder="לדוגמה: מרצדס"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">דגם</label>
+                      <input
+                        type="text"
+                        value={formData.model}
+                        onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                        placeholder="לדוגמה: אקטרוס"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">שנת ייצור</label>
+                      <input
+                        type="number"
+                        value={formData.year}
+                        onChange={(e) => setFormData({ ...formData, year: Number(e.target.value) })}
+                        min="2000"
+                        max="2030"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">קיבולת רכבים</label>
+                      <input
+                        type="number"
+                        value={formData.vehicleCapacity}
+                        onChange={(e) => setFormData({ ...formData, vehicleCapacity: Number(e.target.value) })}
+                        min="1"
+                        max="20"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* משקלים */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">2</span>
+                  משקלים (ק״ג)
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משקל כולל</label>
+                    <input
+                      type="number"
+                      value={formData.maxWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, maxWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משקל מורשה</label>
+                    <input
+                      type="number"
+                      value={formData.permittedWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, permittedWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משטח עליון</label>
+                    <input
+                      type="number"
+                      value={formData.upperPlatformWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, upperPlatformWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">משטח תחתון</label>
+                    <input
+                      type="number"
+                      value={formData.lowerPlatformWeight || ''}
+                      onChange={(e) => setFormData({ ...formData, lowerPlatformWeight: Number(e.target.value) })}
+                      placeholder="0"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* רישיון רכב ומסמכים */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
+                  רישיון רכב ומסמכים
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
+                      <input
+                        type="date"
+                        value={formData.licenseExpiry}
+                        onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף ביטוח</label>
+                      <input
+                        type="date"
+                        value={formData.insuranceExpiry}
+                        onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                  </div>
+                  <FileUploadField
+                    label="צילום רישיון רכב + נספח"
+                    docType="license"
+                    currentUrl={formData.licensePhotoUrl}
+                    inputRef={licensePhotoRef as React.RefObject<HTMLInputElement>}
+                  />
+                </div>
+              </div>
+
+              {/* טכוגרף ותסקיר מהנדס */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">4</span>
+                  טכוגרף ותסקיר מהנדס
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף כיול טכוגרף</label>
+                      <input
+                        type="date"
+                        value={formData.tachographExpiry}
+                        onChange={(e) => setFormData({ ...formData, tachographExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <FileUploadField
+                      label="צילום תעודת כיול"
+                      docType="tachograph"
+                      currentUrl={formData.tachographPhotoUrl}
+                      inputRef={tachographPhotoRef as React.RefObject<HTMLInputElement>}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">תוקף תסקיר מהנדס</label>
+                      <input
+                        type="date"
+                        value={formData.engineerReportExpiry}
+                        onChange={(e) => setFormData({ ...formData, engineerReportExpiry: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                    <FileUploadField
+                      label="צילום תסקיר מהנדס"
+                      docType="engineer_report"
+                      currentUrl={formData.engineerReportPhotoUrl}
+                      inputRef={engineerReportPhotoRef as React.RefObject<HTMLInputElement>}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* בדיקת חורף */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">5</span>
+                  בדיקת חורף
+                </h3>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">תאריך בדיקת חורף אחרונה</label>
+                  <input
+                    type="date"
+                    value={formData.lastWinterInspection}
+                    onChange={(e) => setFormData({ ...formData, lastWinterInspection: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">תזכורת תופיע מ-1 בספטמבר כל שנה</p>
+                </div>
+              </div>
+
+              {/* שיוך נהג */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">6</span>
+                  שיוך נהג
+                </h3>
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setFormData({ ...formData, driverAssignment: 'existing', selectedDriverId: null })}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        formData.driverAssignment === 'existing' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      שייך לנהג
+                    </button>
+                    <button
+                      onClick={() => setFormData({ ...formData, driverAssignment: 'none' })}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        formData.driverAssignment === 'none' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      ללא שיוך
+                    </button>
+                  </div>
+
+                  {formData.driverAssignment === 'existing' && (
+                    <div className="space-y-2">
+                      {availableDrivers.length === 0 ? (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                          <p className="text-sm text-amber-800">אין נהגים ללא גרר</p>
+                        </div>
+                      ) : (
+                        availableDrivers.map((driver) => (
+                          <label
+                            key={driver.id}
+                            className={`flex items-center gap-4 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                              formData.selectedDriverId === driver.id
+                                ? 'border-[#33d4ff] bg-cyan-50'
+                                : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="driver"
+                              checked={formData.selectedDriverId === driver.id}
+                              onChange={() => setFormData({ ...formData, selectedDriverId: driver.id })}
+                              className="w-4 h-4 text-[#33d4ff]"
+                            />
+                            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                              <User size={18} className="text-gray-600" />
+                            </div>
+                            <div className="flex-1">
+                              <span className="font-medium text-gray-800">{driver.user.full_name}</span>
+                              <p className="text-sm text-gray-500">{driver.user.phone}</p>
+                            </div>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* סטטוס התחלתי */}
+              {!editingTruck && (
+                <div className="bg-white rounded-xl border border-gray-200 p-4">
+                  <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">7</span>
+                    סטטוס התחלתי
+                  </h3>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setFormData({ ...formData, initialStatus: 'available' })}
+                      className={`flex-1 p-3 rounded-xl border-2 text-center transition-all ${
+                        formData.initialStatus === 'available'
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      <CheckCircle size={24} className={`mx-auto mb-1 ${formData.initialStatus === 'available' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                      <p className={`text-sm font-medium ${formData.initialStatus === 'available' ? 'text-emerald-700' : 'text-gray-600'}`}>פעיל</p>
+                    </button>
+                    <button
+                      onClick={() => setFormData({ ...formData, initialStatus: 'inactive' })}
+                      className={`flex-1 p-3 rounded-xl border-2 text-center transition-all ${
+                        formData.initialStatus === 'inactive'
+                          ? 'border-gray-500 bg-gray-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      <XCircle size={24} className={`mx-auto mb-1 ${formData.initialStatus === 'inactive' ? 'text-gray-600' : 'text-gray-400'}`} />
+                      <p className={`text-sm font-medium ${formData.initialStatus === 'inactive' ? 'text-gray-700' : 'text-gray-600'}`}>לא פעיל</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* הערות */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">
+                    {editingTruck ? '7' : '8'}
+                  </span>
+                  הערות
+                </h3>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="הערות על הגרר (תקלות ידועות, מגבלות וכו')..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
             </div>
-          </>
-        )}
-      </div>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+              <button
+                onClick={() => { setShowModal(false); resetForm(); }}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!formData.plate || !formData.type || saving}
+                className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 transition-colors font-medium"
+              >
+                {saving ? 'שומר...' : editingTruck ? 'שמור' : 'הוסף גרר'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* אזהרת כפילות */}
+      {showDuplicateWarning && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">גרר כבר קיים</h2>
+              <p className="text-gray-600">גרר עם מספר רישוי {formData.plate} כבר קיים במערכת</p>
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => setShowDuplicateWarning(false)}
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                הבנתי
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* אזהרת תוקף */}
+      {showExpiryWarning && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-amber-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">תוקף פג</h2>
+              <p className="text-gray-600">{expiryWarningMessage}</p>
+              <p className="text-gray-600 mt-2">האם להמשיך בכל זאת?</p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setShowExpiryWarning(false)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+              >
+                חזור
+              </button>
+              <button
+                onClick={() => {
+                  setShowExpiryWarning(false)
+                  handleSave()
+                }}
+                className="flex-1 py-3 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors"
+              >
+                המשך בכל זאת
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* אישור מחיקה */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={28} className="text-red-600" />
+              </div>
+              <h3 className="font-bold text-gray-800 text-lg mb-2">מחיקת גרר</h3>
+              <p className="text-gray-500">האם למחוק את הגרר?</p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={() => handleDelete(showDeleteConfirm)}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-medium hover:bg-red-600 transition-colors"
+              >
+                מחק
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
