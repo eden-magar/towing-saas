@@ -35,8 +35,8 @@ export async function getCalendarTows(
     `)
     .eq('company_id', companyId)
     .neq('status', 'cancelled')
-    .or(`scheduled_at.gte.${startISO},created_at.gte.${startISO}`)
-    .or(`scheduled_at.lte.${endISO},created_at.lte.${endISO}`)
+    .gte('created_at', startISO)
+    .lte('created_at', endISO)
     .order('scheduled_at', { ascending: true, nullsFirst: false })
 
   if (error) {

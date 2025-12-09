@@ -54,7 +54,7 @@ export default function CalendarPage() {
   const [selectedTow, setSelectedTow] = useState<TowWithDetails | null>(null)
   const [draggedTow, setDraggedTow] = useState<TowWithDetails | null>(null)
 
-  const hours = Array.from({ length: 15 }, (_, i) => i + 6) // 06:00 - 20:00
+  const hours = Array.from({ length: 24 }, (_, i) => i) // 00:00 - 23:00
 
   // טעינת נתונים
   const loadData = async () => {
@@ -571,10 +571,10 @@ export default function CalendarPage() {
                   ))}
 
                   {/* Current Time Line */}
-                  {getCurrentTime() >= 6 && getCurrentTime() <= 20 && (
+                  {getCurrentTime() >= 0 && getCurrentTime() <= 23 && (
                     <div
                       className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
-                      style={{ top: `${(getCurrentTime() - 6) * 60}px` }}
+                      style={{ top: `${getCurrentTime() * 60}px` }}
                     >
                       <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
                     </div>
