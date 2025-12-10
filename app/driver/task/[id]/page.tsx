@@ -411,13 +411,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const handleSaveAllPhotos = async () => {
     if (imageQueue.length === 0) return
     
-    // בדיקת user ו-task עם logging
-    console.log('=== handleSaveAllPhotos ===')
-    console.log('user:', user)
-    console.log('userRef.current:', userRef.current)
-    console.log('task:', task)
-    console.log('taskRef.current:', taskRef.current)
-    
     // נשתמש ב-refs כ-fallback
     const currentTask = task || taskRef.current
     const currentUser = user || userRef.current
@@ -428,7 +421,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
     
     if (!currentUser) {
-      // ננסה לרענן את הדף אוטומטית
       alert('שגיאה: לא נמצא משתמש. הדף יתרענן עכשיו.')
       window.location.reload()
       return
@@ -438,12 +430,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     const photoType = getCurrentPhotoType()
     
     try {
-      for (const img of imageQueue) {
+      // העלאה במקביל - הרבה יותר מהיר!
+      const uploadPromises = imageQueue.map(async (img) => {
         console.log(`Compressing: ${img.file.name}`)
         const compressedFile = await compressImage(img.file, 1)
         
         console.log('Uploading to Supabase...')
-        await uploadTowImage(
+        const result = await uploadTowImage(
           currentTask.id,
           currentUser.id,
           photoType,
@@ -452,7 +445,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           currentTask.vehicles[0]?.id
         )
         console.log('Upload successful!')
-      }
+        return result
+      })
+      
+      const uploadedImages = await Promise.all(uploadPromises)
+      console.log('All uploads completed:', uploadedImages)
       
       // ניקוי
       imageQueue.forEach(img => URL.revokeObjectURL(img.url))
@@ -460,11 +457,16 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       setPhotosInSession(0)
       setShowImageModal(false)
       
-      // טעינה מחדש - וחיכוי שהנתונים יתעדכנו
-      await loadTask()
-      
-      // המתנה קצרה לעדכון ה-state
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // עדכון ישיר של ה-state עם התמונות החדשות
+      const newImages = uploadedImages.filter(img => img !== null)
+      if (currentTask && newImages.length > 0) {
+        const updatedTask = {
+          ...currentTask,
+          images: [...currentTask.images, ...newImages]
+        }
+        setTask(updatedTask)
+        taskRef.current = updatedTask
+      }
       
       setShowSummary(true)
       
