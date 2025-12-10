@@ -1,7 +1,14 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
-import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3, Search, Loader2, Car } from 'lucide-react'
+/// <reference types="google.maps" />
+declare global {
+  interface Window {
+    google: typeof google
+  }
+}
+
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3, Search, Loader2, Car, Navigation, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../lib/AuthContext'
@@ -13,12 +20,492 @@ import { getBasePriceList, getCustomersWithPricing, getFixedPriceItems, Customer
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { lookupVehicle, getVehicleTypeLabel, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 
+// ==================== Google Maps Types ====================
+interface AddressData {
+  address: string
+  placeId?: string
+  lat?: number
+  lng?: number
+  isPinDropped?: boolean
+}
+
+interface DistanceResult {
+  distanceKm: number
+  durationMinutes: number
+}
+
 interface PriceItem {
   id: string
   label: string
   price: number
 }
 
+// ==================== Google Maps Loading ====================
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+
+let isGoogleMapsLoaded = false
+let isGoogleMapsLoading = false
+let googleMapsCallbacks: Array<() => void> = []
+
+function loadGoogleMaps(): Promise<void> {
+  return new Promise((resolve) => {
+    if (isGoogleMapsLoaded || (typeof window !== 'undefined' && window.google?.maps)) {
+      isGoogleMapsLoaded = true
+      resolve()
+      return
+    }
+    googleMapsCallbacks.push(resolve)
+    if (isGoogleMapsLoading) return
+    isGoogleMapsLoading = true
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places&language=he&region=IL`
+    script.async = true
+    script.defer = true
+    script.onload = () => {
+      isGoogleMapsLoaded = true
+      isGoogleMapsLoading = false
+      googleMapsCallbacks.forEach(cb => cb())
+      googleMapsCallbacks = []
+    }
+    document.head.appendChild(script)
+  })
+}
+
+// חישוב מרחק
+async function calculateDistance(origin: AddressData, destination: AddressData): Promise<DistanceResult | null> {
+  if (!window.google?.maps) return null
+  const service = new window.google.maps.DistanceMatrixService()
+  const originLocation = origin.lat && origin.lng ? new window.google.maps.LatLng(origin.lat, origin.lng) : origin.address
+  const destLocation = destination.lat && destination.lng ? new window.google.maps.LatLng(destination.lat, destination.lng) : destination.address
+
+  return new Promise((resolve) => {
+    service.getDistanceMatrix({
+      origins: [originLocation],
+      destinations: [destLocation],
+      travelMode: window.google.maps.TravelMode.DRIVING,
+      unitSystem: window.google.maps.UnitSystem.METRIC,
+      region: 'IL'
+    }, (response: google.maps.DistanceMatrixResponse | null, status: google.maps.DistanceMatrixStatus) => {
+      if (status !== 'OK' || !response) { resolve(null); return }
+      const result = response.rows[0]?.elements[0]
+      if (result?.status !== 'OK') { resolve(null); return }
+      resolve({
+        distanceKm: Math.round(result.distance.value / 1000 * 10) / 10,
+        durationMinutes: Math.round(result.duration.value / 60)
+      })
+    })
+  })
+}
+
+// Reverse Geocoding
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  if (!window.google?.maps) return null
+  const geocoder = new window.google.maps.Geocoder()
+  return new Promise((resolve) => {
+    geocoder.geocode({ location: { lat, lng } }, (results: google.maps.GeocoderResult[] | null, status: google.maps.GeocoderStatus) => {      resolve(status === 'OK' && results?.[0] ? results[0].formatted_address : null)
+    })
+  })
+}
+
+// קישורי ניווט
+const getWazeLink = (addr: AddressData) => addr.lat && addr.lng 
+  ? `https://waze.com/ul?ll=${addr.lat},${addr.lng}&navigate=yes` 
+  : `https://waze.com/ul?q=${encodeURIComponent(addr.address)}&navigate=yes`
+
+const getGoogleMapsLink = (addr: AddressData) => addr.lat && addr.lng 
+  ? `https://www.google.com/maps/dir/?api=1&destination=${addr.lat},${addr.lng}` 
+  : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr.address)}`
+
+// ==================== AddressInput Component ====================
+function AddressInput({ 
+  value, 
+  onChange, 
+  placeholder = 'הזן כתובת...', 
+  label, 
+  required, 
+  onPinDropClick 
+}: {
+  value: AddressData
+  onChange: (data: AddressData) => void
+  placeholder?: string
+  label?: string
+  required?: boolean
+  onPinDropClick?: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [inputValue, setInputValue] = useState(value.address || '')
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+
+  useEffect(() => {
+    loadGoogleMaps().then(() => {
+      if (!inputRef.current || !window.google?.maps?.places || autocompleteRef.current) return
+      
+      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'il' },
+        fields: ['formatted_address', 'name', 'place_id', 'geometry'],
+        types: ['establishment', 'geocode']
+      })
+      
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace()
+        if (!place.formatted_address && !place.name) return
+        const selectedAddress = place.formatted_address || place.name || ''
+        setInputValue(selectedAddress)
+        onChange({
+          address: selectedAddress,
+          placeId: place.place_id,
+          lat: place.geometry?.location?.lat(),
+          lng: place.geometry?.location?.lng(),
+          isPinDropped: false
+        })
+      })
+      autocompleteRef.current = autocomplete
+    })
+  }, [])
+
+  useEffect(() => {
+    if (value.address !== inputValue) {
+      setInputValue(value.address || '')
+    }
+  }, [value.address])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value)
+    onChange({ address: e.target.value, isPinDropped: false })
+  }
+
+  const hasCoords = !!(value.lat && value.lng)
+
+  return (
+    <div className="space-y-1">
+      {label && (
+        <label className="block text-sm font-medium text-gray-700">
+          {label}
+          {required && <span className="text-red-500 mr-1">*</span>}
+        </label>
+      )}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={handleInputChange}
+            placeholder={placeholder}
+            className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] ${
+              hasCoords ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+            }`}
+          />
+          {hasCoords && (
+            <Navigation size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
+          )}
+        </div>
+        {onPinDropClick && (
+          <button
+            type="button"
+            onClick={onPinDropClick}
+            className={`px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+              value.isPinDropped
+                ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+            }`}
+          >
+            <MapPin size={16} />
+            <span className="hidden sm:inline">{value.isPinDropped ? 'סיכה ✓' : 'הנח סיכה'}</span>
+          </button>
+        )}
+      </div>
+      {value.isPinDropped && (
+        <p className="text-xs text-emerald-600 flex items-center gap-1">
+          <Navigation size={12} />
+          מיקום מדויק נבחר מהמפה
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ==================== PinDropModal Component ====================
+function PinDropModal({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  initialAddress, 
+  title = 'בחר מיקום' 
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: (data: AddressData) => void
+  initialAddress?: AddressData
+  title?: string
+}) {
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<google.maps.Map | null>(null)
+  const markerRef = useRef<google.maps.Marker | null>(null)
+  const [currentAddress, setCurrentAddress] = useState('')
+  const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const initMap = async () => {
+      await loadGoogleMaps()
+      if (!mapContainerRef.current || !window.google?.maps) return
+      setIsLoading(true)
+
+      const pos = initialAddress?.lat && initialAddress?.lng 
+        ? { lat: initialAddress.lat, lng: initialAddress.lng } 
+        : { lat: 32.0853, lng: 34.7818 } // תל אביב
+
+      mapRef.current = new window.google.maps.Map(mapContainerRef.current, {
+        center: pos,
+        zoom: 15,
+        mapTypeId: window.google.maps.MapTypeId.ROADMAP,
+        gestureHandling: 'greedy',
+        streetViewControl: false,
+        fullscreenControl: false,
+        mapTypeControl: false
+      })
+
+      markerRef.current = new window.google.maps.Marker({
+        position: pos,
+        map: mapRef.current,
+        draggable: true,
+        title: 'גרור למיקום הרצוי'
+      })
+
+      setCurrentPosition(pos)
+      if (initialAddress?.address) setCurrentAddress(initialAddress.address)
+
+      // כשגוררים את הסיכה
+      markerRef.current.addListener('dragend', async () => {
+        const p = markerRef.current?.getPosition()
+        if (p) {
+          const lat = p.lat(), lng = p.lng()
+          setCurrentPosition({ lat, lng })
+          setCurrentAddress(await reverseGeocode(lat, lng) || 'מיקום מדויק')
+        }
+      })
+
+      // כשלוחצים על המפה
+      mapRef.current.addListener('click', async (e: google.maps.MapMouseEvent) => {
+        if (e.latLng && markerRef.current) {
+          markerRef.current.setPosition(e.latLng)
+          const lat = e.latLng.lat(), lng = e.latLng.lng()
+          setCurrentPosition({ lat, lng })
+          setCurrentAddress(await reverseGeocode(lat, lng) || 'מיקום מדויק')
+        }
+      })
+
+      // ניסיון לקבל מיקום נוכחי
+      if (!initialAddress?.lat && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const p = { lat: position.coords.latitude, lng: position.coords.longitude }
+            mapRef.current?.setCenter(p)
+            markerRef.current?.setPosition(p)
+            setCurrentPosition(p)
+            setCurrentAddress(await reverseGeocode(p.lat, p.lng) || 'מיקום מדויק')
+          },
+          () => {}
+        )
+      }
+
+      setIsLoading(false)
+    }
+
+    initMap()
+
+    return () => {
+      mapRef.current = null
+      markerRef.current = null
+    }
+  }, [isOpen, initialAddress])
+
+  const handleConfirm = () => {
+    if (currentPosition) {
+      onConfirm({
+        address: currentAddress || 'מיקום מדויק',
+        lat: currentPosition.lat,
+        lng: currentPosition.lng,
+        isPinDropped: true
+      })
+      onClose()
+    }
+  }
+
+  const goToCurrentLocation = () => {
+    navigator.geolocation?.getCurrentPosition(async (position) => {
+      const p = { lat: position.coords.latitude, lng: position.coords.longitude }
+      mapRef.current?.setCenter(p)
+      mapRef.current?.setZoom(17)
+      markerRef.current?.setPosition(p)
+      setCurrentPosition(p)
+      setCurrentAddress(await reverseGeocode(p.lat, p.lng) || 'מיקום מדויק')
+    })
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl w-full max-w-2xl mx-4 overflow-hidden shadow-xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-[#33d4ff] text-white flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <MapPin size={20} />
+            <h2 className="font-bold text-lg">{title}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg text-xl">×</button>
+        </div>
+
+        {/* Map */}
+        <div className="relative flex-1 min-h-[400px]">
+          <div ref={mapContainerRef} className="w-full h-full" />
+          {isLoading && (
+            <div className="absolute inset-0 bg-white flex items-center justify-center">
+              <Loader2 size={32} className="animate-spin text-[#33d4ff]" />
+            </div>
+          )}
+          <button
+            onClick={goToCurrentLocation}
+            className="absolute bottom-4 right-4 bg-white p-3 rounded-full shadow-lg hover:bg-gray-50"
+            title="המיקום שלי"
+          >
+            <Navigation size={20} className="text-[#33d4ff]" />
+          </button>
+          <div className="absolute top-4 left-4 right-4 bg-white/90 backdrop-blur px-4 py-2 rounded-lg shadow text-sm text-gray-600 text-center">
+            גרור את הסיכה או לחץ על המפה לבחירת מיקום
+          </div>
+        </div>
+
+        {/* Address Display */}
+        {currentAddress && (
+          <div className="px-5 py-3 bg-gray-50 border-t">
+            <div className="flex items-start gap-2">
+              <MapPin size={18} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-gray-800">{currentAddress}</p>
+                {currentPosition && (
+                  <p className="text-xs text-gray-500 font-mono">
+                    {currentPosition.lat.toFixed(6)}, {currentPosition.lng.toFixed(6)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div className="flex gap-3 px-5 py-4 border-t bg-white flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
+          >
+            ביטול
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={!currentPosition}
+            className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <MapPin size={18} />
+            אישור מיקום
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ==================== DistanceDisplay Component ====================
+function DistanceDisplay({ 
+  distance, 
+  destination, 
+  pricePerKm = 12, 
+  basePrice = 180, 
+  isLoading = false 
+}: {
+  distance: DistanceResult | null
+  destination?: AddressData
+  pricePerKm?: number
+  basePrice?: number
+  isLoading?: boolean
+}) {
+  if (isLoading) {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <div className="flex items-center gap-3 text-gray-500">
+          <Loader2 size={20} className="animate-spin" />
+          <span className="text-sm">מחשב מרחק...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!distance) return null
+
+  const distancePrice = Math.round(distance.distanceKm * pricePerKm)
+  const estimatedPrice = basePrice + distancePrice
+
+  return (
+    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl overflow-hidden">
+      <div className="px-4 py-2 bg-blue-100/50 border-b border-blue-200 flex items-center gap-2">
+        <Navigation size={16} className="text-blue-600" />
+        <span className="font-medium text-blue-800 text-sm">מידע מסלול</span>
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-800">
+              {distance.distanceKm}
+              <span className="text-sm font-normal text-gray-500 mr-1">ק״מ</span>
+            </div>
+            <div className="text-xs text-gray-500">מרחק</div>
+          </div>
+          <div className="text-center border-x border-blue-200">
+            <div className="text-2xl font-bold text-gray-800">
+              {distance.durationMinutes}
+              <span className="text-sm font-normal text-gray-500 mr-1">דק׳</span>
+            </div>
+            <div className="text-xs text-gray-500">זמן נסיעה</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-emerald-600">₪{estimatedPrice}</div>
+            <div className="text-xs text-gray-500">מחיר משוער</div>
+          </div>
+        </div>
+        
+        {destination && (destination.lat || destination.address) && (
+          <div className="flex gap-2 pt-3 border-t border-blue-200">
+            <a
+              href={getWazeLink(destination)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-[#33ccff] text-white rounded-lg text-sm font-medium hover:bg-[#28b8e8]"
+            >
+              <ExternalLink size={14} />
+              Waze
+            </a>
+            <a
+              href={getGoogleMapsLink(destination)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600"
+            >
+              <ExternalLink size={14} />
+              Google Maps
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ==================== Main Form Component ====================
 function NewTowForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -66,28 +553,51 @@ function NewTowForm() {
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
   const [vehicleNotFound, setVehicleNotFound] = useState(false)
   
+  // Exchange mode - תקין-תקול
   const [workingVehiclePlate, setWorkingVehiclePlate] = useState('')
   const [workingVehicleType, setWorkingVehicleType] = useState('')
-  const [workingPickup, setWorkingPickup] = useState('')
-  const [workingDropoff, setWorkingDropoff] = useState('')
+  const [workingPickup, setWorkingPickup] = useState<AddressData>({ address: '' })
+  const [workingDropoff, setWorkingDropoff] = useState<AddressData>({ address: '' })
   const [defectiveVehiclePlate, setDefectiveVehiclePlate] = useState('')
   const [defectiveVehicleType, setDefectiveVehicleType] = useState('')
-  const [defectivePickup, setDefectivePickup] = useState('')
-  const [defectiveDropoff, setDefectiveDropoff] = useState('')
+  const [defectivePickup, setDefectivePickup] = useState<AddressData>({ address: '' })
+  const [defectiveDropoff, setDefectiveDropoff] = useState<AddressData>({ address: '' })
   
-  const [vehicles, setVehicles] = useState([{ id: 1, plate: '', type: '', defect: '', pickup: '', dropoff: '' }])
+  // Multiple mode - מרובה
+  const [vehicles, setVehicles] = useState([{ 
+    id: 1, 
+    plate: '', 
+    type: '', 
+    defect: '', 
+    pickup: { address: '' } as AddressData, 
+    dropoff: { address: '' } as AddressData 
+  }])
   
-  const [pickupAddress, setPickupAddress] = useState('')
-  const [dropoffAddress, setDropoffAddress] = useState('')
+  // Single mode - כתובות עם Google Maps
+  const [pickupAddress, setPickupAddress] = useState<AddressData>({ address: '' })
+  const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
   const [fromBase, setFromBase] = useState(false)
   const [toTerritories, setToTerritories] = useState(false)
   
+  // מודאל הנחת סיכה
+  const [pinDropModal, setPinDropModal] = useState<{
+    isOpen: boolean
+    field: string | null
+    vehicleIndex?: number
+  }>({ isOpen: false, field: null })
+  
+  // מרחק
+  const [distance, setDistance] = useState<DistanceResult | null>(null)
+  const [distanceLoading, setDistanceLoading] = useState(false)
+  
+  // פרטים נוספים
   const [pickupContactName, setPickupContactName] = useState('')
   const [pickupContactPhone, setPickupContactPhone] = useState('')
   const [dropoffContactName, setDropoffContactName] = useState('')
   const [dropoffContactPhone, setDropoffContactPhone] = useState('')
   const [notes, setNotes] = useState('')
   
+  // תשלום
   const [invoiceName, setInvoiceName] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'credit' | 'invoice'>('cash')
   const [creditCardNumber, setCreditCardNumber] = useState('')
@@ -97,6 +607,35 @@ function NewTowForm() {
 
   const defects = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'אחר']
 
+  // טעינת Google Maps בהתחלה
+  useEffect(() => {
+    loadGoogleMaps()
+  }, [])
+
+  // חישוב מרחק אוטומטי
+  useEffect(() => {
+    if (!pickupAddress.address || !dropoffAddress.address) {
+      setDistance(null)
+      return
+    }
+
+    const calc = async () => {
+      setDistanceLoading(true)
+      try {
+        const result = await calculateDistance(pickupAddress, dropoffAddress)
+        setDistance(result)
+      } catch (err) {
+        console.error('Distance calculation error:', err)
+        setDistance(null)
+      } finally {
+        setDistanceLoading(false)
+      }
+    }
+
+    const timeout = setTimeout(calc, 500)
+    return () => clearTimeout(timeout)
+  }, [pickupAddress.address, pickupAddress.lat, dropoffAddress.address, dropoffAddress.lat])
+
   // קריאת פרמטרים מהכתובת (מהיומן)
   useEffect(() => {
     const dateParam = searchParams.get('date')
@@ -104,7 +643,6 @@ function NewTowForm() {
     
     if (dateParam) {
       setTowDate(dateParam)
-      // בדיקה אם זה היום
       const today = new Date().toISOString().split('T')[0]
       setIsToday(dateParam === today)
     }
@@ -151,7 +689,6 @@ function NewTowForm() {
     } else {
       setSelectedCustomerPricing(null)
     }
-    // איפוס בחירת מחיר כשמחליפים לקוח
     setPriceMode('recommended')
     setSelectedPriceItem(null)
     setCustomPrice('')
@@ -171,27 +708,25 @@ function NewTowForm() {
     if (!basePriceList) return 0
     
     const vehicleTypeMap: Record<string, string> = {
+      'private': 'base_price_private',
       'motorcycle': 'base_price_motorcycle',
-      'small': 'base_price_small',
-      'medium': 'base_price_medium',
-      'large': 'base_price_large',
-      'truck': 'base_price_truck'
+      'heavy': 'base_price_heavy',
+      'machinery': 'base_price_machinery'
     }
     
-    const priceField = vehicleTypeMap[vehicleType] || 'base_price_medium'
+    const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
     const basePrice = basePriceList[priceField] || 180
     const pricePerKm = basePriceList.price_per_km || 12
     const minimumPrice = basePriceList.minimum_price || 250
     
-    // לצורך הדגמה - מרחק קבוע של 22 ק"מ
-    const distance = 22
-    let total = basePrice + (distance * pricePerKm)
+    // שימוש במרחק אמיתי אם יש, אחרת 0
+    const distanceKm = distance?.distanceKm || 0
+    let total = basePrice + (distanceKm * pricePerKm)
     
     if (toTerritories) {
       total *= 1.25
     }
     
-    // הנחת לקוח
     if (selectedCustomerPricing && selectedCustomerPricing.discount_percent) {
       total = total * (1 - selectedCustomerPricing.discount_percent / 100)
     }
@@ -207,7 +742,6 @@ function NewTowForm() {
     
     if ((priceMode === 'fixed' || priceMode === 'customer') && selectedPriceItem) {
       let price = selectedPriceItem.price
-      // הנחת לקוח רק במחירון הכללי
       if (priceMode === 'fixed' && selectedCustomerPricing && selectedCustomerPricing.discount_percent) {
         price = price * (1 - selectedCustomerPricing.discount_percent / 100)
       }
@@ -222,9 +756,7 @@ function NewTowForm() {
 
   // חיפוש פרטי רכב מ-data.gov.il
   const handleVehicleLookup = async () => {
-    if (vehiclePlate.length < 5) {
-      return
-    }
+    if (vehiclePlate.length < 5) return
     
     setVehicleLoading(true)
     setVehicleNotFound(false)
@@ -250,6 +782,43 @@ function NewTowForm() {
     }
   }
 
+  // טיפול בהנחת סיכה
+  const handlePinDropConfirm = (data: AddressData) => {
+    const field = pinDropModal.field
+    const vehicleIdx = pinDropModal.vehicleIndex
+    
+    switch (field) {
+      case 'pickup':
+        setPickupAddress(data)
+        break
+      case 'dropoff':
+        setDropoffAddress(data)
+        break
+      case 'workingPickup':
+        setWorkingPickup(data)
+        break
+      case 'workingDropoff':
+        setWorkingDropoff(data)
+        break
+      case 'defectivePickup':
+        setDefectivePickup(data)
+        break
+      case 'defectiveDropoff':
+        setDefectiveDropoff(data)
+        break
+      case 'vehiclePickup':
+        if (vehicleIdx !== undefined) {
+          updateVehicle(vehicles[vehicleIdx].id, 'pickup', data)
+        }
+        break
+      case 'vehicleDropoff':
+        if (vehicleIdx !== undefined) {
+          updateVehicle(vehicles[vehicleIdx].id, 'dropoff', data)
+        }
+        break
+    }
+  }
+
   const toggleDefect = (defect: string) => {
     if (selectedDefects.includes(defect)) {
       setSelectedDefects(selectedDefects.filter(d => d !== defect))
@@ -259,7 +828,14 @@ function NewTowForm() {
   }
 
   const addVehicle = () => {
-    setVehicles([...vehicles, { id: vehicles.length + 1, plate: '', type: '', defect: '', pickup: '', dropoff: '' }])
+    setVehicles([...vehicles, { 
+      id: vehicles.length + 1, 
+      plate: '', 
+      type: '', 
+      defect: '', 
+      pickup: { address: '' }, 
+      dropoff: { address: '' } 
+    }])
   }
 
   const removeVehicle = (id: number) => {
@@ -268,7 +844,7 @@ function NewTowForm() {
     }
   }
 
-  const updateVehicle = (id: number, field: string, value: string) => {
+  const updateVehicle = (id: number, field: string, value: any) => {
     setVehicles(vehicles.map(v => v.id === id ? { ...v, [field]: value } : v))
   }
 
@@ -309,15 +885,45 @@ function NewTowForm() {
       }))
 
       const legsData = towType === 'single' ? [
-        { legType: 'pickup' as const, fromAddress: pickupAddress, toAddress: dropoffAddress }
+        { 
+          legType: 'pickup' as const, 
+          fromAddress: pickupAddress.address, 
+          toAddress: dropoffAddress.address,
+          fromLat: pickupAddress.lat,
+          fromLng: pickupAddress.lng,
+          toLat: dropoffAddress.lat,
+          toLng: dropoffAddress.lng
+        }
       ] : towType === 'exchange' ? [
-        { legType: 'pickup' as const, fromAddress: workingPickup, toAddress: workingDropoff, towVehicleIndex: 0 },
-        { legType: 'pickup' as const, fromAddress: defectivePickup, toAddress: defectiveDropoff, towVehicleIndex: 1 }
+        { 
+          legType: 'pickup' as const, 
+          fromAddress: workingPickup.address, 
+          toAddress: workingDropoff.address, 
+          towVehicleIndex: 0,
+          fromLat: workingPickup.lat,
+          fromLng: workingPickup.lng,
+          toLat: workingDropoff.lat,
+          toLng: workingDropoff.lng
+        },
+        { 
+          legType: 'pickup' as const, 
+          fromAddress: defectivePickup.address, 
+          toAddress: defectiveDropoff.address, 
+          towVehicleIndex: 1,
+          fromLat: defectivePickup.lat,
+          fromLng: defectivePickup.lng,
+          toLat: defectiveDropoff.lat,
+          toLng: defectiveDropoff.lng
+        }
       ] : vehicles.map((v, i) => ({
         legType: 'pickup' as const,
-        fromAddress: v.pickup,
-        toAddress: v.dropoff,
-        towVehicleIndex: i
+        fromAddress: v.pickup.address,
+        toAddress: v.dropoff.address,
+        towVehicleIndex: i,
+        fromLat: v.pickup.lat,
+        fromLng: v.pickup.lng,
+        toLat: v.dropoff.lat,
+        toLng: v.dropoff.lng
       }))
 
       const result = await createTow({
@@ -380,7 +986,9 @@ function NewTowForm() {
                 <p className={`font-medium ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-700'}`}>
                   מחיר מומלץ
                 </p>
-                <p className="text-xs text-gray-500">חישוב אוטומטי לפי מחירון</p>
+                <p className="text-xs text-gray-500">
+                  {distance ? `${distance.distanceKm} ק״מ × ₪${basePriceList?.price_per_km || 12}` : 'חישוב אוטומטי לפי מחירון'}
+                </p>
               </div>
             </div>
             <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
@@ -447,7 +1055,7 @@ function NewTowForm() {
           </div>
         )}
 
-        {/* מחירון לקוח - רק אם נבחר לקוח עסקי עם מחירון */}
+        {/* מחירון לקוח */}
         {hasCustomerPricing && (
           <div className={`rounded-xl border-2 transition-all overflow-hidden ${
             priceMode === 'customer' ? 'border-purple-500' : 'border-gray-200'
@@ -573,12 +1181,14 @@ function NewTowForm() {
             <>
               <div className="flex justify-between">
                 <span className="text-gray-500">מחיר בסיס</span>
-                <span className="text-gray-700">₪{basePriceList?.[`base_price_${vehicleType || 'medium'}`] || 180}</span>
+                <span className="text-gray-700">₪{basePriceList?.[`base_price_${vehicleType || 'private'}`] || 180}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">מרחק: 22 ק״מ</span>
-                <span className="text-gray-700">₪{22 * (basePriceList?.price_per_km || 12)}</span>
-              </div>
+              {distance && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">מרחק: {distance.distanceKm} ק״מ</span>
+                  <span className="text-gray-700">₪{Math.round(distance.distanceKm * (basePriceList?.price_per_km || 12))}</span>
+                </div>
+              )}
               {toTerritories && (
                 <div className="flex justify-between text-amber-600">
                   <span>שטחים (+25%)</span>
@@ -644,7 +1254,7 @@ function NewTowForm() {
           {error}
         </div>
       )}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center gap-3">
@@ -748,10 +1358,10 @@ function NewTowForm() {
                           <Check size={18} />
                           <span className="font-medium">{customerName}</span>
                           {selectedCustomerPricing && (selectedCustomerPricing.discount_percent > 0 || selectedCustomerPricing.price_items.length > 0) && (
-                          <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full mr-auto">
-                            יש מחירון מותאם
-                          </span>
-                        )}
+                            <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full mr-auto">
+                              יש מחירון מותאם
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}
@@ -918,7 +1528,6 @@ function NewTowForm() {
                         </button>
                       </div>
 
-                      {/* כרטיס פרטי רכב - כשנמצא */}
                       {vehicleData?.found && vehicleData.data && (
                         <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
                           <div className="flex items-start gap-3">
@@ -953,7 +1562,6 @@ function NewTowForm() {
                         </div>
                       )}
 
-                      {/* הודעה כשלא נמצא */}
                       {vehicleNotFound && (
                         <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                           <div className="flex items-center gap-2 text-amber-700">
@@ -1051,14 +1659,20 @@ function NewTowForm() {
                             <option value="machinery">🚜 צמ״ה</option>
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">מוצא</label>
-                          <input type="text" value={workingPickup} onChange={(e) => setWorkingPickup(e.target.value)} placeholder="כתובת מוצא" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">יעד</label>
-                          <input type="text" value={workingDropoff} onChange={(e) => setWorkingDropoff(e.target.value)} placeholder="כתובת יעד" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                        </div>
+                        <AddressInput
+                          label="מוצא"
+                          value={workingPickup}
+                          onChange={setWorkingPickup}
+                          placeholder="כתובת מוצא"
+                          onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'workingPickup' })}
+                        />
+                        <AddressInput
+                          label="יעד"
+                          value={workingDropoff}
+                          onChange={setWorkingDropoff}
+                          placeholder="כתובת יעד"
+                          onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'workingDropoff' })}
+                        />
                       </div>
 
                       {/* רכב תקול */}
@@ -1084,16 +1698,24 @@ function NewTowForm() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">מוצא</label>
-                          <div className="flex gap-2">
-                            <input type="text" value={defectivePickup} onChange={(e) => setDefectivePickup(e.target.value)} placeholder="כתובת מוצא" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                            <button onClick={copyFromWorkingDestination} className="px-3 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-xs hover:bg-gray-200 whitespace-nowrap">העתק</button>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">מוצא</label>
+                            <button onClick={copyFromWorkingDestination} className="text-xs text-[#33d4ff] hover:underline">העתק מיעד תקין</button>
                           </div>
+                          <AddressInput
+                            value={defectivePickup}
+                            onChange={setDefectivePickup}
+                            placeholder="כתובת מוצא"
+                            onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'defectivePickup' })}
+                          />
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">יעד</label>
-                          <input type="text" value={defectiveDropoff} onChange={(e) => setDefectiveDropoff(e.target.value)} placeholder="כתובת יעד" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                        </div>
+                        <AddressInput
+                          label="יעד"
+                          value={defectiveDropoff}
+                          onChange={setDefectiveDropoff}
+                          placeholder="כתובת יעד"
+                          onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'defectiveDropoff' })}
+                        />
                       </div>
                     </div>
                   </div>
@@ -1114,7 +1736,7 @@ function NewTowForm() {
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">מספר רכב</label>
-                            <input type="text" value={vehicle.plate} onChange={(e) => updateVehicle(vehicle.id, 'plate', e.target.value)} placeholder="12-345-67" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono" />
+                            <input type="text" value={vehicle.plate} onChange={(e) => updateVehicle(vehicle.id, 'plate', e.target.value)} placeholder="12-345-67" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono bg-white" />
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">סוג רכב</label>
@@ -1138,14 +1760,20 @@ function NewTowForm() {
                           </div>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">מוצא</label>
-                            <input type="text" value={vehicle.pickup} onChange={(e) => updateVehicle(vehicle.id, 'pickup', e.target.value)} placeholder="כתובת מוצא" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">יעד</label>
-                            <input type="text" value={vehicle.dropoff} onChange={(e) => updateVehicle(vehicle.id, 'dropoff', e.target.value)} placeholder="כתובת יעד" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                          </div>
+                          <AddressInput
+                            label="מוצא"
+                            value={vehicle.pickup}
+                            onChange={(data) => updateVehicle(vehicle.id, 'pickup', data)}
+                            placeholder="כתובת מוצא"
+                            onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'vehiclePickup', vehicleIndex: index })}
+                          />
+                          <AddressInput
+                            label="יעד"
+                            value={vehicle.dropoff}
+                            onChange={(data) => updateVehicle(vehicle.id, 'dropoff', data)}
+                            placeholder="כתובת יעד"
+                            onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'vehicleDropoff', vehicleIndex: index })}
+                          />
                         </div>
                       </div>
                     ))}
@@ -1169,32 +1797,40 @@ function NewTowForm() {
                 </div>
                 <div className="p-4 sm:p-5 space-y-4">
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className="flex flex-col items-center pt-3">
+                    <div className="flex flex-col items-center pt-8">
                       <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-                      <div className="w-0.5 h-16 bg-gray-200"></div>
+                      <div className="w-0.5 h-20 bg-gray-200"></div>
                       <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                     </div>
                     <div className="flex-1 space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">מוצא <span className="text-red-500">*</span></label>
-                        <div className="flex gap-2">
-                          <input type="text" value={pickupAddress} onChange={(e) => setPickupAddress(e.target.value)} placeholder="הזן כתובת" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                          <button className="px-3 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm hover:bg-gray-200">
-                            <MapPin size={20} />
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">יעד <span className="text-red-500">*</span></label>
-                        <div className="flex gap-2">
-                          <input type="text" value={dropoffAddress} onChange={(e) => setDropoffAddress(e.target.value)} placeholder="הזן כתובת" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]" />
-                          <button className="px-3 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm hover:bg-gray-200">
-                            <MapPin size={20} />
-                          </button>
-                        </div>
-                      </div>
+                      <AddressInput
+                        label="מוצא"
+                        value={pickupAddress}
+                        onChange={setPickupAddress}
+                        placeholder="הזן כתובת איסוף..."
+                        required
+                        onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'pickup' })}
+                      />
+                      <AddressInput
+                        label="יעד"
+                        value={dropoffAddress}
+                        onChange={setDropoffAddress}
+                        placeholder="הזן כתובת יעד..."
+                        required
+                        onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'dropoff' })}
+                      />
                     </div>
                   </div>
+
+                  {/* תצוגת מרחק */}
+                  <DistanceDisplay
+                    distance={distance}
+                    destination={dropoffAddress}
+                    pricePerKm={basePriceList?.price_per_km || 12}
+                    basePrice={basePriceList?.[`base_price_${vehicleType || 'private'}`] || 180}
+                    isLoading={distanceLoading}
+                  />
+
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button onClick={() => setFromBase(!fromBase)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${fromBase ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                       יציאה מהבסיס
@@ -1349,6 +1985,35 @@ function NewTowForm() {
           </div>
         </div>
       </div>
+
+      {/* מודאל הנחת סיכה */}
+      <PinDropModal
+        isOpen={pinDropModal.isOpen}
+        onClose={() => setPinDropModal({ isOpen: false, field: null })}
+        onConfirm={handlePinDropConfirm}
+        initialAddress={
+          pinDropModal.field === 'pickup' ? pickupAddress :
+          pinDropModal.field === 'dropoff' ? dropoffAddress :
+          pinDropModal.field === 'workingPickup' ? workingPickup :
+          pinDropModal.field === 'workingDropoff' ? workingDropoff :
+          pinDropModal.field === 'defectivePickup' ? defectivePickup :
+          pinDropModal.field === 'defectiveDropoff' ? defectiveDropoff :
+          pinDropModal.field === 'vehiclePickup' && pinDropModal.vehicleIndex !== undefined ? vehicles[pinDropModal.vehicleIndex]?.pickup :
+          pinDropModal.field === 'vehicleDropoff' && pinDropModal.vehicleIndex !== undefined ? vehicles[pinDropModal.vehicleIndex]?.dropoff :
+          undefined
+        }
+        title={
+          pinDropModal.field === 'pickup' ? 'בחר מיקום מוצא' :
+          pinDropModal.field === 'dropoff' ? 'בחר מיקום יעד' :
+          pinDropModal.field === 'workingPickup' ? 'מוצא רכב תקין' :
+          pinDropModal.field === 'workingDropoff' ? 'יעד רכב תקין' :
+          pinDropModal.field === 'defectivePickup' ? 'מוצא רכב תקול' :
+          pinDropModal.field === 'defectiveDropoff' ? 'יעד רכב תקול' :
+          pinDropModal.field === 'vehiclePickup' ? `מוצא רכב ${(pinDropModal.vehicleIndex || 0) + 1}` :
+          pinDropModal.field === 'vehicleDropoff' ? `יעד רכב ${(pinDropModal.vehicleIndex || 0) + 1}` :
+          'בחר מיקום'
+        }
+      />
 
       {/* מודל הצלחה */}
       {showAssignNowModal && (
