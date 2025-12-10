@@ -232,7 +232,7 @@ export default function SettingsPage() {
     setError('')
 
     try {
-      await deleteCompanyLogo(companyId, companyDetails.logo_url)
+      await deleteCompanyLogo(companyId)
       setCompanyDetails(prev => prev ? { ...prev, logo_url: null } : null)
       setSuccess('הלוגו נמחק בהצלחה')
       setTimeout(() => setSuccess(''), 3000)
