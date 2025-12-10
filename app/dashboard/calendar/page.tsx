@@ -149,23 +149,52 @@ export default function CalendarPage() {
     return days
   }, [currentWeekStart])
 
-  // ימים להצגה - 3 במובייל, 7 בדסקטופ
-  const [mobileStartIndex, setMobileStartIndex] = useState(0)
+  // ימים להצגה - 1 במובייל, 7 בדסקטופ
+  const [mobileDayIndex, setMobileDayIndex] = useState(0)
   
   useEffect(() => {
-    // מתחילים מהיום הנוכחי במובייל, או מיום ראשון אם זה שבוע אחר
+    // במובייל - מתחילים מהיום הנוכחי אם הוא בשבוע הזה
     const todayIndex = weekDays.findIndex(d => d.isToday)
     if (todayIndex !== -1) {
-      setMobileStartIndex(Math.max(0, Math.min(todayIndex, 4))) // מקסימום 4 כדי להציג 3 ימים
+      setMobileDayIndex(todayIndex)
     } else {
-      setMobileStartIndex(0) // שבוע אחר - מתחילים מיום ראשון
+      setMobileDayIndex(0)
     }
   }, [weekDays])
 
+  // ניווט בין שבועות
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentWeekStart)
+    newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
+    newDate.setHours(0, 0, 0, 0)
+    setCurrentWeekStart(newDate)
+  }
+
+  // ניווט יום במובייל
+  const navigateMobileDay = (direction: 'prev' | 'next') => {
+    if (direction === 'next') {
+      if (mobileDayIndex < 6) {
+        setMobileDayIndex(mobileDayIndex + 1)
+      } else {
+        // עבר לשבוע הבא
+        navigateWeek('next')
+        setMobileDayIndex(0)
+      }
+    } else {
+      if (mobileDayIndex > 0) {
+        setMobileDayIndex(mobileDayIndex - 1)
+      } else {
+        // עבר לשבוע הקודם
+        navigateWeek('prev')
+        setMobileDayIndex(6)
+      }
+    }
+  }
+
   const displayedDays = useMemo(() => {
     if (!isMobile) return weekDays
-    return weekDays.slice(mobileStartIndex, mobileStartIndex + 3)
-  }, [weekDays, isMobile, mobileStartIndex])
+    return [weekDays[mobileDayIndex]].filter(Boolean)
+  }, [weekDays, isMobile, mobileDayIndex])
 
   // בדיקה אם "הכל" נבחר - אם הרשימה ריקה = הכל נבחר
   const isAllSelected = selectedDrivers.length === 0
@@ -232,14 +261,6 @@ export default function CalendarPage() {
     return tow.vehicles?.[0]?.plate_number || '-'
   }
 
-  // ניווט בין שבועות
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentWeekStart)
-    newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
-    newDate.setHours(0, 0, 0, 0)
-    setCurrentWeekStart(newDate)
-  }
-
   const goToToday = () => {
     const today = new Date()
     const day = today.getDay()
@@ -248,6 +269,7 @@ export default function CalendarPage() {
     weekStart.setDate(diff)
     weekStart.setHours(0, 0, 0, 0)
     setCurrentWeekStart(weekStart)
+    setMobileDayIndex(today.getDay()) // היום הנוכחי בשבוע
     
     const todayClean = new Date()
     todayClean.setHours(0, 0, 0, 0)
@@ -501,52 +523,57 @@ export default function CalendarPage() {
           <div>
             {/* Mobile Day Navigation */}
             {isMobile && (
-              <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
                 <button
-                  onClick={() => setMobileStartIndex(Math.max(0, mobileStartIndex - 1))}
-                  disabled={mobileStartIndex === 0}
-                  className="p-2 rounded-lg hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  onClick={() => navigateMobileDay('prev')}
+                  className="p-2 rounded-lg hover:bg-gray-200"
                 >
                   <ChevronRight size={20} />
                 </button>
-                <span className="text-sm text-gray-600">
-                  {displayedDays[0]?.day} - {displayedDays[displayedDays.length - 1]?.day}
-                </span>
+                <div className="text-center">
+                  <span className="font-bold text-lg text-gray-800">
+                    {displayedDays[0]?.day}
+                  </span>
+                  <span className="text-gray-500 mr-2">
+                    {displayedDays[0]?.date}/{(currentWeekStart.getMonth() + 1)}
+                  </span>
+                </div>
                 <button
-                  onClick={() => setMobileStartIndex(Math.min(4, mobileStartIndex + 1))}
-                  disabled={mobileStartIndex >= 4}
-                  className="p-2 rounded-lg hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                  onClick={() => navigateMobileDay('next')}
+                  className="p-2 rounded-lg hover:bg-gray-200"
                 >
                   <ChevronLeft size={20} />
                 </button>
               </div>
             )}
             
-            {/* Days Header */}
-            <div className={`grid border-b border-gray-200 sticky top-0 bg-white z-20 ${isMobile ? 'grid-cols-4' : 'grid-cols-8'}`}>
-              <div className="p-2 sm:p-3 text-center text-sm text-gray-500 border-l border-gray-200">
-                <Clock size={16} className="mx-auto" />
+            {/* Days Header - Desktop only */}
+            {!isMobile && (
+              <div className="grid grid-cols-8 border-b border-gray-200 sticky top-0 bg-white z-20">
+                <div className="p-2 sm:p-3 text-center text-sm text-gray-500 border-l border-gray-200">
+                  <Clock size={16} className="mx-auto" />
+                </div>
+                {displayedDays.map((day, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => selectDay(day.fullDate)}
+                    className={`p-2 sm:p-3 text-center border-l border-gray-200 hover:bg-gray-50 transition-colors ${
+                      day.isToday ? 'bg-[#33d4ff]/10' : ''
+                    }`}
+                  >
+                    <p className="text-xs sm:text-sm text-gray-500">{day.day}</p>
+                    <p className={`text-lg sm:text-xl font-bold ${day.isToday ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
+                      {day.date}
+                    </p>
+                  </button>
+                ))}
               </div>
-              {displayedDays.map((day, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => selectDay(day.fullDate)}
-                  className={`p-2 sm:p-3 text-center border-l border-gray-200 hover:bg-gray-50 transition-colors ${
-                    day.isToday ? 'bg-[#33d4ff]/10' : ''
-                  }`}
-                >
-                  <p className="text-xs sm:text-sm text-gray-500">{isMobile ? day.day.slice(0, 3) : day.day}</p>
-                  <p className={`text-lg sm:text-xl font-bold ${day.isToday ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
-                    {day.date}
-                  </p>
-                </button>
-              ))}
-            </div>
+            )}
 
             {/* Time Grid */}
             <div className="relative">
               {hours.map((hour) => (
-                <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-4' : 'grid-cols-8'}`} style={{ height: '50px' }}>
+                <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-2' : 'grid-cols-8'}`} style={{ height: '50px' }}>
                   <div className="p-1 sm:p-2 text-xs sm:text-sm text-gray-400 text-center border-l border-gray-200 flex items-start justify-center">
                     {hour.toString().padStart(2, '0')}:00
                   </div>
@@ -573,59 +600,59 @@ export default function CalendarPage() {
               ))}
 
               {/* Tow Events */}
-                <div className={`absolute top-0 left-0 bottom-0 pointer-events-none ${isMobile ? 'right-[25%]' : 'right-[12.5%]'}`}>
-                  {filteredTows.map((tow) => {
-                    const { dayIndex, hour } = getTowPosition(tow)
-                    
-                    // בדיקה אם היום מוצג במובייל
-                    const displayIndex = displayedDays.findIndex(d => d.dayIndex === dayIndex)
-                    if (displayIndex === -1) return null
-                    
-                    const top = hour * 50
-                    const height = 50
-                    const numDays = isMobile ? 3 : 7
-                    const dayWidth = 100 / numDays
-                    const right = displayIndex * dayWidth
-                    const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                    const route = getRoute(tow)
+              <div className={`absolute top-0 left-0 bottom-0 pointer-events-none ${isMobile ? 'right-[50%]' : 'right-[12.5%]'}`}>
+                {filteredTows.map((tow) => {
+                  const { dayIndex, hour } = getTowPosition(tow)
+                  
+                  // בדיקה אם היום מוצג
+                  const displayIndex = displayedDays.findIndex(d => d.dayIndex === dayIndex)
+                  if (displayIndex === -1) return null
+                  
+                  const top = hour * 50
+                  const height = 50
+                  const numDays = isMobile ? 1 : 7
+                  const dayWidth = 100 / numDays
+                  const right = displayIndex * dayWidth
+                  const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
+                  const route = getRoute(tow)
 
-                    return (
-                      <div
-                        key={tow.id}
-                        draggable={!isMobile}
-                        onDragStart={(e) => handleDragStart(e, tow)}
-                        onClick={(e) => { 
-                          e.stopPropagation()
-                          if (!tow.driver_id) {
-                            handleAssignDriver(tow)
-                          } else {
-                            setSelectedTow(tow)
-                          }
-                        }}
-                        className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
-                          draggedTow?.id === tow.id ? 'opacity-50' : ''
-                        } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
-                        style={{
-                          top: `${top}px`,
-                          height: `${Math.max(height - 4, 20)}px`,
-                          right: `${right + 0.3}%`,
-                          width: `${dayWidth - 0.6}%`,
-                          backgroundColor: driverColor,
-                          borderRightColor: driverColor,
-                        }}
-                      >
-                        {!tow.driver_id && (
-                          <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
-                            לשיבוץ
-                          </div>
-                        )}
-                        <div className="font-bold truncate text-[10px] sm:text-xs">
-                          {tow.customer?.name || 'ללא לקוח'}
+                  return (
+                    <div
+                      key={tow.id}
+                      draggable={!isMobile}
+                      onDragStart={(e) => handleDragStart(e, tow)}
+                      onClick={(e) => { 
+                        e.stopPropagation()
+                        if (!tow.driver_id) {
+                          handleAssignDriver(tow)
+                        } else {
+                          setSelectedTow(tow)
+                        }
+                      }}
+                      className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
+                        draggedTow?.id === tow.id ? 'opacity-50' : ''
+                      } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
+                      style={{
+                        top: `${top}px`,
+                        height: `${Math.max(height - 4, 20)}px`,
+                        right: `${right + 0.5}%`,
+                        width: `${dayWidth - 1}%`,
+                        backgroundColor: driverColor,
+                        borderRightColor: driverColor,
+                      }}
+                    >
+                      {!tow.driver_id && (
+                        <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
+                          לשיבוץ
                         </div>
-                        <div className="truncate opacity-90 text-[9px] sm:text-[11px] hidden sm:block">
-                          {route.from} ← {route.to}
-                        </div>
+                      )}
+                      <div className="font-bold truncate text-[10px] sm:text-xs">
+                        {tow.customer?.name || 'ללא לקוח'}
                       </div>
+                      <div className="truncate opacity-90 text-[9px] sm:text-[11px]">
+                        {route.from} ← {route.to}
+                      </div>
+                    </div>
                     )
                   })}
                 </div>
