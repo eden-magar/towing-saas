@@ -16,7 +16,7 @@ import { createTow } from '../../../lib/queries/tows'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
-import { getBasePriceList, getCustomersWithPricing, getFixedPriceItems, CustomerWithPricing, FixedPriceItem } from '../../../lib/queries/price-lists'
+import { getBasePriceList, getCustomersWithPricing, getFixedPriceItems, getTimeSurcharges, getLocationSurcharges, getServiceSurcharges, CustomerWithPricing, FixedPriceItem, TimeSurcharge, LocationSurcharge, ServiceSurcharge, getActiveTimeSurcharges } from '../../../lib/queries/price-lists'
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { lookupVehicle, getVehicleTypeLabel, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 
@@ -495,6 +495,20 @@ function NewTowForm() {
   const [customersWithPricing, setCustomersWithPricing] = useState<CustomerWithPricing[]>([])
   const [selectedCustomerPricing, setSelectedCustomerPricing] = useState<CustomerWithPricing | null>(null)
   
+  // תוספות מהדאטאבייס
+  const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
+  const [locationSurchargesData, setLocationSurchargesData] = useState<LocationSurcharge[]>([])
+  const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
+  
+  // תוספות נבחרות
+  const [selectedLocationSurcharges, setSelectedLocationSurcharges] = useState<string[]>([])
+  const [selectedServiceSurcharges, setSelectedServiceSurcharges] = useState<string[]>([])
+  const [waitingTimeUnits, setWaitingTimeUnits] = useState(0) // יחידות המתנה (כל יחידה = 15 דקות)
+  const [isHoliday, setIsHoliday] = useState(false)
+  
+  // תוספות זמן פעילות (מחושב אוטומטית)
+  const [activeTimeSurchargesList, setActiveTimeSurchargesList] = useState<TimeSurcharge[]>([])
+  
   // בחירת מחיר
   const [priceMode, setPriceMode] = useState<'recommended' | 'fixed' | 'customer' | 'custom'>('recommended')
   const [selectedPriceItem, setSelectedPriceItem] = useState<PriceItem | null>(null)
@@ -544,10 +558,6 @@ function NewTowForm() {
   // Single mode - כתובות עם Google Maps
   const [pickupAddress, setPickupAddress] = useState<AddressData>({ address: '' })
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
-  const [fromBase, setFromBase] = useState(false)
-  const [toTerritories, setToTerritories] = useState(false)
-  const [isEvening, setIsEvening] = useState(false)
-  const [isNight, setIsNight] = useState(false)
   
   // מודאל הנחת סיכה
   const [pinDropModal, setPinDropModal] = useState<{
@@ -632,13 +642,16 @@ function NewTowForm() {
   const loadData = async () => {
     if (!companyId) return
     try {
-      const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData] = await Promise.all([
+      const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData, timeSurchargesRes, locationSurchargesRes, serviceSurchargesRes] = await Promise.all([
         getCustomers(companyId),
         getDrivers(companyId),
         getTrucks(companyId),
         getBasePriceList(companyId),
         getFixedPriceItems(companyId),
-        getCustomersWithPricing(companyId)
+        getCustomersWithPricing(companyId),
+        getTimeSurcharges(companyId),
+        getLocationSurcharges(companyId),
+        getServiceSurcharges(companyId)
       ])
       setCustomers(customersData)
       setDrivers(driversData)
@@ -646,6 +659,9 @@ function NewTowForm() {
       setBasePriceList(basePriceData)
       setFixedPriceItems(fixedPricesData)
       setCustomersWithPricing(customersPricingData)
+      setTimeSurchargesData(timeSurchargesRes)
+      setLocationSurchargesData(locationSurchargesRes)
+      setServiceSurchargesData(serviceSurchargesRes)
     } catch (err) {
       console.error('Error loading data:', err)
     }
@@ -664,6 +680,17 @@ function NewTowForm() {
     setCustomPrice('')
   }, [selectedCustomerId, customersWithPricing])
 
+  // חישוב אוטומטי של תוספות זמן לפי תאריך ושעה
+  useEffect(() => {
+    if (!towDate || !towTime || timeSurchargesData.length === 0) {
+      setActiveTimeSurchargesList([])
+      return
+    }
+    
+    const activeSurcharges = getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday)
+    setActiveTimeSurchargesList(activeSurcharges)
+  }, [towDate, towTime, timeSurchargesData, isHoliday])
+
   // סינון לקוחות לפי חיפוש
   const filteredCustomers = customers.filter(c => {
     if (!searchCustomer) return false
@@ -675,44 +702,69 @@ function NewTowForm() {
 
   // חישוב מחיר מומלץ
   const calculateRecommendedPrice = () => {
-  const vehicleTypeMap: Record<string, string> = {
-    'private': 'base_price_private',
-    'motorcycle': 'base_price_motorcycle',
-    'heavy': 'base_price_heavy',
-    'machinery': 'base_price_machinery'
+    const vehicleTypeMap: Record<string, string> = {
+      'private': 'base_price_private',
+      'motorcycle': 'base_price_motorcycle',
+      'heavy': 'base_price_heavy',
+      'machinery': 'base_price_machinery'
+    }
+    
+    const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
+    const basePrice = basePriceList?.[priceField] || 180
+    const pricePerKm = basePriceList?.price_per_km || 12
+    const minimumPrice = basePriceList?.minimum_price || 250
+    
+    const distanceKm = distance?.distanceKm || 0
+    const distancePrice = distanceKm * pricePerKm
+    
+    // סכום בסיס + מרחק
+    let subtotal = basePrice + distancePrice
+    
+    // תוספות זמן (אחוזים) - הגבוהה ביותר
+    let timePercent = 0
+    if (activeTimeSurchargesList.length > 0) {
+      timePercent = Math.max(...activeTimeSurchargesList.map(s => s.surcharge_percent))
+    }
+    const timeAddition = subtotal * (timePercent / 100)
+    
+    // תוספות מיקום (אחוזים)
+    let locationPercent = 0
+    selectedLocationSurcharges.forEach(id => {
+      const surcharge = locationSurchargesData.find(l => l.id === id)
+      if (surcharge) {
+        locationPercent += surcharge.surcharge_percent
+      }
+    })
+    const locationAddition = subtotal * (locationPercent / 100)
+    
+    // תוספות שירותים (סכומים קבועים)
+    let servicesTotal = 0
+    selectedServiceSurcharges.forEach(id => {
+      const surcharge = serviceSurchargesData.find(s => s.id === id)
+      if (surcharge) {
+        // אם זה שירות המתנה - מכפילים ביחידות
+        if (surcharge.label.includes('המתנה')) {
+          servicesTotal += surcharge.price * waitingTimeUnits
+        } else {
+          servicesTotal += surcharge.price
+        }
+      }
+    })
+    
+    const beforeDiscount = subtotal + timeAddition + locationAddition + servicesTotal
+    
+    // הנחת לקוח (אם יש)
+    let afterDiscount = beforeDiscount
+    if (selectedCustomerPricing?.discount_percent) {
+      afterDiscount = beforeDiscount * (1 - selectedCustomerPricing.discount_percent / 100)
+    }
+    
+    // מע"מ
+    const vat = afterDiscount * 0.18
+    const total = afterDiscount + vat
+    
+    return Math.max(Math.round(total), minimumPrice)
   }
-  
-  const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
-  const basePrice = basePriceList?.[priceField] || 180
-  const pricePerKm = basePriceList?.price_per_km || 12
-  const minimumPrice = basePriceList?.minimum_price || 250
-  
-  const distanceKm = distance?.distanceKm || 0
-  const distancePrice = distanceKm * pricePerKm
-  
-  // סכום בסיס + מרחק
-  let subtotal = basePrice + distancePrice
-  
-  // תוספות באחוזים
-  let percentageAdditions = 0
-  if (toTerritories) percentageAdditions += subtotal * 0.25
-  if (isEvening) percentageAdditions += subtotal * 0.15
-  if (isNight) percentageAdditions += subtotal * 0.25
-  
-  const beforeVat = subtotal + percentageAdditions
-  
-  // הנחת לקוח (אם יש)
-  let afterDiscount = beforeVat
-  if (selectedCustomerPricing?.discount_percent) {
-    afterDiscount = beforeVat * (1 - selectedCustomerPricing.discount_percent / 100)
-  }
-  
-  // מע"מ
-  const vat = afterDiscount * 0.17
-  const total = afterDiscount + vat
-  
-  return Math.max(Math.round(total), minimumPrice)
-}
 
   // חישוב מחיר סופי
   const calculateFinalPrice = () => {
@@ -1141,47 +1193,82 @@ function NewTowForm() {
 
   // רכיב סיכום מחיר (סיידבר)
   const PriceSummary = ({ isMobile = false }: { isMobile?: boolean }) => {
-  if (!towType) {
-    return (
-      <div className={`text-center ${isMobile ? 'py-4' : 'py-8'} text-gray-400`}>
-        {!isMobile && (
-          <div className="w-12 h-12 mx-auto mb-3 opacity-50 bg-gray-100 rounded-xl flex items-center justify-center">
-            <FileText size={24} />
-          </div>
-        )}
-        <p className="text-sm">בחר סוג גרירה לחישוב מחיר</p>
-      </div>
-    )
-  }
+    if (!towType) {
+      return (
+        <div className={`text-center ${isMobile ? 'py-4' : 'py-8'} text-gray-400`}>
+          {!isMobile && (
+            <div className="w-12 h-12 mx-auto mb-3 opacity-50 bg-gray-100 rounded-xl flex items-center justify-center">
+              <FileText size={24} />
+            </div>
+          )}
+          <p className="text-sm">בחר סוג גרירה לחישוב מחיר</p>
+        </div>
+      )
+    }
 
-  // חישוב מפורט
-  const vehicleTypeMap: Record<string, string> = {
-    'private': 'base_price_private',
-    'motorcycle': 'base_price_motorcycle',
-    'heavy': 'base_price_heavy',
-    'machinery': 'base_price_machinery'
-  }
-  const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
-  const basePrice = basePriceList?.[priceField] || 180
-  const pricePerKm = basePriceList?.price_per_km || 12
-  const distanceKm = distance?.distanceKm || 0
-  const distancePrice = Math.round(distanceKm * pricePerKm)
-  
-  const subtotal = basePrice + distancePrice
-  
-  const territoriesAmount = toTerritories ? Math.round(subtotal * 0.25) : 0
-  const eveningAmount = isEvening ? Math.round(subtotal * 0.15) : 0
-  const nightAmount = isNight ? Math.round(subtotal * 0.25) : 0
-  
-  const beforeDiscount = subtotal + territoriesAmount + eveningAmount + nightAmount
-  
-  const discountAmount = selectedCustomerPricing?.discount_percent 
-    ? Math.round(beforeDiscount * selectedCustomerPricing.discount_percent / 100) 
-    : 0
-  
-  const beforeVat = beforeDiscount - discountAmount
-  const vatAmount = Math.round(beforeVat * 0.17)
-  const total = beforeVat + vatAmount
+    // חישוב מפורט
+    const vehicleTypeMap: Record<string, string> = {
+      'private': 'base_price_private',
+      'motorcycle': 'base_price_motorcycle',
+      'heavy': 'base_price_heavy',
+      'machinery': 'base_price_machinery'
+    }
+    const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
+    const basePrice = basePriceList?.[priceField] || 180
+    const pricePerKm = basePriceList?.price_per_km || 12
+    const distanceKm = distance?.distanceKm || 0
+    const distancePrice = Math.round(distanceKm * pricePerKm)
+    
+    const subtotal = basePrice + distancePrice
+    
+    // תוספות זמן (הגבוהה ביותר)
+    let timePercent = 0
+    let timeLabel = ''
+    if (activeTimeSurchargesList.length > 0) {
+      const maxSurcharge = activeTimeSurchargesList.reduce((max, s) => 
+        s.surcharge_percent > max.surcharge_percent ? s : max
+      , activeTimeSurchargesList[0])
+      timePercent = maxSurcharge.surcharge_percent
+      timeLabel = maxSurcharge.label
+    }
+    const timeAmount = Math.round(subtotal * (timePercent / 100))
+    
+    // תוספות מיקום
+    let locationPercent = 0
+    const activeLocationSurcharges = selectedLocationSurcharges
+      .map(id => locationSurchargesData.find(l => l.id === id))
+      .filter(Boolean) as LocationSurcharge[]
+    activeLocationSurcharges.forEach(s => { locationPercent += s.surcharge_percent })
+    const locationAmount = Math.round(subtotal * (locationPercent / 100))
+    
+    // תוספות שירותים
+    let servicesTotal = 0
+    const activeServices: { label: string; amount: number }[] = []
+    selectedServiceSurcharges.forEach(id => {
+      const surcharge = serviceSurchargesData.find(s => s.id === id)
+      if (surcharge) {
+        let amount = surcharge.price
+        let label = surcharge.label
+        if (surcharge.label.includes('המתנה') && waitingTimeUnits > 0) {
+          amount = surcharge.price * waitingTimeUnits
+          label = `${surcharge.label} (×${waitingTimeUnits})`
+        } else if (surcharge.label.includes('המתנה') && waitingTimeUnits === 0) {
+          return // לא מציגים המתנה אם אין יחידות
+        }
+        servicesTotal += amount
+        activeServices.push({ label, amount })
+      }
+    })
+    
+    const beforeDiscount = subtotal + timeAmount + locationAmount + servicesTotal
+    
+    const discountAmount = selectedCustomerPricing?.discount_percent 
+      ? Math.round(beforeDiscount * selectedCustomerPricing.discount_percent / 100) 
+      : 0
+    
+    const beforeVat = beforeDiscount - discountAmount
+    const vatAmount = Math.round(beforeVat * 0.18)
+    const total = beforeVat + vatAmount
 
     return (
       <div className="space-y-3 sm:space-y-4">
@@ -1198,24 +1285,24 @@ function NewTowForm() {
                   <span className="text-gray-700">₪{distancePrice}</span>
                 </div>
               )}
-              {toTerritories && (
-                <div className="flex justify-between text-amber-600">
-                  <span>שטחים (+25%)</span>
-                  <span>₪{territoriesAmount}</span>
-                </div>
-              )}
-              {isEvening && (
+              {timeAmount > 0 && (
                 <div className="flex justify-between text-orange-600">
-                  <span>תוספת ערב (+15%)</span>
-                  <span>₪{eveningAmount}</span>
+                  <span>{timeLabel} (+{timePercent}%)</span>
+                  <span>₪{timeAmount}</span>
                 </div>
               )}
-              {isNight && (
-                <div className="flex justify-between text-purple-600">
-                  <span>תוספת לילה (+25%)</span>
-                  <span>₪{nightAmount}</span>
+              {activeLocationSurcharges.map(s => (
+                <div key={s.id} className="flex justify-between text-amber-600">
+                  <span>{s.label} (+{s.surcharge_percent}%)</span>
+                  <span>₪{Math.round(subtotal * s.surcharge_percent / 100)}</span>
                 </div>
-              )}
+              ))}
+              {activeServices.map((s, i) => (
+                <div key={i} className="flex justify-between text-blue-600">
+                  <span>{s.label}</span>
+                  <span>₪{s.amount}</span>
+                </div>
+              ))}
               {discountAmount > 0 && (
                 <div className="flex justify-between text-emerald-600">
                   <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
@@ -1223,7 +1310,7 @@ function NewTowForm() {
                 </div>
               )}
               <div className="flex justify-between border-t border-gray-100 pt-2">
-                <span className="text-gray-500">מע״מ (17%)</span>
+                <span className="text-gray-500">מע״מ (18%)</span>
                 <span className="text-gray-700">₪{vatAmount}</span>
               </div>
             </>
@@ -1855,20 +1942,109 @@ function NewTowForm() {
                     isLoading={distanceLoading}
                   />
 
-                  <div className="flex flex-wrap gap-2 pt-2">
-                  <button onClick={() => setFromBase(!fromBase)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${fromBase ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    יציאה מהבסיס
-                  </button>
-                  <button onClick={() => setToTerritories(!toTerritories)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${toTerritories ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    שטחים (+25%)
-                  </button>
-                  <button onClick={() => setIsEvening(!isEvening)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${isEvening ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    ערב (+15%)
-                  </button>
-                  <button onClick={() => setIsNight(!isNight)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${isNight ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    לילה (+25%)
-                  </button>
-                </div>
+                  {/* תוספות זמן - אוטומטיות */}
+                  {activeTimeSurchargesList.length > 0 && (
+                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                      <p className="text-sm font-medium text-orange-800 mb-2">🕐 תוספות זמן פעילות:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {activeTimeSurchargesList.map(s => (
+                          <span key={s.id} className="px-3 py-1 bg-orange-500 text-white rounded-full text-sm">
+                            {s.label} (+{s.surcharge_percent}%)
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* כפתור חג */}
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setIsHoliday(!isHoliday)} 
+                      className={`px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${isHoliday ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      🎉 {isHoliday ? 'חג (פעיל)' : 'סמן כחג'}
+                    </button>
+                    {isHoliday && (
+                      <span className="text-xs text-red-600">תוספת חג תחושב אוטומטית</span>
+                    )}
+                  </div>
+
+                  {/* תוספות מיקום */}
+                  {locationSurchargesData.filter(l => l.is_active).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">📍 תוספות מיקום:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {locationSurchargesData.filter(l => l.is_active).map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => {
+                              if (selectedLocationSurcharges.includes(s.id)) {
+                                setSelectedLocationSurcharges(selectedLocationSurcharges.filter(id => id !== s.id))
+                              } else {
+                                setSelectedLocationSurcharges([...selectedLocationSurcharges, s.id])
+                              }
+                            }}
+                            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                              selectedLocationSurcharges.includes(s.id) 
+                                ? 'bg-amber-500 text-white' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                          >
+                            {s.label} (+{s.surcharge_percent}%)
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* שירותים נוספים */}
+                  {serviceSurchargesData.filter(s => s.is_active).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">🔧 שירותים נוספים:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {serviceSurchargesData.filter(s => s.is_active).map(s => {
+                          const isWaiting = s.label.includes('המתנה')
+                          const isSelected = selectedServiceSurcharges.includes(s.id)
+                          
+                          return (
+                            <div key={s.id} className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedServiceSurcharges(selectedServiceSurcharges.filter(id => id !== s.id))
+                                    if (isWaiting) setWaitingTimeUnits(0)
+                                  } else {
+                                    setSelectedServiceSurcharges([...selectedServiceSurcharges, s.id])
+                                    if (isWaiting) setWaitingTimeUnits(1)
+                                  }
+                                }}
+                                className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+                                  isSelected 
+                                    ? 'bg-blue-500 text-white' 
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                {s.label} (+₪{s.price})
+                              </button>
+                              {isWaiting && isSelected && (
+                                <div className="flex items-center gap-1 mr-1">
+                                  <button 
+                                    onClick={() => setWaitingTimeUnits(Math.max(0, waitingTimeUnits - 1))}
+                                    className="w-7 h-7 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
+                                  >-</button>
+                                  <span className="w-8 text-center text-sm font-medium">{waitingTimeUnits}</span>
+                                  <button 
+                                    onClick={() => setWaitingTimeUnits(waitingTimeUnits + 1)}
+                                    className="w-7 h-7 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
+                                  >+</button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

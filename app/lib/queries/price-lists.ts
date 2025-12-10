@@ -29,7 +29,11 @@ export interface TimeSurcharge {
   name: string
   label: string
   time_description: string | null
+  time_start?: string | null      // optional
+  time_end?: string | null        // optional
   surcharge_percent: number
+  day_type?: string               // optional
+  sort_order?: number             // optional
   is_active: boolean
 }
 
@@ -216,6 +220,7 @@ export async function getTimeSurcharges(companyId: string): Promise<TimeSurcharg
     .from('time_surcharges')
     .select('*')
     .eq('company_id', companyId)
+    .order('sort_order', { ascending: true })
 
   if (error) {
     console.error('Error fetching time surcharges:', error)
@@ -474,4 +479,105 @@ export async function getFullPriceList(companyId: string) {
     customersWithPricing,
     fixedPriceItems
   }
+}
+
+// ==================== פונקציות עזר לחישוב תוספות זמן ====================
+
+/**
+ * בודק אם שעה נתונה נופלת בטווח זמן
+ * תומך בטווחים שעוברים חצות (למשל 19:00 - 07:00)
+ */
+export function isTimeInRange(time: string, startTime: string | null, endTime: string | null): boolean {
+  if (!startTime || !endTime) return false
+  
+  const [timeHours, timeMinutes] = time.split(':').map(Number)
+  const [startHours, startMinutes] = startTime.split(':').map(Number)
+  const [endHours, endMinutes] = endTime.split(':').map(Number)
+  
+  const timeValue = timeHours * 60 + timeMinutes
+  const startValue = startHours * 60 + startMinutes
+  const endValue = endHours * 60 + endMinutes
+  
+  // אם הטווח עובר חצות (למשל 19:00 - 07:00)
+  if (startValue > endValue) {
+    return timeValue >= startValue || timeValue < endValue
+  }
+  
+  // טווח רגיל
+  return timeValue >= startValue && timeValue < endValue
+}
+
+/**
+ * בודק אם תאריך הוא יום שבת
+ */
+export function isSaturday(date: string): boolean {
+  const d = new Date(date)
+  return d.getDay() === 6
+}
+
+/**
+ * בודק אם תאריך הוא ערב שבת (יום שישי)
+ */
+export function isFriday(date: string): boolean {
+  const d = new Date(date)
+  return d.getDay() === 5
+}
+
+/**
+ * מחשב אילו תוספות זמן חלות על זמן ותאריך נתונים
+ */
+export function getActiveTimeSurcharges(
+  timeSurcharges: TimeSurcharge[],
+  time: string,
+  date: string,
+  isHoliday: boolean = false
+): TimeSurcharge[] {
+  return timeSurcharges.filter(surcharge => {
+    if (!surcharge.is_active) return false
+    
+    // בדיקת סוג היום
+    switch (surcharge.day_type) {
+      case 'saturday':
+        // תוספת שבת - רק בשבת
+        if (!isSaturday(date)) return false
+        break
+      case 'friday':
+        // תוספת ערב שבת - רק בשישי
+        if (!isFriday(date)) return false
+        break
+      case 'holiday':
+        // תוספת חג - רק אם סומן כחג
+        if (!isHoliday) return false
+        break
+      case 'all':
+      default:
+        // תוספת רגילה - בודקים שעות
+        break
+    }
+    
+    // בדיקת טווח שעות (אם מוגדר)
+    if (surcharge.time_start && surcharge.time_end) {
+      return isTimeInRange(time, surcharge.time_start, surcharge.time_end)
+    }
+    
+    // אם אין טווח שעות, התוספת תמיד חלה (לסוג היום הנכון)
+    return true
+  })
+}
+
+/**
+ * מחשב את סכום אחוזי התוספות הפעילות
+ */
+export function calculateTimeSurchargePercent(
+  timeSurcharges: TimeSurcharge[],
+  time: string,
+  date: string,
+  isHoliday: boolean = false
+): number {
+  const activeSurcharges = getActiveTimeSurcharges(timeSurcharges, time, date, isHoliday)
+  
+  // מחזירים את הערך הגבוה ביותר (לא מצטבר)
+  if (activeSurcharges.length === 0) return 0
+  
+  return Math.max(...activeSurcharges.map(s => s.surcharge_percent))
 }

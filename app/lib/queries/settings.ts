@@ -26,6 +26,13 @@ export interface CompanySettings {
   working_hours_end: string | null
   night_hours_start: string | null
   night_hours_end: string | null
+  evening_hours_start: string | null
+  evening_hours_end: string | null
+  shabbat_start: string | null
+  shabbat_end: string | null
+  base_address: string | null
+  base_lat: number | null
+  base_lng: number | null
   created_at: string
   updated_at: string
 }
@@ -108,11 +115,15 @@ export async function getCompanySettings(companyId: string): Promise<CompanySett
 async function createDefaultSettings(companyId: string): Promise<CompanySettings | null> {
   const defaultSettings = {
     company_id: companyId,
-    default_vat_percent: 17,
+    default_vat_percent: 18,
     working_hours_start: '08:00',
     working_hours_end: '18:00',
-    night_hours_start: '22:00',
-    night_hours_end: '06:00'
+    evening_hours_start: '15:00',
+    evening_hours_end: '19:00',
+    night_hours_start: '19:00',
+    night_hours_end: '07:00',
+    shabbat_start: '14:00',
+    shabbat_end: '20:00'
   }
 
   const { data, error } = await supabase
@@ -137,6 +148,13 @@ interface UpdateSettingsInput {
   working_hours_end?: string
   night_hours_start?: string
   night_hours_end?: string
+  evening_hours_start?: string
+  evening_hours_end?: string
+  shabbat_start?: string
+  shabbat_end?: string
+  base_address?: string
+  base_lat?: number
+  base_lng?: number
 }
 
 export async function updateCompanySettings(
@@ -150,6 +168,13 @@ export async function updateCompanySettings(
   if (input.working_hours_end !== undefined) updates.working_hours_end = input.working_hours_end
   if (input.night_hours_start !== undefined) updates.night_hours_start = input.night_hours_start
   if (input.night_hours_end !== undefined) updates.night_hours_end = input.night_hours_end
+  if (input.evening_hours_start !== undefined) updates.evening_hours_start = input.evening_hours_start
+  if (input.evening_hours_end !== undefined) updates.evening_hours_end = input.evening_hours_end
+  if (input.shabbat_start !== undefined) updates.shabbat_start = input.shabbat_start
+  if (input.shabbat_end !== undefined) updates.shabbat_end = input.shabbat_end
+  if (input.base_address !== undefined) updates.base_address = input.base_address
+  if (input.base_lat !== undefined) updates.base_lat = input.base_lat
+  if (input.base_lng !== undefined) updates.base_lng = input.base_lng
 
   const { error } = await supabase
     .from('company_settings')
