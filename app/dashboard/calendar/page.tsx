@@ -150,17 +150,10 @@ export default function CalendarPage() {
   }, [currentWeekStart])
 
   // ימים להצגה - 1 במובייל, 7 בדסקטופ
-  const [mobileDayIndex, setMobileDayIndex] = useState(0)
-  
-  useEffect(() => {
-    // במובייל - מתחילים מהיום הנוכחי אם הוא בשבוע הזה
-    const todayIndex = weekDays.findIndex(d => d.isToday)
-    if (todayIndex !== -1) {
-      setMobileDayIndex(todayIndex)
-    } else {
-      setMobileDayIndex(0)
-    }
-  }, [weekDays])
+  const [mobileDayIndex, setMobileDayIndex] = useState(() => {
+    // אתחול פעם אחת - מהיום הנוכחי בשבוע
+    return new Date().getDay()
+  })
 
   // ניווט בין שבועות
   const navigateWeek = (direction: 'prev' | 'next') => {
