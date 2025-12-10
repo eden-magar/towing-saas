@@ -74,6 +74,16 @@ export default function CalendarPage() {
 
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
+  // זיהוי מובייל
+  const [isMobile, setIsMobile] = useState(false)
+  
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
   // טעינת נתונים
   const loadData = async () => {
     if (!companyId) return
@@ -138,6 +148,22 @@ export default function CalendarPage() {
     }
     return days
   }, [currentWeekStart])
+
+  // ימים להצגה - 3 במובייל, 7 בדסקטופ
+  const [mobileStartIndex, setMobileStartIndex] = useState(0)
+  
+  useEffect(() => {
+    // מתחילים מהיום הנוכחי במובייל
+    const todayIndex = weekDays.findIndex(d => d.isToday)
+    if (todayIndex !== -1) {
+      setMobileStartIndex(Math.max(0, Math.min(todayIndex, 4))) // מקסימום 4 כדי להציג 3 ימים
+    }
+  }, [weekDays])
+
+  const displayedDays = useMemo(() => {
+    if (!isMobile) return weekDays
+    return weekDays.slice(mobileStartIndex, mobileStartIndex + 3)
+  }, [weekDays, isMobile, mobileStartIndex])
 
   // בדיקה אם "הכל" נבחר - אם הרשימה ריקה = הכל נבחר
   const isAllSelected = selectedDrivers.length === 0
@@ -470,76 +496,101 @@ export default function CalendarPage() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Week View */}
         {view === 'week' && (
-          <div className="overflow-x-auto">
-            <div className="min-w-[600px]">
-              {/* Days Header */}
-              <div className="grid grid-cols-8 border-b border-gray-200 sticky top-0 bg-white z-20">
-                <div className="p-2 sm:p-3 text-center text-sm text-gray-500 border-l border-gray-200">
-                  <Clock size={16} className="mx-auto" />
-                </div>
-                {weekDays.map((day, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => selectDay(day.fullDate)}
-                    className={`p-2 sm:p-3 text-center border-l border-gray-200 hover:bg-gray-50 transition-colors ${
-                      day.isToday ? 'bg-[#33d4ff]/10' : ''
-                    }`}
-                  >
-                    <p className="text-xs sm:text-sm text-gray-500">{day.day}</p>
-                    <p className={`text-lg sm:text-xl font-bold ${day.isToday ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
-                      {day.date}
-                    </p>
-                  </button>
-                ))}
+          <div>
+            {/* Mobile Day Navigation */}
+            {isMobile && (
+              <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => setMobileStartIndex(Math.max(0, mobileStartIndex - 1))}
+                  disabled={mobileStartIndex === 0}
+                  className="p-2 rounded-lg hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight size={20} />
+                </button>
+                <span className="text-sm text-gray-600">
+                  {displayedDays[0]?.day} - {displayedDays[displayedDays.length - 1]?.day}
+                </span>
+                <button
+                  onClick={() => setMobileStartIndex(Math.min(4, mobileStartIndex + 1))}
+                  disabled={mobileStartIndex >= 4}
+                  className="p-2 rounded-lg hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft size={20} />
+                </button>
               </div>
+            )}
+            
+            {/* Days Header */}
+            <div className={`grid border-b border-gray-200 sticky top-0 bg-white z-20 ${isMobile ? 'grid-cols-4' : 'grid-cols-8'}`}>
+              <div className="p-2 sm:p-3 text-center text-sm text-gray-500 border-l border-gray-200">
+                <Clock size={16} className="mx-auto" />
+              </div>
+              {displayedDays.map((day, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => selectDay(day.fullDate)}
+                  className={`p-2 sm:p-3 text-center border-l border-gray-200 hover:bg-gray-50 transition-colors ${
+                    day.isToday ? 'bg-[#33d4ff]/10' : ''
+                  }`}
+                >
+                  <p className="text-xs sm:text-sm text-gray-500">{isMobile ? day.day.slice(0, 3) : day.day}</p>
+                  <p className={`text-lg sm:text-xl font-bold ${day.isToday ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
+                    {day.date}
+                  </p>
+                </button>
+              ))}
+            </div>
 
-              {/* Time Grid */}
-              <div className="relative">
-                {hours.map((hour) => (
-                  <div key={hour} className="grid grid-cols-8 border-b border-gray-100" style={{ height: '50px' }}>
-                    <div className="p-1 sm:p-2 text-xs sm:text-sm text-gray-400 text-center border-l border-gray-200 flex items-start justify-center">
-                      {hour.toString().padStart(2, '0')}:00
-                    </div>
-                    {weekDays.map((day, dayIdx) => {
-                      return (
-                        <div
-                          key={dayIdx}
-                          onClick={() => handleSlotClick(day.fullDate, hour)}
-                          className={`border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group ${
-                            day.isToday ? 'bg-[#33d4ff]/5' : ''
-                          }`}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, dayIdx, hour)}
-                        >
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="w-6 h-6 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
-                              <Plus size={14} className="text-white" />
-                            </div>
+            {/* Time Grid */}
+            <div className="relative">
+              {hours.map((hour) => (
+                <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-4' : 'grid-cols-8'}`} style={{ height: '50px' }}>
+                  <div className="p-1 sm:p-2 text-xs sm:text-sm text-gray-400 text-center border-l border-gray-200 flex items-start justify-center">
+                    {hour.toString().padStart(2, '0')}:00
+                  </div>
+                  {displayedDays.map((day, dayIdx) => {
+                    return (
+                      <div
+                        key={dayIdx}
+                        onClick={() => handleSlotClick(day.fullDate, hour)}
+                        className={`border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group ${
+                          day.isToday ? 'bg-[#33d4ff]/5' : ''
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, day.dayIndex, hour)}
+                      >
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-6 h-6 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
+                            <Plus size={14} className="text-white" />
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
 
-                {/* Tow Events */}
-                <div className="absolute top-0 right-[12.5%] left-0 bottom-0 pointer-events-none">
+              {/* Tow Events */}
+                <div className={`absolute top-0 left-0 bottom-0 pointer-events-none ${isMobile ? 'right-[25%]' : 'right-[12.5%]'}`}>
                   {filteredTows.map((tow) => {
                     const { dayIndex, hour } = getTowPosition(tow)
                     
-                    if (dayIndex === -1) return null
+                    // בדיקה אם היום מוצג במובייל
+                    const displayIndex = displayedDays.findIndex(d => d.dayIndex === dayIndex)
+                    if (displayIndex === -1) return null
                     
                     const top = hour * 50
                     const height = 50
-                    const dayWidth = 100 / 7
-                    const right = dayIndex * dayWidth
+                    const numDays = isMobile ? 3 : 7
+                    const dayWidth = 100 / numDays
+                    const right = displayIndex * dayWidth
                     const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                     const route = getRoute(tow)
 
                     return (
                       <div
                         key={tow.id}
-                        draggable
+                        draggable={!isMobile}
                         onDragStart={(e) => handleDragStart(e, tow)}
                         onClick={(e) => { 
                           e.stopPropagation()
@@ -587,7 +638,6 @@ export default function CalendarPage() {
                   </div>
                 )}
               </div>
-            </div>
           </div>
         )}
 
