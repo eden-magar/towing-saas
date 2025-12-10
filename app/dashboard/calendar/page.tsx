@@ -153,10 +153,12 @@ export default function CalendarPage() {
   const [mobileStartIndex, setMobileStartIndex] = useState(0)
   
   useEffect(() => {
-    // מתחילים מהיום הנוכחי במובייל
+    // מתחילים מהיום הנוכחי במובייל, או מיום ראשון אם זה שבוע אחר
     const todayIndex = weekDays.findIndex(d => d.isToday)
     if (todayIndex !== -1) {
       setMobileStartIndex(Math.max(0, Math.min(todayIndex, 4))) // מקסימום 4 כדי להציג 3 ימים
+    } else {
+      setMobileStartIndex(0) // שבוע אחר - מתחילים מיום ראשון
     }
   }, [weekDays])
 
