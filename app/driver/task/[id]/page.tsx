@@ -127,20 +127,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const userRef = useRef(user) // שמירת user ב-ref
   const taskRef = useRef<TaskDetailFull | null>(null) // שמירת task ב-ref
   
-  // עדכון ה-refs כשהם משתנים
-  useEffect(() => {
-    if (user) {
-      userRef.current = user
-    }
-  }, [user])
-
-  // עדכון taskRef כשה-task משתנה
-  useEffect(() => {
-    if (task) {
-      taskRef.current = task
-    }
-  }, [task])
-
   // States
   const [task, setTask] = useState<TaskDetailFull | null>(null)
   const [loading, setLoading] = useState(true)
@@ -159,6 +145,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const [showSummary, setShowSummary] = useState(false) // מודל סיכום אחרי 4 תמונות
   const [imageQueue, setImageQueue] = useState<{file: File; url: string}[]>([])
   const [showImageModal, setShowImageModal] = useState(false)
+
+  // עדכון ה-refs כשהם משתנים
+  useEffect(() => {
+    if (user) {
+      userRef.current = user
+    }
+  }, [user])
+
+  // עדכון taskRef כשה-task משתנה
+  useEffect(() => {
+    if (task) {
+      taskRef.current = task
+    }
+  }, [task])
 
   // Load task data
   useEffect(() => {
