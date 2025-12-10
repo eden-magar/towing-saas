@@ -32,7 +32,8 @@ import {
   MessageCircle,
   Map,
   Loader2,
-  Trash2
+  Trash2,
+  Check
 } from 'lucide-react'
 
 // סטטוסים מפורטים של גרירה (flow)
@@ -59,6 +60,65 @@ const photoCategories = {
   at_destination: { label: 'תמונות ביעד', icon: '📸', color: 'bg-emerald-100 text-emerald-700' },
 }
 
+// פונקציית compression לתמונות - מקטינה את גודל הקובץ
+async function compressImage(file: File, maxSizeMB: number = 1): Promise<File> {
+  return new Promise((resolve, reject) => {
+    // אם הקובץ כבר קטן מספיק, מחזירים אותו כמו שהוא
+    if (file.size <= maxSizeMB * 1024 * 1024) {
+      console.log(`Image already small enough: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+      resolve(file)
+      return
+    }
+
+    const img = new Image()
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    img.onload = () => {
+      // חישוב גודל חדש - מקסימום 1920px
+      let { width, height } = img
+      const maxDimension = 1920
+
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = (height / width) * maxDimension
+          width = maxDimension
+        } else {
+          width = (width / height) * maxDimension
+          height = maxDimension
+        }
+      }
+
+      canvas.width = width
+      canvas.height = height
+
+      // ציור התמונה על הקנבס
+      ctx?.drawImage(img, 0, 0, width, height)
+
+      // המרה ל-blob עם quality נמוך יותר
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            })
+            console.log(`Compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB -> ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`)
+            resolve(compressedFile)
+          } else {
+            reject(new Error('Failed to compress image'))
+          }
+        },
+        'image/jpeg',
+        0.7 // quality 70%
+      )
+    }
+
+    img.onerror = () => reject(new Error('Failed to load image'))
+    img.src = URL.createObjectURL(file)
+  })
+}
+
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -76,9 +136,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const [showConfirmComplete, setShowConfirmComplete] = useState(false)
   const [showPhotoPreview, setShowPhotoPreview] = useState<TowImage | null>(null)
   
-  // Photo upload states
+  // Photo upload states - NEW FLOW
   const [uploadingImage, setUploadingImage] = useState(false)
-  const [imageQueue, setImageQueue] = useState<{file: File; url: string}[]>([])
+  const [showQuickConfirm, setShowQuickConfirm] = useState(false) // אישור מהיר אחרי צילום
+  const [photosInSession, setPhotosInSession] = useState(0) // כמה תמונות צולמו בסשן הנוכחי
+  const [showSummary, setShowSummary] = useState(false) // מודל סיכום אחרי 4 תמונות
 
   // Load task data
   useEffect(() => {
@@ -115,6 +177,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     setLoading(true)
     try {
       const data = await getTaskDetail(id)
+      console.log('Task loaded:', data)
+      console.log('Images:', data?.images)
       setTask(data)
     } catch (error) {
       console.error('Error loading task:', error)
@@ -130,20 +194,25 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
     return 'after_pickup' // נשתמש ב-after_pickup בתור "תמונות ביעד"
   }
+
   // ספירת תמונות לפי קטגוריה
   const getPickupPhotosCount = () => {
-  if (!task) return 0
-  return task.images.filter(img => 
-    img.image_type === 'before_pickup'
-  ).length
-}
+    if (!task) return 0
+    return task.images.filter(img => img.image_type === 'before_pickup').length
+  }
 
   const getDestinationPhotosCount = () => {
-  if (!task) return 0
-  return task.images.filter(img => 
-    img.image_type === 'after_pickup'
-  ).length
-}
+    if (!task) return 0
+    return task.images.filter(img => img.image_type === 'after_pickup').length
+  }
+
+  // בדיקה כמה תמונות חסרות בשלב הנוכחי
+  const getMissingPhotosCount = () => {
+    if (currentFlowIndex <= 2) {
+      return Math.max(0, 4 - getPickupPhotosCount())
+    }
+    return Math.max(0, 4 - getDestinationPhotosCount())
+  }
 
   const handleStatusUpdate = async () => {
     if (!task || !user) return
@@ -245,69 +314,82 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
-  // פתיחת צילום - ישר לבחירת קבצים בלי בחירת סוג
-  const handleOpenUpload = () => {
-    setShowImageUpload(true)
-    setImageQueue([])
-    // פותח ישר את בחירת הקבצים
-    setTimeout(() => fileInputRef.current?.click(), 100)
-  }
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    const newImages = Array.from(files).map(file => ({
-      file,
-      url: URL.createObjectURL(file)
-    }))
-    
-    setImageQueue(prev => [...prev, ...newImages])
-    
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const handleAddMorePhotos = () => {
+  // ===== NEW PHOTO FLOW =====
+  
+  // פתיחת צילום - ישר למצלמה
+  const handleOpenCamera = () => {
+    setPhotosInSession(0)
     fileInputRef.current?.click()
   }
 
-  const handleRemoveFromQueue = (index: number) => {
-    setImageQueue(prev => {
-      const newQueue = [...prev]
-      URL.revokeObjectURL(newQueue[index].url)
-      newQueue.splice(index, 1)
-      return newQueue
-    })
-  }
-
-  const handleSaveAllPhotos = async () => {
-    if (imageQueue.length === 0 || !task || !user) return
+  // כשבוחרים/מצלמים תמונה - שומרים מיד!
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    if (!task || !user) {
+      console.error('No task or user')
+      alert('שגיאה: לא נמצא משתמש או משימה')
+      return
+    }
 
     setUploadingImage(true)
-    const photoType = getCurrentPhotoType()
+    setShowQuickConfirm(false)
     
+    const photoType = getCurrentPhotoType()
+    let successCount = 0
+
     try {
-      for (const img of imageQueue) {
+      for (const file of Array.from(files)) {
+        console.log(`Processing file: ${file.name}, size: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+        
+        // Compress the image
+        const compressedFile = await compressImage(file, 1)
+        
+        // Upload immediately
+        console.log('Uploading to Supabase...')
         await uploadTowImage(
           task.id,
           user.id,
           photoType,
-          img.file,
+          compressedFile,
           undefined,
           task.vehicles[0]?.id
         )
+        console.log('Upload successful!')
+        successCount++
       }
       
-      imageQueue.forEach(img => URL.revokeObjectURL(img.url))
-      setImageQueue([])
+      // עדכון מונה התמונות
+      const newSessionCount = photosInSession + successCount
+      setPhotosInSession(newSessionCount)
       
+      // טעינה מחדש של המשימה
       await loadTask()
-      handleCloseUpload()
+      
+      // בדיקה האם הגענו ל-4 תמונות
+      const currentCount = photoType === 'before_pickup' 
+        ? getPickupPhotosCount() + successCount 
+        : getDestinationPhotosCount() + successCount
+      
+      if (currentCount >= 4) {
+        // הגענו ל-4 - מציגים מודל סיכום
+        setShowSummary(true)
+      } else {
+        // עדיין לא 4 - מציגים אישור מהיר וממשיכים לצלם
+        setShowQuickConfirm(true)
+        setTimeout(() => {
+          setShowQuickConfirm(false)
+          // פותח שוב את המצלמה אוטומטית
+          fileInputRef.current?.click()
+        }, 800)
+      }
+      
     } catch (error) {
-      console.error('Error uploading images:', error)
-      alert('שגיאה בהעלאת התמונות')
+      console.error('Error uploading image:', error)
+      alert(`שגיאה בהעלאת התמונה: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setUploadingImage(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -324,10 +406,9 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleCloseUpload = () => {
-    setShowImageUpload(false)
-    imageQueue.forEach(img => URL.revokeObjectURL(img.url))
-    setImageQueue([])
+  const handleCloseSummary = () => {
+    setShowSummary(false)
+    setPhotosInSession(0)
   }
 
   const getStatusColor = (index: number) => {
@@ -372,12 +453,8 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const vehicle = task.vehicles[0]
 
   // חלוקת תמונות ל-2 קטגוריות
-  const pickupImages = task.images.filter(img => 
-  img.image_type === 'before_pickup'
-)
-  const destinationImages = task.images.filter(img => 
-  img.image_type === 'after_pickup'
-)
+  const pickupImages = task.images.filter(img => img.image_type === 'before_pickup')
+  const destinationImages = task.images.filter(img => img.image_type === 'after_pickup')
 
   return (
     <div className="pb-32">
@@ -622,10 +699,15 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-gray-800">תמונות</h3>
             <button 
-              onClick={handleOpenUpload}
-              className="flex items-center gap-1 text-[#33d4ff] text-sm font-medium"
+              onClick={handleOpenCamera}
+              disabled={uploadingImage}
+              className="flex items-center gap-1 text-[#33d4ff] text-sm font-medium disabled:opacity-50"
             >
-              <Camera size={16} />
+              {uploadingImage ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Camera size={16} />
+              )}
               הוסף תמונה
             </button>
           </div>
@@ -635,10 +717,11 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               <ImageIcon size={32} className="text-gray-300 mx-auto mb-2" />
               <p className="text-gray-500 text-sm">אין תמונות עדיין</p>
               <button 
-                onClick={handleOpenUpload}
-                className="mt-3 text-[#33d4ff] text-sm font-medium"
+                onClick={handleOpenCamera}
+                disabled={uploadingImage}
+                className="mt-3 text-[#33d4ff] text-sm font-medium disabled:opacity-50"
               >
-                צלם או העלה תמונה
+                {uploadingImage ? 'מעלה...' : 'צלם או העלה תמונה'}
               </button>
             </div>
           ) : (
@@ -715,12 +798,19 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
               
               {/* כפתור הוספה */}
               <button 
-                onClick={handleOpenUpload}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 hover:border-[#33d4ff] hover:text-[#33d4ff]"
+                onClick={handleOpenCamera}
+                disabled={uploadingImage}
+                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center gap-2 text-gray-500 hover:border-[#33d4ff] hover:text-[#33d4ff] disabled:opacity-50"
               >
-                <Camera size={18} />
+                {uploadingImage ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Camera size={18} />
+                )}
                 <span className="text-sm font-medium">
-                  {currentFlowIndex <= 2 ? 'צלם תמונות באיסוף' : 'צלם תמונות ביעד'}
+                  {uploadingImage ? 'מעלה תמונה...' : 
+                   currentFlowIndex <= 2 ? `צלם תמונות באיסוף (${4 - pickupImages.length} נותרו)` : 
+                   `צלם תמונות ביעד (${4 - destinationImages.length} נותרו)`}
                 </span>
               </button>
             </div>
@@ -774,92 +864,69 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* Hidden file input */}
+      {/* Hidden file input - without capture for better compatibility */}
       <input 
         type="file" 
         ref={fileInputRef}
         accept="image/*"
         capture="environment"
-        multiple
         onChange={handleFileSelect}
         className="hidden"
       />
 
-      {/* Image Upload Modal - פשוט וישיר */}
-      {showImageUpload && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-          <div className="bg-white w-full rounded-t-2xl overflow-hidden max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <h3 className="font-bold text-gray-800">
-                  {currentFlowIndex <= 2 ? '📷 תמונות באיסוף' : '📸 תמונות ביעד'}
-                </h3>
-                {imageQueue.length > 0 && (
-                  <span className="bg-[#33d4ff] text-white text-xs px-2 py-1 rounded-full">
-                    {imageQueue.length} תמונות
-                  </span>
-                )}
+      {/* Quick Confirm Toast - אישור מהיר אחרי צילום */}
+      {showQuickConfirm && (
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+          <div className="bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse">
+            <Check size={24} />
+            <span className="font-bold">תמונה נשמרה!</span>
+          </div>
+        </div>
+      )}
+
+      {/* Uploading Overlay */}
+      {uploadingImage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
+            <Loader2 size={40} className="animate-spin text-[#33d4ff]" />
+            <p className="font-medium text-gray-700">מעלה תמונה...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Modal - אחרי 4 תמונות */}
+      {showSummary && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 size={32} className="text-emerald-600" />
               </div>
-              <button onClick={handleCloseUpload} className="p-2 hover:bg-gray-100 rounded-lg">
-                <X size={20} className="text-gray-500" />
-              </button>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                {currentFlowIndex <= 2 ? '📷 תמונות האיסוף הושלמו!' : '📸 תמונות היעד הושלמו!'}
+              </h3>
+              <p className="text-gray-600">
+                {currentFlowIndex <= 2 
+                  ? `צולמו ${getPickupPhotosCount()} תמונות באיסוף`
+                  : `צולמו ${getDestinationPhotosCount()} תמונות ביעד`}
+              </p>
+              
+              {/* תצוגה מקדימה של התמונות */}
+              <div className="grid grid-cols-4 gap-2 mt-4">
+                {(currentFlowIndex <= 2 ? pickupImages : destinationImages).slice(-4).map((img) => (
+                  <div key={img.id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    <img src={img.image_url} className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              {imageQueue.length === 0 ? (
-                <div className="text-center py-8">
-                  <Camera size={48} className="text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 mb-4">לחץ לצילום או בחירת תמונות</p>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-6 py-3 bg-[#33d4ff] text-white rounded-xl font-medium"
-                  >
-                    צלם / בחר תמונות
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="text-gray-600 mb-3">{imageQueue.length} תמונות מוכנות להעלאה</p>
-                  
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    {imageQueue.map((img, idx) => (
-                      <div key={idx} className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden">
-                        <img src={img.url} className="w-full h-full object-cover" />
-                        <button
-                          onClick={() => handleRemoveFromQueue(idx)}
-                          className="absolute top-2 left-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleAddMorePhotos}
-                      className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium flex items-center justify-center gap-2"
-                    >
-                      <Camera size={18} />
-                      צלם עוד
-                    </button>
-                    <button
-                      onClick={handleSaveAllPhotos}
-                      disabled={uploadingImage}
-                      className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {uploadingImage ? (
-                        <Loader2 size={18} className="animate-spin" />
-                      ) : (
-                        <>
-                          <CheckCircle2 size={18} />
-                          שמור הכל
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </>
-              )}
+            <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={handleCloseSummary}
+                className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-bold"
+              >
+                אישור
+              </button>
             </div>
           </div>
         </div>
@@ -870,7 +937,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
           <div className="flex items-center justify-between p-4">
             <div className="text-white text-sm">
-              {showPhotoPreview.image_type === 'before_pickup' || showPhotoPreview.image_type === 'after_pickup' 
+              {showPhotoPreview.image_type === 'before_pickup' 
                 ? '📷 תמונה באיסוף' 
                 : '📸 תמונה ביעד'}
             </div>
