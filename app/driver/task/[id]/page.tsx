@@ -134,6 +134,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [user])
 
+  // עדכון taskRef כשה-task משתנה
+  useEffect(() => {
+    if (task) {
+      taskRef.current = task
+    }
+  }, [task])
+
   // States
   const [task, setTask] = useState<TaskDetailFull | null>(null)
   const [loading, setLoading] = useState(true)
@@ -219,15 +226,17 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     return 'after_pickup' // נשתמש ב-after_pickup בתור "תמונות ביעד"
   }
 
-  // ספירת תמונות לפי קטגוריה
+  // ספירת תמונות לפי קטגוריה - משתמשים גם ב-ref כ-fallback
   const getPickupPhotosCount = () => {
-    if (!task) return 0
-    return task.images.filter(img => img.image_type === 'before_pickup').length
+    const currentTask = task || taskRef.current
+    if (!currentTask) return 0
+    return currentTask.images.filter(img => img.image_type === 'before_pickup').length
   }
 
   const getDestinationPhotosCount = () => {
-    if (!task) return 0
-    return task.images.filter(img => img.image_type === 'after_pickup').length
+    const currentTask = task || taskRef.current
+    if (!currentTask) return 0
+    return currentTask.images.filter(img => img.image_type === 'after_pickup').length
   }
 
   // בדיקה כמה תמונות חסרות בשלב הנוכחי
@@ -450,10 +459,14 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       setImageQueue([])
       setPhotosInSession(0)
       setShowImageModal(false)
-      setShowSummary(true)
       
-      // טעינה מחדש
+      // טעינה מחדש - וחיכוי שהנתונים יתעדכנו
       await loadTask()
+      
+      // המתנה קצרה לעדכון ה-state
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      setShowSummary(true)
       
     } catch (error) {
       console.error('Error uploading images:', error)
