@@ -165,23 +165,25 @@ export default function CalendarPage() {
 
   // ניווט יום במובייל
   const navigateMobileDay = (direction: 'prev' | 'next') => {
-    if (direction === 'next') {
-      if (mobileDayIndex < 6) {
-        setMobileDayIndex(mobileDayIndex + 1)
+    setMobileDayIndex(currentIndex => {
+      if (direction === 'next') {
+        if (currentIndex < 6) {
+          return currentIndex + 1
+        } else {
+          // עבר לשבוע הבא
+          navigateWeek('next')
+          return 0
+        }
       } else {
-        // עבר לשבוע הבא
-        navigateWeek('next')
-        setMobileDayIndex(0)
+        if (currentIndex > 0) {
+          return currentIndex - 1
+        } else {
+          // עבר לשבוע הקודם
+          navigateWeek('prev')
+          return 6
+        }
       }
-    } else {
-      if (mobileDayIndex > 0) {
-        setMobileDayIndex(mobileDayIndex - 1)
-      } else {
-        // עבר לשבוע הקודם
-        navigateWeek('prev')
-        setMobileDayIndex(6)
-      }
-    }
+    })
   }
 
   const displayedDays = useMemo(() => {
@@ -413,7 +415,7 @@ export default function CalendarPage() {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => navigateWeek('prev')}
-              className="p-2 hover:bg-gray-100 rounded-lg"
+              className="hidden sm:block p-2 hover:bg-gray-100 rounded-lg"
             >
               <ChevronRight size={20} className="text-gray-600" />
             </button>
@@ -422,7 +424,7 @@ export default function CalendarPage() {
             </span>
             <button 
               onClick={() => navigateWeek('next')}
-              className="p-2 hover:bg-gray-100 rounded-lg"
+              className="hidden sm:block p-2 hover:bg-gray-100 rounded-lg"
             >
               <ChevronLeft size={20} className="text-gray-600" />
             </button>
