@@ -413,21 +413,46 @@ export default function CalendarPage() {
         {/* Navigation Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
+            {/* Desktop: week navigation */}
             <button 
               onClick={() => navigateWeek('prev')}
               className="hidden sm:block p-2 hover:bg-gray-100 rounded-lg"
             >
               <ChevronRight size={20} className="text-gray-600" />
             </button>
-            <span className="text-base sm:text-lg font-medium text-gray-700 min-w-[120px] text-center">
+            
+            {/* Mobile: day navigation */}
+            <button 
+              onClick={() => navigateMobileDay('prev')}
+              className="sm:hidden p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <ChevronRight size={20} className="text-gray-600" />
+            </button>
+            
+            {/* Desktop: month/year, Mobile: day name and date */}
+            <span className="hidden sm:block text-base sm:text-lg font-medium text-gray-700 min-w-[120px] text-center">
               {getMonthYear()}
             </span>
+            <span className="sm:hidden text-base font-medium text-gray-700 min-w-[100px] text-center">
+              {weekDays[mobileDayIndex]?.day} {weekDays[mobileDayIndex]?.date}/{currentWeekStart.getMonth() + 1}
+            </span>
+            
+            {/* Desktop: week navigation */}
             <button 
               onClick={() => navigateWeek('next')}
               className="hidden sm:block p-2 hover:bg-gray-100 rounded-lg"
             >
               <ChevronLeft size={20} className="text-gray-600" />
             </button>
+            
+            {/* Mobile: day navigation */}
+            <button 
+              onClick={() => navigateMobileDay('next')}
+              className="sm:hidden p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <ChevronLeft size={20} className="text-gray-600" />
+            </button>
+            
             <button 
               onClick={goToToday}
               className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 font-medium"
@@ -516,32 +541,6 @@ export default function CalendarPage() {
         {/* Week View */}
         {view === 'week' && (
           <div>
-            {/* Mobile Day Navigation */}
-            {isMobile && (
-              <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
-                <button
-                  onClick={() => navigateMobileDay('prev')}
-                  className="p-2 rounded-lg hover:bg-gray-200"
-                >
-                  <ChevronRight size={20} />
-                </button>
-                <div className="text-center">
-                  <span className="font-bold text-lg text-gray-800">
-                    {displayedDays[0]?.day}
-                  </span>
-                  <span className="text-gray-500 mr-2">
-                    {displayedDays[0]?.date}/{(currentWeekStart.getMonth() + 1)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => navigateMobileDay('next')}
-                  className="p-2 rounded-lg hover:bg-gray-200"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-              </div>
-            )}
-            
             {/* Days Header - Desktop only */}
             {!isMobile && (
               <div className="grid grid-cols-8 border-b border-gray-200 sticky top-0 bg-white z-20">
