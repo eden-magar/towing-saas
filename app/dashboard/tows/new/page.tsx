@@ -681,9 +681,9 @@ function NewTowForm() {
     }
     
     const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
-    const basePrice = basePriceList[priceField] || 180
-    const pricePerKm = basePriceList.price_per_km || 12
-    const minimumPrice = basePriceList.minimum_price || 250
+    const basePrice = basePriceList?.[priceField] || 180
+    const pricePerKm = basePriceList?.price_per_km || 12
+    const minimumPrice = basePriceList?.minimum_price || 250
     
     // שימוש במרחק אמיתי אם יש, אחרת 0
     const distanceKm = distance?.distanceKm || 0
