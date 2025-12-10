@@ -29,6 +29,9 @@ interface TimeSurchargeLocal {
   name: string
   label: string
   time_description: string
+  time_start: string
+  time_end: string
+  day_type: string  // 'all' | 'saturday' | 'friday' | 'holiday'
   surcharge_percent: number
   is_active: boolean
 }
@@ -127,10 +130,10 @@ export default function PriceListsPage() {
 
   // Surcharges state
   const [timeSurcharges, setTimeSurcharges] = useState<TimeSurchargeLocal[]>([
-    { id: 'evening', name: 'evening', label: 'שעות ערב', time_description: '15:00-19:00', surcharge_percent: 25, is_active: true },
-    { id: 'night', name: 'night', label: 'שעות לילה', time_description: '19:00-07:00', surcharge_percent: 50, is_active: true },
-    { id: 'saturday', name: 'saturday', label: 'שבת', time_description: 'כל היום', surcharge_percent: 50, is_active: true },
-    { id: 'holiday', name: 'holiday', label: 'חג', time_description: 'כל היום', surcharge_percent: 50, is_active: true },
+    { id: 'evening', name: 'evening', label: 'שעות ערב', time_description: '15:00-19:00', time_start: '15:00', time_end: '19:00', day_type: 'all', surcharge_percent: 25, is_active: true },
+    { id: 'night', name: 'night', label: 'שעות לילה', time_description: '19:00-07:00', time_start: '19:00', time_end: '07:00', day_type: 'all', surcharge_percent: 50, is_active: true },
+    { id: 'saturday', name: 'saturday', label: 'שבת', time_description: 'כל היום', time_start: '', time_end: '', day_type: 'saturday', surcharge_percent: 50, is_active: true },
+    { id: 'holiday', name: 'holiday', label: 'חג', time_description: 'כל היום', time_start: '', time_end: '', day_type: 'holiday', surcharge_percent: 50, is_active: true },
   ])
 
   const [locationSurcharges, setLocationSurcharges] = useState<LocationSurchargeLocal[]>([
@@ -214,6 +217,9 @@ export default function PriceListsPage() {
           name: t.name,
           label: t.label,
           time_description: t.time_description || '',
+          time_start: t.time_start || '',
+          time_end: t.time_end || '',
+          day_type: t.day_type || 'all',
           surcharge_percent: t.surcharge_percent,
           is_active: t.is_active
         })))
@@ -334,6 +340,9 @@ export default function PriceListsPage() {
         name: t.name,
         label: t.label,
         time_description: t.time_description,
+        time_start: t.time_start || null,
+        time_end: t.time_end || null,
+        day_type: t.day_type,
         surcharge_percent: t.surcharge_percent,
         is_active: t.is_active
       })))
@@ -369,6 +378,27 @@ export default function PriceListsPage() {
 
   const updateTimeSurcharge = (id: string, updates: Partial<TimeSurchargeLocal>) => {
     setTimeSurcharges(timeSurcharges.map(t => t.id === id ? { ...t, ...updates } : t))
+    setHasChanges(true)
+  }
+
+  const addTimeSurcharge = () => {
+    const newId = `new_${Date.now()}`
+    setTimeSurcharges([...timeSurcharges, { 
+      id: newId, 
+      name: newId,
+      label: 'תוספת חדשה', 
+      time_description: '',
+      time_start: '18:00',
+      time_end: '22:00',
+      day_type: 'all',
+      surcharge_percent: 0, 
+      is_active: true 
+    }])
+    setHasChanges(true)
+  }
+
+  const removeTimeSurcharge = (id: string) => {
+    setTimeSurcharges(timeSurcharges.filter(t => t.id !== id))
     setHasChanges(true)
   }
 
@@ -898,35 +928,118 @@ export default function PriceListsPage() {
                 <Clock size={22} className="text-gray-600" />
                 <h3 className="font-bold text-gray-800 text-lg">תוספות זמן</h3>
               </div>
-              <p className="text-gray-500 mt-1">תוספות לפי שעה ויום</p>
+              <p className="text-gray-500 mt-1">תוספות לפי שעה ויום - מופעלות אוטומטית בהזמנה חדשה</p>
             </div>
             <div className="p-4 sm:p-5 space-y-4">
               {timeSurcharges.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-100 rounded-xl border border-gray-200">
-                  <input
-                    type="checkbox"
-                    checked={item.is_active}
-                    onChange={(e) => updateTimeSurcharge(item.id, { is_active: e.target.checked })}
-                    className="w-5 h-5 text-[#33d4ff] rounded flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-700">{item.label}</p>
-                    <p className="text-sm text-gray-500">{item.time_description}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 hidden sm:inline">+</span>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={item.surcharge_percent}
-                        onChange={(e) => updateTimeSurcharge(item.id, { surcharge_percent: Number(e.target.value) })}
-                        className="w-20 sm:w-24 pr-3 pl-8 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium"
-                      />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                <div key={item.id} className="p-4 bg-gray-100 rounded-xl border border-gray-200 space-y-3">
+                  {/* Row 1: Active toggle, Label, Percent */}
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <input
+                      type="checkbox"
+                      checked={item.is_active}
+                      onChange={(e) => updateTimeSurcharge(item.id, { is_active: e.target.checked })}
+                      className="w-5 h-5 text-[#33d4ff] rounded flex-shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(e) => {
+                        updateTimeSurcharge(item.id, { label: e.target.value })
+                        setHasChanges(true)
+                      }}
+                      placeholder="שם התוספת"
+                      className="flex-1 min-w-0 px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium"
+                    />
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 hidden sm:inline">+</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={item.surcharge_percent}
+                          onChange={(e) => updateTimeSurcharge(item.id, { surcharge_percent: Number(e.target.value) })}
+                          className="w-20 sm:w-24 pr-3 pl-8 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium"
+                        />
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => removeTimeSurcharge(item.id)}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                  
+                  {/* Row 2: Day Type and Time Range */}
+                  <div className="flex flex-wrap items-center gap-3 pr-8">
+                    <select
+                      value={item.day_type}
+                      onChange={(e) => {
+                        const newDayType = e.target.value
+                        let newTimeDesc = item.time_description
+                        if (newDayType === 'saturday') newTimeDesc = 'כל יום שבת'
+                        else if (newDayType === 'friday') newTimeDesc = 'יום שישי'
+                        else if (newDayType === 'holiday') newTimeDesc = 'ימי חג'
+                        updateTimeSurcharge(item.id, { 
+                          day_type: newDayType,
+                          time_description: newTimeDesc
+                        })
+                        setHasChanges(true)
+                      }}
+                      className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white text-sm"
+                    >
+                      <option value="all">כל הימים</option>
+                      <option value="saturday">שבת</option>
+                      <option value="friday">שישי</option>
+                      <option value="holiday">חג</option>
+                    </select>
+                    
+                    {item.day_type === 'all' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">משעה</span>
+                        <input
+                          type="time"
+                          value={item.time_start}
+                          onChange={(e) => {
+                            const newStart = e.target.value
+                            const desc = `${newStart}-${item.time_end}`
+                            updateTimeSurcharge(item.id, { time_start: newStart, time_description: desc })
+                            setHasChanges(true)
+                          }}
+                          className="px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white text-sm"
+                        />
+                        <span className="text-sm text-gray-500">עד</span>
+                        <input
+                          type="time"
+                          value={item.time_end}
+                          onChange={(e) => {
+                            const newEnd = e.target.value
+                            const desc = `${item.time_start}-${newEnd}`
+                            updateTimeSurcharge(item.id, { time_end: newEnd, time_description: desc })
+                            setHasChanges(true)
+                          }}
+                          className="px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white text-sm"
+                        />
+                      </div>
+                    )}
+                    
+                    {item.day_type !== 'all' && (
+                      <span className="text-sm text-gray-500 bg-gray-200 px-2 py-1 rounded">
+                        {item.time_description}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
+
+              <button
+                onClick={addTimeSurcharge}
+                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#33d4ff] hover:text-[#33d4ff] transition-colors flex items-center justify-center gap-2"
+              >
+                <Plus size={20} />
+                הוסף תוספת זמן
+              </button>
             </div>
           </div>
 
