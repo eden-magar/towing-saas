@@ -107,15 +107,6 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
   })
 }
 
-// קישורי ניווט
-const getWazeLink = (addr: AddressData) => addr.lat && addr.lng 
-  ? `https://waze.com/ul?ll=${addr.lat},${addr.lng}&navigate=yes` 
-  : `https://waze.com/ul?q=${encodeURIComponent(addr.address)}&navigate=yes`
-
-const getGoogleMapsLink = (addr: AddressData) => addr.lat && addr.lng 
-  ? `https://www.google.com/maps/dir/?api=1&destination=${addr.lat},${addr.lng}` 
-  : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr.address)}`
-
 // ==================== AddressInput Component ====================
 function AddressInput({ 
   value, 
@@ -477,29 +468,6 @@ function DistanceDisplay({
             <div className="text-xs text-gray-500">מחיר משוער</div>
           </div>
         </div>
-        
-        {destination && (destination.lat || destination.address) && (
-          <div className="flex gap-2 pt-3 border-t border-blue-200">
-            <a
-              href={getWazeLink(destination)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-[#33ccff] text-white rounded-lg text-sm font-medium hover:bg-[#28b8e8]"
-            >
-              <ExternalLink size={14} />
-              Waze
-            </a>
-            <a
-              href={getGoogleMapsLink(destination)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600"
-            >
-              <ExternalLink size={14} />
-              Google Maps
-            </a>
-          </div>
-        )}
       </div>
     </div>
   )
@@ -705,8 +673,6 @@ function NewTowForm() {
 
   // חישוב מחיר מומלץ
   const calculateRecommendedPrice = () => {
-    if (!basePriceList) return 0
-    
     const vehicleTypeMap: Record<string, string> = {
       'private': 'base_price_private',
       'motorcycle': 'base_price_motorcycle',
