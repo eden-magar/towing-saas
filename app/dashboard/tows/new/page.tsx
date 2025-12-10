@@ -546,6 +546,8 @@ function NewTowForm() {
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
   const [fromBase, setFromBase] = useState(false)
   const [toTerritories, setToTerritories] = useState(false)
+  const [isEvening, setIsEvening] = useState(false)
+  const [isNight, setIsNight] = useState(false)
   
   // מודאל הנחת סיכה
   const [pinDropModal, setPinDropModal] = useState<{
@@ -673,32 +675,44 @@ function NewTowForm() {
 
   // חישוב מחיר מומלץ
   const calculateRecommendedPrice = () => {
-    const vehicleTypeMap: Record<string, string> = {
-      'private': 'base_price_private',
-      'motorcycle': 'base_price_motorcycle',
-      'heavy': 'base_price_heavy',
-      'machinery': 'base_price_machinery'
-    }
-    
-    const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
-    const basePrice = basePriceList?.[priceField] || 180
-    const pricePerKm = basePriceList?.price_per_km || 12
-    const minimumPrice = basePriceList?.minimum_price || 250
-    
-    // שימוש במרחק אמיתי אם יש, אחרת 0
-    const distanceKm = distance?.distanceKm || 0
-    let total = basePrice + (distanceKm * pricePerKm)
-    
-    if (toTerritories) {
-      total *= 1.25
-    }
-    
-    if (selectedCustomerPricing && selectedCustomerPricing.discount_percent) {
-      total = total * (1 - selectedCustomerPricing.discount_percent / 100)
-    }
-    
-    return Math.max(Math.round(total), minimumPrice)
+  const vehicleTypeMap: Record<string, string> = {
+    'private': 'base_price_private',
+    'motorcycle': 'base_price_motorcycle',
+    'heavy': 'base_price_heavy',
+    'machinery': 'base_price_machinery'
   }
+  
+  const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
+  const basePrice = basePriceList?.[priceField] || 180
+  const pricePerKm = basePriceList?.price_per_km || 12
+  const minimumPrice = basePriceList?.minimum_price || 250
+  
+  const distanceKm = distance?.distanceKm || 0
+  const distancePrice = distanceKm * pricePerKm
+  
+  // סכום בסיס + מרחק
+  let subtotal = basePrice + distancePrice
+  
+  // תוספות באחוזים
+  let percentageAdditions = 0
+  if (toTerritories) percentageAdditions += subtotal * 0.25
+  if (isEvening) percentageAdditions += subtotal * 0.15
+  if (isNight) percentageAdditions += subtotal * 0.25
+  
+  const beforeVat = subtotal + percentageAdditions
+  
+  // הנחת לקוח (אם יש)
+  let afterDiscount = beforeVat
+  if (selectedCustomerPricing?.discount_percent) {
+    afterDiscount = beforeVat * (1 - selectedCustomerPricing.discount_percent / 100)
+  }
+  
+  // מע"מ
+  const vat = afterDiscount * 0.17
+  const total = afterDiscount + vat
+  
+  return Math.max(Math.round(total), minimumPrice)
+}
 
   // חישוב מחיר סופי
   const calculateFinalPrice = () => {
@@ -1127,18 +1141,47 @@ function NewTowForm() {
 
   // רכיב סיכום מחיר (סיידבר)
   const PriceSummary = ({ isMobile = false }: { isMobile?: boolean }) => {
-    if (!towType) {
-      return (
-        <div className={`text-center ${isMobile ? 'py-4' : 'py-8'} text-gray-400`}>
-          {!isMobile && (
-            <div className="w-12 h-12 mx-auto mb-3 opacity-50 bg-gray-100 rounded-xl flex items-center justify-center">
-              <FileText size={24} />
-            </div>
-          )}
-          <p className="text-sm">בחר סוג גרירה לחישוב מחיר</p>
-        </div>
-      )
-    }
+  if (!towType) {
+    return (
+      <div className={`text-center ${isMobile ? 'py-4' : 'py-8'} text-gray-400`}>
+        {!isMobile && (
+          <div className="w-12 h-12 mx-auto mb-3 opacity-50 bg-gray-100 rounded-xl flex items-center justify-center">
+            <FileText size={24} />
+          </div>
+        )}
+        <p className="text-sm">בחר סוג גרירה לחישוב מחיר</p>
+      </div>
+    )
+  }
+
+  // חישוב מפורט
+  const vehicleTypeMap: Record<string, string> = {
+    'private': 'base_price_private',
+    'motorcycle': 'base_price_motorcycle',
+    'heavy': 'base_price_heavy',
+    'machinery': 'base_price_machinery'
+  }
+  const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
+  const basePrice = basePriceList?.[priceField] || 180
+  const pricePerKm = basePriceList?.price_per_km || 12
+  const distanceKm = distance?.distanceKm || 0
+  const distancePrice = Math.round(distanceKm * pricePerKm)
+  
+  const subtotal = basePrice + distancePrice
+  
+  const territoriesAmount = toTerritories ? Math.round(subtotal * 0.25) : 0
+  const eveningAmount = isEvening ? Math.round(subtotal * 0.15) : 0
+  const nightAmount = isNight ? Math.round(subtotal * 0.25) : 0
+  
+  const beforeDiscount = subtotal + territoriesAmount + eveningAmount + nightAmount
+  
+  const discountAmount = selectedCustomerPricing?.discount_percent 
+    ? Math.round(beforeDiscount * selectedCustomerPricing.discount_percent / 100) 
+    : 0
+  
+  const beforeVat = beforeDiscount - discountAmount
+  const vatAmount = Math.round(beforeVat * 0.17)
+  const total = beforeVat + vatAmount
 
     return (
       <div className="space-y-3 sm:space-y-4">
@@ -1147,20 +1190,42 @@ function NewTowForm() {
             <>
               <div className="flex justify-between">
                 <span className="text-gray-500">מחיר בסיס</span>
-                <span className="text-gray-700">₪{basePriceList?.[`base_price_${vehicleType || 'private'}`] || 180}</span>
+                <span className="text-gray-700">₪{basePrice}</span>
               </div>
-              {distance && (
+              {distanceKm > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">מרחק: {distance.distanceKm} ק״מ</span>
-                  <span className="text-gray-700">₪{Math.round(distance.distanceKm * (basePriceList?.price_per_km || 12))}</span>
+                  <span className="text-gray-500">מרחק ({distanceKm} ק״מ × ₪{pricePerKm})</span>
+                  <span className="text-gray-700">₪{distancePrice}</span>
                 </div>
               )}
               {toTerritories && (
                 <div className="flex justify-between text-amber-600">
                   <span>שטחים (+25%)</span>
-                  <span>+25%</span>
+                  <span>₪{territoriesAmount}</span>
                 </div>
               )}
+              {isEvening && (
+                <div className="flex justify-between text-orange-600">
+                  <span>תוספת ערב (+15%)</span>
+                  <span>₪{eveningAmount}</span>
+                </div>
+              )}
+              {isNight && (
+                <div className="flex justify-between text-purple-600">
+                  <span>תוספת לילה (+25%)</span>
+                  <span>₪{nightAmount}</span>
+                </div>
+              )}
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
+                  <span>-₪{discountAmount}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-gray-100 pt-2">
+                <span className="text-gray-500">מע״מ (17%)</span>
+                <span className="text-gray-700">₪{vatAmount}</span>
+              </div>
             </>
           )}
 
@@ -1184,20 +1249,13 @@ function NewTowForm() {
               <span className="text-gray-700">₪{customPrice}</span>
             </div>
           )}
-
-          {selectedCustomerPricing && selectedCustomerPricing.discount_percent > 0 && priceMode === 'fixed' && (
-            <div className="flex justify-between text-emerald-600">
-              <span>הנחת לקוח</span>
-              <span>-{selectedCustomerPricing.discount_percent}%</span>
-            </div>
-          )}
         </div>
 
         <div className="border-t border-gray-200 pt-3">
           <div className="flex justify-between items-center">
-            <span className="font-bold text-gray-800">סה״כ</span>
+            <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
             <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-              ₪{finalPrice || 0}
+              ₪{priceMode === 'recommended' ? total : finalPrice}
             </span>
           </div>
         </div>
@@ -1798,13 +1856,19 @@ function NewTowForm() {
                   />
 
                   <div className="flex flex-wrap gap-2 pt-2">
-                    <button onClick={() => setFromBase(!fromBase)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${fromBase ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                      יציאה מהבסיס
-                    </button>
-                    <button onClick={() => setToTerritories(!toTerritories)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${toTerritories ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                      שטחים (+25%)
-                    </button>
-                  </div>
+                  <button onClick={() => setFromBase(!fromBase)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${fromBase ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    יציאה מהבסיס
+                  </button>
+                  <button onClick={() => setToTerritories(!toTerritories)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${toTerritories ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    שטחים (+25%)
+                  </button>
+                  <button onClick={() => setIsEvening(!isEvening)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${isEvening ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    ערב (+15%)
+                  </button>
+                  <button onClick={() => setIsNight(!isNight)} className={`px-4 py-2 rounded-lg text-sm transition-colors ${isNight ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    לילה (+25%)
+                  </button>
+                </div>
                 </div>
               </div>
             )}
