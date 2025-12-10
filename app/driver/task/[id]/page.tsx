@@ -177,8 +177,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     setLoading(true)
     try {
       const data = await getTaskDetail(id)
-      console.log('Task loaded:', data)
-      console.log('Images:', data?.images)
+      console.log('=== Task loaded ===')
+      console.log('Total images:', data?.images?.length)
+      console.log('All images:', data?.images)
+      
+      // ספירה ידנית
+      const pickupCount = data?.images?.filter(img => img.image_type === 'before_pickup').length || 0
+      const destCount = data?.images?.filter(img => img.image_type === 'after_pickup').length || 0
+      console.log('Pickup photos (before_pickup):', pickupCount)
+      console.log('Destination photos (after_pickup):', destCount)
+      
+      // בדיקה אם יש image_types אחרים
+      const types = data?.images?.map(img => img.image_type) || []
+      console.log('All image types:', [...new Set(types)])
+      
       setTask(data)
     } catch (error) {
       console.error('Error loading task:', error)
@@ -220,6 +232,14 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     const nextIndex = currentFlowIndex + 1
     if (nextIndex >= statusFlow.length) return
     
+    // DEBUG
+    console.log('=== handleStatusUpdate ===')
+    console.log('currentFlowIndex:', currentFlowIndex)
+    console.log('nextIndex:', nextIndex)
+    console.log('task.images:', task.images)
+    console.log('getPickupPhotosCount():', getPickupPhotosCount())
+    console.log('getDestinationPhotosCount():', getDestinationPhotosCount())
+    
     // אם זה סיום משימה - מראים מודל אישור
     if (nextIndex === 5) {
       // בדיקת 4 תמונות ביעד לפני סיום
@@ -233,6 +253,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
     // בדיקת 4 תמונות באיסוף לפני יציאה ליעד (מ-arrived_pickup ל-on_way_dropoff)
     if (currentFlowIndex === 2 && getPickupPhotosCount() < 4) {
+      console.log('BLOCKED: Not enough pickup photos')
       alert(`יש לצלם לפחות 4 תמונות באיסוף לפני יציאה ליעד.\nכרגע יש ${getPickupPhotosCount()} תמונות.`)
       return
     }

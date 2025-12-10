@@ -297,9 +297,23 @@ export async function createTow(input: CreateTowInput) {
     }
   }
 
+  // בדיקה אם יש delivery leg - אם לא, ניצור אוטומטית
+  let legsToCreate = [...input.legs]
+  const hasDelivery = legsToCreate.some(l => l.legType === 'delivery')
+  const pickupLeg = legsToCreate.find(l => l.legType === 'pickup')
+  
+  if (!hasDelivery && pickupLeg) {
+    // יצירת delivery leg אוטומטית עם היעד של ה-pickup
+    legsToCreate.push({
+      legType: 'delivery',
+      fromAddress: pickupLeg.toAddress,
+      toAddress: pickupLeg.toAddress
+    })
+  }
+
   // יצירת רגליים
-  for (let i = 0; i < input.legs.length; i++) {
-    const leg = input.legs[i]
+  for (let i = 0; i < legsToCreate.length; i++) {
+    const leg = legsToCreate[i]
     const towVehicleId = leg.towVehicleIndex !== undefined ? vehicleIds[leg.towVehicleIndex] : null
 
     const { error: legError } = await supabase
