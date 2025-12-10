@@ -124,6 +124,15 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   const router = useRouter()
   const { user } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const userRef = useRef(user) // שמירת user ב-ref
+  const taskRef = useRef<TaskDetailFull | null>(null) // שמירת task ב-ref
+  
+  // עדכון ה-refs כשהם משתנים
+  useEffect(() => {
+    if (user) {
+      userRef.current = user
+    }
+  }, [user])
 
   // States
   const [task, setTask] = useState<TaskDetailFull | null>(null)
@@ -194,6 +203,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       console.log('All image types:', [...new Set(types)])
       
       setTask(data)
+      taskRef.current = data // שמירה ב-ref
     } catch (error) {
       console.error('Error loading task:', error)
     } finally {
@@ -391,8 +401,27 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   // העלאת כל התמונות
   const handleSaveAllPhotos = async () => {
     if (imageQueue.length === 0) return
-    if (!task || !user) {
-      alert('שגיאה: לא נמצא משתמש או משימה. נסה לרענן את הדף.')
+    
+    // בדיקת user ו-task עם logging
+    console.log('=== handleSaveAllPhotos ===')
+    console.log('user:', user)
+    console.log('userRef.current:', userRef.current)
+    console.log('task:', task)
+    console.log('taskRef.current:', taskRef.current)
+    
+    // נשתמש ב-refs כ-fallback
+    const currentTask = task || taskRef.current
+    const currentUser = user || userRef.current
+    
+    if (!currentTask) {
+      alert('שגיאה: לא נמצאה משימה. נסה לרענן את הדף.')
+      return
+    }
+    
+    if (!currentUser) {
+      // ננסה לרענן את הדף אוטומטית
+      alert('שגיאה: לא נמצא משתמש. הדף יתרענן עכשיו.')
+      window.location.reload()
       return
     }
 
@@ -406,12 +435,12 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         
         console.log('Uploading to Supabase...')
         await uploadTowImage(
-          task.id,
-          user.id,
+          currentTask.id,
+          currentUser.id,
           photoType,
           compressedFile,
           undefined,
-          task.vehicles[0]?.id
+          currentTask.vehicles[0]?.id
         )
         console.log('Upload successful!')
       }
