@@ -66,6 +66,11 @@ export default function CalendarPage() {
   
   const [selectedTow, setSelectedTow] = useState<TowWithDetails | null>(null)
   const [draggedTow, setDraggedTow] = useState<TowWithDetails | null>(null)
+  
+  // מודל בחירת נהג
+  const [showDriverModal, setShowDriverModal] = useState(false)
+  const [pendingSlot, setPendingSlot] = useState<{ date: Date; hour: number } | null>(null)
+  const [towToAssign, setTowToAssign] = useState<TowWithDetails | null>(null)
 
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
@@ -270,6 +275,51 @@ export default function CalendarPage() {
     setDraggedTow(null)
   }
 
+  // פתיחת מודל בחירת נהג למשבצת ריקה
+  const handleSlotClick = (date: Date, hour: number) => {
+    const slotDate = new Date(date)
+    slotDate.setHours(hour, 0, 0, 0)
+    setPendingSlot({ date: slotDate, hour })
+    setTowToAssign(null)
+    setShowDriverModal(true)
+  }
+
+  // פתיחת מודל לשיבוץ נהג לגרירה קיימת
+  const handleAssignDriver = (tow: TowWithDetails) => {
+    setTowToAssign(tow)
+    setPendingSlot(null)
+    setShowDriverModal(true)
+  }
+
+  // בחירת נהג - מעביר לטופס או משבץ לגרירה קיימת
+  const handleDriverSelect = async (driverId: string) => {
+    if (pendingSlot) {
+      // יצירת גרירה חדשה - מעביר לטופס עם הפרמטרים
+      const dateStr = pendingSlot.date.toISOString().split('T')[0]
+      const timeStr = `${pendingSlot.hour.toString().padStart(2, '0')}:00`
+      window.location.href = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}&driver=${driverId}`
+    } else if (towToAssign) {
+      // שיבוץ נהג לגרירה קיימת
+      try {
+        await updateTowSchedule(towToAssign.id, new Date(towToAssign.scheduled_at || towToAssign.created_at), driverId)
+        setTows(tows.map(t => 
+          t.id === towToAssign.id ? { ...t, driver_id: driverId } : t
+        ))
+        setShowDriverModal(false)
+        setTowToAssign(null)
+      } catch (error) {
+        console.error('Error assigning driver:', error)
+      }
+    }
+  }
+
+  // סגירת מודל בחירת נהג
+  const closeDriverModal = () => {
+    setShowDriverModal(false)
+    setPendingSlot(null)
+    setTowToAssign(null)
+  }
+
   // בחירת יום לתצוגה יומית
   const selectDay = (date: Date) => {
     setSelectedDate(date)
@@ -451,27 +501,21 @@ export default function CalendarPage() {
                       {hour.toString().padStart(2, '0')}:00
                     </div>
                     {weekDays.map((day, dayIdx) => {
-                      const dateStr = day.fullDate.toISOString().split('T')[0]
-                      const timeStr = `${hour.toString().padStart(2, '0')}:00`
-                      const newTowUrl = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}`
-                      
                       return (
                         <div
                           key={dayIdx}
+                          onClick={() => handleSlotClick(day.fullDate, hour)}
                           className={`border-l border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative group ${
                             day.isToday ? 'bg-[#33d4ff]/5' : ''
                           }`}
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, dayIdx, hour)}
                         >
-                          <Link
-                            href={newTowUrl}
-                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="w-6 h-6 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
                               <Plus size={14} className="text-white" />
                             </div>
-                          </Link>
+                          </div>
                         </div>
                       )
                     })}
@@ -497,10 +541,17 @@ export default function CalendarPage() {
                         key={tow.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, tow)}
-                        onClick={(e) => { e.stopPropagation(); setSelectedTow(tow) }}
+                        onClick={(e) => { 
+                          e.stopPropagation()
+                          if (!tow.driver_id) {
+                            handleAssignDriver(tow)
+                          } else {
+                            setSelectedTow(tow)
+                          }
+                        }}
                         className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
                           draggedTow?.id === tow.id ? 'opacity-50' : ''
-                        }`}
+                        } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                         style={{
                           top: `${top}px`,
                           height: `${Math.max(height - 4, 20)}px`,
@@ -510,6 +561,11 @@ export default function CalendarPage() {
                           borderRightColor: driverColor,
                         }}
                       >
+                        {!tow.driver_id && (
+                          <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
+                            לשיבוץ
+                          </div>
+                        )}
                         <div className="font-bold truncate text-[10px] sm:text-xs">
                           {tow.customer?.name || 'ללא לקוח'}
                         </div>
@@ -555,10 +611,6 @@ export default function CalendarPage() {
               <div className="min-w-[300px]">
                 <div className="relative">
                   {hours.map((hour) => {
-                    const dateStr = selectedDate.toISOString().split('T')[0]
-                    const timeStr = `${hour.toString().padStart(2, '0')}:00`
-                    const newTowUrl = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}`
-                    
                     return (
                       <div
                         key={hour}
@@ -569,18 +621,16 @@ export default function CalendarPage() {
                           {hour.toString().padStart(2, '0')}:00
                         </div>
                         <div 
+                          onClick={() => handleSlotClick(selectedDate, hour)}
                           className="flex-1 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative"
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, 0, hour)}
                         >
-                          <Link
-                            href={newTowUrl}
-                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <div className="w-7 h-7 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
                               <Plus size={16} className="text-white" />
                             </div>
-                          </Link>
+                          </div>
                         </div>
                       </div>
                     )
@@ -600,10 +650,17 @@ export default function CalendarPage() {
                           key={tow.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, tow)}
-                          onClick={(e) => { e.stopPropagation(); setSelectedTow(tow) }}
+                          onClick={(e) => { 
+                            e.stopPropagation()
+                            if (!tow.driver_id) {
+                              handleAssignDriver(tow)
+                            } else {
+                              setSelectedTow(tow)
+                            }
+                          }}
                           className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
                             draggedTow?.id === tow.id ? 'opacity-50' : ''
-                          }`}
+                          } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                           style={{
                             top: `${top}px`,
                             height: '56px',
@@ -613,6 +670,11 @@ export default function CalendarPage() {
                             borderRightColor: driverColor,
                           }}
                         >
+                          {!tow.driver_id && (
+                            <div className="absolute top-0 left-0 bg-white text-gray-600 text-[10px] px-1.5 py-0.5 rounded-br font-bold">
+                              לשיבוץ
+                            </div>
+                          )}
                           <div className="flex items-center justify-between">
                             <div className="flex-1 min-w-0">
                               <div className="font-bold truncate text-sm">
@@ -758,6 +820,130 @@ export default function CalendarPage() {
               >
                 פרטים מלאים
               </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Driver Selection Modal */}
+      {showDriverModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+          <div className="bg-white w-full sm:rounded-2xl sm:max-w-md sm:mx-4 overflow-hidden rounded-t-2xl max-h-[80vh] overflow-y-auto">
+            <div className="px-5 py-4 bg-[#33d4ff] text-white flex items-center justify-between sticky top-0">
+              <div>
+                <h2 className="font-bold text-lg">
+                  {towToAssign ? 'שיבוץ נהג לגרירה' : 'בחר נהג'}
+                </h2>
+                <p className="text-white/80 text-sm">
+                  {pendingSlot && (
+                    <>
+                      {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][pendingSlot.date.getDay()]},{' '}
+                      {pendingSlot.date.toLocaleDateString('he-IL')} בשעה {pendingSlot.hour.toString().padStart(2, '0')}:00
+                    </>
+                  )}
+                  {towToAssign && (
+                    <>
+                      {towToAssign.customer?.name || 'ללא לקוח'}
+                    </>
+                  )}
+                </p>
+              </div>
+              <button onClick={closeDriverModal} className="p-2 hover:bg-white/20 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2">
+              {drivers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Truck size={40} className="mx-auto mb-3 text-gray-300" />
+                  <p>אין נהגים במערכת</p>
+                  <Link 
+                    href="/dashboard/drivers" 
+                    className="text-[#33d4ff] hover:underline text-sm mt-2 inline-block"
+                  >
+                    הוסף נהגים
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  {/* רשימת נהגים עם מספר גרירות היום */}
+                  {drivers.map((driver, index) => {
+                    const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
+                    const targetDate = pendingSlot?.date || (towToAssign ? new Date(towToAssign.scheduled_at || towToAssign.created_at) : new Date())
+                    const driverTowsToday = tows.filter(t => {
+                      if (t.driver_id !== driver.id) return false
+                      const towDate = new Date(t.scheduled_at || t.created_at)
+                      return towDate.toDateString() === targetDate.toDateString()
+                    })
+                    const towCount = driverTowsToday.length
+                    
+                    return (
+                      <button
+                        key={driver.id}
+                        onClick={() => handleDriverSelect(driver.id)}
+                        className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-[#33d4ff] hover:bg-[#33d4ff]/5 transition-all text-right"
+                      >
+                        <div 
+                          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                          style={{ backgroundColor: color }}
+                        >
+                          {driver.user?.full_name?.charAt(0) || '?'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800">{driver.user?.full_name}</p>
+                          <p className="text-sm text-gray-500">{driver.user?.phone || 'אין טלפון'}</p>
+                        </div>
+                        <div className="text-left flex-shrink-0">
+                          {towCount === 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                              פנוי
+                            </span>
+                          ) : towCount <= 3 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
+                              <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                              {towCount} גרירות
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                              {towCount} גרירות
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                  
+                  {/* אפשרות ללא נהג */}
+                  {pendingSlot && (
+                    <div className="pt-2 border-t border-gray-200 mt-3">
+                      <Link
+                        href={`/dashboard/tows/new?date=${pendingSlot.date.toISOString().split('T')[0]}&time=${pendingSlot.hour.toString().padStart(2, '0')}:00`}
+                        className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-500"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <Plus size={20} className="text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium">ללא נהג</p>
+                          <p className="text-sm">שיבוץ מאוחר יותר</p>
+                        </div>
+                      </Link>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={closeDriverModal}
+                className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
+              >
+                ביטול
+              </button>
             </div>
           </div>
         </div>

@@ -8,7 +8,7 @@ declare global {
 }
 
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3, Search, Loader2, Car, Navigation, ExternalLink } from 'lucide-react'
+import { ArrowRight, Check, AlertTriangle, Plus, Trash2, MapPin, Banknote, CreditCard, FileText, Truck, Tag, Calculator, Edit3, Search, Loader2, Car, Navigation, ExternalLink, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../lib/AuthContext'
@@ -488,6 +488,7 @@ function NewTowForm() {
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [preSelectedDriverId, setPreSelectedDriverId] = useState<string | null>(null)
   
   // מחירון
   const [basePriceList, setBasePriceList] = useState<any>(null)
@@ -620,6 +621,7 @@ function NewTowForm() {
   useEffect(() => {
     const dateParam = searchParams.get('date')
     const timeParam = searchParams.get('time')
+    const driverParam = searchParams.get('driver')
     
     if (dateParam) {
       setTowDate(dateParam)
@@ -629,6 +631,10 @@ function NewTowForm() {
     
     if (timeParam) {
       setTowTime(timeParam)
+    }
+
+    if (driverParam) {
+      setPreSelectedDriverId(driverParam)
     }
   }, [searchParams])
 
@@ -962,6 +968,7 @@ function NewTowForm() {
         companyId,
         createdBy: user.id,
         customerId: selectedCustomerId || undefined,
+        driverId: preSelectedDriverId || undefined,
         towType: towType === 'single' ? 'simple' : towType === 'exchange' ? 'transfer' : 'multi_vehicle',
         notes: notes || undefined,
         finalPrice: finalPrice || undefined,
@@ -1382,6 +1389,30 @@ function NewTowForm() {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6">
+        {/* Driver Pre-Selected Banner */}
+        {preSelectedDriverId && drivers.length > 0 && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
+                {drivers.find(d => d.id === preSelectedDriverId)?.user?.full_name?.charAt(0) || '?'}
+              </div>
+              <div>
+                <p className="text-sm text-green-700">נהג משובץ:</p>
+                <p className="font-medium text-green-800">
+                  {drivers.find(d => d.id === preSelectedDriverId)?.user?.full_name || 'נהג לא נמצא'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPreSelectedDriverId(null)}
+              className="p-2 text-green-600 hover:bg-green-100 rounded-lg"
+              title="הסר נהג"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
           <div className="flex-1 space-y-4 sm:space-y-6">
             
