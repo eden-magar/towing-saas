@@ -218,6 +218,19 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  // רענון בלי loading - לשימוש אחרי העלאת תמונות
+  const refreshTask = async () => {
+    try {
+      const data = await getTaskDetail(id)
+      console.log('=== Task refreshed ===')
+      console.log('Total images:', data?.images?.length)
+      setTask(data)
+      taskRef.current = data
+    } catch (error) {
+      console.error('Error refreshing task:', error)
+    }
+  }
+
   // קביעה אוטומטית של סוג התמונה לפי השלב
   const getCurrentPhotoType = (): TowImageType => {
     if (currentFlowIndex <= 2) {
@@ -368,7 +381,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     setTimeout(() => fileInputRef.current?.click(), 100)
   }
 
-  // כשבוחרים/מצלמים תמונה - שומרים ב-queue (לא מעלים עדיין!)
+ // כשבוחרים/מצלמים תמונה - שומרים ב-queue
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
@@ -386,13 +399,60 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     // ניקוי ה-input
     if (fileInputRef.current) fileInputRef.current.value = ''
     
-    // אם עדיין אין 4 תמונות - פותח שוב את המצלמה
-    if (updatedQueue.length < 4) {
-      setShowQuickConfirm(true)
-      setTimeout(() => {
-        setShowQuickConfirm(false)
-        fileInputRef.current?.click()
-      }, 500)
+    // אם יש 4 תמונות - מעלים אוטומטית
+    if (updatedQueue.length >= 4) {
+      // מעלים ישר בלי להציג מודל
+      await handleSaveAllPhotosAuto(updatedQueue)
+    } else {
+      // פותח מצלמה שוב מיד (בלי delay!)
+      setTimeout(() => fileInputRef.current?.click(), 50)
+    }
+  }
+
+  // העלאה אוטומטית אחרי 4 תמונות
+  const handleSaveAllPhotosAuto = async (queue: {file: File; url: string}[]) => {
+    const currentTask = task || taskRef.current
+    const currentUser = user || userRef.current
+    
+    if (!currentTask || !currentUser) {
+      alert('שגיאה: נסה לרענן את הדף')
+      return
+    }
+
+    setUploadingImage(true)
+    const photoType = getCurrentPhotoType()
+    
+    try {
+      const uploadPromises = queue.map(async (img) => {
+        const compressedFile = await compressImage(img.file, 1)
+        return await uploadTowImage(
+          currentTask.id,
+          currentUser.id,
+          photoType,
+          compressedFile,
+          undefined,
+          currentTask.vehicles[0]?.id
+        )
+      })
+      
+      await Promise.all(uploadPromises)
+      
+      // ניקוי
+      queue.forEach(img => URL.revokeObjectURL(img.url))
+      setImageQueue([])
+      setPhotosInSession(0)
+      setShowImageModal(false)
+      
+      // רענון בלי loading
+      await refreshTask()
+      
+      setShowSummary(true)
+      
+    } catch (error) {
+      console.error('Error uploading images:', error)
+      alert(`שגיאה בהעלאת התמונות: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setUploadingImage(false)
     }
   }
 
@@ -459,7 +519,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       setShowImageModal(false)
       
       // טעינה מחדש מה-DB - מבטיח סנכרון מלא
-      await loadTask()
+      await refreshTask()
       
       setShowSummary(true)
       
@@ -484,7 +544,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
     
     try {
       await deleteTowImage(image.id, image.image_url)
-      await loadTask()
+      await refreshTask()
       setShowPhotoPreview(null)
     } catch (error) {
       console.error('Error deleting image:', error)
