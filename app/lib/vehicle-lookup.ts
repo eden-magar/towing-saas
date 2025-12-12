@@ -29,6 +29,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     fuelType: 'sug_delek_nm',
     totalWeight: 'mishkal_kolel',
     vehicleType: 'sug_rechev_nm',
+    driveType: 'hanaa_nm',  // חדש!
   },
   motorcycle: {
     manufacturer: 'tozeret_nm',
@@ -38,6 +39,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     fuelType: 'sug_delek_nm',
     totalWeight: 'mishkal_kolel',
     vehicleType: 'sug_rechev_nm',
+    driveType: 'hanaa_nm',  // חדש!
   },
   heavy: {
     manufacturer: 'tozeret_nm',
@@ -47,6 +49,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     fuelType: 'sug_delek_nm',
     totalWeight: 'mishkal_kolel',
     vehicleType: 'sug_rechev_nm',
+    driveType: 'hanaa_nm',  // חדש!
   },
   machinery: {
     manufacturer: 'shilda_totzar_en_nm',
@@ -56,6 +59,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     fuelType: '',
     totalWeight: 'mishkal_kolel_ton',
     vehicleType: 'sug_tzama_nm',
+    driveType: '',  // אין לצמ"ה
   },
 }
 
@@ -121,6 +125,7 @@ function mapVehicleData(rawData: any, source: string, licenseNumber: string): Ve
     fuelType: rawData[fields.fuelType] || null,
     totalWeight: rawData[fields.totalWeight] ? parseFloat(rawData[fields.totalWeight]) : null,
     vehicleType: rawData[fields.vehicleType] || null,
+    driveType: rawData[fields.driveType] || null,  // חדש!
   }
 }
 

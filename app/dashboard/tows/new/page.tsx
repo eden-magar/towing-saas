@@ -908,11 +908,16 @@ function NewTowForm() {
     
     try {
       const vehiclesData = towType === 'single' ? [{
-        plateNumber: vehiclePlate,
-        vehicleType: vehicleType as any || undefined,
-        isWorking: false,
-        towReason: selectedDefects.join(', ') || undefined
-      }] : towType === 'exchange' ? [
+      plateNumber: vehiclePlate,
+      vehicleType: vehicleType as any || undefined,
+      manufacturer: vehicleData?.data?.manufacturer || undefined,
+      model: vehicleData?.data?.model || undefined,
+      year: vehicleData?.data?.year || undefined,
+      color: vehicleData?.data?.color || undefined,
+      driveType: vehicleData?.data?.driveType || undefined,  // הנעה
+      isWorking: !selectedDefects.length,
+      towReason: selectedDefects.join(', ') || undefined
+    }] : towType === 'exchange' ? [
         { plateNumber: workingVehiclePlate, vehicleType: workingVehicleType as any || undefined, isWorking: true },
         { plateNumber: defectiveVehiclePlate, vehicleType: defectiveVehicleType as any || undefined, isWorking: false }
       ] : vehicles.map(v => ({

@@ -301,15 +301,16 @@ export interface VehicleLookupResult {
   source: 'private' | 'motorcycle' | 'heavy' | 'machinery' | null
   sourceLabel: string
   data: {
-    plateNumber: string
-    manufacturer: string | null    // tozeret_nm
-    model: string | null           // kinuy_mishari / degem_nm
-    year: number | null            // shnat_yitzur
-    color: string | null           // tzeva_rechev
-    fuelType: string | null        // sug_delek_nm
-    totalWeight: number | null     // mishkal_kolel
-    vehicleType: string | null     // sug_rechev_nm
-  } | null
+  plateNumber: string
+  manufacturer: string | null    // tozeret_nm
+  model: string | null           // kinuy_mishari / degem_nm
+  year: number | null            // shnat_yitzur
+  color: string | null           // tzeva_rechev
+  fuelType: string | null        // sug_delek_nm
+  totalWeight: number | null     // mishkal_kolel
+  vehicleType: string | null     // sug_rechev_nm
+  driveType: string | null       // hanaa_nm - הנעה (חדש!)
+} | null
   error?: string
 }
 
