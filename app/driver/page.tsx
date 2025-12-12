@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
 import { 
   getDriverByUserId, 
@@ -43,6 +44,7 @@ const rejectReasons: { key: RejectReason; label: string; icon: string }[] = [
 
 export default function DriverTasksPage() {
   const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   console.log('Component render - authLoading:', authLoading, 'user:', user?.id)  // הוסיפי כאן
 
   
@@ -112,40 +114,6 @@ export default function DriverTasksPage() {
   }
 }
 
-  // const loadData = async () => {
-  //   if (!user) return
-    
-  //   setLoading(true)
-  //   setError(null)
-
-  //   console.log('1. Starting loadData, user:', user.id)  // הוסיפי
-
-    
-  //   try {
-  //     // שליפת פרטי הנהג
-  //     const driver = await getDriverByUserId(user.id)
-  //     if (!driver) {
-  //       setError('לא נמצא פרופיל נהג עבור המשתמש')
-  //       setLoading(false)
-  //       return
-  //     }
-  //     setDriverInfo(driver)
-
-  //     // שליפת משימות
-  //     const driverTasks = await getDriverTasks(driver.id)
-  //     setTasks(driverTasks)
-
-  //     // שליפת סטטיסטיקות
-  //     const driverStats = await getDriverStats(driver.id)
-  //     setStats(driverStats)
-
-  //   } catch (err) {
-  //     console.error('Error loading data:', err)
-  //     setError('שגיאה בטעינת הנתונים')
-  //   } finally {
-  //     setLoading(false)
-  //   }
-  // }
 
   // פילטור משימות
   const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
@@ -200,20 +168,18 @@ export default function DriverTasksPage() {
 
   // קבלת משימה
   const handleAcceptTask = async () => {
-    if (!selectedTask) return
-    setIsProcessing(true)
-    try {
-      await acceptTask(selectedTask.id)
-      setShowNewTaskModal(false)
-      setSelectedTask(null)
-      await loadData() // רענון
-    } catch (err) {
-      console.error('Error accepting task:', err)
-      alert('שגיאה בקבלת המשימה')
-    } finally {
-      setIsProcessing(false)
-    }
+  if (!selectedTask) return
+  setIsProcessing(true)
+  try {
+    await acceptTask(selectedTask.id)
+    // מעבר ישיר לפרטי המשימה
+    router.push(`/driver/task/${selectedTask.id}`)
+  } catch (err) {
+    console.error('Error accepting task:', err)
+    alert('שגיאה בקבלת המשימה')
+    setIsProcessing(false)
   }
+}
 
   // דחיית משימה
   const handleRejectTask = () => {
