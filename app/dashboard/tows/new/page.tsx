@@ -625,6 +625,11 @@ function NewTowForm() {
   const [creditCardCvv, setCreditCardCvv] = useState('')
   const [creditCardId, setCreditCardId] = useState('')
 
+  // יציאה מהבסיס
+  const [startFromBase, setStartFromBase] = useState(false)
+  const [baseToPickupDistance, setBaseToPickupDistance] = useState<DistanceResult | null>(null)
+  const [baseToPickupLoading, setBaseToPickupLoading] = useState(false)
+
   const defects = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'אחר']
 
   // טעינת Google Maps בהתחלה
@@ -656,6 +661,35 @@ function NewTowForm() {
     return () => clearTimeout(timeout)
   }, [pickupAddress.address, pickupAddress.lat, dropoffAddress.address, dropoffAddress.lat])
 
+  // חישוב מרחק מהבסיס למוצא
+  useEffect(() => {
+    if (!startFromBase || !pickupAddress.address || !basePriceList?.base_lat || !basePriceList?.base_lng) {
+      setBaseToPickupDistance(null)
+      return
+    }
+
+    const calcBaseDistance = async () => {
+      setBaseToPickupLoading(true)
+      try {
+        const baseAddress: AddressData = {
+          address: basePriceList.base_address || '',
+          lat: basePriceList.base_lat,
+          lng: basePriceList.base_lng
+        }
+        const result = await calculateDistance(baseAddress, pickupAddress)
+        setBaseToPickupDistance(result)
+      } catch (err) {
+        console.error('Base distance calculation error:', err)
+        setBaseToPickupDistance(null)
+      } finally {
+        setBaseToPickupLoading(false)
+      }
+    }
+
+    const timeout = setTimeout(calcBaseDistance, 500)
+    return () => clearTimeout(timeout)
+  }, [startFromBase, pickupAddress.address, pickupAddress.lat, basePriceList?.base_lat, basePriceList?.base_lng])
+
   // קריאת פרמטרים מהכתובת (מהיומן)
   useEffect(() => {
     const dateParam = searchParams.get('date')
@@ -685,7 +719,12 @@ function NewTowForm() {
   }, [companyId])
 
   const loadData = async () => {
-    if (!companyId) return
+    if (!companyId) {
+    console.log('loadData: No companyId')
+    return
+  }
+    console.log('loadData: Starting with companyId:', companyId)
+
     try {
       const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData, timeSurchargesRes, locationSurchargesRes, serviceSurchargesRes] = await Promise.all([
         getCustomers(companyId),
@@ -698,6 +737,8 @@ function NewTowForm() {
         getLocationSurcharges(companyId),
         getServiceSurcharges(companyId)
       ])
+        console.log('loadData: basePriceData =', basePriceData)
+
       setCustomers(customersData)
       setDrivers(driversData)
       setTrucks(trucksData)
@@ -747,6 +788,9 @@ function NewTowForm() {
 
   // חישוב מחיר מומלץ
   const calculateRecommendedPrice = () => {
+    // אם אין סוג רכב - אין מחיר בסיס
+    if (!vehicleType) return 0
+    
     const vehicleTypeMap: Record<string, string> = {
       'private': 'base_price_private',
       'motorcycle': 'base_price_motorcycle',
@@ -754,12 +798,15 @@ function NewTowForm() {
       'machinery': 'base_price_machinery'
     }
     
-    const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
-    const basePrice = basePriceList?.[priceField] || 180
-    const pricePerKm = basePriceList?.price_per_km || 12
-    const minimumPrice = basePriceList?.minimum_price || 250
+    const priceField = vehicleTypeMap[vehicleType]
+    const basePrice = basePriceList?.[priceField] || 0
+    const pricePerKm = basePriceList?.price_per_km || 0
+    const minimumPrice = basePriceList?.minimum_price || 0
     
-    const distanceKm = distance?.distanceKm || 0
+    // מרחק כולל: אם יציאה מהבסיס = (בסיס→מוצא) + (מוצא→יעד), אחרת רק (מוצא→יעד)
+    const pickupToDropoffKm = distance?.distanceKm || 0
+    const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0
+    const distanceKm = pickupToDropoffKm + baseToPickupKm
     const distancePrice = distanceKm * pricePerKm
     
     // סכום בסיס + מרחק
@@ -787,7 +834,6 @@ function NewTowForm() {
     selectedServiceSurcharges.forEach(id => {
       const surcharge = serviceSurchargesData.find(s => s.id === id)
       if (surcharge) {
-        // אם זה שירות המתנה - מכפילים ביחידות
         if (surcharge.label.includes('המתנה')) {
           servicesTotal += surcharge.price * waitingTimeUnits
         } else {
@@ -808,7 +854,12 @@ function NewTowForm() {
     const vat = afterDiscount * 0.18
     const total = afterDiscount + vat
     
-    return Math.max(Math.round(total), minimumPrice)
+    // אם יש מחיר מינימום ויש סוג רכב
+    if (total > 0 && total < minimumPrice) {
+      return minimumPrice
+    }
+    
+    return Math.round(total)
   }
 
   // חישוב מחיר סופי
@@ -829,6 +880,15 @@ function NewTowForm() {
   }
 
   const recommendedPrice = calculateRecommendedPrice()
+  // DEBUG - למחוק אחרי הבדיקה
+  console.log('=== PRICE DEBUG ===', {
+    vehicleType,
+    basePriceList,
+    priceField: vehicleType ? `base_price_${vehicleType}` : null,
+    basePrice: basePriceList?.[`base_price_${vehicleType}`],
+    pricePerKm: basePriceList?.price_per_km,
+    distance: distance?.distanceKm
+  })
   const finalPrice = calculateFinalPrice()
 
   // חיפוש פרטי רכב מ-data.gov.il
@@ -1268,10 +1328,13 @@ function NewTowForm() {
       'heavy': 'base_price_heavy',
       'machinery': 'base_price_machinery'
     }
-    const priceField = vehicleTypeMap[vehicleType] || 'base_price_private'
-    const basePrice = basePriceList?.[priceField] || 180
-    const pricePerKm = basePriceList?.price_per_km || 12
-    const distanceKm = distance?.distanceKm || 0
+    
+    const priceField = vehicleType ? vehicleTypeMap[vehicleType] : null
+    const basePrice = priceField ? (basePriceList?.[priceField] || 0) : 0
+    const pricePerKm = basePriceList?.price_per_km || 0
+    const pickupToDropoffKm = distance?.distanceKm || 0
+    const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0
+    const distanceKm = pickupToDropoffKm + baseToPickupKm
     const distancePrice = Math.round(distanceKm * pricePerKm)
     
     const subtotal = basePrice + distancePrice
@@ -1294,7 +1357,7 @@ function NewTowForm() {
       .map(id => locationSurchargesData.find(l => l.id === id))
       .filter(Boolean) as LocationSurcharge[]
     activeLocationSurcharges.forEach(s => { locationPercent += s.surcharge_percent })
-    const locationAmount = Math.round(subtotal * (locationPercent / 100))
+    const locationAmount = Math.round(subtotal * locationPercent / 100)
     
     // תוספות שירותים
     let servicesTotal = 0
@@ -1308,7 +1371,7 @@ function NewTowForm() {
           amount = surcharge.price * waitingTimeUnits
           label = `${surcharge.label} (×${waitingTimeUnits})`
         } else if (surcharge.label.includes('המתנה') && waitingTimeUnits === 0) {
-          return // לא מציגים המתנה אם אין יחידות
+          return
         }
         servicesTotal += amount
         activeServices.push({ label, amount })
@@ -1325,49 +1388,62 @@ function NewTowForm() {
     const vatAmount = Math.round(beforeVat * 0.18)
     const total = beforeVat + vatAmount
 
+    // אם אין סוג רכב עדיין - הצג הודעה
+    const hasVehicleType = !!vehicleType
+
     return (
       <div className="space-y-3 sm:space-y-4">
         <div className="space-y-2 text-sm">
           {priceMode === 'recommended' && (
             <>
-              <div className="flex justify-between">
-                <span className="text-gray-500">מחיר בסיס</span>
-                <span className="text-gray-700">₪{basePrice}</span>
-              </div>
-              {distanceKm > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">מרחק ({distanceKm} ק״מ × ₪{pricePerKm})</span>
-                  <span className="text-gray-700">₪{distancePrice}</span>
+              {!hasVehicleType ? (
+                <div className="text-center py-2 text-gray-400 text-sm">
+                  הזן מספר רכב לחישוב מחיר
                 </div>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">מחיר בסיס ({vehicleType === 'private' ? 'פרטי' : vehicleType === 'motorcycle' ? 'דו גלגלי' : vehicleType === 'heavy' ? 'כבד' : vehicleType === 'machinery' ? 'צמ"ה' : ''})</span>
+                    <span className="text-gray-700">₪{basePrice}</span>
+                  </div>
+                  {distanceKm > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">מרחק ({distanceKm} ק״מ × ₪{pricePerKm})</span>
+                      <span className="text-gray-700">₪{distancePrice}</span>
+                    </div>
+                  )}
+                  {timeAmount > 0 && (
+                    <div className="flex justify-between text-orange-600">
+                      <span>{timeLabel} (+{timePercent}%)</span>
+                      <span>₪{timeAmount}</span>
+                    </div>
+                  )}
+                  {activeLocationSurcharges.map(s => (
+                    <div key={s.id} className="flex justify-between text-amber-600">
+                      <span>{s.label} (+{s.surcharge_percent}%)</span>
+                      <span>₪{Math.round(subtotal * s.surcharge_percent / 100)}</span>
+                    </div>
+                  ))}
+                  {activeServices.map((s, i) => (
+                    <div key={i} className="flex justify-between text-blue-600">
+                      <span>{s.label}</span>
+                      <span>₪{s.amount}</span>
+                    </div>
+                  ))}
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-emerald-600">
+                      <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
+                      <span>-₪{discountAmount}</span>
+                    </div>
+                  )}
+                  {beforeVat > 0 && (
+                    <div className="flex justify-between border-t border-gray-100 pt-2">
+                      <span className="text-gray-500">מע״מ (18%)</span>
+                      <span className="text-gray-700">₪{vatAmount}</span>
+                    </div>
+                  )}
+                </>
               )}
-              {timeAmount > 0 && (
-                <div className="flex justify-between text-orange-600">
-                  <span>{timeLabel} (+{timePercent}%)</span>
-                  <span>₪{timeAmount}</span>
-                </div>
-              )}
-              {activeLocationSurcharges.map(s => (
-                <div key={s.id} className="flex justify-between text-amber-600">
-                  <span>{s.label} (+{s.surcharge_percent}%)</span>
-                  <span>₪{Math.round(subtotal * s.surcharge_percent / 100)}</span>
-                </div>
-              ))}
-              {activeServices.map((s, i) => (
-                <div key={i} className="flex justify-between text-blue-600">
-                  <span>{s.label}</span>
-                  <span>₪{s.amount}</span>
-                </div>
-              ))}
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-600">
-                  <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
-                  <span>-₪{discountAmount}</span>
-                </div>
-              )}
-              <div className="flex justify-between border-t border-gray-100 pt-2">
-                <span className="text-gray-500">מע״מ (18%)</span>
-                <span className="text-gray-700">₪{vatAmount}</span>
-              </div>
             </>
           )}
 
@@ -1397,7 +1473,7 @@ function NewTowForm() {
           <div className="flex justify-between items-center">
             <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
             <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-              ₪{priceMode === 'recommended' ? total : finalPrice}
+              ₪{priceMode === 'recommended' ? (hasVehicleType ? total : 0) : finalPrice}
             </span>
           </div>
         </div>
@@ -2010,13 +2086,62 @@ function NewTowForm() {
                     </div>
                   </div>
 
+                  {/* יציאה מהבסיס */}
+                  {basePriceList?.base_address && (
+                    <div className={`p-4 rounded-xl border-2 transition-all ${
+                      startFromBase 
+                        ? 'bg-emerald-50 border-emerald-300' 
+                        : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={startFromBase}
+                          onChange={(e) => setStartFromBase(e.target.checked)}
+                          className="w-5 h-5 text-emerald-500 rounded"
+                        />
+                        <div className="flex-1">
+                          <span className={`font-medium ${startFromBase ? 'text-emerald-700' : 'text-gray-700'}`}>
+                            🏠 יציאה מהבסיס
+                          </span>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {basePriceList.base_address}
+                          </p>
+                        </div>
+                      </label>
+                      
+                      {startFromBase && (
+                        <div className="mt-3 pt-3 border-t border-emerald-200">
+                          {baseToPickupLoading ? (
+                            <div className="flex items-center gap-2 text-gray-500 text-sm">
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>מחשב מרחק מהבסיס...</span>
+                            </div>
+                          ) : baseToPickupDistance ? (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-emerald-700">מרחק בסיס → מוצא:</span>
+                              <span className="font-bold text-emerald-700">{baseToPickupDistance.distanceKm} ק״מ</span>
+                            </div>
+                          ) : pickupAddress.address ? (
+                            <p className="text-xs text-amber-600">לא ניתן לחשב מרחק</p>
+                          ) : (
+                            <p className="text-xs text-gray-500">הזן כתובת מוצא לחישוב</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* תצוגת מרחק */}
                   <DistanceDisplay
-                    distance={distance}
+                    distance={startFromBase && baseToPickupDistance && distance ? {
+                      distanceKm: distance.distanceKm + baseToPickupDistance.distanceKm,
+                      durationMinutes: distance.durationMinutes + baseToPickupDistance.durationMinutes
+                    } : distance}
                     destination={dropoffAddress}
                     pricePerKm={basePriceList?.price_per_km || 12}
                     basePrice={basePriceList?.[`base_price_${vehicleType || 'private'}`] || 180}
-                    isLoading={distanceLoading}
+                    isLoading={distanceLoading || baseToPickupLoading}
                   />
 
                   {/* תוספות זמן - אוטומטיות */}

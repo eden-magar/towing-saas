@@ -73,7 +73,7 @@ export interface CustomerWithPricing {
   price_items: CustomerPriceItem[]
 }
 
-// מעודכן לפי מאגרי משרד התחבורה
+// מעודכן לפי מאגרי משרד התחבורה + נקודת בסיס
 export interface BasePriceList {
   id: string
   company_id: string
@@ -87,6 +87,10 @@ export interface BasePriceList {
   night_surcharge_percent: number | null
   weekend_surcharge_percent: number | null
   is_active: boolean
+  // נקודת בסיס לחישוב מרחק
+  base_address: string | null
+  base_lat: number | null
+  base_lng: number | null
 }
 
 // ==================== מחירון בסיס ====================
@@ -117,6 +121,10 @@ export async function upsertBasePriceList(
     base_price_machinery?: number    // צמ"ה
     price_per_km?: number
     minimum_price?: number
+    // נקודת בסיס
+    base_address?: string | null
+    base_lat?: number | null
+    base_lng?: number | null
   }
 ) {
   // בדיקה אם קיים מחירון בסיס

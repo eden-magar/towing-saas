@@ -15,7 +15,8 @@ import {
   CustomerWithPricing,
   FixedPriceItem
 } from '../../lib/queries/price-lists'
-import { Save, Plus, Trash2, Info, Calculator, Car, Clock, MapPin, Wrench, Building2, X, ChevronDown, ChevronUp, Edit2, RefreshCw, FileText } from 'lucide-react'
+import AddressInput from '../../components/address/AddressInput'
+import { Save, Plus, Trash2, Info, Calculator, Car, Clock, MapPin, Wrench, Building2, X, ChevronDown, ChevronUp, Edit2, RefreshCw, FileText, Home } from 'lucide-react'
 
 interface VehiclePrice {
   id: string
@@ -87,6 +88,15 @@ interface FixedPriceItemLocal {
   sort_order: number
 }
 
+// טיפוס לנקודת בסיס
+interface BaseLocationData {
+  address: string
+  placeId?: string
+  lat?: number
+  lng?: number
+  isPinDropped?: boolean
+}
+
 export default function PriceListsPage() {
   const { companyId, loading: authLoading } = useAuth()
   const [activeTab, setActiveTab] = useState<'base' | 'fixed' | 'surcharges' | 'customers'>('base')
@@ -107,6 +117,13 @@ export default function PriceListsPage() {
 
   const [pricePerKm, setPricePerKm] = useState(12)
   const [minimumPrice, setMinimumPrice] = useState(250)
+
+  // נקודת בסיס
+  const [baseLocation, setBaseLocation] = useState<BaseLocationData>({
+    address: '',
+    lat: undefined,
+    lng: undefined
+  })
 
   const [distanceTiers, setDistanceTiers] = useState<DistanceTierLocal[]>([
     { id: '1', from_km: 0, to_km: 20, price_per_km: 12 },
@@ -178,6 +195,15 @@ export default function PriceListsPage() {
         ])
         setPricePerKm(bp.price_per_km || 12)
         setMinimumPrice(bp.minimum_price || 250)
+
+        // טעינת נקודת בסיס
+        if (bp.base_address) {
+          setBaseLocation({
+            address: bp.base_address,
+            lat: bp.base_lat ?? undefined,
+            lng: bp.base_lng ?? undefined
+          })
+        }
       }
 
       // מדרגות מרחק
@@ -302,10 +328,14 @@ export default function PriceListsPage() {
 
     setSaving(true)
     try {
-      // שמירת מחירון בסיס
-      const basePriceData: Record<string, number> = {
+      // שמירת מחירון בסיס (כולל נקודת בסיס)
+      const basePriceData: Record<string, number | string | null> = {
         price_per_km: pricePerKm,
-        minimum_price: minimumPrice
+        minimum_price: minimumPrice,
+        // נקודת בסיס
+        base_address: baseLocation.address || null,
+        base_lat: baseLocation.lat ?? null,
+        base_lng: baseLocation.lng ?? null
       }
       vehiclePrices.forEach(v => {
         basePriceData[v.field] = v.price
@@ -523,6 +553,12 @@ export default function PriceListsPage() {
     }
   }
 
+  // פונקציה לטיפול בשינוי נקודת בסיס
+  const handleBaseLocationChange = (data: BaseLocationData) => {
+    setBaseLocation(data)
+    setHasChanges(true)
+  }
+
   const simulatedPrice = calculateSimulatedPrice()
   const simBasePrice = vehiclePrices.find(v => v.id === simVehicleType)?.price || 180
   const simDistancePrice = simDistance * pricePerKm
@@ -613,6 +649,48 @@ export default function PriceListsPage() {
       {/* Base Price Tab */}
       {activeTab === 'base' && (
         <div className="space-y-6">
+          {/* נקודת בסיס - NEW SECTION */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden">
+            <div className="px-5 py-4 bg-gradient-to-l from-emerald-50 to-white border-b border-gray-200">
+              <div className="flex items-center gap-2">
+                <Home size={22} className="text-emerald-600" />
+                <h3 className="font-bold text-gray-800 text-lg">נקודת בסיס</h3>
+              </div>
+              <p className="text-gray-500 mt-1">כתובת המוצא של הגררים - משמשת לחישוב מרחק כשמסומן "יציאה מהבסיס"</p>
+            </div>
+            <div className="p-4 sm:p-5 space-y-4">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <Info size={22} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-emerald-800">איך זה עובד?</p>
+                    <p className="text-emerald-700 mt-1">
+                      כשמסמנים "יציאה מהבסיס" בטופס גרירה חדשה, המערכת תחשב את המרחק הכולל:
+                      <br />
+                      <span className="font-medium">מרחק כולל = (בסיס → מוצא) + (מוצא → יעד)</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-gray-700 mb-2">כתובת הבסיס</label>
+                <AddressInput
+                  value={baseLocation}
+                  onChange={handleBaseLocationChange}
+                  placeholder="הזן את כתובת הבסיס של החברה..."
+                />
+              </div>
+
+              {baseLocation.lat && baseLocation.lng && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+                  <MapPin size={16} className="text-emerald-500" />
+                  <span>קואורדינטות: {baseLocation.lat.toFixed(5)}, {baseLocation.lng.toFixed(5)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Vehicle Base Prices */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden">
             <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
@@ -1048,9 +1126,9 @@ export default function PriceListsPage() {
             <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-2">
                 <MapPin size={22} className="text-gray-600" />
-                <h3 className="font-bold text-gray-800 text-lg">תוספות מיקום</h3>
+                <h3 className="font-bold text-gray-800 text-lg">תוספות אזור</h3>
               </div>
-              <p className="text-gray-500 mt-1">תוספות לפי אזור או מיקום</p>
+              <p className="text-gray-500 mt-1">תוספות לפי אזור גיאוגרפי</p>
             </div>
             <div className="p-4 sm:p-5 space-y-4">
               {locationSurcharges.map((item) => (
@@ -1065,6 +1143,7 @@ export default function PriceListsPage() {
                     type="text"
                     value={item.label}
                     onChange={(e) => updateLocationSurcharge(item.id, { label: e.target.value })}
+                    placeholder="שם האזור"
                     className="flex-1 min-w-0 px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium"
                   />
                   <div className="flex items-center gap-2">
@@ -1098,7 +1177,7 @@ export default function PriceListsPage() {
             </div>
           </div>
 
-          {/* Special Services */}
+          {/* Service Surcharges */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden">
             <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-2">
@@ -1120,15 +1199,16 @@ export default function PriceListsPage() {
                     type="text"
                     value={item.label}
                     onChange={(e) => updateServiceSurcharge(item.id, { label: e.target.value })}
+                    placeholder="שם השירות"
                     className="flex-1 min-w-0 px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium"
                   />
                   <div className="relative">
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">+₪</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">₪</span>
                     <input
                       type="number"
                       value={item.price}
                       onChange={(e) => updateServiceSurcharge(item.id, { price: Number(e.target.value) })}
-                      className="w-24 sm:w-32 pr-10 pl-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium text-left"
+                      className="w-24 sm:w-32 pr-8 pl-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white font-medium text-left"
                     />
                   </div>
                   <button
@@ -1152,56 +1232,56 @@ export default function PriceListsPage() {
         </div>
       )}
 
-      {/* Customer Price Lists Tab */}
+      {/* Customers Tab */}
       {activeTab === 'customers' && (
         <div className="space-y-6">
-          {/* Customer List */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-md overflow-hidden">
             <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-2">
                 <Building2 size={22} className="text-gray-600" />
                 <h3 className="font-bold text-gray-800 text-lg">מחירוני לקוחות</h3>
               </div>
-              <p className="text-gray-500 mt-1">לקוחות עסקיים עם מחירון מותאם</p>
+              <p className="text-gray-500 mt-1">הגדרת הנחות ומחירים מותאמים ללקוחות עסקיים</p>
             </div>
-            {customerPriceLists.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Building2 size={48} className="mx-auto mb-4 text-gray-300" />
-                <p>אין לקוחות עסקיים עם מחירון מותאם</p>
-                <p className="text-sm mt-2">הוסף לקוחות עסקיים בדף הלקוחות כדי להגדיר להם מחירון מותאם</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {customerPriceLists.map((customer) => (
-                  <div
-                    key={customer.id}
-                    onClick={() => openCustomerModal(customer)}
-                    className="px-4 sm:px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3 sm:gap-4">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Building2 size={20} className="text-purple-600" />
+            <div className="p-4 sm:p-5">
+              {customerPriceLists.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Building2 size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p className="font-medium">אין לקוחות עסקיים</p>
+                  <p className="text-sm mt-1">הוסף לקוחות עסקיים בניהול לקוחות כדי להגדיר להם מחירון מותאם</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {customerPriceLists.map((customer) => (
+                    <div key={customer.id} className="flex items-center justify-between p-4 bg-gray-100 rounded-xl border border-gray-200">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-800 truncate">{customer.name}</h4>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs px-2 py-0.5 bg-gray-200 rounded text-gray-600">{customer.type}</span>
+                          {customer.discount_percent > 0 && (
+                            <span className="text-xs text-emerald-600 font-medium">
+                              הנחה {customer.discount_percent}%
+                            </span>
+                          )}
+                          {customer.price_items.length > 0 && (
+                            <span className="text-xs text-blue-600">
+                              {customer.price_items.length} מחירים מותאמים
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-800 text-lg">{customer.name}</p>
-                        <p className="text-gray-500">{customer.type}</p>
-                      </div>
+                      <button
+                        onClick={() => openCustomerModal(customer)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <Edit2 size={16} />
+                        <span className="hidden sm:inline">עריכה</span>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-4 sm:gap-6 mr-14 sm:mr-0">
-                      <div className="text-center">
-                        <p className="font-medium text-emerald-600">{customer.discount_percent}%</p>
-                        <p className="text-sm text-gray-500">הנחה</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="font-medium text-gray-700">{customer.price_items.length}</p>
-                        <p className="text-sm text-gray-500">מחירים</p>
-                      </div>
-                      <Edit2 size={20} className="text-gray-400" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Price Simulator */}
@@ -1209,12 +1289,12 @@ export default function PriceListsPage() {
             <div className="px-5 py-4 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-2">
                 <Calculator size={22} className="text-gray-600" />
-                <h3 className="font-bold text-gray-800 text-lg">סימולטור מחיר</h3>
+                <h3 className="font-bold text-gray-800 text-lg">סימולטור מחירים</h3>
               </div>
-              <p className="text-gray-500 mt-1">בדוק מחיר משוער לגרירה</p>
+              <p className="text-gray-500 mt-1">בדיקת מחיר משוער לגרירה</p>
             </div>
-            <div className="p-4 sm:p-5">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            <div className="p-4 sm:p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-medium text-gray-700 mb-1">סוג רכב</label>
                   <select
