@@ -766,12 +766,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                   <p className="font-medium text-gray-800">{vehicle.total_weight.toLocaleString()} ק״ג</p>
                 </div>
               )}
-              <div className="bg-gray-50 rounded-lg p-2">
-                <p className="text-gray-500 text-xs">מצב</p>
-                <p className="font-medium text-gray-800">
-                  {vehicle.is_working ? 'נוסע' : 'לא נוסע'}
-                </p>
-              </div>
             </div>
             {vehicle.tow_reason && (
               <div className="mt-3 p-2 bg-amber-50 rounded-lg">
