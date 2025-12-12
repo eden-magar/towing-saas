@@ -309,7 +309,9 @@ export interface VehicleLookupResult {
   fuelType: string | null        // sug_delek_nm
   totalWeight: number | null     // mishkal_kolel
   vehicleType: string | null     // sug_rechev_nm
-  driveType: string | null       // hanaa_nm - הנעה (חדש!)
+  driveType: string | null       // hanaa_nm - הנעה
+  driveTechnology: string | null // technologiat_hanaa_nm - טכנולוגיית הנעה
+  gearType: string | null        // automatic_ind - סוג גיר
 } | null
   error?: string
 }

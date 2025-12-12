@@ -529,6 +529,7 @@ function NewTowForm() {
   const [towType, setTowType] = useState<'single' | 'exchange' | 'multiple' | ''>('')
   
   const [vehiclePlate, setVehiclePlate] = useState('')
+  const [vehicleCode, setVehicleCode] = useState('')
   const [vehicleLoading, setVehicleLoading] = useState(false)
   const [vehicleData, setVehicleData] = useState<VehicleLookupResult | null>(null)
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
@@ -1676,38 +1677,44 @@ function NewTowForm() {
                       </div>
 
                       {vehicleData?.found && vehicleData.data && (
-                        <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
-                          <div className="flex items-start gap-3">
-                            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm">
-                              {getVehicleTypeIcon(vehicleData.source || 'private')}
+                      <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-2xl shadow-sm">
+                            {getVehicleTypeIcon(vehicleData.source || 'private')}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-gray-800">
+                                {vehicleData.data.manufacturer} {vehicleData.data.model}
+                              </span>
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+                                {vehicleData.sourceLabel}
+                              </span>
                             </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-gray-800">
-                                  {vehicleData.data.manufacturer} {vehicleData.data.model}
-                                </span>
-                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
-                                  {vehicleData.sourceLabel}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
-                                {vehicleData.data.year && (
-                                  <span>שנה: <strong>{vehicleData.data.year}</strong></span>
-                                )}
-                                {vehicleData.data.color && (
-                                  <span>צבע: <strong>{vehicleData.data.color}</strong></span>
-                                )}
-                                {vehicleData.data.fuelType && (
-                                  <span>דלק: <strong>{vehicleData.data.fuelType}</strong></span>
-                                )}
-                                {vehicleData.data.totalWeight && (
-                                  <span>משקל: <strong>{vehicleData.data.totalWeight.toLocaleString()} ק״ג</strong></span>
-                                )}
-                              </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                              {vehicleData.data.year && (
+                                <span>שנה: <strong>{vehicleData.data.year}</strong></span>
+                              )}
+                              {vehicleData.data.color && (
+                                <span>צבע: <strong>{vehicleData.data.color}</strong></span>
+                              )}
+                              {vehicleData.data.driveType && (
+                                <span>הנעה: <strong>{vehicleData.data.driveType}</strong></span>
+                              )}
+                              {vehicleData.data.driveTechnology && (
+                                <span>טכנולוגיה: <strong>{vehicleData.data.driveTechnology}</strong></span>
+                              )}
+                              {vehicleData.data.totalWeight && (
+                                <span>משקל: <strong>{vehicleData.data.totalWeight.toLocaleString()} ק״ג</strong></span>
+                              )}
+                              {vehicleData.data.gearType && (
+                                <span>גיר: <strong>{vehicleData.data.gearType}</strong></span>
+                              )}
                             </div>
                           </div>
                         </div>
-                      )}
+                      </div>
+                    )}
 
                       {vehicleNotFound && (
                         <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
@@ -1741,22 +1748,14 @@ function NewTowForm() {
                         )}
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">סוג גרר</label>
-                        <select
-                          value={towTruckType}
-                          onChange={(e) => setTowTruckType(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
-                        >
-                          <option value="">בחר גרר</option>
-                          <option value="crane_tow">גרר מנוף</option>
-                          <option value="dolly">דולי (מערסל ידני)</option>
-                          <option value="heavy_rescue">חילוץ כבד</option>
-                          <option value="carrier">מובילית</option>
-                          <option value="carrier_large">מובילית 10+ רכבים</option>
-                          <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
-                          <option value="heavy_equipment">ציוד כבד/לובי</option>
-                          <option value="flatbed_ramsa">רמסע</option>
-                        </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
+                        <input
+                          type="text"
+                          value={vehicleCode}
+                          onChange={(e) => setVehicleCode(e.target.value)}
+                          placeholder="קוד פנימי (אופציונלי)"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        />
                       </div>
                     </div>
 
