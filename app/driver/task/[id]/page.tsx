@@ -745,6 +745,28 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
                 <p className="font-medium text-gray-800">{vehicle.color || '-'}</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-2">
+                <p className="text-gray-500 text-xs">דלק</p>
+                <p className="font-medium text-gray-800">{vehicle.fuel_type || '-'}</p>
+              </div>
+              {vehicle.drive_type && (
+                <div className="bg-gray-50 rounded-lg p-2">
+                  <p className="text-gray-500 text-xs">הנעה</p>
+                  <p className="font-medium text-gray-800">{vehicle.drive_type}</p>
+                </div>
+              )}
+              {vehicle.gear_type && (
+                <div className="bg-gray-50 rounded-lg p-2">
+                  <p className="text-gray-500 text-xs">גיר</p>
+                  <p className="font-medium text-gray-800">{vehicle.gear_type}</p>
+                </div>
+              )}
+              {vehicle.total_weight && (
+                <div className="bg-gray-50 rounded-lg p-2">
+                  <p className="text-gray-500 text-xs">משקל כולל</p>
+                  <p className="font-medium text-gray-800">{vehicle.total_weight.toLocaleString()} ק״ג</p>
+                </div>
+              )}
+              <div className="bg-gray-50 rounded-lg p-2">
                 <p className="text-gray-500 text-xs">מצב</p>
                 <p className="font-medium text-gray-800">
                   {vehicle.is_working ? 'נוסע' : 'לא נוסע'}

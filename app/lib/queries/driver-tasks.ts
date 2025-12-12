@@ -11,6 +11,12 @@ export interface DriverTaskVehicle {
   color: string | null
   is_working: boolean | null
   tow_reason: string | null
+  // שדות מורחבים ממשרד התחבורה
+  fuel_type: string | null
+  drive_type: string | null
+  gear_type: string | null
+  total_weight: number | null
+  drive_technology: string | null
 }
 
 export interface DriverTaskLeg {

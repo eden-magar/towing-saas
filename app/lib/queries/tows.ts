@@ -230,6 +230,12 @@ interface CreateTowInput {
     isWorking?: boolean
     towReason?: string
     notes?: string
+    driveType?: string
+    fuelType?: string
+    totalWeight?: number
+    gearType?: string
+    driveTechnology?: string
+
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -286,7 +292,12 @@ export async function createTow(input: CreateTowInput) {
         is_working: v.isWorking ?? true,
         tow_reason: v.towReason || null,
         notes: v.notes || null,
-        order_index: i
+        order_index: i,
+        drive_type: v.driveType || null,
+        fuel_type: v.fuelType || null,
+        total_weight: v.totalWeight || null,
+        gear_type: v.gearType || null,
+        drive_technology: v.driveTechnology || null,
       })
 
     if (vehicleError) {
