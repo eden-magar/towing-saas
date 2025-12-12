@@ -138,18 +138,29 @@ function AddressInput({
       })
       
       autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace()
-        if (!place.formatted_address && !place.name) return
-        const selectedAddress = place.formatted_address || place.name || ''
-        setInputValue(selectedAddress)
-        onChange({
-          address: selectedAddress,
-          placeId: place.place_id,
-          lat: place.geometry?.location?.lat(),
-          lng: place.geometry?.location?.lng(),
-          isPinDropped: false
-        })
+      const place = autocomplete.getPlace()
+      
+      console.log('Place selected:', {
+        name: place.name,
+        formatted_address: place.formatted_address,
+        lat: place.geometry?.location?.lat(),
+        lng: place.geometry?.location?.lng()
       })
+      
+      if (!place.formatted_address && !place.name) return
+      
+      // נעדיף name על פני formatted_address
+      const selectedAddress = place.name || place.formatted_address || ''
+      setInputValue(selectedAddress)
+      
+      onChange({
+        address: selectedAddress,
+        placeId: place.place_id,
+        lat: place.geometry?.location?.lat(),
+        lng: place.geometry?.location?.lng(),
+        isPinDropped: false
+      })
+    })
       autocompleteRef.current = autocomplete
     })
   }, [])
@@ -245,9 +256,37 @@ function PinDropModal({
       if (!mapContainerRef.current || !window.google?.maps) return
       setIsLoading(true)
 
-      const pos = initialAddress?.lat && initialAddress?.lng 
-        ? { lat: initialAddress.lat, lng: initialAddress.lng } 
-        : { lat: 32.0853, lng: 34.7818 } // תל אביב
+      let pos = { lat: 32.0853, lng: 34.7818 } // תל אביב - ברירת מחדל
+
+      // אם יש קואורדינטות - להשתמש בהן
+      if (initialAddress?.lat && initialAddress?.lng) {
+        pos = { lat: initialAddress.lat, lng: initialAddress.lng }
+        if (initialAddress.address) setCurrentAddress(initialAddress.address)
+      } 
+      // אם יש כתובת בלי קואורדינטות - לעשות geocoding
+      else if (initialAddress?.address) {
+        const geocoder = new window.google.maps.Geocoder()
+        try {
+          const result = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+            geocoder.geocode(
+              { address: initialAddress.address, region: 'IL' },
+              (results, status) => {
+                if (status === 'OK' && results) resolve(results)
+                else reject(status)
+              }
+            )
+          })
+          if (result[0]?.geometry?.location) {
+            pos = {
+              lat: result[0].geometry.location.lat(),
+              lng: result[0].geometry.location.lng()
+            }
+            setCurrentAddress(initialAddress.address)
+          }
+        } catch (e) {
+          console.log('Geocoding failed, using default location')
+        }
+      }
 
       mapRef.current = new window.google.maps.Map(mapContainerRef.current, {
         center: pos,
@@ -267,7 +306,6 @@ function PinDropModal({
       })
 
       setCurrentPosition(pos)
-      if (initialAddress?.address) setCurrentAddress(initialAddress.address)
 
       // כשגוררים את הסיכה
       markerRef.current.addListener('dragend', async () => {
@@ -289,8 +327,8 @@ function PinDropModal({
         }
       })
 
-      // ניסיון לקבל מיקום נוכחי
-      if (!initialAddress?.lat && navigator.geolocation) {
+      // ניסיון לקבל מיקום נוכחי - רק אם אין כתובת כלל
+      if (!initialAddress?.lat && !initialAddress?.address && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           async (position) => {
             const p = { lat: position.coords.latitude, lng: position.coords.longitude }
@@ -353,8 +391,8 @@ function PinDropModal({
         </div>
 
         {/* Map */}
-        <div className="relative flex-1 min-h-[400px]">
-          <div ref={mapContainerRef} className="w-full h-full" />
+        <div className="relative flex-1" style={{ minHeight: '400px' }}>
+          <div ref={mapContainerRef} className="absolute inset-0" />
           {isLoading && (
             <div className="absolute inset-0 bg-white flex items-center justify-center">
               <Loader2 size={32} className="animate-spin text-[#33d4ff]" />
