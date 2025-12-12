@@ -462,23 +462,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
       await loadTask()
       
       setShowSummary(true)
-      // imageQueue.forEach(img => URL.revokeObjectURL(img.url))
-      // setImageQueue([])
-      // setPhotosInSession(0)
-      // setShowImageModal(false)
-      
-      // // עדכון ישיר של ה-state עם התמונות החדשות
-      // const newImages = uploadedImages.filter(img => img !== null)
-      // if (currentTask && newImages.length > 0) {
-      //   const updatedTask = {
-      //     ...currentTask,
-      //     images: [...currentTask.images, ...newImages]
-      //   }
-      //   setTask(updatedTask)
-      //   taskRef.current = updatedTask
-      // }
-      
-      // setShowSummary(true)
       
     } catch (error) {
       console.error('Error uploading images:', error)
