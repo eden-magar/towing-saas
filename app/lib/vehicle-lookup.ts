@@ -9,6 +9,7 @@ const API_RESOURCES = {
   motorcycle: 'bf9df4e2-d90d-4c0a-a400-19e15af8e95f',   // דו גלגלי / טרקטורון
   heavy: 'cd3acc5c-03c3-4c89-9c54-d40f93c0d790',        // רכב כבד (מעל 3.5 טון)
   machinery: '58dc4654-16b1-42ed-8170-98fadec153ea',    // צמ"ה
+  private_extra: '142afde2-6228-49f9-8a29-9b6c3a0cbe40', // מאגר מורחב לרכב פרטי
 }
 
 // תוויות לסוגי רכב
@@ -122,6 +123,8 @@ async function searchInResource(
  * מיפוי נתונים גולמיים לפורמט אחיד
  */
 function mapVehicleData(rawData: any, source: string, licenseNumber: string): VehicleLookupResult['data'] {
+  console.log('🚗 Raw data from API:', rawData)  // הוסיפי שורה זו
+
   const fields = FIELD_MAPPINGS[source]
   
   // המרת automatic_ind לטקסט
@@ -151,6 +154,44 @@ function mapVehicleData(rawData: any, source: string, licenseNumber: string): Ve
 }
 
 /**
+ * שליפת מידע נוסף מהמאגר המורחב לרכב פרטי
+ */
+async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
+  try {
+    const model = `${vehicle.tozeret_nm || ''} ${vehicle.kinuy_mishari || ''}`.trim()
+    const query = encodeURIComponent(model)
+    const url = `https://data.gov.il/api/3/action/datastore_search?resource_id=${API_RESOURCES.private_extra}&q=${query}`
+    
+    const response = await fetch(url)
+    const data = await response.json()
+    
+    if (data.success && data.result?.records?.length > 0) {
+      // חיפוש התאמה מדויקת לפי שנה, קוד דגם ונפח מנוע
+      const match = data.result.records.find((record: any) =>
+        record.shnat_yitzur == vehicle.shnat_yitzur &&
+        record.degem_cd == vehicle.degem_cd &&
+        record.nefach_manoa == vehicle.nefach_manoa
+      )
+      
+      if (match) {
+        // המרת automatic_ind לטקסט
+        if ('automatic_ind' in match) {
+          match.automatic_ind = match.automatic_ind === '1' || match.automatic_ind === 1
+            ? 'אוטומטי'
+            : 'ידני'
+        }
+        return match
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error('Error fetching extra private info:', error)
+    return null
+  }
+}
+
+/**
  * חיפוש רכב בכל המאגרים
  * מחזיר את הרכב מהמאגר הראשון שמצא אותו
  */
@@ -175,11 +216,24 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
     const result = await searchInResource(cleanLicense, API_RESOURCES[source], source)
     
     if (result.found) {
+      const mappedData = mapVehicleData(result.data, source, cleanLicense)
+      
+      // אם זה רכב פרטי - נסה להביא מידע נוסף
+      if (source === 'private' && mappedData) {
+        const extraData = await fetchExtraPrivateInfo(result.data)
+        if (extraData) {
+          mappedData.totalWeight = extraData.mishkal_kolel ? parseFloat(extraData.mishkal_kolel) : mappedData.totalWeight
+          mappedData.driveType = extraData.hanaa_nm || mappedData.driveType
+          mappedData.driveTechnology = extraData.technologiat_hanaa_nm || mappedData.driveTechnology
+          mappedData.gearType = extraData.automatic_ind || mappedData.gearType
+        }
+      }
+      
       return {
         found: true,
         source: source as VehicleType,
         sourceLabel: SOURCE_LABELS[source],
-        data: mapVehicleData(result.data, source, cleanLicense),
+        data: mappedData,
       }
     }
   }
