@@ -309,6 +309,9 @@ export default function CalendarPage() {
     e.preventDefault()
     if (!draggedTow || !companyId) return
 
+    console.log('Dragged tow:', draggedTow)
+    console.log('Has price_breakdown:', !!draggedTow.price_breakdown)
+
     const targetDate = view === 'week' ? weekDays[dayIndex].fullDate : selectedDate
     const newDate = new Date(targetDate)
     newDate.setHours(Math.floor(hour), (hour % 1) * 60, 0, 0)
