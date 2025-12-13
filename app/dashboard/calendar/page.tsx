@@ -406,7 +406,11 @@ const handleSkipPriceUpdate = () => {
   const handleDriverSelect = async (driverId: string) => {
     if (pendingSlot) {
       // יצירת גרירה חדשה - מעביר לטופס עם הפרמטרים
-      const dateStr = pendingSlot.date.toISOString().split('T')[0]
+      // שימוש בתאריך מקומי במקום UTC
+      const year = pendingSlot.date.getFullYear()
+      const month = (pendingSlot.date.getMonth() + 1).toString().padStart(2, '0')
+      const day = pendingSlot.date.getDate().toString().padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
       const timeStr = `${pendingSlot.hour.toString().padStart(2, '0')}:00`
       window.location.href = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}&driver=${driverId}`
     } else if (towToAssign) {
