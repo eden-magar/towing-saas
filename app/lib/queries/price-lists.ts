@@ -533,6 +533,11 @@ export function isFriday(date: string): boolean {
 
 /**
  * מחשב אילו תוספות זמן חלות על זמן ותאריך נתונים
+ * הלוגיקה:
+ * - שבת: תוספת שבת בלבד (ללא בדיקת שעות)
+ * - חג: תוספת חג בלבד (ללא בדיקת שעות)
+ * - שישי: אם השעה >= time_start → תוספת שישי בלבד, אחרת ללא תוספות
+ * - ראשון-חמישי: בדיקת תוספות ערב/לילה לפי שעות
  */
 export function getActiveTimeSurcharges(
   timeSurcharges: TimeSurcharge[],
@@ -540,36 +545,65 @@ export function getActiveTimeSurcharges(
   date: string,
   isHoliday: boolean = false
 ): TimeSurcharge[] {
+  const d = new Date(date)
+  const dayOfWeek = d.getDay() // 0 = Sunday, 6 = Saturday
+  
+  const isSaturdayDay = dayOfWeek === 6
+  const isFridayDay = dayOfWeek === 5
+  
+  // חג - רק תוספת חג
+  if (isHoliday) {
+    return timeSurcharges.filter(s => s.is_active && s.day_type === 'holiday')
+  }
+  
+  // שבת - רק תוספת שבת (ללא בדיקת שעות)
+  if (isSaturdayDay) {
+    return timeSurcharges.filter(s => s.is_active && s.day_type === 'saturday')
+  }
+  
+  // שישי - בדיקה אם עברנו את השעה שהוגדרה
+  if (isFridayDay) {
+    const fridaySurcharge = timeSurcharges.find(s => s.is_active && s.day_type === 'friday')
+    
+    if (fridaySurcharge) {
+      // אם יש time_start, בודקים אם השעה הנוכחית >= time_start
+      if (fridaySurcharge.time_start) {
+        const [timeHours, timeMinutes] = time.split(':').map(Number)
+        const [startHours, startMinutes] = fridaySurcharge.time_start.split(':').map(Number)
+        
+        const timeValue = timeHours * 60 + timeMinutes
+        const startValue = startHours * 60 + startMinutes
+        
+        // אם השעה >= time_start, תוספת שישי
+        if (timeValue >= startValue) {
+          return [fridaySurcharge]
+        }
+      } else {
+        // אין time_start = שישי כל היום
+        return [fridaySurcharge]
+      }
+    }
+    
+    // שישי לפני השעה שהוגדרה = ללא תוספות
+    return []
+  }
+  
+  // ראשון-חמישי - בדיקת תוספות ערב/לילה לפי שעות
   return timeSurcharges.filter(surcharge => {
     if (!surcharge.is_active) return false
     
-    // בדיקת סוג היום
-    switch (surcharge.day_type) {
-      case 'saturday':
-        // תוספת שבת - רק בשבת
-        if (!isSaturday(date)) return false
-        break
-      case 'friday':
-        // תוספת ערב שבת - רק בשישי
-        if (!isFriday(date)) return false
-        break
-      case 'holiday':
-        // תוספת חג - רק אם סומן כחג
-        if (!isHoliday) return false
-        break
-      case 'all':
-      default:
-        // תוספת רגילה - בודקים שעות
-        break
+    // לא כולל תוספות של שבת/שישי/חג
+    if (surcharge.day_type === 'saturday' || surcharge.day_type === 'friday' || surcharge.day_type === 'holiday') {
+      return false
     }
     
-    // בדיקת טווח שעות (אם מוגדר)
+    // בדיקת טווח שעות
     if (surcharge.time_start && surcharge.time_end) {
       return isTimeInRange(time, surcharge.time_start, surcharge.time_end)
     }
     
-    // אם אין טווח שעות, התוספת תמיד חלה (לסוג היום הנכון)
-    return true
+    // אם אין טווח שעות, לא מחזירים
+    return false
   })
 }
 

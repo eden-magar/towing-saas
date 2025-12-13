@@ -252,13 +252,12 @@ interface CreateTowInput {
     totalWeight?: number
     gearType?: string
     driveTechnology?: string
-
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
     fromAddress?: string
     toAddress?: string
-    towVehicleIndex?: number // אינדקס של הרכב ב-vehicles array
+    towVehicleIndex?: number
   }[]
 }
 
@@ -320,7 +319,6 @@ export async function createTow(input: CreateTowInput) {
 
     if (vehicleError) {
       console.error('Error creating tow vehicle:', vehicleError)
-      // ניקוי - מחיקת הגרירה
       await supabase.from('tows').delete().eq('id', towId)
       throw vehicleError
     }
@@ -332,7 +330,6 @@ export async function createTow(input: CreateTowInput) {
   const pickupLeg = legsToCreate.find(l => l.legType === 'pickup')
   
   if (!hasDelivery && pickupLeg) {
-    // יצירת delivery leg אוטומטית עם היעד של ה-pickup
     legsToCreate.push({
       legType: 'delivery',
       fromAddress: pickupLeg.toAddress,
@@ -359,7 +356,6 @@ export async function createTow(input: CreateTowInput) {
 
     if (legError) {
       console.error('Error creating tow leg:', legError)
-      // ניקוי
       await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
       await supabase.from('tows').delete().eq('id', towId)
       throw legError
@@ -442,7 +438,7 @@ interface UpdateTowInput {
   scheduledAt?: string | null
   priceBreakdown?: PriceBreakdown | null
   vehicles?: {
-    id?: string // אם קיים - עדכון, אם לא - יצירה
+    id?: string
     plateNumber: string
     manufacturer?: string
     model?: string
@@ -462,15 +458,13 @@ interface UpdateTowInput {
 }
 
 export async function updateTow(input: UpdateTowInput) {
-  // עדכון פרטי הגרירה הבסיסיים
   const towUpdates: Record<string, any> = {}
   
   if (input.customerId !== undefined) towUpdates.customer_id = input.customerId
   if (input.notes !== undefined) towUpdates.notes = input.notes
   if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
-  if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt  // הוספת זה
+  if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
   if (input.priceBreakdown !== undefined) towUpdates.price_breakdown = input.priceBreakdown
-
 
   if (Object.keys(towUpdates).length > 0) {
     const { error: towError } = await supabase
@@ -484,12 +478,9 @@ export async function updateTow(input: UpdateTowInput) {
     }
   }
 
-  // עדכון רכבים - מחיקה ויצירה מחדש (פשוט יותר)
   if (input.vehicles) {
-    // מחיקת רכבים קיימים
     await supabase.from('tow_vehicles').delete().eq('tow_id', input.towId)
 
-    // יצירת רכבים חדשים
     for (let i = 0; i < input.vehicles.length; i++) {
       const v = input.vehicles[i]
       const { error: vehicleError } = await supabase
@@ -516,12 +507,9 @@ export async function updateTow(input: UpdateTowInput) {
     }
   }
 
-  // עדכון רגליים
   if (input.legs) {
-    // מחיקת רגליים קיימות
     await supabase.from('tow_legs').delete().eq('tow_id', input.towId)
 
-    // יצירת רגליים חדשות
     for (let i = 0; i < input.legs.length; i++) {
       const leg = input.legs[i]
       const { error: legError } = await supabase
@@ -548,13 +536,9 @@ export async function updateTow(input: UpdateTowInput) {
 // ==================== מחיקת גרירה ====================
 
 export async function deleteTow(towId: string) {
-  // מחיקת רגליים
   await supabase.from('tow_legs').delete().eq('tow_id', towId)
-  
-  // מחיקת כלי רכב
   await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
   
-  // מחיקת הגרירה
   const { error } = await supabase
     .from('tows')
     .delete()
@@ -597,42 +581,64 @@ export async function recalculateTowPrice(
   const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
   const dayOfWeek = newScheduledAt.getDay() // 0 = Sunday, 6 = Saturday
 
-  const isSaturday = dayOfWeek === 6
-  const isFriday = dayOfWeek === 5
+  const isSaturdayDay = dayOfWeek === 6
+  const isFridayDay = dayOfWeek === 5
 
-  const activeTimeSurcharges = timeSurcharges.filter(surcharge => {
-    // שבת - רק תוספת שבת, בלי בדיקת שעות
-    if (isSaturday) {
-      return surcharge.day_type === 'saturday'
-    }
-    
-    // שישי - רק תוספת שישי אם יש, בלי בדיקת שעות
-    if (isFriday) {
-      return surcharge.day_type === 'friday'
-    }
-    
-    // יום חול - בודקים תוספות לפי שעה בלבד
-    // לא כולל תוספות של שבת/שישי/חג
-    if (surcharge.day_type === 'saturday' || surcharge.day_type === 'friday' || surcharge.day_type === 'holiday') {
-      return false
-    }
-    
-    // בדיקת שעות ליום חול
-    if (surcharge.start_time && surcharge.end_time) {
-      const start = surcharge.start_time
-      const end = surcharge.end_time
+  let activeTimeSurcharges: typeof timeSurcharges = []
 
-      if (start < end) {
-        // טווח רגיל (למשל 15:00-19:00)
-        if (timeStr < start || timeStr >= end) return false
+  // שבת - רק תוספת שבת (ללא בדיקת שעות)
+  if (isSaturdayDay) {
+    activeTimeSurcharges = timeSurcharges.filter(s => s.day_type === 'saturday')
+  }
+  // שישי - בדיקה אם עברנו את השעה שהוגדרה
+  else if (isFridayDay) {
+    const fridaySurcharge = timeSurcharges.find(s => s.day_type === 'friday')
+    
+    if (fridaySurcharge) {
+      if (fridaySurcharge.time_start) {
+        const [startHours, startMinutes] = fridaySurcharge.time_start.split(':').map(Number)
+        const timeValue = hour * 60 + minute
+        const startValue = startHours * 60 + startMinutes
+        
+        if (timeValue >= startValue) {
+          activeTimeSurcharges = [fridaySurcharge]
+        }
+        // אחרת - ללא תוספות (מערך ריק)
       } else {
-        // טווח שחוצה חצות (למשל 19:00-07:00)
-        if (timeStr < start && timeStr >= end) return false
+        // שישי כל היום
+        activeTimeSurcharges = [fridaySurcharge]
       }
     }
+    // אין תוספת שישי מוגדרת = ללא תוספות
+  }
+  // ראשון-חמישי - בדיקת תוספות ערב/לילה לפי שעות
+  else {
+    activeTimeSurcharges = timeSurcharges.filter(surcharge => {
+      // לא כולל תוספות של שבת/שישי/חג
+      if (surcharge.day_type === 'saturday' || surcharge.day_type === 'friday' || surcharge.day_type === 'holiday') {
+        return false
+      }
+      
+      // בדיקת שעות
+      if (surcharge.time_start && surcharge.time_end) {
+        const start = surcharge.time_start
+        const end = surcharge.time_end
 
-    return true
-  })
+        if (start < end) {
+          // טווח רגיל (למשל 15:00-19:00)
+          if (timeStr < start || timeStr >= end) return false
+        } else {
+          // טווח שחוצה חצות (למשל 19:00-07:00)
+          if (timeStr < start && timeStr >= end) return false
+        }
+      } else {
+        // אין טווח שעות מוגדר = לא מחזירים
+        return false
+      }
+
+      return true
+    })
+  }
 
   // חישוב הסכום הבסיסי (בלי תוספות זמן)
   const baseSubtotal = breakdown.base_price + breakdown.distance_price
@@ -672,16 +678,6 @@ export async function recalculateTowPrice(
     vat_amount: vatAmount,
     total: newTotal
   }
-
-  console.log('Price recalculation:', {
-    dayOfWeek,
-    isSaturday,
-    timeStr,
-    activeTimeSurcharges: activeTimeSurcharges.map(s => s.label),
-    timeAmount,
-    oldTotal: oldPrice,
-    newTotal
-  })
 
   return {
     oldPrice,
