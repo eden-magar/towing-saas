@@ -54,6 +54,7 @@ export default function TowDetailsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tow, setTow] = useState<TowWithDetails | null>(null)
+  
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
@@ -1001,7 +1002,6 @@ export default function TowDetailsPage() {
                   )}
                 </div>
               </div>
-
               {/* מחיר */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-800 text-white">
@@ -1023,14 +1023,14 @@ export default function TowDetailsPage() {
                       {/* מחיר בסיס */}
                       <div className="flex justify-between">
                         <span className="text-gray-600">מחיר בסיס ({tow.price_breakdown.vehicle_type === 'private' ? 'פרטי' : tow.price_breakdown.vehicle_type})</span>
-                        <span className="font-medium">₪{tow.price_breakdown.base_price}</span>
+                        <span className="font-medium text-gray-800">₪{tow.price_breakdown.base_price}</span>
                       </div>
                       
                       {/* מרחק */}
                       {tow.price_breakdown.distance_km > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">מרחק ({tow.price_breakdown.distance_km} ק״מ)</span>
-                          <span className="font-medium">₪{tow.price_breakdown.distance_price}</span>
+                          <span className="font-medium text-gray-800">₪{tow.price_breakdown.distance_price}</span>
                         </div>
                       )}
                       
@@ -1421,12 +1421,12 @@ export default function TowDetailsPage() {
                     <span>₪{parseFloat(invoiceData.amount).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">מע״מ (17%)</span>
-                    <span>₪{(parseFloat(invoiceData.amount) * 0.17).toLocaleString()}</span>
+                    <span className="text-gray-600">מע״מ (18%)</span>
+                    <span>₪{(parseFloat(invoiceData.amount) * 0.18).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between font-bold border-t border-emerald-200 pt-2">
                     <span>סה״כ</span>
-                    <span className="text-emerald-700">₪{(parseFloat(invoiceData.amount) * 1.17).toLocaleString()}</span>
+                    <span className="text-emerald-700">₪{(parseFloat(invoiceData.amount) * 1.18).toLocaleString()}</span>
                   </div>
                 </div>
               )}
