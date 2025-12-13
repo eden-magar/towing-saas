@@ -821,6 +821,87 @@ function NewTowForm() {
     setError('')
     
     try {
+      // בניית פירוט המחיר
+      const vehicleTypeMap: Record<string, string> = {
+        'private': 'base_price_private',
+        'motorcycle': 'base_price_motorcycle',
+        'heavy': 'base_price_heavy',
+        'machinery': 'base_price_machinery'
+      }
+      
+      const priceField = vehicleType ? vehicleTypeMap[vehicleType] : null
+      const basePrice = priceField ? (basePriceList?.[priceField] || 0) : 0
+      const pricePerKm = basePriceList?.price_per_km || 0
+      const pickupToDropoffKm = distance?.distanceKm || 0
+      const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0
+      const distanceKm = pickupToDropoffKm + baseToPickupKm
+      const distancePrice = Math.round(distanceKm * pricePerKm)
+      
+      const subtotal = basePrice + distancePrice
+      
+      // תוספות זמן
+      const timeSurchargesBreakdown = activeTimeSurchargesList.map(s => ({
+        id: s.id,
+        label: s.label,
+        percent: s.surcharge_percent,
+        amount: Math.round(subtotal * s.surcharge_percent / 100)
+      }))
+      const timeAmount = timeSurchargesBreakdown.reduce((sum, s) => Math.max(sum, s.amount), 0)
+      
+      // תוספות מיקום
+      const locationSurchargesBreakdown = selectedLocationSurcharges
+        .map(id => locationSurchargesData.find(l => l.id === id))
+        .filter(Boolean)
+        .map(s => ({
+          id: s!.id,
+          label: s!.label,
+          percent: s!.surcharge_percent,
+          amount: Math.round(subtotal * s!.surcharge_percent / 100)
+        }))
+      const locationAmount = locationSurchargesBreakdown.reduce((sum, s) => sum + s.amount, 0)
+      
+      // תוספות שירותים
+      const serviceSurchargesBreakdown = selectedServiceSurcharges
+        .map(id => serviceSurchargesData.find(s => s.id === id))
+        .filter(Boolean)
+        .map(s => {
+          const isWaiting = s!.label.includes('המתנה')
+          const units = isWaiting ? waitingTimeUnits : 1
+          return {
+            id: s!.id,
+            label: s!.label,
+            price: s!.price,
+            units: isWaiting ? waitingTimeUnits : undefined,
+            amount: s!.price * units
+          }
+        })
+        .filter(s => s.amount > 0)
+      const servicesTotal = serviceSurchargesBreakdown.reduce((sum, s) => sum + s.amount, 0)
+      
+      const beforeDiscount = subtotal + timeAmount + locationAmount + servicesTotal
+      
+      const discountPercent = selectedCustomerPricing?.discount_percent || 0
+      const discountAmount = Math.round(beforeDiscount * discountPercent / 100)
+      
+      const beforeVat = beforeDiscount - discountAmount
+      const vatAmount = Math.round(beforeVat * 0.18)
+      const total = beforeVat + vatAmount
+
+      const priceBreakdown = {
+        base_price: basePrice,
+        vehicle_type: vehicleType || '',
+        distance_km: distanceKm,
+        distance_price: distancePrice,
+        time_surcharges: timeSurchargesBreakdown,
+        location_surcharges: locationSurchargesBreakdown,
+        service_surcharges: serviceSurchargesBreakdown,
+        subtotal: beforeDiscount,
+        discount_percent: discountPercent,
+        discount_amount: discountAmount,
+        vat_amount: vatAmount,
+        total: total
+      }
+
       const vehiclesData = [{
         plateNumber: vehiclePlate,
         vehicleType: vehicleType as any || undefined,
@@ -855,6 +936,7 @@ function NewTowForm() {
         towType: 'simple',
         notes: notes || undefined,
         finalPrice: finalPrice || undefined,
+        priceBreakdown: priceBreakdown,
         vehicles: vehiclesData,
         legs: legsData
       })

@@ -6,6 +6,7 @@ import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
 import { getDrivers } from '../../lib/queries/drivers'
 import { TowWithDetails } from '../../lib/queries/tows'
 import { DriverWithDetails } from '../../lib/types'
+import { recalculateTowPrice, updateTow } from '../../lib/queries/tows'
 import { 
   ChevronRight,
   ChevronLeft,
@@ -71,6 +72,17 @@ export default function CalendarPage() {
   const [showDriverModal, setShowDriverModal] = useState(false)
   const [pendingSlot, setPendingSlot] = useState<{ date: Date; hour: number } | null>(null)
   const [towToAssign, setTowToAssign] = useState<TowWithDetails | null>(null)
+
+  // מודל עדכון מחיר
+  const [showPriceUpdateModal, setShowPriceUpdateModal] = useState(false)
+  const [priceUpdateInfo, setPriceUpdateInfo] = useState<{
+    towId: string
+    oldPrice: number
+    newPrice: number
+    newBreakdown: any
+    customerName: string
+  } | null>(null)
+  const [updatingPrice, setUpdatingPrice] = useState(false)
 
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
@@ -295,15 +307,17 @@ export default function CalendarPage() {
 
   const handleDrop = async (e: React.DragEvent, dayIndex: number, hour: number, driverId?: string) => {
     e.preventDefault()
-    if (!draggedTow) return
+    if (!draggedTow || !companyId) return
 
     const targetDate = view === 'week' ? weekDays[dayIndex].fullDate : selectedDate
     const newDate = new Date(targetDate)
     newDate.setHours(Math.floor(hour), (hour % 1) * 60, 0, 0)
 
     try {
+      // עדכון הזמן
       await updateTowSchedule(draggedTow.id, newDate, driverId)
       
+      // עדכון מקומי
       setTows(tows.map(t => 
         t.id === draggedTow.id 
           ? { 
@@ -313,12 +327,61 @@ export default function CalendarPage() {
             }
           : t
       ))
+
+      // בדיקה אם יש פירוט מחיר - אם כן, נחשב מחדש
+      if (draggedTow.price_breakdown) {
+        const result = await recalculateTowPrice(draggedTow.id, newDate, companyId)
+        
+        if (result && result.oldPrice !== result.newPrice) {
+          // המחיר השתנה - מציגים מודל
+          setPriceUpdateInfo({
+            towId: draggedTow.id,
+            oldPrice: result.oldPrice,
+            newPrice: result.newPrice,
+            newBreakdown: result.newBreakdown,
+            customerName: draggedTow.customer?.name || 'ללא לקוח'
+          })
+          setShowPriceUpdateModal(true)
+        }
+      }
     } catch (error) {
       console.error('Error updating tow schedule:', error)
     }
     
     setDraggedTow(null)
   }
+
+  const handleConfirmPriceUpdate = async () => {
+  if (!priceUpdateInfo) return
+  
+  setUpdatingPrice(true)
+  try {
+    await updateTow({
+      towId: priceUpdateInfo.towId,
+      finalPrice: priceUpdateInfo.newPrice,
+      priceBreakdown: priceUpdateInfo.newBreakdown
+    })
+    
+    // עדכון מקומי
+    setTows(tows.map(t => 
+      t.id === priceUpdateInfo.towId 
+        ? { ...t, final_price: priceUpdateInfo.newPrice, price_breakdown: priceUpdateInfo.newBreakdown }
+        : t
+    ))
+    
+    setShowPriceUpdateModal(false)
+    setPriceUpdateInfo(null)
+  } catch (error) {
+    console.error('Error updating price:', error)
+  } finally {
+    setUpdatingPrice(false)
+  }
+}
+
+const handleSkipPriceUpdate = () => {
+  setShowPriceUpdateModal(false)
+  setPriceUpdateInfo(null)
+}
 
   // פתיחת מודל בחירת נהג למשבצת ריקה
   const handleSlotClick = (date: Date, hour: number) => {
@@ -1016,6 +1079,62 @@ export default function CalendarPage() {
                 className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
               >
                 ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* מודל עדכון מחיר */}
+      {showPriceUpdateModal && priceUpdateInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+            <div className="px-5 py-4 bg-amber-500 text-white">
+              <h2 className="font-bold text-lg">עדכון מחיר</h2>
+              <p className="text-white/80 text-sm">{priceUpdateInfo.customerName}</p>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">המחיר עודכן בעקבות שינוי הזמן:</p>
+                
+                <div className="flex items-center justify-center gap-4">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500">מחיר קודם</p>
+                    <p className="text-xl font-bold text-gray-400 line-through">₪{priceUpdateInfo.oldPrice}</p>
+                  </div>
+                  <div className="text-2xl text-gray-400">→</div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500">מחיר חדש</p>
+                    <p className="text-2xl font-bold text-amber-600">₪{priceUpdateInfo.newPrice}</p>
+                  </div>
+                </div>
+                
+                {priceUpdateInfo.newPrice > priceUpdateInfo.oldPrice ? (
+                  <p className="text-sm text-amber-600 mt-3">
+                    +₪{priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice} (תוספת זמן)
+                  </p>
+                ) : (
+                  <p className="text-sm text-green-600 mt-3">
+                    -₪{priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice} (ללא תוספת זמן)
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={handleSkipPriceUpdate}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+              >
+                השאר מחיר קודם
+              </button>
+              <button
+                onClick={handleConfirmPriceUpdate}
+                disabled={updatingPrice}
+                className="flex-1 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors font-medium disabled:bg-gray-300"
+              >
+                {updatingPrice ? 'מעדכן...' : 'עדכן מחיר'}
               </button>
             </div>
           </div>

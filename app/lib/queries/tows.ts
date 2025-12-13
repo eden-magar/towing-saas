@@ -2,6 +2,21 @@ import { supabase } from '../supabase'
 
 // ==================== טיפוסים ====================
 
+export interface PriceBreakdown {
+  base_price: number
+  vehicle_type: string
+  distance_km: number
+  distance_price: number
+  time_surcharges: { id: string; label: string; percent: number; amount: number }[]
+  location_surcharges: { id: string; label: string; percent: number; amount: number }[]
+  service_surcharges: { id: string; label: string; price: number; units?: number; amount: number }[]
+  subtotal: number
+  discount_percent: number
+  discount_amount: number
+  vat_amount: number
+  total: number
+}
+
 export interface TowVehicle {
   id: string
   tow_id: string
@@ -51,6 +66,7 @@ export interface TowWithDetails {
   notes: string | null
   recommended_price: number | null
   final_price: number | null
+  price_breakdown: PriceBreakdown | null
   price_list_id: string | null
   started_at: string | null
   completed_at: string | null
@@ -220,6 +236,7 @@ interface CreateTowInput {
   scheduledAt?: string
   notes?: string
   finalPrice?: number
+  priceBreakdown?: PriceBreakdown
   vehicles: {
     plateNumber: string
     manufacturer?: string
@@ -260,6 +277,7 @@ export async function createTow(input: CreateTowInput) {
       driver_id: input.driverId || null,
       truck_id: input.truckId || null,
       tow_type: input.towType,
+      price_breakdown: input.priceBreakdown || null,
       status,
       scheduled_at: input.scheduledAt || null,
       notes: input.notes || null,
@@ -422,6 +440,7 @@ interface UpdateTowInput {
   notes?: string | null
   finalPrice?: number | null
   scheduledAt?: string | null
+  priceBreakdown?: PriceBreakdown | null
   vehicles?: {
     id?: string // אם קיים - עדכון, אם לא - יצירה
     plateNumber: string
@@ -450,6 +469,7 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.notes !== undefined) towUpdates.notes = input.notes
   if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
   if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt  // הוספת זה
+  if (input.priceBreakdown !== undefined) towUpdates.price_breakdown = input.priceBreakdown
 
 
   if (Object.keys(towUpdates).length > 0) {
@@ -546,4 +566,97 @@ export async function deleteTow(towId: string) {
   }
 
   return true
+}
+
+// ==================== חישוב מחיר מחדש לפי תאריך ====================
+
+export async function recalculateTowPrice(
+  towId: string,
+  newScheduledAt: Date,
+  companyId: string
+): Promise<{ oldPrice: number; newPrice: number; newBreakdown: PriceBreakdown } | null> {
+  // שליפת הגרירה
+  const tow = await getTow(towId)
+  if (!tow || !tow.price_breakdown) return null
+
+  const oldPrice = tow.final_price || 0
+  const breakdown = { ...tow.price_breakdown }
+
+  // שליפת תוספות זמן
+  const { data: timeSurcharges } = await supabase
+    .from('time_surcharges')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('is_active', true)
+
+  if (!timeSurcharges) return null
+
+  // חישוב תוספות זמן חדשות
+  const hour = newScheduledAt.getHours()
+  const minute = newScheduledAt.getMinutes()
+  const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
+  const dayOfWeek = newScheduledAt.getDay() // 0 = Sunday, 6 = Saturday
+
+  const activeTimeSurcharges = timeSurcharges.filter(surcharge => {
+    // בדיקת יום
+    if (surcharge.day_type === 'saturday' && dayOfWeek !== 6) return false
+    if (surcharge.day_type === 'weekday' && dayOfWeek === 6) return false
+    // holiday נבדק בנפרד
+
+    // בדיקת שעות
+    if (surcharge.start_time && surcharge.end_time) {
+      const start = surcharge.start_time
+      const end = surcharge.end_time
+
+      if (start < end) {
+        // טווח רגיל (למשל 15:00-19:00)
+        if (timeStr < start || timeStr >= end) return false
+      } else {
+        // טווח שחוצה חצות (למשל 19:00-07:00)
+        if (timeStr < start && timeStr >= end) return false
+      }
+    }
+
+    return true
+  })
+
+  // חישוב הסכום הבסיסי (בלי תוספות זמן)
+  const baseSubtotal = breakdown.base_price + breakdown.distance_price
+
+  // חישוב תוספות זמן חדשות
+  const newTimeSurcharges = activeTimeSurcharges.map(s => ({
+    id: s.id,
+    label: s.label,
+    percent: s.surcharge_percent,
+    amount: Math.round(baseSubtotal * s.surcharge_percent / 100)
+  }))
+  
+  // לוקחים רק את התוספת הגבוהה ביותר
+  const timeAmount = newTimeSurcharges.reduce((max, s) => Math.max(max, s.amount), 0)
+
+  // תוספות מיקום ושירותים נשארות כמו שהיו
+  const locationAmount = breakdown.location_surcharges.reduce((sum, s) => sum + s.amount, 0)
+  const servicesAmount = breakdown.service_surcharges.reduce((sum, s) => sum + s.amount, 0)
+
+  // חישוב סופי
+  const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
+  const discountAmount = Math.round(beforeDiscount * breakdown.discount_percent / 100)
+  const beforeVat = beforeDiscount - discountAmount
+  const vatAmount = Math.round(beforeVat * 0.18)
+  const newTotal = beforeVat + vatAmount
+
+  const newBreakdown: PriceBreakdown = {
+    ...breakdown,
+    time_surcharges: newTimeSurcharges,
+    subtotal: beforeDiscount,
+    discount_amount: discountAmount,
+    vat_amount: vatAmount,
+    total: newTotal
+  }
+
+  return {
+    oldPrice,
+    newPrice: newTotal,
+    newBreakdown
+  }
 }
