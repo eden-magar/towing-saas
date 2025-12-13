@@ -597,13 +597,27 @@ export async function recalculateTowPrice(
   const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
   const dayOfWeek = newScheduledAt.getDay() // 0 = Sunday, 6 = Saturday
 
-  const activeTimeSurcharges = timeSurcharges.filter(surcharge => {
-    // בדיקת יום
-    if (surcharge.day_type === 'saturday' && dayOfWeek !== 6) return false
-    if (surcharge.day_type === 'weekday' && dayOfWeek === 6) return false
-    // holiday נבדק בנפרד
+  const isSaturday = dayOfWeek === 6
+  const isFriday = dayOfWeek === 5
 
-    // בדיקת שעות
+  const activeTimeSurcharges = timeSurcharges.filter(surcharge => {
+    // שבת - רק תוספת שבת, בלי בדיקת שעות
+    if (isSaturday) {
+      return surcharge.day_type === 'saturday'
+    }
+    
+    // שישי - רק תוספת שישי אם יש, בלי בדיקת שעות
+    if (isFriday) {
+      return surcharge.day_type === 'friday'
+    }
+    
+    // יום חול - בודקים תוספות לפי שעה בלבד
+    // לא כולל תוספות של שבת/שישי/חג
+    if (surcharge.day_type === 'saturday' || surcharge.day_type === 'friday' || surcharge.day_type === 'holiday') {
+      return false
+    }
+    
+    // בדיקת שעות ליום חול
     if (surcharge.start_time && surcharge.end_time) {
       const start = surcharge.start_time
       const end = surcharge.end_time
@@ -645,24 +659,30 @@ export async function recalculateTowPrice(
   const vatAmount = Math.round(beforeVat * 0.18)
   const newTotal = beforeVat + vatAmount
 
+  // שמירת רק התוספת הגבוהה ביותר ב-breakdown
+  const highestSurcharge = newTimeSurcharges.length > 0 
+    ? [newTimeSurcharges.reduce((max, s) => s.amount > max.amount ? s : max, newTimeSurcharges[0])]
+    : []
+
   const newBreakdown: PriceBreakdown = {
     ...breakdown,
-    time_surcharges: newTimeSurcharges,
+    time_surcharges: highestSurcharge,
     subtotal: beforeDiscount,
     discount_amount: discountAmount,
     vat_amount: vatAmount,
     total: newTotal
   }
 
-    console.log('Price recalculation:', {
-    baseSubtotal,
-    oldTimeSurcharges: breakdown.time_surcharges,
-    newTimeSurcharges,
+  console.log('Price recalculation:', {
+    dayOfWeek,
+    isSaturday,
+    timeStr,
+    activeTimeSurcharges: activeTimeSurcharges.map(s => s.label),
     timeAmount,
-    beforeDiscount,
     oldTotal: oldPrice,
     newTotal
   })
+
   return {
     oldPrice,
     newPrice: newTotal,

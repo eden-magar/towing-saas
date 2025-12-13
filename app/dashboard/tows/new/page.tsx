@@ -943,7 +943,13 @@ function NewTowForm() {
       })
 
       setSavedTowId(result.id)
-      setShowAssignNowModal(true)
+      // להציג מודל שיבוץ רק אם אין נהג
+      if (!preSelectedDriverId) {
+        setShowAssignNowModal(true)
+      } else {
+        // אם יש נהג - לעבור ישירות ליומן
+        router.push('/dashboard/calendar')
+      }
     } catch (err) {
       console.error('Error creating tow:', err)
       setError('שגיאה ביצירת הגרירה')
