@@ -934,6 +934,7 @@ function NewTowForm() {
         customerId: selectedCustomerId || undefined,
         driverId: preSelectedDriverId || undefined,
         towType: 'simple',
+        scheduledAt: towDate && towTime ? new Date(`${towDate}T${towTime}:00`).toISOString() : new Date().toISOString(),
         notes: notes || undefined,
         finalPrice: finalPrice || undefined,
         priceBreakdown: priceBreakdown,

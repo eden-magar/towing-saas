@@ -654,6 +654,15 @@ export async function recalculateTowPrice(
     total: newTotal
   }
 
+    console.log('Price recalculation:', {
+    baseSubtotal,
+    oldTimeSurcharges: breakdown.time_surcharges,
+    newTimeSurcharges,
+    timeAmount,
+    beforeDiscount,
+    oldTotal: oldPrice,
+    newTotal
+  })
   return {
     oldPrice,
     newPrice: newTotal,
