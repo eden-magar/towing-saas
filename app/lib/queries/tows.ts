@@ -421,6 +421,7 @@ interface UpdateTowInput {
   customerId?: string | null
   notes?: string | null
   finalPrice?: number | null
+  scheduledAt?: string | null
   vehicles?: {
     id?: string // אם קיים - עדכון, אם לא - יצירה
     plateNumber: string
@@ -448,6 +449,8 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.customerId !== undefined) towUpdates.customer_id = input.customerId
   if (input.notes !== undefined) towUpdates.notes = input.notes
   if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
+  if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt  // הוספת זה
+
 
   if (Object.keys(towUpdates).length > 0) {
     const { error: towError } = await supabase

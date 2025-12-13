@@ -93,6 +93,9 @@ export default function TowDetailsPage() {
   const [editToAddress, setEditToAddress] = useState('')
   const [editFinalPrice, setEditFinalPrice] = useState(0)
 
+
+  const [editScheduledDate, setEditScheduledDate] = useState('')
+  const [editScheduledTime, setEditScheduledTime] = useState('')
   const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
   const statusConfig: Record<string, { label: string; color: string }> = {
@@ -182,6 +185,9 @@ export default function TowDetailsPage() {
       setEditFinalPrice(tow.final_price || 0)
       setEditFromAddress(getFromAddress())
       setEditToAddress(getToAddress())
+      const scheduledDate = new Date(tow.scheduled_at || tow.created_at)
+      setEditScheduledDate(scheduledDate.toISOString().split('T')[0])
+      setEditScheduledTime(scheduledDate.toTimeString().slice(0, 5))
       setEditVehicles(tow.vehicles?.map((v: any) => ({
         id: v.id,
         plateNumber: v.plate_number,
@@ -208,6 +214,9 @@ export default function TowDetailsPage() {
       return
     }
 
+    // יצירת תאריך חדש
+    const newScheduledAt = new Date(`${editScheduledDate}T${editScheduledTime}:00`)
+
     setSaving(true)
     try {
       await updateTow({
@@ -215,6 +224,7 @@ export default function TowDetailsPage() {
         customerId: editCustomerId,
         notes: editNotes || null,
         finalPrice: editFinalPrice || null,
+        scheduledAt: newScheduledAt.toISOString(),
         vehicles: editVehicles.map(v => ({
           plateNumber: v.plateNumber,
           manufacturer: v.manufacturer || undefined,
@@ -680,6 +690,62 @@ export default function TowDetailsPage() {
                             {tow.customer.phone}
                           </a>
                         )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* תאריך ושעה */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                  <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                    <Clock size={18} />
+                    תאריך ושעה
+                  </h2>
+                </div>
+                <div className="p-4 sm:p-5">
+                  {isEditing ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">תאריך</label>
+                        <input
+                          type="date"
+                          value={editScheduledDate}
+                          onChange={(e) => setEditScheduledDate(e.target.value)}
+                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">שעה</label>
+                        <input
+                          type="time"
+                          value={editScheduledTime}
+                          onChange={(e) => setEditScheduledTime(e.target.value)}
+                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-[#33d4ff]/10 rounded-lg flex items-center justify-center">
+                        <Clock size={20} className="text-[#33d4ff]" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">
+                          {new Date(tow.scheduled_at || tow.created_at).toLocaleDateString('he-IL', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(tow.scheduled_at || tow.created_at).toLocaleTimeString('he-IL', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
                       </div>
                     </div>
                   )}
