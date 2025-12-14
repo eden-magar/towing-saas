@@ -116,17 +116,44 @@ export function VehicleLookup({
                   {vehicleData.data.color && (
                     <span>צבע: <strong>{vehicleData.data.color}</strong></span>
                   )}
-                  {vehicleData.data.driveType && (
-                    <span>הנעה: <strong>{vehicleData.data.driveType}</strong></span>
+                  
+                  {/* שדות לרכב רגיל */}
+                  {vehicleData.source !== 'machinery' && (
+                    <>
+                      {/* סוג רכב לדו גלגלי */}
+                      {vehicleData.source === 'motorcycle' && vehicleData.data.vehicleType && (
+                        <span>סוג: <strong>{vehicleData.data.vehicleType}</strong></span>
+                      )}
+                      {vehicleData.data.driveType && (
+                        <span>הנעה: <strong>{vehicleData.data.driveType}</strong></span>
+                      )}
+                      {vehicleData.data.driveTechnology && (
+                        <span>טכנולוגיה: <strong>{vehicleData.data.driveTechnology}</strong></span>
+                      )}
+                      {vehicleData.data.totalWeight && (
+                        <span>משקל: <strong>{vehicleData.data.totalWeight.toLocaleString()} ק״ג</strong></span>
+                      )}
+                      {vehicleData.data.gearType && (
+                        <span>גיר: <strong>{vehicleData.data.gearType}</strong></span>
+                      )}
+                    </>
                   )}
-                  {vehicleData.data.driveTechnology && (
-                    <span>טכנולוגיה: <strong>{vehicleData.data.driveTechnology}</strong></span>
-                  )}
-                  {vehicleData.data.totalWeight && (
-                    <span>משקל: <strong>{vehicleData.data.totalWeight.toLocaleString()} ק״ג</strong></span>
-                  )}
-                  {vehicleData.data.gearType && (
-                    <span>גיר: <strong>{vehicleData.data.gearType}</strong></span>
+                  {/* שדות לצמ"ה */}
+                  {vehicleData.source === 'machinery' && (
+                    <>
+                      {vehicleData.data.machineryType && (
+                        <span>סוג צמ״ה: <strong>{vehicleData.data.machineryType}</strong></span>
+                      )}
+                      {vehicleData.data.selfWeight && (
+                        <span>משקל עצמי: <strong>{vehicleData.data.selfWeight} טון</strong></span>
+                      )}
+                      {vehicleData.data.totalWeightTon && (
+                        <span>משקל כולל: <strong>{vehicleData.data.totalWeightTon} טון</strong></span>
+                      )}
+                      {vehicleData.data.driveType && (
+                        <span>הנעה: <strong>{vehicleData.data.driveType}</strong></span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

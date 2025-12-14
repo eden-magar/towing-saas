@@ -90,6 +90,7 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
 
     const isPrivate = data.source_type === 'private'
     const isMachinery = data.source_type === 'machinery'
+    const isMotorcycle = data.source_type === 'motorcycle'
 
     // משתנים למידע נוסף
     let driveType = data.drive_type
@@ -120,11 +121,18 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
     let machineryType = null
     let selfWeight = null
     let totalWeightTon = null
-    
+
     if (isMachinery && data.raw_data) {
       machineryType = data.raw_data.sug_tzama_nm || data.vehicle_type
-      selfWeight = data.raw_data.mishkal_ton || null
-      totalWeightTon = data.raw_data.mishkal_kolel_ton || null
+      selfWeight = data.raw_data.mishkal_ton !== undefined ? data.raw_data.mishkal_ton : null
+      totalWeightTon = data.raw_data.mishkal_kolel_ton !== undefined ? data.raw_data.mishkal_kolel_ton : null
+      driveType = data.raw_data.hanaa_nm || driveType
+    }
+
+    // לדו גלגלי - שליפת סוג רכב מ-raw_data
+    let motorcycleType = null
+    if (isMotorcycle && data.raw_data) {
+      motorcycleType = data.raw_data.sug_rechev_nm || data.vehicle_type
     }
 
     return {
@@ -139,7 +147,7 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
         color: data.color,
         fuelType: data.fuel_type,
         totalWeight: isMachinery ? null : totalWeight,
-        vehicleType: data.vehicle_type,
+        vehicleType: isMotorcycle ? motorcycleType : data.vehicle_type,
         driveType: driveType,
         driveTechnology: driveTechnology,
         gearType: gearType,
