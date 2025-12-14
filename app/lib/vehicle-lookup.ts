@@ -76,9 +76,6 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
 /**
  * חיפוש רכב ב-Supabase (מהיר)
  */
-/**
- * חיפוש רכב ב-Supabase (מהיר)
- */
 async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupResult | null> {
   try {
     const { data, error } = await supabase
@@ -92,6 +89,7 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
     }
 
     const isPrivate = data.source_type === 'private'
+    const isMachinery = data.source_type === 'machinery'
 
     // משתנים למידע נוסף
     let driveType = data.drive_type
@@ -118,6 +116,17 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
       }
     }
 
+    // לצמ"ה - שליפת שדות נוספים מ-raw_data
+    let machineryType = null
+    let selfWeight = null
+    let totalWeightTon = null
+    
+    if (isMachinery && data.raw_data) {
+      machineryType = data.raw_data.sug_tzama_nm || data.vehicle_type
+      selfWeight = data.raw_data.mishkal_ton || null
+      totalWeightTon = data.raw_data.mishkal_kolel_ton || null
+    }
+
     return {
       found: true,
       source: data.source_type as VehicleType,
@@ -129,11 +138,15 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
         year: data.year,
         color: data.color,
         fuelType: data.fuel_type,
-        totalWeight: totalWeight,
+        totalWeight: isMachinery ? null : totalWeight,
         vehicleType: data.vehicle_type,
         driveType: driveType,
         driveTechnology: driveTechnology,
         gearType: gearType,
+        // שדות צמ"ה
+        machineryType: machineryType,
+        selfWeight: selfWeight,
+        totalWeightTon: totalWeightTon,
       },
     }
   } catch (error) {
@@ -221,6 +234,7 @@ async function searchInResource(
  */
 function mapVehicleData(rawData: any, source: string, licenseNumber: string): VehicleLookupResult['data'] {
   const fields = FIELD_MAPPINGS[source]
+  const isMachinery = source === 'machinery'
   
   const gearValue = rawData[fields.gearType]
   let gearType: string | null = null
@@ -239,11 +253,15 @@ function mapVehicleData(rawData: any, source: string, licenseNumber: string): Ve
     year: rawData[fields.year] ? parseInt(rawData[fields.year], 10) : null,
     color: rawData[fields.color] || null,
     fuelType: rawData[fields.fuelType] || null,
-    totalWeight: rawData[fields.totalWeight] ? parseFloat(rawData[fields.totalWeight]) : null,
+    totalWeight: isMachinery ? null : (rawData[fields.totalWeight] ? parseFloat(rawData[fields.totalWeight]) : null),
     vehicleType: rawData[fields.vehicleType] || null,
     driveType: rawData[fields.driveType] || null,
     driveTechnology: rawData[fields.driveTechnology] || null,
     gearType: gearType,
+    // שדות צמ"ה
+    machineryType: isMachinery ? (rawData.sug_tzama_nm || null) : null,
+    selfWeight: isMachinery ? (rawData.mishkal_ton ? parseFloat(rawData.mishkal_ton) : null) : null,
+    totalWeightTon: isMachinery ? (rawData.mishkal_kolel_ton ? parseFloat(rawData.mishkal_kolel_ton) : null) : null,
   }
 }
 

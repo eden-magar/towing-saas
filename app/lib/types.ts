@@ -301,18 +301,22 @@ export interface VehicleLookupResult {
   source: 'private' | 'motorcycle' | 'heavy' | 'machinery' | null
   sourceLabel: string
   data: {
-  plateNumber: string
-  manufacturer: string | null    // tozeret_nm
-  model: string | null           // kinuy_mishari / degem_nm
-  year: number | null            // shnat_yitzur
-  color: string | null           // tzeva_rechev
-  fuelType: string | null        // sug_delek_nm
-  totalWeight: number | null     // mishkal_kolel
-  vehicleType: string | null     // sug_rechev_nm
-  driveType: string | null       // hanaa_nm - הנעה
-  driveTechnology: string | null // technologiat_hanaa_nm - טכנולוגיית הנעה
-  gearType: string | null        // automatic_ind - סוג גיר
-} | null
+    plateNumber: string
+    manufacturer: string | null    // tozeret_nm
+    model: string | null           // kinuy_mishari / degem_nm
+    year: number | null            // shnat_yitzur
+    color: string | null           // tzeva_rechev
+    fuelType: string | null        // sug_delek_nm
+    totalWeight: number | null     // mishkal_kolel
+    vehicleType: string | null     // sug_rechev_nm
+    driveType: string | null       // hanaa_nm - הנעה
+    driveTechnology: string | null // technologiat_hanaa_nm - טכנולוגיית הנעה
+    gearType: string | null        // automatic_ind - סוג גיר
+    // שדות צמ"ה
+    machineryType: string | null   // sug_tzama_nm - סוג צמ"ה
+    selfWeight: number | null      // mishkal_ton - משקל עצמי
+    totalWeightTon: number | null  // mishkal_kolel_ton - משקל כולל בטון
+  } | null
   error?: string
 }
 
