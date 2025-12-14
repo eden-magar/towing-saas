@@ -71,7 +71,15 @@ export function VehicleLookup({
           <input
             type="text"
             value={plateNumber}
-            onChange={(e) => onPlateChange(e.target.value)}
+            onChange={(e) => {
+            const newValue = e.target.value
+            onPlateChange(newValue)
+            // אם נמחק מספר הרכב - נקה את הנתונים
+            if (newValue.replace(/[^0-9]/g, '').length < 5) {
+              onVehicleDataChange(null)
+              onVehicleTypeChange('')
+            }
+          }}
             placeholder="12-345-67"
             disabled={disabled}
             className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"

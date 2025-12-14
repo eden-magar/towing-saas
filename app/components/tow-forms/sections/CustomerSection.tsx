@@ -184,15 +184,23 @@ export function CustomerSection({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">תאריך ביצוע</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => onIsTodayChange(true)}
-                className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
-                  isToday ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                היום
-              </button>
+            <div className="flex gap-2">.
+            <button
+              onClick={() => {
+                const now = new Date()
+                const dateStr = now.toISOString().split('T')[0]
+                const timeStr = now.toTimeString().slice(0, 5)
+                onTowDateChange(dateStr)
+                onTowTimeChange(timeStr)
+                onIsTodayChange(true)
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
+                isToday ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              עכשיו
+            </button>
+
               <input
                 type="date"
                 value={towDate}
