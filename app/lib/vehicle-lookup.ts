@@ -76,6 +76,9 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
 /**
  * חיפוש רכב ב-Supabase (מהיר)
  */
+/**
+ * חיפוש רכב ב-Supabase (מהיר)
+ */
 async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupResult | null> {
   try {
     const { data, error } = await supabase
@@ -86,6 +89,33 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
 
     if (error || !data) {
       return null
+    }
+
+    const isPrivate = data.source_type === 'private'
+
+    // משתנים למידע נוסף
+    let driveType = data.drive_type
+    let driveTechnology = data.drive_technology
+    let gearType = data.gear_type
+    let totalWeight = data.total_weight
+
+    // לרכב פרטי - שליפת מידע נוסף מטבלת vehicle_models
+    if (isPrivate) {
+      const { data: modelData } = await supabase
+        .from('vehicle_models')
+        .select('*')
+        .eq('manufacturer', data.manufacturer)
+        .eq('model', data.model)
+        .eq('year', data.year)
+        .single()
+
+      if (modelData) {
+        console.log('✅ נמצא מידע נוסף מטבלת דגמים')
+        driveType = modelData.drive_type || driveType
+        driveTechnology = modelData.drive_technology || driveTechnology
+        gearType = modelData.gear_type || gearType
+        totalWeight = modelData.total_weight || totalWeight
+      }
     }
 
     return {
@@ -99,11 +129,11 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
         year: data.year,
         color: data.color,
         fuelType: data.fuel_type,
-        totalWeight: data.total_weight,
+        totalWeight: totalWeight,
         vehicleType: data.vehicle_type,
-        driveType: data.drive_type,
-        driveTechnology: data.drive_technology,
-        gearType: data.gear_type,
+        driveType: driveType,
+        driveTechnology: driveTechnology,
+        gearType: gearType,
       },
     }
   } catch (error) {
