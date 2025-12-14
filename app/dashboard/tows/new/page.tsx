@@ -938,6 +938,7 @@ function NewTowForm() {
         notes: notes || undefined,
         finalPrice: finalPrice || undefined,
         priceBreakdown: priceBreakdown,
+        priceMode: priceMode,
         vehicles: vehiclesData,
         legs: legsData
       })

@@ -72,6 +72,7 @@ export interface TowWithDetails {
   completed_at: string | null
   created_at: string
   updated_at: string
+  price_mode: 'recommended' | 'fixed' | 'customer' | 'custom' | null
   // שדות מורחבים
   customer: {
     id: string
@@ -236,6 +237,7 @@ interface CreateTowInput {
   scheduledAt?: string
   notes?: string
   finalPrice?: number
+  priceMode?: 'recommended' | 'fixed' | 'customer' | 'custom'
   priceBreakdown?: PriceBreakdown
   vehicles: {
     plateNumber: string
@@ -280,7 +282,9 @@ export async function createTow(input: CreateTowInput) {
       status,
       scheduled_at: input.scheduledAt || null,
       notes: input.notes || null,
+      price_mode: input.priceMode || 'recommended',
       final_price: input.finalPrice || null
+      
     })
 
   if (towError) {
