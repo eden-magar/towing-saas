@@ -1,15 +1,16 @@
 // ==================== Vehicle Lookup Service ====================
-// שירות חיפוש פרטי רכב ממאגרי משרד התחבורה (data.gov.il)
+// שירות חיפוש פרטי רכב - קודם ב-Supabase, אח"כ ב-data.gov.il
 
 import { VehicleLookupResult, VehicleType } from './types'
+import { supabase } from './supabase'
 
 // מזהי המאגרים ב-data.gov.il
 const API_RESOURCES = {
-  private: '053cea08-09bc-40ec-8f7a-156f0677aff3',      // רכב פרטי
-  motorcycle: 'bf9df4e2-d90d-4c0a-a400-19e15af8e95f',   // דו גלגלי / טרקטורון
-  heavy: 'cd3acc5c-03c3-4c89-9c54-d40f93c0d790',        // רכב כבד (מעל 3.5 טון)
-  machinery: '58dc4654-16b1-42ed-8170-98fadec153ea',    // צמ"ה
-  private_extra: '142afde2-6228-49f9-8a29-9b6c3a0cbe40', // מאגר מורחב לרכב פרטי
+  private: '053cea08-09bc-40ec-8f7a-156f0677aff3',
+  motorcycle: 'bf9df4e2-d90d-4c0a-a400-19e15af8e95f',
+  heavy: 'cd3acc5c-03c3-4c89-9c54-d40f93c0d790',
+  machinery: '58dc4654-16b1-42ed-8170-98fadec153ea',
+  private_extra: '142afde2-6228-49f9-8a29-9b6c3a0cbe40',
 }
 
 // תוויות לסוגי רכב
@@ -73,7 +74,77 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
 }
 
 /**
- * חיפוש רכב במאגר ספציפי
+ * חיפוש רכב ב-Supabase (מהיר)
+ */
+async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupResult | null> {
+  try {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*')
+      .eq('license_number', licenseNumber)
+      .single()
+
+    if (error || !data) {
+      return null
+    }
+
+    return {
+      found: true,
+      source: data.source_type as VehicleType,
+      sourceLabel: SOURCE_LABELS[data.source_type] || 'רכב',
+      data: {
+        plateNumber: data.license_number,
+        manufacturer: data.manufacturer,
+        model: data.model,
+        year: data.year,
+        color: data.color,
+        fuelType: data.fuel_type,
+        totalWeight: data.total_weight,
+        vehicleType: data.vehicle_type,
+        driveType: data.drive_type,
+        driveTechnology: data.drive_technology,
+        gearType: data.gear_type,
+      },
+    }
+  } catch (error) {
+    console.error('Error searching in Supabase:', error)
+    return null
+  }
+}
+
+/**
+ * שמירת רכב ב-Supabase (לאחר מציאה ב-API)
+ */
+async function saveToSupabase(
+  licenseNumber: string,
+  sourceType: string,
+  mappedData: VehicleLookupResult['data'],
+  rawData: any
+): Promise<void> {
+  try {
+    await supabase.from('vehicles').upsert({
+      license_number: licenseNumber,
+      source_type: sourceType,
+      manufacturer: mappedData?.manufacturer,
+      model: mappedData?.model,
+      year: mappedData?.year,
+      color: mappedData?.color,
+      fuel_type: mappedData?.fuelType,
+      total_weight: mappedData?.totalWeight,
+      vehicle_type: mappedData?.vehicleType,
+      drive_type: mappedData?.driveType,
+      drive_technology: mappedData?.driveTechnology,
+      gear_type: mappedData?.gearType,
+      raw_data: rawData,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'license_number' })
+  } catch (error) {
+    console.error('Error saving to Supabase:', error)
+  }
+}
+
+/**
+ * חיפוש רכב במאגר ספציפי ב-API
  */
 async function searchInResource(
   licenseNumber: string,
@@ -81,10 +152,8 @@ async function searchInResource(
   source: string
 ): Promise<{ found: boolean; data: any }> {
   try {
-    // ניקוי מספר הרישוי
     const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
     
-    // ניסיון ראשון - חיפוש עם filter
     const url1 = `https://data.gov.il/api/3/action/datastore_search?resource_id=${resourceId}&filters={"mispar_rechev":"${parseInt(cleanLicense, 10).toString()}"}`
     
     const response1 = await fetch(url1)
@@ -94,14 +163,12 @@ async function searchInResource(
       return { found: true, data: data1.result.records[0] }
     }
     
-    // ניסיון שני - חיפוש כללי
     const url2 = `https://data.gov.il/api/3/action/datastore_search?resource_id=${resourceId}&q=${cleanLicense}`
     
     const response2 = await fetch(url2)
     const data2 = await response2.json()
     
     if (data2.success && data2.result?.records?.length > 0) {
-      // בדיקה שהרשומה מכילה את מספר הרישוי
       const record = data2.result.records.find((rec: any) => {
         const recLicense = String(rec.mispar_rechev || '').replace(/[^0-9]/g, '')
         return recLicense === cleanLicense || recLicense === parseInt(cleanLicense, 10).toString()
@@ -123,11 +190,8 @@ async function searchInResource(
  * מיפוי נתונים גולמיים לפורמט אחיד
  */
 function mapVehicleData(rawData: any, source: string, licenseNumber: string): VehicleLookupResult['data'] {
-  console.log('🚗 Raw data from API:', rawData)  // הוסיפי שורה זו
-
   const fields = FIELD_MAPPINGS[source]
   
-  // המרת automatic_ind לטקסט
   const gearValue = rawData[fields.gearType]
   let gearType: string | null = null
   if (gearValue === 'A' || gearValue === 'אוטומטי') {
@@ -166,7 +230,6 @@ async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
     const data = await response.json()
     
     if (data.success && data.result?.records?.length > 0) {
-      // חיפוש התאמה מדויקת לפי שנה, קוד דגם ונפח מנוע
       const match = data.result.records.find((record: any) =>
         record.shnat_yitzur == vehicle.shnat_yitzur &&
         record.degem_cd == vehicle.degem_cd &&
@@ -174,7 +237,6 @@ async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
       )
       
       if (match) {
-        // המרת automatic_ind לטקסט
         if ('automatic_ind' in match) {
           match.automatic_ind = match.automatic_ind === '1' || match.automatic_ind === 1
             ? 'אוטומטי'
@@ -192,11 +254,9 @@ async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
 }
 
 /**
- * חיפוש רכב בכל המאגרים
- * מחזיר את הרכב מהמאגר הראשון שמצא אותו
+ * חיפוש רכב - קודם ב-Supabase, אח"כ ב-API
  */
 export async function lookupVehicle(licenseNumber: string): Promise<VehicleLookupResult> {
-  // ניקוי מספר הרישוי
   const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
   
   if (cleanLicense.length < 5) {
@@ -208,8 +268,17 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
       error: 'מספר רישוי קצר מדי',
     }
   }
+
+  // שלב 1: חיפוש ב-Supabase (מהיר)
+  const supabaseResult = await searchInSupabase(cleanLicense)
+  if (supabaseResult) {
+    console.log('✅ נמצא ב-Supabase')
+    return supabaseResult
+  }
+
+  console.log('🔍 לא נמצא ב-Supabase, מחפש ב-API...')
   
-  // סדר החיפוש: פרטי, דו גלגלי, כבד, צמ"ה
+  // שלב 2: Fallback ל-API
   const searchOrder: Array<keyof typeof API_RESOURCES> = ['private', 'motorcycle', 'heavy', 'machinery']
   
   for (const source of searchOrder) {
@@ -218,7 +287,6 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
     if (result.found) {
       const mappedData = mapVehicleData(result.data, source, cleanLicense)
       
-      // אם זה רכב פרטי - נסה להביא מידע נוסף
       if (source === 'private' && mappedData) {
         const extraData = await fetchExtraPrivateInfo(result.data)
         if (extraData) {
@@ -228,6 +296,10 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
           mappedData.gearType = extraData.automatic_ind || mappedData.gearType
         }
       }
+
+      // שמירה ב-Supabase לפעם הבאה
+      await saveToSupabase(cleanLicense, source, mappedData, result.data)
+      console.log('💾 נשמר ב-Supabase')
       
       return {
         found: true,
@@ -238,7 +310,6 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
     }
   }
   
-  // לא נמצא באף מאגר
   return {
     found: false,
     source: null,
