@@ -22,7 +22,7 @@ interface PriceSummaryProps {
   vehicleType: string
   
   // מחירון בסיס
-  basePriceList: any
+  basePriceList: Record<string, any> | null
   
   // מרחק
   distance: DistanceResult | null
@@ -49,6 +49,10 @@ interface PriceSummaryProps {
   finalPrice: number
   onSave: () => void
   saving: boolean
+  
+  // מסלול מותאם אישית
+  towType?: string
+  customRouteVehicleCount?: number
 }
 
 export function PriceSummary({
@@ -72,8 +76,12 @@ export function PriceSummary({
   customPrice,
   finalPrice,
   onSave,
-  saving
+  saving,
+  towType,
+  customRouteVehicleCount = 0
 }: PriceSummaryProps) {
+  
+  const isCustomRoute = towType === 'custom'
   
   if (!hasTowType) {
     return (
@@ -96,13 +104,25 @@ export function PriceSummary({
     'machinery': 'base_price_machinery'
   }
   
-  const priceField = vehicleType ? vehicleTypeMap[vehicleType] : null
-  const basePrice = priceField ? (basePriceList?.[priceField] || 0) : 0
-  const pricePerKm = basePriceList?.price_per_km || 0
-  const pickupToDropoffKm = distance?.distanceKm || 0
-  const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0
-  const distanceKm = pickupToDropoffKm + baseToPickupKm
-  const distancePrice = Math.round(distanceKm * pricePerKm)
+  const pricePerKm = basePriceList?.price_per_km || 12
+  const distanceKm = distance?.distanceKm || 0
+  
+  // מחיר בסיס - שונה לפי סוג המסלול
+  let basePrice = 0
+  if (isCustomRoute) {
+    // מסלול מותאם - מחיר בסיס לכל רכב (נניח פרטי)
+    const basePricePerVehicle = basePriceList?.base_price_private || 180
+    basePrice = basePricePerVehicle * customRouteVehicleCount
+  } else {
+    // גרירה רגילה
+    const priceField = vehicleType ? vehicleTypeMap[vehicleType] : null
+    basePrice = priceField ? (basePriceList?.[priceField] || 0) : 0
+  }
+  
+  // מרחק
+  const baseToPickupKm = (!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm) || 0
+  const totalDistanceKm = distanceKm + baseToPickupKm
+  const distancePrice = Math.round(totalDistanceKm * pricePerKm)
   
   const subtotal = basePrice + distancePrice
   
@@ -165,51 +185,79 @@ export function PriceSummary({
     }
   }
 
+  // בדיקה אם יש מספיק נתונים להציג
+  const hasDataForCalculation = isCustomRoute 
+    ? (customRouteVehicleCount > 0 && distanceKm > 0)
+    : hasVehicleType
+
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="space-y-2 text-sm">
         {priceMode === 'recommended' && (
           <>
-            {!hasVehicleType ? (
+            {!hasDataForCalculation ? (
               <div className="text-center py-2 text-gray-400 text-sm">
-                הזן מספר רכב לחישוב מחיר
+                {isCustomRoute 
+                  ? 'הוסף נקודות ורכבים לחישוב מחיר'
+                  : 'הזן מספר רכב לחישוב מחיר'
+                }
               </div>
             ) : (
               <>
+                {/* מחיר בסיס */}
                 <div className="flex justify-between">
-                  <span className="text-gray-500">מחיר בסיס ({getVehicleTypeLabel(vehicleType)})</span>
+                  <span className="text-gray-500">
+                    {isCustomRoute 
+                      ? `מחיר בסיס (${customRouteVehicleCount} רכבים)`
+                      : `מחיר בסיס (${getVehicleTypeLabel(vehicleType)})`
+                    }
+                  </span>
                   <span className="text-gray-700">₪{basePrice}</span>
                 </div>
-                {distanceKm > 0 && (
+                
+                {/* מרחק */}
+                {totalDistanceKm > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-500">מרחק ({distanceKm} ק״מ × ₪{pricePerKm})</span>
+                    <span className="text-gray-500">
+                      מרחק ({totalDistanceKm} ק״מ × ₪{pricePerKm})
+                    </span>
                     <span className="text-gray-700">₪{distancePrice}</span>
                   </div>
                 )}
+                
+                {/* תוספת זמן */}
                 {timeAmount > 0 && (
                   <div className="flex justify-between text-orange-600">
                     <span>{timeLabel} (+{timePercent}%)</span>
                     <span>₪{timeAmount}</span>
                   </div>
                 )}
+                
+                {/* תוספות מיקום */}
                 {activeLocationSurcharges.map(s => (
                   <div key={s.id} className="flex justify-between text-amber-600">
                     <span>{s.label} (+{s.surcharge_percent}%)</span>
                     <span>₪{Math.round(subtotal * s.surcharge_percent / 100)}</span>
                   </div>
                 ))}
+                
+                {/* תוספות שירותים */}
                 {activeServices.map((s, i) => (
                   <div key={i} className="flex justify-between text-blue-600">
                     <span>{s.label}</span>
                     <span>₪{s.amount}</span>
                   </div>
                 ))}
+                
+                {/* הנחת לקוח */}
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-emerald-600">
                     <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
                     <span>-₪{discountAmount}</span>
                   </div>
                 )}
+                
+                {/* מע"מ */}
                 {beforeVat > 0 && (
                   <div className="flex justify-between border-t border-gray-100 pt-2">
                     <span className="text-gray-500">מע״מ (18%)</span>
@@ -247,7 +295,7 @@ export function PriceSummary({
         <div className="flex justify-between items-center">
           <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
           <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-            ₪{priceMode === 'recommended' ? (hasVehicleType ? total : 0) : finalPrice}
+            ₪{priceMode === 'recommended' ? (hasDataForCalculation ? total : 0) : finalPrice}
           </span>
         </div>
       </div>

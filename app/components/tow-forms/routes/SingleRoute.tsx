@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2, Navigation } from 'lucide-react'
-import { AddressInput, AddressData, VehicleLookup, DefectSelector, StartFromBase } from '../shared'
+import { AddressInput, AddressData } from './AddressInput'
+import { VehicleLookup, DefectSelector, StartFromBase } from '../shared'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
 
@@ -36,7 +37,7 @@ interface SingleRouteProps {
   distanceLoading: boolean
   
   // יציאה מהבסיס
-  basePriceList: any
+  basePriceList: Record<string, any> | null
   startFromBase: boolean
   onStartFromBaseChange: (checked: boolean) => void
   baseToPickupDistance: DistanceResult | null

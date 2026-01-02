@@ -16,11 +16,11 @@ import {
   Car,
   Menu,
   X,
-  Plus
+  Plus,
+  Calendar,
+  Package
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-
-import { Calendar} from 'lucide-react'
 
 const menuItems = [
   { href: '/dashboard', label: 'דשבורד', icon: LayoutDashboard },
@@ -28,6 +28,7 @@ const menuItems = [
   { href: '/dashboard/calendar', label: 'יומן', icon: Calendar},
   { href: '/dashboard/drivers', label: 'נהגים', icon: UserCircle },
   { href: '/dashboard/trucks', label: 'גררים', icon: Car },
+  { href: '/dashboard/storage', label: 'אחסנה', icon: Package },
   { href: '/dashboard/customers', label: 'לקוחות', icon: Users },
   { href: '/dashboard/price-lists', label: 'מחירונים', icon: ClipboardList },
   { href: '/dashboard/invoices', label: 'חשבוניות', icon: FileText },

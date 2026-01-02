@@ -34,7 +34,7 @@ import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult }
 
 // Import form components
 import { CustomerSection, TowTypeSelector, TowType, PaymentSection, PriceSummary } from '../../../components/tow-forms/sections'
-import { SingleRoute } from '../../../components/tow-forms/routes'
+import { SingleRoute, RouteBuilder, RoutePoint } from '../../../components/tow-forms/routes'
 
 // ==================== Types ====================
 interface AddressData {
@@ -323,7 +323,8 @@ function PriceSelector({
   distance,
   basePriceList,
   fixedPriceItems,
-  selectedCustomerPricing
+  selectedCustomerPricing,
+  showRecommended = true
 }: {
   priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
   setPriceMode: (mode: 'recommended' | 'fixed' | 'customer' | 'custom') => void
@@ -336,80 +337,56 @@ function PriceSelector({
   basePriceList: any
   fixedPriceItems: FixedPriceItem[]
   selectedCustomerPricing: CustomerWithPricing | null
+  showRecommended?: boolean
 }) {
   const hasCustomerPricing = selectedCustomerPricing && selectedCustomerPricing.price_items.length > 0
   const hasFixedPrices = fixedPriceItems.length > 0
 
+  // If recommended is hidden and priceMode is recommended, switch to another mode
+  useEffect(() => {
+    if (!showRecommended && priceMode === 'recommended') {
+      if (hasCustomerPricing) {
+        setPriceMode('customer')
+      } else if (hasFixedPrices) {
+        setPriceMode('fixed')
+      } else {
+        setPriceMode('custom')
+      }
+    }
+  }, [showRecommended, priceMode, hasCustomerPricing, hasFixedPrices, setPriceMode])
+
   return (
     <div className="space-y-3">
-      {/* מחיר מומלץ */}
-      <button
-        onClick={() => { setPriceMode('recommended'); setSelectedPriceItem(null); setCustomPrice('') }}
-        className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
-          priceMode === 'recommended' ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200 hover:border-gray-300'
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              priceMode === 'recommended' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-500'
-            }`}>
-              📊
-            </div>
-            <div>
-              <p className={`font-medium ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-700'}`}>מחיר מומלץ</p>
-              <p className="text-xs text-gray-500">
-                {distance ? `${distance.distanceKm} ק״מ × ₪${basePriceList?.price_per_km || 12}` : 'חישוב אוטומטי לפי מחירון'}
-              </p>
-            </div>
-          </div>
-          <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
-            ₪{recommendedPrice}
-          </span>
-        </div>
-      </button>
-
-      {/* מחירון כללי */}
-      {hasFixedPrices && (
-        <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'fixed' ? 'border-emerald-500' : 'border-gray-200'}`}>
-          <button
-            onClick={() => { setPriceMode('fixed'); setSelectedPriceItem(null); setCustomPrice('') }}
-            className={`w-full p-4 text-right ${priceMode === 'fixed' ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
-          >
+      {/* מחיר מומלץ - only show for single tow */}
+      {showRecommended && (
+        <button
+          onClick={() => { setPriceMode('recommended'); setSelectedPriceItem(null); setCustomPrice('') }}
+          className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
+            priceMode === 'recommended' ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${priceMode === 'fixed' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                📋
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                priceMode === 'recommended' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                📊
               </div>
               <div>
-                <p className={`font-medium ${priceMode === 'fixed' ? 'text-emerald-700' : 'text-gray-700'}`}>מחירון כללי</p>
-                <p className="text-xs text-gray-500">תעריפים קבועים</p>
+                <p className={`font-medium ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-700'}`}>מחיר מומלץ</p>
+                <p className="text-xs text-gray-500">
+                  {distance ? `${distance.distanceKm} ק״מ × ₪${basePriceList?.price_per_km || 12}` : 'חישוב אוטומטי לפי מחירון'}
+                </p>
               </div>
             </div>
-          </button>
-          
-          {priceMode === 'fixed' && (
-            <div className="p-3 pt-0 space-y-2">
-              {fixedPriceItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedPriceItem({ id: item.id, label: item.label, price: item.price })}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
-                    selectedPriceItem?.id === item.id ? 'border-emerald-500 bg-emerald-100' : 'border-gray-200 bg-white hover:border-emerald-300'
-                  }`}
-                >
-                  <div className="text-right">
-                    <span className={`font-medium ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-700'}`}>{item.label}</span>
-                    {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
-                  </div>
-                  <span className={`font-bold ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-800'}`}>₪{item.price}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
+              ₪{recommendedPrice}
+            </span>
+          </div>
+        </button>
       )}
 
-      {/* מחירון לקוח */}
+      {/* מחירון לקוח - show first if customer is selected */}
       {hasCustomerPricing && (
         <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'customer' ? 'border-purple-500' : 'border-gray-200'}`}>
           <button
@@ -446,6 +423,46 @@ function PriceSelector({
                 >
                   <span className={`font-medium ${selectedPriceItem?.id === item.id ? 'text-purple-700' : 'text-gray-700'}`}>{item.label}</span>
                   <span className={`font-bold ${selectedPriceItem?.id === item.id ? 'text-purple-700' : 'text-gray-800'}`}>₪{item.price}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* מחירון כללי */}
+      {hasFixedPrices && (
+        <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'fixed' ? 'border-emerald-500' : 'border-gray-200'}`}>
+          <button
+            onClick={() => { setPriceMode('fixed'); setSelectedPriceItem(null); setCustomPrice('') }}
+            className={`w-full p-4 text-right ${priceMode === 'fixed' ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${priceMode === 'fixed' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                📋
+              </div>
+              <div>
+                <p className={`font-medium ${priceMode === 'fixed' ? 'text-emerald-700' : 'text-gray-700'}`}>מחירון כללי</p>
+                <p className="text-xs text-gray-500">תעריפים קבועים</p>
+              </div>
+            </div>
+          </button>
+          
+          {priceMode === 'fixed' && (
+            <div className="p-3 pt-0 space-y-2">
+              {fixedPriceItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedPriceItem({ id: item.id, label: item.label, price: item.price })}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    selectedPriceItem?.id === item.id ? 'border-emerald-500 bg-emerald-100' : 'border-gray-200 bg-white hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="text-right">
+                    <span className={`font-medium ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-700'}`}>{item.label}</span>
+                    {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
+                  </div>
+                  <span className={`font-bold ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-800'}`}>₪{item.price}</span>
                 </button>
               ))}
             </div>
@@ -543,6 +560,21 @@ function NewTowForm() {
   
   // Tow type
   const [towType, setTowType] = useState<TowType>('')
+  // Route Builder state
+  const [routePoints, setRoutePoints] = useState<RoutePoint[]>([])
+  const [customRouteData, setCustomRouteData] = useState<{ totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }>({ totalDistanceKm: 0, vehicles: [] })
+
+  // Reset when tow type changes
+  useEffect(() => {
+    if (towType) {
+      resetForm(true)
+    }
+  }, [towType])
+
+  // Reset route points when customer changes
+  useEffect(() => {
+    setRoutePoints([])
+  }, [selectedCustomerId])
   
   // Single tow - Vehicle
   const [vehiclePlate, setVehiclePlate] = useState('')
@@ -581,6 +613,8 @@ function NewTowForm() {
   
   // Pin drop modal
   const [pinDropModal, setPinDropModal] = useState<{ isOpen: boolean; field: string | null }>({ isOpen: false, field: null })
+  const [pinDropResult, setPinDropResult] = useState<{ pointId: string; data: AddressData } | null>(null)
+
 
   // ==================== Effects ====================
   
@@ -642,18 +676,32 @@ function NewTowForm() {
     return () => clearTimeout(timeout)
   }, [startFromBase, pickupAddress.address, pickupAddress.lat, basePriceList?.base_lat, basePriceList?.base_lng])
 
-  // Read URL params
+  // Read URL params or set defaults to now
   useEffect(() => {
     const dateParam = searchParams.get('date')
     const timeParam = searchParams.get('time')
     const driverParam = searchParams.get('driver')
     
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    const currentTime = now.toTimeString().slice(0, 5) // HH:MM format
+    
     if (dateParam) {
       setTowDate(dateParam)
-      const today = new Date().toISOString().split('T')[0]
       setIsToday(dateParam === today)
+    } else {
+      // Default to today
+      setTowDate(today)
+      setIsToday(true)
     }
-    if (timeParam) setTowTime(timeParam)
+    
+    if (timeParam) {
+      setTowTime(timeParam)
+    } else {
+      // Default to current time
+      setTowTime(currentTime)
+    }
+    
     if (driverParam) setPreSelectedDriverId(driverParam)
   }, [searchParams])
 
@@ -690,6 +738,18 @@ function NewTowForm() {
     }
   }
 
+  // Debug: log loaded data
+  useEffect(() => {
+    console.log('Price data loaded:', {
+      fixedPriceItems,
+      customersWithPricing,
+      selectedCustomerPricing,
+      timeSurchargesData,
+      locationSurchargesData,
+      serviceSurchargesData
+    })
+  }, [fixedPriceItems, customersWithPricing, selectedCustomerPricing])
+
   // Customer pricing
   useEffect(() => {
     if (selectedCustomerId) {
@@ -716,6 +776,55 @@ function NewTowForm() {
   // ==================== Price Calculations ====================
   
   const calculateRecommendedPrice = () => {
+    // For custom routes
+    if (towType === 'custom') {
+      if (customRouteData.vehicles.length === 0 || customRouteData.totalDistanceKm === 0) {
+        return 0
+      }
+      
+      const pricePerKm = basePriceList?.price_per_km || 12
+      const minimumPrice = basePriceList?.minimum_price || 250
+      
+      // Calculate base price for all vehicles
+      let totalBasePrice = 0
+      customRouteData.vehicles.forEach(v => {
+        const vehicleTypeMap: Record<string, string> = {
+          'private': 'base_price_private',
+          'motorcycle': 'base_price_motorcycle',
+          'heavy': 'base_price_heavy',
+          'machinery': 'base_price_machinery'
+        }
+        const priceField = vehicleTypeMap[v.type] || 'base_price_private'
+        totalBasePrice += basePriceList?.[priceField] || 180
+      })
+      
+      // Distance price
+      const distancePrice = customRouteData.totalDistanceKm * pricePerKm
+      
+      let subtotal = totalBasePrice + distancePrice
+      
+      // Time surcharges
+      let timePercent = 0
+      if (activeTimeSurchargesList.length > 0) {
+        timePercent = Math.max(...activeTimeSurchargesList.map(s => s.surcharge_percent))
+      }
+      const timeAddition = subtotal * (timePercent / 100)
+      
+      // Customer discount
+      const beforeDiscount = subtotal + timeAddition
+      let afterDiscount = beforeDiscount
+      if (selectedCustomerPricing?.discount_percent) {
+        afterDiscount = beforeDiscount * (1 - selectedCustomerPricing.discount_percent / 100)
+      }
+      
+      // VAT
+      const vat = afterDiscount * 0.18
+      const total = afterDiscount + vat
+      
+      return Math.max(Math.round(total), minimumPrice)
+    }
+    
+    // For single tow
     if (!vehicleType) return 0
     
     const vehicleTypeMap: Record<string, string> = {
@@ -802,6 +911,47 @@ function NewTowForm() {
   const handlePinDropConfirm = (data: AddressData) => {
     if (pinDropModal.field === 'pickup') setPickupAddress(data)
     else if (pinDropModal.field === 'dropoff') setDropoffAddress(data)
+    else if (pinDropModal.field) {
+      // For RouteBuilder points - send data to RouteBuilder
+      setPinDropResult({ pointId: pinDropModal.field, data })
+    }
+  }
+
+  // Reset form function
+  const resetForm = (keepCustomer: boolean = false) => {
+    // Reset route points
+    setRoutePoints([])
+    // Reset price
+    setPriceMode('recommended')
+    setSelectedPriceItem(null)
+    setCustomPrice('')
+    // Reset vehicle data
+    setVehiclePlate('')
+    setVehicleCode('')
+    setVehicleData(null)
+    setVehicleType('')
+    setSelectedDefects([])
+    // Reset addresses
+    setPickupAddress({ address: '' })
+    setDropoffAddress({ address: '' })
+    setDistance(null)
+    // Reset contacts
+    setPickupContactName('')
+    setPickupContactPhone('')
+    setDropoffContactName('')
+    setDropoffContactPhone('')
+    setNotes('')
+    // Reset surcharges
+    setSelectedLocationSurcharges([])
+    setSelectedServiceSurcharges([])
+    setWaitingTimeUnits(0)
+    setStartFromBase(false)
+    
+    if (!keepCustomer) {
+      setSelectedCustomerId(null)
+      setCustomerName('')
+      setCustomerPhone('')
+    }
   }
 
   const copyFromCustomer = (target: 'pickup' | 'dropoff') => {
@@ -1071,15 +1221,30 @@ function NewTowForm() {
               />
             )}
 
-            {towType === 'exchange' && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-8 text-center">
-                <p className="text-gray-500">טופס תקין-תקול - בפיתוח</p>
-              </div>
-            )}
-
-            {towType === 'multiple' && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-8 text-center">
-                <p className="text-gray-500">טופס גרירה מרובה - בפיתוח</p>
+            {towType === 'custom' && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                  <h2 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                    <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
+                    בניית מסלול
+                  </h2>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <RouteBuilder
+                    companyId={companyId || ''}
+                    customerId={selectedCustomerId}
+                    customerName={customerName}
+                    customerPhone={customerPhone}
+                    baseAddress={basePriceList?.base_address}
+                    baseLat={basePriceList?.base_lat}        
+                    baseLng={basePriceList?.base_lng}        
+                    onPointsChange={setRoutePoints}
+                    onPinDropClick={(pointId) => setPinDropModal({ isOpen: true, field: pointId })}
+                    onRouteDataChange={setCustomRouteData}
+                    pinDropResult={pinDropResult}
+                    onPinDropHandled={() => setPinDropResult(null)}
+                  />
+                </div>
               </div>
             )}
 
@@ -1113,7 +1278,7 @@ function NewTowForm() {
             )}
 
             {/* Section 6 - Additional Details */}
-            {towType && (
+            {towType === 'single' && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
                   <h2 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
@@ -1184,10 +1349,10 @@ function NewTowForm() {
                   <PriceSummary
                     isMobile
                     hasTowType={!!towType}
-                    hasVehicleType={!!vehicleType}
+                    hasVehicleType={towType === 'custom' ? customRouteData.vehicles.length > 0 : !!vehicleType}
                     vehicleType={vehicleType}
                     basePriceList={basePriceList}
-                    distance={distance}
+                    distance={towType === 'custom' ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 } : distance}
                     baseToPickupDistance={baseToPickupDistance}
                     startFromBase={startFromBase}
                     activeTimeSurcharges={activeTimeSurchargesList}
@@ -1203,6 +1368,8 @@ function NewTowForm() {
                     finalPrice={finalPrice}
                     onSave={handleSave}
                     saving={saving}
+                    towType={towType}
+                    customRouteVehicleCount={customRouteData.vehicles.length}
                   />
                 </div>
               </div>
@@ -1218,10 +1385,10 @@ function NewTowForm() {
               <div className="p-5">
                 <PriceSummary
                   hasTowType={!!towType}
-                  hasVehicleType={!!vehicleType}
+                  hasVehicleType={towType === 'custom' ? customRouteData.vehicles.length > 0 : !!vehicleType}
                   vehicleType={vehicleType}
                   basePriceList={basePriceList}
-                  distance={distance}
+                  distance={towType === 'custom' ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 } : distance}
                   baseToPickupDistance={baseToPickupDistance}
                   startFromBase={startFromBase}
                   activeTimeSurcharges={activeTimeSurchargesList}
@@ -1237,6 +1404,8 @@ function NewTowForm() {
                   finalPrice={finalPrice}
                   onSave={handleSave}
                   saving={saving}
+                  towType={towType}
+                  customRouteVehicleCount={customRouteData.vehicles.length}
                 />
               </div>
             </div>
@@ -1249,7 +1418,13 @@ function NewTowForm() {
         isOpen={pinDropModal.isOpen}
         onClose={() => setPinDropModal({ isOpen: false, field: null })}
         onConfirm={handlePinDropConfirm}
-        initialAddress={pinDropModal.field === 'pickup' ? pickupAddress : pinDropModal.field === 'dropoff' ? dropoffAddress : undefined}
+        initialAddress={
+          pinDropModal.field === 'pickup' ? pickupAddress : 
+          pinDropModal.field === 'dropoff' ? dropoffAddress : 
+          routePoints.find(p => p.id === pinDropModal.field)?.address 
+            ? { address: routePoints.find(p => p.id === pinDropModal.field)?.address || '', lat: routePoints.find(p => p.id === pinDropModal.field)?.addressData?.lat, lng: routePoints.find(p => p.id === pinDropModal.field)?.addressData?.lng }
+            : undefined
+        }
         title={pinDropModal.field === 'pickup' ? 'בחר מיקום מוצא' : pinDropModal.field === 'dropoff' ? 'בחר מיקום יעד' : 'בחר מיקום'}
       />
 
