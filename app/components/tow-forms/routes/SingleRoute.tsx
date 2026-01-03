@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { VehicleLookup, DefectSelector, StartFromBase, TowTruckTypeSelector, ServiceSurchargeSelector, SelectedService } from '../shared'
 import { Loader2, Navigation } from 'lucide-react'
 import { AddressInput, AddressData } from './AddressInput'
-import { VehicleLookup, DefectSelector, StartFromBase } from '../shared'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
 
@@ -51,10 +50,12 @@ interface SingleRouteProps {
   selectedLocationSurcharges: string[]
   onLocationSurchargesChange: (ids: string[]) => void
   serviceSurchargesData: ServiceSurcharge[]
-  selectedServiceSurcharges: string[]
-  onServiceSurchargesChange: (ids: string[]) => void
-  waitingTimeUnits: number
-  onWaitingTimeUnitsChange: (units: number) => void
+  selectedServices: SelectedService[]
+  onSelectedServicesChange: (services: SelectedService[]) => void
+
+  // סוג גרר
+  requiredTruckTypes: string[]
+  onRequiredTruckTypesChange: (types: string[]) => void
 }
 
 export function SingleRoute({
@@ -96,10 +97,12 @@ export function SingleRoute({
   selectedLocationSurcharges,
   onLocationSurchargesChange,
   serviceSurchargesData,
-  selectedServiceSurcharges,
-  onServiceSurchargesChange,
-  waitingTimeUnits,
-  onWaitingTimeUnitsChange
+  selectedServices,
+  onSelectedServicesChange,
+
+  // סוג גרר
+  requiredTruckTypes,
+  onRequiredTruckTypesChange,
 }: SingleRouteProps) {
   
   const toggleLocationSurcharge = (id: string) => {
@@ -107,16 +110,6 @@ export function SingleRoute({
       onLocationSurchargesChange(selectedLocationSurcharges.filter(i => i !== id))
     } else {
       onLocationSurchargesChange([...selectedLocationSurcharges, id])
-    }
-  }
-
-  const toggleServiceSurcharge = (id: string, isWaiting: boolean) => {
-    if (selectedServiceSurcharges.includes(id)) {
-      onServiceSurchargesChange(selectedServiceSurcharges.filter(i => i !== id))
-      if (isWaiting) onWaitingTimeUnitsChange(0)
-    } else {
-      onServiceSurchargesChange([...selectedServiceSurcharges, id])
-      if (isWaiting) onWaitingTimeUnitsChange(1)
     }
   }
 
@@ -153,6 +146,18 @@ export function SingleRoute({
           <DefectSelector
             selectedDefects={selectedDefects}
             onChange={onDefectsChange}
+          />
+
+          {/* שירותים נוספים - לפני סוג גרר */}
+          <ServiceSurchargeSelector
+            services={serviceSurchargesData}
+            selectedServices={selectedServices}
+            onChange={onSelectedServicesChange}
+          />
+
+          <TowTruckTypeSelector
+            selectedTypes={requiredTruckTypes}
+            onChange={onRequiredTruckTypesChange}
           />
         </div>
       </div>
@@ -295,50 +300,6 @@ export function SingleRoute({
                     {s.label} (+{s.surcharge_percent}%)
                   </button>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* שירותים נוספים */}
-          {serviceSurchargesData.filter(s => s.is_active).length > 0 && (
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">🔧 שירותים נוספים:</p>
-              <div className="flex flex-wrap gap-2">
-                {serviceSurchargesData.filter(s => s.is_active).map(s => {
-                  const isWaiting = s.label.includes('המתנה')
-                  const isSelected = selectedServiceSurcharges.includes(s.id)
-                  
-                  return (
-                    <div key={s.id} className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleServiceSurcharge(s.id, isWaiting)}
-                        className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-500 text-white' 
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {s.label} (+₪{s.price})
-                      </button>
-                      {isWaiting && isSelected && (
-                        <div className="flex items-center gap-1 mr-1">
-                          <button 
-                            type="button"
-                            onClick={() => onWaitingTimeUnitsChange(Math.max(0, waitingTimeUnits - 1))}
-                            className="w-7 h-7 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
-                          >-</button>
-                          <span className="w-8 text-center text-sm font-medium">{waitingTimeUnits}</span>
-                          <button 
-                            type="button"
-                            onClick={() => onWaitingTimeUnitsChange(waitingTimeUnits + 1)}
-                            className="w-7 h-7 bg-gray-200 rounded text-gray-600 hover:bg-gray-300"
-                          >+</button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
               </div>
             </div>
           )}

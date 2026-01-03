@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { getServiceSurcharges, ServiceSurcharge } from '../../../lib/queries/price-lists'
+import { ServiceSurchargeSelector, SelectedService } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
   Edit2, 
@@ -93,7 +95,9 @@ export default function TowDetailsPage() {
   const [editFromAddress, setEditFromAddress] = useState('')
   const [editToAddress, setEditToAddress] = useState('')
   const [editFinalPrice, setEditFinalPrice] = useState(0)
-
+  // Service surcharges
+  const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
+  const [editSelectedServices, setEditSelectedServices] = useState<SelectedService[]>([])
 
   const [editScheduledDate, setEditScheduledDate] = useState('')
   const [editScheduledTime, setEditScheduledTime] = useState('')
@@ -122,16 +126,18 @@ export default function TowDetailsPage() {
     if (!companyId) return
     setLoading(true)
     try {
-      const [towData, driversData, trucksData, customersData] = await Promise.all([
+      const [towData, driversData, trucksData, customersData, serviceSurcharges] = await Promise.all([
         getTow(towId),
         getDrivers(companyId),
         getTrucks(companyId),
-        getCustomers(companyId)
+        getCustomers(companyId),
+        getServiceSurcharges(companyId)
       ])
       setTow(towData)
       setDrivers(driversData)
       setTrucks(trucksData)
       setCustomers(customersData)
+      setServiceSurchargesData(serviceSurcharges)
       
       // בדיקה אם יש חשבונית לגרירה
       if (towData) {
@@ -199,10 +205,21 @@ export default function TowDetailsPage() {
         color: v.color || '',
         towReason: v.tow_reason || ''
       })) || [])
+      // Initialize selected services from price breakdown
+      if (tow.price_breakdown?.service_surcharges) {
+        const services: SelectedService[] = tow.price_breakdown.service_surcharges.map((s: any) => ({
+          id: s.id,
+          quantity: s.units || undefined,
+          manualPrice: s.price_type === 'manual' ? s.amount : undefined
+        }))
+        setEditSelectedServices(services)
+      } else {
+        setEditSelectedServices([])
+      }
+
       setIsEditing(true)
     }
   }
-
   const handleCancelEdit = () => {
     setIsEditing(false)
   }
@@ -218,14 +235,70 @@ export default function TowDetailsPage() {
     // יצירת תאריך חדש
     const newScheduledAt = new Date(`${editScheduledDate}T${editScheduledTime}:00`)
 
+    // חישוב מחדש של תוספות שירות
+    let newPriceBreakdown = tow.price_breakdown ? { ...tow.price_breakdown } : null
+    let newFinalPrice = editFinalPrice
+
+    if (newPriceBreakdown) {
+      // חישוב תוספות שירות חדשות
+      const newServiceSurcharges = editSelectedServices.map(selected => {
+        const service = serviceSurchargesData.find(s => s.id === selected.id)
+        if (!service) return null
+
+        let amount = 0
+        let units: number | undefined = undefined
+
+        if (service.price_type === 'manual') {
+          amount = selected.manualPrice || 0
+        } else if (service.price_type === 'per_unit') {
+          units = selected.quantity || 1
+          amount = service.price * units
+        } else {
+          amount = service.price
+        }
+
+        return {
+          id: service.id,
+          label: service.label,
+          price: service.price,
+          price_type: service.price_type,
+          units,
+          amount
+        }
+      }).filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
+
+      // עדכון ה-breakdown
+      newPriceBreakdown.service_surcharges = newServiceSurcharges
+
+      // חישוב מחדש של הסכומים
+      const baseSubtotal = newPriceBreakdown.base_price + newPriceBreakdown.distance_price
+      const timeAmount = newPriceBreakdown.time_surcharges.reduce((max, s) => Math.max(max, s.amount), 0)
+      const locationAmount = newPriceBreakdown.location_surcharges.reduce((sum, s) => sum + s.amount, 0)
+      const servicesAmount = newServiceSurcharges.reduce((sum, s) => sum + s.amount, 0)
+
+      const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
+      const discountAmount = Math.round(beforeDiscount * newPriceBreakdown.discount_percent / 100)
+      const beforeVat = beforeDiscount - discountAmount
+      const vatAmount = Math.round(beforeVat * 0.18)
+      const total = beforeVat + vatAmount
+
+      newPriceBreakdown.subtotal = beforeDiscount
+      newPriceBreakdown.discount_amount = discountAmount
+      newPriceBreakdown.vat_amount = vatAmount
+      newPriceBreakdown.total = total
+
+      newFinalPrice = total
+    }
+
     setSaving(true)
     try {
       await updateTow({
         towId: tow.id,
         customerId: editCustomerId,
         notes: editNotes || null,
-        finalPrice: editFinalPrice || null,
+        finalPrice: newFinalPrice || null,
         scheduledAt: newScheduledAt.toISOString(),
+        priceBreakdown: newPriceBreakdown,
         vehicles: editVehicles.map(v => ({
           plateNumber: v.plateNumber,
           manufacturer: v.manufacturer || undefined,
@@ -923,6 +996,43 @@ export default function TowDetailsPage() {
                   )}
                 </div>
               </div>
+
+               {/* תוספות שירות */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                  <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                    🔧 תוספות שירות
+                  </h2>
+                </div>
+                <div className="p-4 sm:p-5">
+                  {isEditing ? (
+                    <ServiceSurchargeSelector
+                      services={serviceSurchargesData}
+                      selectedServices={editSelectedServices}
+                      onChange={setEditSelectedServices}
+                    />
+                  ) : (
+                    <div>
+                      {tow.price_breakdown?.service_surcharges && tow.price_breakdown.service_surcharges.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {tow.price_breakdown.service_surcharges.map((s: any, idx: number) => (
+                            <span 
+                              key={s.id || idx} 
+                              className="px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-sm"
+                            >
+                              {s.label}
+                              {s.units && s.units > 1 && ` (×${s.units})`}
+                              {' - '}₪{s.amount}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-sm">אין תוספות שירות</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>     
 
               {/* הערות */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

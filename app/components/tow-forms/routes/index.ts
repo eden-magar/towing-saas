@@ -4,7 +4,7 @@ export type { RoutePoint, RouteBuilderProps, VehicleOnTruck, AddressData } from 
 
 // Sub-components (for direct use if needed)
 export { AddressInput, loadGoogleMaps } from './AddressInput'
-export { VehicleCard, DEFECT_OPTIONS } from './VehicleCard'
+export { VehicleCard } from './VehicleCard'
 export { VehicleInfoCard } from './VehicleInfoCard'
 export type { VehicleData } from './VehicleInfoCard'
 export { StorageVehicleSelector, StorageNotification } from './StorageVehicleSelector'

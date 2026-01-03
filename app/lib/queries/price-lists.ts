@@ -50,6 +50,8 @@ export interface ServiceSurcharge {
   company_id: string
   label: string
   price: number
+  price_type: 'fixed' | 'per_unit' | 'manual'
+  unit_label?: string
   is_active: boolean
 }
 

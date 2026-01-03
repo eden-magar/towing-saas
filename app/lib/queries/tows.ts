@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 export interface PriceBreakdown {
   base_price: number
   vehicle_type: string
+  vehicle_count?: number      
   distance_km: number
   distance_price: number
   time_surcharges: { id: string; label: string; percent: number; amount: number }[]
@@ -15,6 +16,7 @@ export interface PriceBreakdown {
   discount_amount: number
   vat_amount: number
   total: number
+  route_points?: any[]
 }
 
 export interface TowVehicle {
@@ -239,12 +241,13 @@ interface CreateTowInput {
   finalPrice?: number
   priceMode?: 'recommended' | 'fixed' | 'customer' | 'custom'
   priceBreakdown?: PriceBreakdown
+  requiredTruckTypes?: string[]
   vehicles: {
     plateNumber: string
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'small' | 'medium' | 'large' | 'truck'
+    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery'
     color?: string
     isWorking?: boolean
     towReason?: string
@@ -279,6 +282,7 @@ export async function createTow(input: CreateTowInput) {
       truck_id: input.truckId || null,
       tow_type: input.towType,
       price_breakdown: input.priceBreakdown || null,
+      required_truck_types: input.requiredTruckTypes || null,
       status,
       scheduled_at: input.scheduledAt || null,
       notes: input.notes || null,
@@ -441,13 +445,14 @@ interface UpdateTowInput {
   finalPrice?: number | null
   scheduledAt?: string | null
   priceBreakdown?: PriceBreakdown | null
+  requiredTruckTypes?: string[]
   vehicles?: {
     id?: string
     plateNumber: string
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'small' | 'medium' | 'large' | 'truck'
+    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery'
     color?: string
     isWorking?: boolean
     towReason?: string

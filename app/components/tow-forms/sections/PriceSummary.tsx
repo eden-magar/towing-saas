@@ -2,6 +2,7 @@
 
 import { FileText } from 'lucide-react'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge, CustomerWithPricing } from '../../../lib/queries/price-lists'
+import { SelectedService } from '../shared'
 
 interface DistanceResult {
   distanceKm: number
@@ -33,9 +34,8 @@ interface PriceSummaryProps {
   activeTimeSurcharges: TimeSurcharge[]
   selectedLocationSurcharges: string[]
   locationSurchargesData: LocationSurcharge[]
-  selectedServiceSurcharges: string[]
+  selectedServices: SelectedService[]
   serviceSurchargesData: ServiceSurcharge[]
-  waitingTimeUnits: number
   
   // לקוח
   selectedCustomerPricing: CustomerWithPricing | null
@@ -67,9 +67,8 @@ export function PriceSummary({
   activeTimeSurcharges,
   selectedLocationSurcharges,
   locationSurchargesData,
-  selectedServiceSurcharges,
+  selectedServices,
   serviceSurchargesData,
-  waitingTimeUnits,
   selectedCustomerPricing,
   priceMode,
   selectedPriceItem,
@@ -149,19 +148,26 @@ export function PriceSummary({
   // תוספות שירותים
   let servicesTotal = 0
   const activeServices: { label: string; amount: number }[] = []
-  selectedServiceSurcharges.forEach(id => {
-    const surcharge = serviceSurchargesData.find(s => s.id === id)
+  selectedServices.forEach(selected => {
+    const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
     if (surcharge) {
-      let amount = surcharge.price
+      let amount = 0
       let label = surcharge.label
-      if (surcharge.label.includes('המתנה') && waitingTimeUnits > 0) {
-        amount = surcharge.price * waitingTimeUnits
-        label = `${surcharge.label} (×${waitingTimeUnits})`
-      } else if (surcharge.label.includes('המתנה') && waitingTimeUnits === 0) {
-        return
+      
+      if (surcharge.price_type === 'manual') {
+        amount = selected.manualPrice || 0
+      } else if (surcharge.price_type === 'per_unit') {
+        const qty = selected.quantity || 1
+        amount = surcharge.price * qty
+        label = `${surcharge.label} (×${qty})`
+      } else {
+        amount = surcharge.price
       }
-      servicesTotal += amount
-      activeServices.push({ label, amount })
+      
+      if (amount > 0) {
+        servicesTotal += amount
+        activeServices.push({ label, amount })
+      }
     }
   })
   

@@ -1,5 +1,6 @@
 'use client'
 
+import { DefectSelector } from '../shared/DefectSelector'
 import { useState } from 'react'
 import { Car, Key, X, AlertTriangle, Search, Loader2 } from 'lucide-react'
 import { VehicleInfoCard, VehicleData } from './VehicleInfoCard'
@@ -28,17 +29,6 @@ interface VehicleCardProps {
   onSearch?: (plateNumber: string) => Promise<void>
   className?: string
 }
-
-// ==================== Constants ====================
-
-export const DEFECT_OPTIONS = [
-  { id: 'flat_tire', label: 'תקר' },
-  { id: 'engine', label: 'מנוע' },
-  { id: 'battery', label: 'מצבר' },
-  { id: 'accident', label: 'תאונה' },
-  { id: 'lockout', label: 'נעילה' },
-  { id: 'other', label: 'אחר' },
-]
 
 // ==================== Component ====================
 
@@ -89,14 +79,6 @@ export function VehicleCard({
     } finally {
       setIsSearching(false)
     }
-  }
-
-  const toggleDefect = (defectLabel: string) => {
-    const defects = vehicle.defects || []
-    const newDefects = defects.includes(defectLabel)
-      ? defects.filter(d => d !== defectLabel)
-      : [...defects, defectLabel]
-    onChange({ ...vehicle, defects: newDefects })
   }
 
   const toggleWorking = () => {
@@ -215,30 +197,15 @@ export function VehicleCard({
         </div>
         
         {/* Defects - only for broken vehicles */}
+        {/* Defects - only for broken vehicles */}
         {!vehicle.isWorking && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              <AlertTriangle size={12} className="inline ml-1 text-orange-500" />
-              פירוט התקלה
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {DEFECT_OPTIONS.map(defect => (
-                <button
-                  key={defect.id}
-                  type="button"
-                  onClick={() => toggleDefect(defect.label)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all border ${
-                    (vehicle.defects || []).includes(defect.label)
-                      ? 'bg-orange-500 text-white border-orange-500'
-                      : 'bg-white text-gray-600 border-gray-300 hover:border-orange-300'
-                  }`}
-                >
-                  {defect.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <DefectSelector
+            selectedDefects={vehicle.defects || []}
+            onChange={(defects) => onChange({ ...vehicle, defects })}
+            label="פירוט התקלה"
+          />
         )}
+        
       </div>
     </div>
   )

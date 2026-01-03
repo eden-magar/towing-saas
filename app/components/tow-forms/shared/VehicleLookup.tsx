@@ -84,6 +84,11 @@ export function VehicleLookup({
             disabled={disabled}
             className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"
             onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+            onBlur={() => {
+              if (!vehicleData?.found && plateNumber.replace(/[^0-9]/g, '').length >= 5) {
+                handleLookup()
+              }
+            }}
           />
           <button
             onClick={handleLookup}
