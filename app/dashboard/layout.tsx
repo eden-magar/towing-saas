@@ -1,7 +1,7 @@
 'use client'
 
 import Sidebar from '../components/Sidebar'
-import { AuthProvider, useAuth } from '../lib/AuthContext'
+import { useAuth } from "../lib/AuthContext";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth()
@@ -33,8 +33,6 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthProvider>
-      <DashboardContent>{children}</DashboardContent>
-    </AuthProvider>
+    <DashboardContent>{children}</DashboardContent>
   )
 }
