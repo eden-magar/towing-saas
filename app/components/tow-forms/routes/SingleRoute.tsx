@@ -1,10 +1,12 @@
 'use client'
 
+
 import { VehicleLookup, DefectSelector, StartFromBase, TowTruckTypeSelector, ServiceSurchargeSelector, SelectedService } from '../shared'
-import { Loader2, Navigation } from 'lucide-react'
+import { Loader2, Navigation, Package } from 'lucide-react'
 import { AddressInput, AddressData } from './AddressInput'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
+import { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
 
 interface DistanceResult {
   distanceKm: number
@@ -56,6 +58,17 @@ interface SingleRouteProps {
   // סוג גרר
   requiredTruckTypes: string[]
   onRequiredTruckTypesChange: (types: string[]) => void
+
+  // אחסנה - חדש!
+  customerStoredVehicles?: StoredVehicleWithCustomer[]
+  selectedStoredVehicleId?: string | null
+  onSelectStoredVehicle?: (vehicle: StoredVehicleWithCustomer) => void
+  onClearStoredVehicle?: () => void
+  storageLoading?: boolean
+  dropoffToStorage?: boolean
+  onDropoffToStorageChange?: (value: boolean) => void
+  storageAddress?: string
+
 }
 
 export function SingleRoute({
@@ -103,6 +116,16 @@ export function SingleRoute({
   // סוג גרר
   requiredTruckTypes,
   onRequiredTruckTypesChange,
+
+  // אחסנה - חדש!
+  customerStoredVehicles = [],
+  selectedStoredVehicleId = null,
+  onSelectStoredVehicle,
+  onClearStoredVehicle,
+  storageLoading = false,
+  dropoffToStorage = false,
+  onDropoffToStorageChange,
+  storageAddress = '',
 }: SingleRouteProps) {
   
   const toggleLocationSurcharge = (id: string) => {
@@ -132,6 +155,68 @@ export function SingleRoute({
           </h2>
         </div>
         <div className="p-4 sm:p-5 space-y-4">
+          
+          {/* === אזור אחסנה - חדש! === */}
+          
+          {/* טוען רכבים מאחסנה */}
+          {storageLoading && (
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
+              <Loader2 size={16} className="animate-spin" />
+              בודק רכבים באחסנה...
+            </div>
+          )}
+
+          {/* הודעה על רכבים באחסנה */}
+          {customerStoredVehicles.length > 0 && !selectedStoredVehicleId && !storageLoading && (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 text-purple-700 mb-3">
+                <Package size={18} />
+                <span className="font-medium">ללקוח זה יש {customerStoredVehicles.length} רכבים באחסנה</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {customerStoredVehicles.map((vehicle) => (
+                  <button
+                    key={vehicle.id}
+                    type="button"
+                    onClick={() => onSelectStoredVehicle?.(vehicle)}
+                    className="px-3 py-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex items-center gap-2"
+                  >
+                    <Package size={14} className="text-purple-500" />
+                    <span className="font-medium text-gray-800">{vehicle.plate_number}</span>
+                    {vehicle.vehicle_data && (
+                      <span className="text-xs text-gray-500">
+                        {vehicle.vehicle_data.manufacturer} {vehicle.vehicle_data.model}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* הודעה שנבחר רכב מאחסנה */}
+          {selectedStoredVehicleId && (
+            <div className="bg-purple-100 border border-purple-300 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-purple-700">
+                  <Package size={18} />
+                  <span className="font-medium">
+                  🚗 {vehiclePlate} {vehicleData?.data?.manufacturer} {vehicleData?.data?.model} - ישוחרר בשמירת הגרירה
+                </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClearStoredVehicle}
+                  className="text-purple-600 hover:text-purple-800 text-sm underline"
+                >
+                  בחר רכב אחר
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* === סוף אזור אחסנה === */}
+
           <VehicleLookup
             plateNumber={vehiclePlate}
             onPlateChange={onVehiclePlateChange}
@@ -197,6 +282,38 @@ export function SingleRoute({
               />
             </div>
           </div>
+
+          {/* === Toggle יעד לאחסנה - חדש! === */}
+          {onDropoffToStorageChange && (
+            <div className="mt-2">
+              <label className="flex items-center gap-3 cursor-pointer p-3 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={dropoffToStorage}
+                  onChange={(e) => {
+                    onDropoffToStorageChange(e.target.checked)
+                    if (e.target.checked && storageAddress) {
+                      onDropoffAddressChange({
+                        address: storageAddress,
+                        isPinDropped: false
+                      })
+                    }
+                  }}
+                  className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                />
+                <div className="flex items-center gap-2">
+                  <Package size={18} className="text-purple-600" />
+                  <span className="text-sm font-medium text-gray-700">היעד הוא לאחסנה (הרכב יכנס למאגר)</span>
+                </div>
+              </label>
+              {dropoffToStorage && (
+                <p className="text-xs text-purple-600 mt-2 mr-11">
+                  📦 הרכב יכנס אוטומטית לאחסנה בשמירת הגרירה
+                </p>
+              )}
+            </div>
+          )}
+          {/* === סוף Toggle === */}
 
           {/* יציאה מהבסיס */}
           <StartFromBase

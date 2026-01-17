@@ -32,6 +32,8 @@ import {
   getActiveTimeSurcharges 
 } from '../../../lib/queries/price-lists'
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../../../lib/types'
+import { getCustomerStoredVehicles, StoredVehicleWithCustomer, addVehicleToStorage, releaseVehicleFromStorage } from '../../../lib/queries/storage'
+
 
 // Import form components
 import { CustomerSection, TowTypeSelector, TowType, PaymentSection, PriceSummary } from '../../../components/tow-forms/sections'
@@ -576,6 +578,30 @@ function NewTowForm() {
   useEffect(() => {
     setRoutePoints([])
   }, [selectedCustomerId])
+
+  // Load customer's stored vehicles when customer changes
+  useEffect(() => {
+    const loadStoredVehicles = async () => {
+      if (!companyId || !selectedCustomerId) {
+        setCustomerStoredVehicles([])
+        setSelectedStoredVehicleId(null)
+        return
+      }
+      
+      setStorageLoading(true)
+      try {
+        const vehicles = await getCustomerStoredVehicles(companyId, selectedCustomerId)
+        setCustomerStoredVehicles(vehicles)
+      } catch (err) {
+        console.error('Error loading stored vehicles:', err)
+        setCustomerStoredVehicles([])
+      } finally {
+        setStorageLoading(false)
+      }
+    }
+    
+    loadStoredVehicles()
+  }, [companyId, selectedCustomerId])
   
   // Single tow - Vehicle
   const [vehiclePlate, setVehiclePlate] = useState('')
@@ -585,7 +611,12 @@ function NewTowForm() {
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
   const [requiredTruckTypes, setRequiredTruckTypes] = useState<string[]>([])
 
-  
+  // Storage
+  const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
+  const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
+  const [dropoffToStorage, setDropoffToStorage] = useState(false)
+  const [storageLoading, setStorageLoading] = useState(false)
+
   // Single tow - Addresses
   const [pickupAddress, setPickupAddress] = useState<AddressData>({ address: '' })
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
@@ -913,6 +944,44 @@ function NewTowForm() {
     setCustomerPhone(phone)
   }
 
+  const handleSelectStoredVehicle = (vehicle: StoredVehicleWithCustomer) => {
+    setSelectedStoredVehicleId(vehicle.id)
+    setVehiclePlate(vehicle.plate_number)
+    
+    if (vehicle.vehicle_data) {
+    const vehicleResult: VehicleLookupResult = {
+      found: true,
+      source: 'private',
+      sourceLabel: 'רכב פרטי',
+      data: {
+        plateNumber: vehicle.plate_number,
+        manufacturer: vehicle.vehicle_data.manufacturer || null,
+        model: vehicle.vehicle_data.model || null,
+        year: vehicle.vehicle_data.year ? parseInt(vehicle.vehicle_data.year) : null,
+        color: vehicle.vehicle_data.color || null,
+        fuelType: null,
+        totalWeight: vehicle.vehicle_data.totalWeight ? parseInt(vehicle.vehicle_data.totalWeight) : null,
+        vehicleType: null,
+        driveType: vehicle.vehicle_data.driveType || null,
+        driveTechnology: null,
+        gearType: vehicle.vehicle_data.gearType || null,
+        machineryType: null,
+        selfWeight: null,
+        totalWeightTon: null
+      }
+    }
+    setVehicleData(vehicleResult)
+    setVehicleType('private')
+  }
+  }
+
+  const handleClearStoredVehicle = () => {
+    setSelectedStoredVehicleId(null)
+    setVehiclePlate('')
+    setVehicleData(null)
+    setVehicleType('')
+  }
+
   const handlePinDropConfirm = (data: AddressData) => {
     if (pinDropModal.field === 'pickup') setPickupAddress(data)
     else if (pinDropModal.field === 'dropoff') setDropoffAddress(data)
@@ -950,6 +1019,8 @@ function NewTowForm() {
     setSelectedLocationSurcharges([])
     setSelectedServices([])
     setStartFromBase(false)
+    setSelectedStoredVehicleId(null)
+    setDropoffToStorage(false)
     
     if (!keepCustomer) {
       setSelectedCustomerId(null)
@@ -1021,6 +1092,38 @@ function NewTowForm() {
     })
 
     const result = await createTow(towData)
+
+    // Handle storage operations
+  if (selectedStoredVehicleId && companyId) {
+    // Release vehicle from storage
+    await releaseVehicleFromStorage({
+      storedVehicleId: selectedStoredVehicleId,
+      towId: result.id,
+      performedBy: user?.id,
+      notes: 'שוחרר לגרירה'
+    })
+  }
+
+  if (dropoffToStorage && companyId) {
+  await addVehicleToStorage({
+    companyId,
+    customerId: selectedCustomerId || undefined,
+    plateNumber: vehiclePlate,
+    vehicleData: vehicleData?.data ? {
+      manufacturer: vehicleData.data.manufacturer || undefined,
+      model: vehicleData.data.model || undefined,
+      year: vehicleData.data.year?.toString() || undefined,
+      color: vehicleData.data.color || undefined,
+      gearType: vehicleData.data.gearType || undefined,
+      driveType: vehicleData.data.driveType || undefined,
+      totalWeight: vehicleData.data.totalWeight?.toString() || undefined,
+    } : undefined,
+    location: undefined,
+    towId: result.id,
+    performedBy: user?.id,
+    notes: 'נכנס מגרירה'
+  })
+}
 
     setSavedTowId(result.id)
     if (!preSelectedDriverId) {
@@ -1145,6 +1248,15 @@ function NewTowForm() {
                 onSelectedServicesChange={setSelectedServices}
                 requiredTruckTypes={requiredTruckTypes}
                 onRequiredTruckTypesChange={setRequiredTruckTypes}
+
+                customerStoredVehicles={customerStoredVehicles}
+                selectedStoredVehicleId={selectedStoredVehicleId}
+                onSelectStoredVehicle={handleSelectStoredVehicle}
+                onClearStoredVehicle={handleClearStoredVehicle}
+                storageLoading={storageLoading}
+                dropoffToStorage={dropoffToStorage}
+                onDropoffToStorageChange={setDropoffToStorage}
+                storageAddress={basePriceList?.base_address || ''}
               />
             )}
 

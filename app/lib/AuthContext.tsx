@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
 import { supabase } from './supabase'
 import { User } from './types'
 
@@ -21,12 +21,11 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const fetchingRef = useRef(false) // למניעת קריאות כפולות
 
   useEffect(() => {
-    // בדיקת משתמש קיים
     checkUser()
 
-    // האזנה לשינויים באימות
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event)
       if (event === 'SIGNED_IN' && session?.user) {
@@ -41,9 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkUser = async () => {
     try {
-      console.log('Checking existing session...')
       const { data: { session } } = await supabase.auth.getSession()
-      console.log('Session:', session ? 'exists' : 'none')
       if (session?.user) {
         await fetchUserData(session.user.id)
       }
@@ -55,39 +52,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const fetchUserData = async (authUserId: string) => {
-    console.log('Fetching user data for:', authUserId)
-    console.log('Starting query at:', new Date().toISOString())
+    // מניעת קריאות כפולות
+    if (fetchingRef.current) return
+    fetchingRef.current = true
     
     try {
-      // Add timeout to detect hanging queries
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout - possible RLS issue')), 10000)
-      )
-      
-      const queryPromise = supabase
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUserId)
         .single()
 
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any
-
-      console.log('Query completed at:', new Date().toISOString())
-      console.log('User data result:', { data, error })
-
       if (error) {
         console.error('Error fetching user data:', error)
         setUser(null)
       } else {
-        console.log('Setting user:', data)
         setUser(data as User)
       }
     } catch (err) {
       console.error('Fetch user error:', err)
       setUser(null)
+    } finally {
+      fetchingRef.current = false
+      setLoading(false)
     }
-    
-    setLoading(false)
   }
 
   const signOut = async () => {

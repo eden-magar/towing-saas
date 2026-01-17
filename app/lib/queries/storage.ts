@@ -125,6 +125,19 @@ interface AddToStorageInput {
 }
 
 export async function addVehicleToStorage(input: AddToStorageInput): Promise<string> {
+  // בדיקה אם הרכב כבר באחסנה
+  const { data: existing } = await supabase
+    .from('stored_vehicles')
+    .select('id')
+    .eq('company_id', input.companyId)
+    .eq('plate_number', input.plateNumber)
+    .eq('current_status', 'stored')
+    .maybeSingle()
+
+  if (existing) {
+    throw new Error('הרכב כבר נמצא באחסנה')
+  }
+
   const { data, error } = await supabase.rpc('add_vehicle_to_storage', {
     p_company_id: input.companyId,
     p_customer_id: input.customerId || null,

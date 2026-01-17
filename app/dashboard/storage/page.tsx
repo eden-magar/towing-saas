@@ -61,6 +61,8 @@ export default function StoragePage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
+
+  const [showAlreadyStoredModal, setShowAlreadyStoredModal] = useState(false)
   // Form state
   const [formData, setFormData] = useState({
     plateNumber: '',
@@ -247,9 +249,13 @@ export default function StoragePage() {
       setShowModal(false)
       resetForm()
       await loadData()
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving:', err)
-      setError('שגיאה בשמירה')
+      if (err.message === 'הרכב כבר נמצא באחסנה') {
+        setShowAlreadyStoredModal(true)
+      } else {
+        setError(err.message || 'שגיאה בשמירה')
+      }
     } finally {
       setSaving(false)
     }
@@ -788,6 +794,33 @@ export default function StoragePage() {
                 className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors font-medium"
               >
                 סגור
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - רכב כבר באחסנה */}
+      {showAlreadyStoredModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Package size={32} className="text-orange-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">הרכב כבר באחסנה</h2>
+              <p className="text-gray-500">רכב עם מספר זה כבר נמצא במאגר האחסנה</p>
+            </div>
+            <div className="px-5 py-4 bg-gray-50 border-t border-gray-200">
+              <button 
+                onClick={() => {
+                  setShowAlreadyStoredModal(false)
+                  setShowModal(false)
+                  resetForm()
+                }}
+                className="w-full py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] transition-colors font-medium"
+              >
+                הבנתי
               </button>
             </div>
           </div>
