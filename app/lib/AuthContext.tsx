@@ -21,7 +21,7 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const fetchingRef = useRef(false) // למניעת קריאות כפולות
+  const fetchingRef = useRef(false)
 
   useEffect(() => {
     checkUser()
@@ -43,16 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
         await fetchUserData(session.user.id)
+      } else {
+        setLoading(false)
       }
     } catch (error) {
       console.error('Error checking user:', error)
-    } finally {
       setLoading(false)
     }
   }
 
   const fetchUserData = async (authUserId: string) => {
-    // מניעת קריאות כפולות
     if (fetchingRef.current) return
     fetchingRef.current = true
     
