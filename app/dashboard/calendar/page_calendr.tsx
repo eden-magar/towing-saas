@@ -784,38 +784,14 @@ const handleSkipPriceUpdate = () => {
           <div>
             {/* Day Header */}
             <div className="p-4 border-b border-gray-200 bg-[#33d4ff]/10">
-              <div className="flex items-center justify-center gap-4">
-                <button 
-                  onClick={() => {
-                    const newDate = new Date(selectedDate)
-                    newDate.setDate(newDate.getDate() - 1)
-                    setSelectedDate(newDate)
-                  }}
-                  className="p-2 hover:bg-white/50 rounded-lg transition-colors"
-                >
-                  <ChevronRight size={24} className="text-gray-600" />
-                </button>
-                
-                <div className="text-center">
-                  <span className="text-base sm:text-lg text-gray-600">
-                    {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][selectedDate.getDay()]},{' '}
-                  </span>
-                  <span className="text-xl sm:text-2xl font-bold text-[#33d4ff]">
-                    {selectedDate.getDate()} ב{getMonthYear()}
-                  </span>
-                </div>
-                
-                <button 
-                  onClick={() => {
-                    const newDate = new Date(selectedDate)
-                    newDate.setDate(newDate.getDate() + 1)
-                    setSelectedDate(newDate)
-                  }}
-                  className="p-2 hover:bg-white/50 rounded-lg transition-colors"
-                >
-                  <ChevronLeft size={24} className="text-gray-600" />
-                </button>
-              </div>
+              <p className="text-center">
+                <span className="text-base sm:text-lg text-gray-600">
+                  {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][selectedDate.getDay()]},{' '}
+                </span>
+                <span className="text-xl sm:text-2xl font-bold text-[#33d4ff]">
+                  {selectedDate.getDate()} ב{getMonthYear()}
+                </span>
+              </p>
             </div>
 
             {/* Time Grid for Day View */}

@@ -69,6 +69,9 @@ interface SingleRouteProps {
   onDropoffToStorageChange?: (value: boolean) => void
   storageAddress?: string
 
+  // Validation
+  truckTypeSectionRef?: React.RefObject<HTMLDivElement | null>
+  truckTypeError?: boolean
 }
 
 export function SingleRoute({
@@ -126,6 +129,8 @@ export function SingleRoute({
   dropoffToStorage = false,
   onDropoffToStorageChange,
   storageAddress = '',
+  truckTypeSectionRef,
+  truckTypeError = false,
 }: SingleRouteProps) {
   
   const toggleLocationSurcharge = (id: string) => {
@@ -240,10 +245,18 @@ export function SingleRoute({
             onChange={onSelectedServicesChange}
           />
 
-          <TowTruckTypeSelector
-            selectedTypes={requiredTruckTypes}
-            onChange={onRequiredTruckTypesChange}
-          />
+          <div 
+            ref={truckTypeSectionRef}
+            className={`rounded-xl transition-all ${truckTypeError ? 'ring-2 ring-red-500 ring-offset-2' : ''}`}
+          >
+            <TowTruckTypeSelector
+              selectedTypes={requiredTruckTypes}
+              onChange={onRequiredTruckTypesChange}
+            />
+            {truckTypeError && (
+              <p className="text-red-500 text-sm mt-2 font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
+            )}
+          </div>
         </div>
       </div>
 

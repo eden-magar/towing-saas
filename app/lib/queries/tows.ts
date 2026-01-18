@@ -70,6 +70,7 @@ export interface TowWithDetails {
   final_price: number | null
   price_breakdown: PriceBreakdown | null
   price_list_id: string | null
+  required_truck_types: string[] | null  // ← הוסיפי את זה!
   started_at: string | null
   completed_at: string | null
   created_at: string

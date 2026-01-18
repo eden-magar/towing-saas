@@ -11,6 +11,8 @@ import { getStoredVehicles, StoredVehicleWithCustomer } from '../../../lib/queri
 import { AddressInput, loadGoogleMaps, AddressData } from './AddressInput'
 import { VehicleCard, VehicleOnTruck, createEmptyVehicle } from './VehicleCard'
 import { StorageVehicleSelector, StorageNotification } from './StorageVehicleSelector'
+import { TowTruckTypeSelector } from '../shared'
+
 
 // ==================== Types ====================
 
@@ -45,6 +47,12 @@ export interface RouteBuilderProps {
   onRouteDataChange?: (data: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }) => void
   pinDropResult?: { pointId: string; data: { address: string; lat?: number; lng?: number; placeId?: string } } | null
   onPinDropHandled?: () => void
+  
+  // סוג גרר
+  requiredTruckTypes?: string[]
+  onRequiredTruckTypesChange?: (types: string[]) => void
+  truckTypeSectionRef?: React.RefObject<HTMLDivElement> | null
+  truckTypeError?: boolean
 }
 
 // ==================== Helper Functions ====================
@@ -77,7 +85,11 @@ export function RouteBuilder({
   onPinDropClick,
   onRouteDataChange,
   pinDropResult,
-  onPinDropHandled
+  onPinDropHandled,
+  requiredTruckTypes = [],
+  onRequiredTruckTypesChange,
+  truckTypeSectionRef,
+  truckTypeError = false,
 }: RouteBuilderProps) {
   const [points, setPoints] = useState<RoutePoint[]>([])
   const [expandedPoint, setExpandedPoint] = useState<string | null>(null)
@@ -764,6 +776,21 @@ export function RouteBuilder({
           <span className="font-medium">הוסף נקודה</span>
         </button>
       </div>
+
+      {/* Truck Type Selector */}
+      <div 
+        ref={truckTypeSectionRef}
+        className={`rounded-xl transition-all ${truckTypeError ? 'ring-2 ring-red-500 ring-offset-2' : ''}`}
+      >
+        <TowTruckTypeSelector
+          selectedTypes={requiredTruckTypes}
+          onChange={onRequiredTruckTypesChange || (() => {})}
+        />
+        {truckTypeError && (
+          <p className="text-red-500 text-sm mt-2 font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
+        )}
+      </div>
+
       
       {/* Summary */}
       {points.length > 0 && (

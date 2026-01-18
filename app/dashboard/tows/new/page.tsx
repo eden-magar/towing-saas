@@ -610,6 +610,8 @@ function NewTowForm() {
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
   const [requiredTruckTypes, setRequiredTruckTypes] = useState<string[]>([])
+  const [truckTypeError, setTruckTypeError] = useState(false)
+  const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
 
   // Storage
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
@@ -1041,7 +1043,24 @@ function NewTowForm() {
 
   const handleSave = async () => {
   if (!companyId || !user) return
-  if (towType !== 'single' && towType !== 'custom') return  // ← הוסיפי שורה זו
+  if (towType !== 'single' && towType !== 'custom') return
+  
+  // Validation - truck type is required
+  if (requiredTruckTypes.length === 0) {
+    setTruckTypeError(true)
+    setError('יש לבחור סוג גרר נדרש')
+    truckTypeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  setTruckTypeError(false)
+  
+  // Validation for single tow
+  if (towType === 'single') {
+    if (requiredTruckTypes.length === 0) {
+      setError('יש לבחור סוג גרר נדרש')
+      return
+    }
+  }
 
   
   setSaving(true)
@@ -1215,6 +1234,8 @@ function NewTowForm() {
             {/* Section 3+4 - Route based on type */}
             {towType === 'single' && (
               <SingleRoute
+                truckTypeSectionRef={truckTypeSectionRef}
+                truckTypeError={truckTypeError}
                 vehiclePlate={vehiclePlate}
                 onVehiclePlateChange={setVehiclePlate}
                 vehicleData={vehicleData}
@@ -1282,6 +1303,10 @@ function NewTowForm() {
                     onRouteDataChange={setCustomRouteData}
                     pinDropResult={pinDropResult}
                     onPinDropHandled={() => setPinDropResult(null)}
+                    requiredTruckTypes={requiredTruckTypes}
+                    onRequiredTruckTypesChange={setRequiredTruckTypes}
+                    truckTypeSectionRef={truckTypeSectionRef}
+                    truckTypeError={truckTypeError}
                   />
                 </div>
               </div>

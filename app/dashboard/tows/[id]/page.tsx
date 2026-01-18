@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { DriverSchedulePicker } from '../../../components/DriverSchedulePicker'
 import { getServiceSurcharges, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import { ServiceSurchargeSelector, SelectedService } from '../../../components/tow-forms/shared'
 import { 
@@ -34,6 +35,19 @@ import { getTrucks } from '../../../lib/queries/trucks'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
 import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
 import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
+
+
+// מיפוי סוגי גרר לעברית
+const truckTypeLabels: Record<string, string> = {
+  'carrier': 'מוביל',
+  'carrier_large': 'מוביל גדול',
+  'crane_tow': 'מנוף',
+  'dolly': 'דולי',
+  'flatbed_ramsa': 'רמסע',
+  'heavy_equipment': 'ציוד כבד',
+  'heavy_rescue': 'חילוץ כבד',
+  'wheel_lift_cradle': 'משקפיים'
+}
 
 interface EditVehicle {
   id: string
@@ -103,6 +117,9 @@ export default function TowDetailsPage() {
   const [editScheduledTime, setEditScheduledTime] = useState('')
   const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
+  const [showAllDrivers, setShowAllDrivers] = useState(false)
+  const [scheduleDate, setScheduleDate] = useState(new Date())
+
   const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'ממתין לשיבוץ', color: 'bg-orange-100 text-orange-700 border-orange-200' },
     assigned: { label: 'שובץ נהג', color: 'bg-amber-100 text-amber-700 border-amber-200' },
@@ -154,10 +171,26 @@ export default function TowDetailsPage() {
 
   const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
 
+  // סינון נהגים לפי סוג גרר נדרש ולפי חיפוש
   const filteredDrivers = drivers.filter(driver => {
+    // סינון לפי חיפוש
     const matchesSearch = driver.user.full_name.toLowerCase().includes(driverSearch.toLowerCase()) || 
                           (driver.user.phone && driver.user.phone.includes(driverSearch))
-    return matchesSearch
+    if (!matchesSearch) return false
+    
+    // אם אין דרישות גרר - מציגים את כולם
+    const requiredTypes = tow?.required_truck_types as string[] | undefined
+    if (!requiredTypes || requiredTypes.length === 0) return true
+    
+    // בדיקה אם לנהג יש גרר מתאים
+    const driverTrucks = trucks.filter(t => t.assigned_driver?.id === driver.id)
+    return driverTrucks.some(truck => requiredTypes.includes(truck.truck_type))
+  })
+
+  // נהגים עם גרר מתאים
+  const driversWithMatchingTruck = filteredDrivers.filter(driver => {
+    const driverTrucks = trucks.filter(t => t.assigned_driver?.id === driver.id)
+    return driverTrucks.length > 0
   })
 
   const filteredCustomers = customers.filter(c => {
@@ -416,6 +449,8 @@ export default function TowDetailsPage() {
     setShowChangeDriverModal(false)
     setSelectedDriverId(null)
     setSelectedTruckId(null)
+    setShowAllDrivers(false)
+    setScheduleDate(new Date())
   }
 
   // ==================== Invoice Functions ====================
@@ -452,125 +487,90 @@ export default function TowDetailsPage() {
   }
 
   const renderDriverModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
-      <div className="bg-white w-full lg:max-w-lg lg:rounded-2xl lg:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
-          <h2 className="font-bold text-lg">{tow?.driver ? 'שינוי נהג' : 'שיבוץ נהג'}</h2>
-          <button onClick={closeDriverModal} className="p-2 hover:bg-white/20 rounded-lg">
-            <X size={20} />
-          </button>
-        </div>
+  <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+    <div className="bg-white w-full lg:max-w-2xl lg:rounded-2xl lg:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
+        <h2 className="font-bold text-lg">{tow?.driver ? 'שינוי נהג' : 'שיבוץ נהג'}</h2>
+        <button onClick={closeDriverModal} className="p-2 hover:bg-white/20 rounded-lg">
+          <X size={20} />
+        </button>
+      </div>
 
-        <div className="p-4 border-b border-gray-200 flex-shrink-0">
-          <div className="relative">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="חיפוש נהג..."
-              value={driverSearch}
-              onChange={(e) => setDriverSearch(e.target.value)}
-              className="w-full pr-10 pl-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-            />
-          </div>
-        </div>
-
+      {!selectedDriverId ? (
+        <DriverSchedulePicker
+          companyId={companyId || ''}
+          requiredTruckTypes={(tow?.required_truck_types as string[]) || []}
+          selectedDate={scheduleDate}
+          onDateChange={setScheduleDate}
+          onDriverSelect={(driverId) => setSelectedDriverId(driverId)}
+          onClose={closeDriverModal}
+        />
+      ) : (
         <div className="flex-1 overflow-y-auto p-4">
-          {!selectedDriverId ? (
-            <div className="space-y-2">
-              {filteredDrivers.map((driver) => {
-                const driverTrucks = getDriverTrucks(driver.id)
-                return (
+          <div className="space-y-4">
+            <button
+              onClick={() => {
+                setSelectedDriverId(null)
+                setSelectedTruckId(null)
+              }}
+              className="flex items-center gap-2 text-[#33d4ff] text-sm font-medium"
+            >
+              <ArrowRight size={18} />
+              חזור לרשימת נהגים
+            </button>
+
+            <div className="p-4 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                  <User size={24} className="text-gray-400" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-800">
+                    {drivers.find(d => d.id === selectedDriverId)?.user.full_name}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {drivers.find(d => d.id === selectedDriverId)?.user.phone}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-gray-800 mb-3">בחר גרר:</h3>
+              <div className="space-y-2">
+                {getDriverTrucks(selectedDriverId).map((truck) => (
                   <button
-                    key={driver.id}
-                    onClick={() => driverTrucks.length > 0 && setSelectedDriverId(driver.id)}
-                    disabled={driverTrucks.length === 0}
+                    key={truck.id}
+                    onClick={() => setSelectedTruckId(truck.id)}
                     className={`w-full p-4 rounded-xl border text-right transition-colors ${
-                      driverTrucks.length === 0 
-                        ? 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed'
-                        : 'bg-white border-gray-200 hover:border-[#33d4ff] hover:bg-[#33d4ff]/5'
+                      selectedTruckId === truck.id
+                        ? 'border-[#33d4ff] bg-[#33d4ff]/5'
+                        : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-                        <User size={24} className="text-gray-400" />
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        selectedTruckId === truck.id ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        <Truck size={20} />
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium text-gray-800">{driver.user.full_name}</p>
-                        <p className="text-sm text-gray-500">{driver.user.phone}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {driverTrucks.length > 0 ? `${driverTrucks.length} גררים` : 'אין גרר משויך'}
-                        </p>
+                        <p className="font-medium text-gray-800">{truckTypeLabels[truck.truck_type] || truck.truck_type}</p>
+                        <p className="text-sm text-gray-500 font-mono">{truck.plate_number}</p>
                       </div>
-                      <ChevronLeft size={20} className="text-gray-400" />
+                      {selectedTruckId === truck.id && (
+                        <CheckCircle size={20} className="text-[#33d4ff]" />
+                      )}
                     </div>
                   </button>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <button
-                onClick={() => {
-                  setSelectedDriverId(null)
-                  setSelectedTruckId(null)
-                }}
-                className="flex items-center gap-2 text-[#33d4ff] text-sm font-medium"
-              >
-                <ArrowRight size={18} />
-                חזור לרשימת נהגים
-              </button>
-
-              <div className="p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                    <User size={24} className="text-gray-400" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-800">
-                      {drivers.find(d => d.id === selectedDriverId)?.user.full_name}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {drivers.find(d => d.id === selectedDriverId)?.user.phone}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="font-medium text-gray-800 mb-3">בחר גרר:</h3>
-                <div className="space-y-2">
-                  {getDriverTrucks(selectedDriverId).map((truck) => (
-                    <button
-                      key={truck.id}
-                      onClick={() => setSelectedTruckId(truck.id)}
-                      className={`w-full p-4 rounded-xl border text-right transition-colors ${
-                        selectedTruckId === truck.id
-                          ? 'border-[#33d4ff] bg-[#33d4ff]/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          selectedTruckId === truck.id ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-400'
-                        }`}>
-                          <Truck size={20} />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-800">{truck.truck_type}</p>
-                          <p className="text-sm text-gray-500 font-mono">{truck.plate_number}</p>
-                        </div>
-                        {selectedTruckId === truck.id && (
-                          <CheckCircle size={20} className="text-[#33d4ff]" />
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
-          )}
+          </div>
         </div>
+      )}
 
+      {selectedDriverId && (
         <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
           <button
             onClick={closeDriverModal}
@@ -586,9 +586,10 @@ export default function TowDetailsPage() {
             {assigning ? 'משבץ...' : tow?.driver ? 'שנה נהג' : 'שבץ נהג'}
           </button>
         </div>
-      </div>
+      )}
     </div>
-  )
+  </div>
+)
 
   if (loading) {
     return (
