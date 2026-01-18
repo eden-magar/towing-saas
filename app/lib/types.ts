@@ -350,3 +350,127 @@ export interface TruckWithDetails extends TowTruck {
   } | null
   today_tows_count: number
 }
+
+// =====================================================
+// להוסיף ל-types.ts - טייפים חדשים עבור tow_points
+// =====================================================
+
+// --- ENUMS ---
+
+export type PointType = 'pickup' | 'dropoff'
+
+export type PointStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
+
+export type PointVehicleAction = 'pickup' | 'dropoff'
+
+export type PointImageType = 'general' | 'vehicle' | 'damage' | 'signature' | 'other'
+
+
+// --- BASE TABLES ---
+
+export interface TowPoint {
+  id: string
+  tow_id: string
+  point_order: number
+  point_type: PointType
+  
+  // כתובת
+  address: string | null
+  lat: number | null
+  lng: number | null
+  
+  // איש קשר
+  contact_name: string | null
+  contact_phone: string | null
+  
+  // סטטוס
+  status: PointStatus
+  arrived_at: string | null
+  completed_at: string | null
+  
+  // מסירה (רק לפריקה)
+  recipient_name: string | null
+  recipient_phone: string | null
+  
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TowPointVehicle {
+  id: string
+  tow_point_id: string
+  tow_vehicle_id: string
+  action: PointVehicleAction
+  created_at: string
+}
+
+export interface TowPointImage {
+  id: string
+  tow_point_id: string
+  tow_vehicle_id: string | null
+  uploaded_by: string
+  image_url: string
+  image_type: PointImageType
+  notes: string | null
+  created_at: string
+}
+
+
+// --- COMPOSITE TYPES ---
+
+export interface TowPointWithDetails extends TowPoint {
+  vehicles: (TowPointVehicle & {
+    vehicle: TowVehicle
+  })[]
+  images: TowPointImage[]
+}
+
+export interface TowWithPoints extends Tow {
+  customer: Customer | null
+  driver: DriverWithDetails | null
+  truck: TowTruck | null
+  vehicles: TowVehicle[]
+  points: TowPointWithDetails[]
+  // Fallback לגרירות ישנות
+  legs?: TowLeg[]
+}
+
+
+// --- DRIVER APP TYPES ---
+
+export interface DriverTowPoint {
+  id: string
+  point_order: number
+  point_type: PointType
+  address: string
+  contact_name: string | null
+  contact_phone: string | null
+  status: PointStatus
+  arrived_at: string | null
+  completed_at: string | null
+  vehicles: {
+    id: string
+    plate_number: string
+    manufacturer: string | null
+    model: string | null
+    color: string | null
+    action: PointVehicleAction
+  }[]
+  images_count: number
+}
+
+export interface DriverActiveTow {
+  id: string
+  tow_type: TowType
+  status: TowStatus
+  scheduled_at: string | null
+  created_at: string
+  notes: string | null
+  customer: {
+    name: string
+    phone: string | null
+  } | null
+  points: DriverTowPoint[]
+  total_vehicles: number
+}
