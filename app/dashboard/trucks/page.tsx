@@ -20,7 +20,7 @@ export default function TrucksPage() {
 
   // UI states
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed_ramsa' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle'>('all')  
+  const [typeFilter, setTypeFilter] = useState<'all' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle'>('all')  
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'busy' | 'maintenance'>('all')
   const [showModal, setShowModal] = useState(false)
   const [editingTruck, setEditingTruck] = useState<TruckWithDetails | null>(null)
@@ -37,7 +37,7 @@ export default function TrucksPage() {
 
   const [formData, setFormData] = useState({
     plate: '',
-    type: '' as '' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed_ramsa' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle',
+    type: '' as '' | 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle',
     manufacturer: '',
     model: '',
     year: new Date().getFullYear(),
@@ -66,7 +66,7 @@ export default function TrucksPage() {
     carrier_large: { label: 'מובילית 10+', color: 'bg-indigo-100 text-indigo-600', iconBg: 'bg-indigo-100' },
     crane_tow: { label: 'גרר מנוף', color: 'bg-purple-100 text-purple-600', iconBg: 'bg-purple-100' },
     dolly: { label: 'דולי', color: 'bg-pink-100 text-pink-600', iconBg: 'bg-pink-100' },
-    flatbed_ramsa: { label: 'רמסע', color: 'bg-cyan-100 text-cyan-600', iconBg: 'bg-cyan-100' },
+    flatbed: { label: 'רמסע', color: 'bg-cyan-100 text-cyan-600', iconBg: 'bg-cyan-100' },
     heavy_equipment: { label: 'ציוד כבד', color: 'bg-amber-100 text-amber-600', iconBg: 'bg-amber-100' },
     heavy_rescue: { label: 'חילוץ כבד', color: 'bg-red-100 text-red-600', iconBg: 'bg-red-100' },
     wheel_lift_cradle: { label: 'משקפיים', color: 'bg-emerald-100 text-emerald-600', iconBg: 'bg-emerald-100' },
@@ -552,7 +552,7 @@ export default function TrucksPage() {
               <option value="carrier_large">מובילית 10+ רכבים</option>
               <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
               <option value="heavy_equipment">ציוד כבד/לובי</option>
-              <option value="flatbed_ramsa">רמסע</option>
+              <option value="flatbed">רמסע</option>
             </select>
           </div>
         </div>
@@ -719,7 +719,7 @@ export default function TrucksPage() {
                         <option value="carrier_large">מובילית 10+ רכבים</option>
                         <option value="wheel_lift_cradle">משקפיים (מערסל)</option>
                         <option value="heavy_equipment">ציוד כבד/לובי</option>
-                        <option value="flatbed_ramsa">רמסע</option>
+                        <option value="flatbed">רמסע</option>
                       </select>
                     </div>
                   </div>

@@ -293,7 +293,7 @@ export default function DriversPage() {
     carrier_large: 'מובילית 10+ רכבים',
     crane_tow: 'גרר מנוף',
     dolly: 'דולי (מערסל ידני)',
-    flatbed_ramsa: 'רמסע',
+    flatbed: 'רמסע',
     heavy_equipment: 'ציוד כבד/לובי',
     heavy_rescue: 'חילוץ כבד',
     wheel_lift_cradle: 'משקפיים (מערסל)',

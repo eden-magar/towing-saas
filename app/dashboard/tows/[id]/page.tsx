@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverSchedulePicker } from '../../../components/DriverSchedulePicker'
 import { getServiceSurcharges, ServiceSurcharge } from '../../../lib/queries/price-lists'
-import { ServiceSurchargeSelector, SelectedService } from '../../../components/tow-forms/shared'
+import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
   Edit2, 
@@ -43,7 +43,7 @@ const truckTypeLabels: Record<string, string> = {
   'carrier_large': 'מוביל גדול',
   'crane_tow': 'מנוף',
   'dolly': 'דולי',
-  'flatbed_ramsa': 'רמסע',
+  'flatbed': 'רמסע',
   'heavy_equipment': 'ציוד כבד',
   'heavy_rescue': 'חילוץ כבד',
   'wheel_lift_cradle': 'משקפיים'
@@ -115,6 +115,7 @@ export default function TowDetailsPage() {
 
   const [editScheduledDate, setEditScheduledDate] = useState('')
   const [editScheduledTime, setEditScheduledTime] = useState('')
+  const [editRequiredTruckTypes, setEditRequiredTruckTypes] = useState<string[]>([])
   const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
   const [showAllDrivers, setShowAllDrivers] = useState(false)
@@ -228,6 +229,7 @@ export default function TowDetailsPage() {
       const scheduledDate = new Date(tow.scheduled_at || tow.created_at)
       setEditScheduledDate(scheduledDate.toISOString().split('T')[0])
       setEditScheduledTime(scheduledDate.toTimeString().slice(0, 5))
+      setEditRequiredTruckTypes((tow.required_truck_types as string[]) || [])
       setEditVehicles(tow.vehicles?.map((v: any) => ({
         id: v.id,
         plateNumber: v.plate_number,
@@ -332,6 +334,7 @@ export default function TowDetailsPage() {
         finalPrice: newFinalPrice || null,
         scheduledAt: newScheduledAt.toISOString(),
         priceBreakdown: newPriceBreakdown,
+        requiredTruckTypes: editRequiredTruckTypes,
         vehicles: editVehicles.map(v => ({
           plateNumber: v.plateNumber,
           manufacturer: v.manufacturer || undefined,
@@ -940,6 +943,36 @@ export default function TowDetailsPage() {
                         </div>
                       )) : (
                         <p className="text-gray-500">אין רכבים</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* סוג גרר נדרש */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                  <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                    <Truck size={18} />
+                    סוג גרר נדרש
+                  </h2>
+                </div>
+                <div className="p-4 sm:p-5">
+                  {isEditing ? (
+                    <TowTruckTypeSelector
+                      selectedTypes={editRequiredTruckTypes}
+                      onChange={setEditRequiredTruckTypes}
+                    />
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {(tow.required_truck_types as string[])?.length > 0 ? (
+                        (tow.required_truck_types as string[]).map((type) => (
+                          <span key={type} className="px-3 py-1.5 bg-[#33d4ff]/10 text-[#33d4ff] rounded-lg text-sm font-medium">
+                            {truckTypeLabels[type] || type}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-500">לא הוגדר</span>
                       )}
                     </div>
                   )}

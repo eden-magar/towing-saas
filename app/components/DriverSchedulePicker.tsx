@@ -32,7 +32,7 @@ const truckTypeLabels: Record<string, string> = {
   'carrier_large': 'מוביל גדול',
   'crane_tow': 'מנוף',
   'dolly': 'דולי',
-  'flatbed_ramsa': 'רמסע',
+  'flatbed': 'רמסע',
   'heavy_equipment': 'ציוד כבד',
   'heavy_rescue': 'חילוץ כבד',
   'wheel_lift_cradle': 'משקפיים'
