@@ -72,6 +72,7 @@ export interface DriverTask {
 
 export interface DriverInfo {
   id: string
+  company_id: string
   status: 'available' | 'busy' | 'unavailable' | null
   truck: {
     id: string
@@ -90,10 +91,10 @@ export interface DriverInfo {
 export async function getDriverByUserId(userId: string): Promise<DriverInfo | null> {
   // קודם מוצאים את הנהג לפי user_id
   const { data: driver, error: driverError } = await supabase
-    .from('drivers')
-    .select('id, status')
-    .eq('user_id', userId)
-    .single()
+  .from('drivers')
+  .select('id, status, company_id')
+  .eq('user_id', userId)
+  .single()
 
   if (driverError || !driver) {
     console.error('Error fetching driver:', driverError)
@@ -131,6 +132,7 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
 
   return {
     id: driver.id,
+    company_id: driver.company_id,
     status: driver.status,
     truck: truck,
     user: user

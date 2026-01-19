@@ -29,16 +29,7 @@ import {
   RefreshCw,
   Check
 } from 'lucide-react'
-
-type RejectReason = 'break' | 'vehicle_issue' | 'too_far' | 'personal' | 'other'
-
-const rejectReasons: { key: RejectReason; label: string; icon: string }[] = [
-  { key: 'break', label: 'הפסקה', icon: '☕' },
-  { key: 'vehicle_issue', label: 'תקלה ברכב', icon: '🔧' },
-  { key: 'too_far', label: 'רחוק מדי', icon: '📍' },
-  { key: 'personal', label: 'סיבה אישית', icon: '👤' },
-  { key: 'other', label: 'אחר', icon: '💬' },
-]
+import NewTaskModal from '../components/NewTaskModal'
 
 const driverStatuses = [
   { id: 'available', label: 'זמין', icon: '🟢' },
@@ -61,10 +52,7 @@ export default function DriverHomePage() {
   // Modals
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [showNewTaskModal, setShowNewTaskModal] = useState(false)
-  const [showRejectModal, setShowRejectModal] = useState(false)
   const [selectedTask, setSelectedTask] = useState<DriverTask | null>(null)
-  const [selectedRejectReason, setSelectedRejectReason] = useState<RejectReason | null>(null)
-  const [rejectNote, setRejectNote] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
 
   // טעינת נתונים
@@ -107,6 +95,8 @@ export default function DriverHomePage() {
   // פילטור משימות
   const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
   const currentTask = tasks.find(t => t.status === 'in_progress')
+  const hasActiveTask = !!currentTask
+
 
   // פונקציות עזר
   const getGreeting = () => {
@@ -207,37 +197,6 @@ export default function DriverHomePage() {
     }
   }
 
-  // דחיית משימה
-  const handleRejectTask = () => {
-    setShowNewTaskModal(false)
-    setShowRejectModal(true)
-  }
-
-  const handleConfirmReject = async () => {
-    if (!selectedRejectReason || !selectedTask) return
-    setIsProcessing(true)
-    try {
-      const reasonLabel = rejectReasons.find(r => r.key === selectedRejectReason)?.label || selectedRejectReason
-      await rejectTask(selectedTask.id, reasonLabel, rejectNote || undefined)
-      setShowRejectModal(false)
-      setSelectedTask(null)
-      setSelectedRejectReason(null)
-      setRejectNote('')
-      await loadData()
-    } catch (err) {
-      console.error('Error rejecting task:', err)
-      alert('שגיאה בדחיית המשימה')
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const handleCancelReject = () => {
-    setShowRejectModal(false)
-    setShowNewTaskModal(true)
-    setSelectedRejectReason(null)
-    setRejectNote('')
-  }
 
   // Loading state
   if (loading || authLoading) {
@@ -527,209 +486,24 @@ export default function DriverHomePage() {
         )}
       </div>
 
-      {/* New Task Modal */}
-      {showNewTaskModal && selectedTask && (
-        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="bg-orange-500 text-white p-6 text-center flex-shrink-0">
-              <AlertCircle size={48} className="mx-auto mb-2" />
-              <h2 className="text-2xl font-bold">משימה חדשה!</h2>
-            </div>
-
-            {/* Content */}
-            <div className="p-5 overflow-y-auto flex-1">
-              <div className="text-center mb-6">
-                <div className="text-4xl font-bold text-gray-800">
-                  {formatTime(selectedTask.scheduled_at || selectedTask.created_at)}
-                </div>
-                <div className="text-gray-500">זמן מתוכנן</div>
-                <div className="mt-2 inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">
-                  {getAddresses(selectedTask).totalPoints} נקודות • {selectedTask.vehicles.length} רכב{selectedTask.vehicles.length > 1 ? 'ים' : ''}
-                </div>
-              </div>
-
-              {/* Points List */}
-              <div className="space-y-3">
-                {(selectedTask as any).points && (selectedTask as any).points.length > 0 ? (
-                  (selectedTask as any).points.map((point: any, idx: number) => (
-                    <div 
-                      key={point.id}
-                      className={`p-4 rounded-2xl ${point.point_type === 'pickup' ? 'bg-green-50' : 'bg-red-50'}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${point.point_type === 'pickup' ? 'bg-green-500' : 'bg-red-500'}`}>
-                            {idx + 1}
-                          </div>
-                          {idx < (selectedTask as any).points.length - 1 && (
-                            <div className="w-0.5 h-6 bg-gray-300 mt-1" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <div className={`text-sm font-medium ${point.point_type === 'pickup' ? 'text-green-700' : 'text-red-700'}`}>
-                            {point.point_type === 'pickup' ? 'איסוף' : 'פריקה'}
-                          </div>
-                          <div className="text-gray-800 font-medium">{point.address}</div>
-                          {point.contact_name && (
-                            <div className="text-sm text-gray-500 mt-1">
-                              {point.contact_name} {point.contact_phone && `• ${point.contact_phone}`}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  // Fallback to legs
-                  <>
-                    <div className="p-4 rounded-2xl bg-green-50">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold bg-green-500">1</div>
-                        <div>
-                          <div className="text-sm font-medium text-green-700">איסוף</div>
-                          <div className="text-gray-800 font-medium">{getAddresses(selectedTask).from}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-red-50">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold bg-red-500">2</div>
-                        <div>
-                          <div className="text-sm font-medium text-red-700">פריקה</div>
-                          <div className="text-gray-800 font-medium">{getAddresses(selectedTask).to}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {selectedTask.notes && (
-                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <div className="flex items-start gap-2">
-                    <MessageSquare size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-amber-800">{selectedTask.notes}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="p-5 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-              <div className="flex gap-3">
-                <button
-                  onClick={handleRejectTask}
-                  disabled={isProcessing}
-                  className="flex-1 py-4 border-2 border-red-200 bg-white text-red-600 rounded-xl font-bold text-lg flex items-center justify-center gap-2"
-                >
-                  <XCircle size={22} />
-                  דחה
-                </button>
-                <button
-                  onClick={handleAcceptTask}
-                  disabled={isProcessing}
-                  className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <>
-                      <CheckCircle2 size={22} />
-                      קבל
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reject Reason Modal */}
-      {showRejectModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="bg-red-500 text-white p-5 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                  <XCircle size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg">דחיית משימה</h3>
-                  <p className="text-white/80 text-sm">בחר סיבה לדחייה</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-5 overflow-y-auto flex-1">
-              <div className="space-y-2 mb-4">
-                {rejectReasons.map((reason) => (
-                  <button
-                    key={reason.key}
-                    onClick={() => setSelectedRejectReason(reason.key)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors ${
-                      selectedRejectReason === reason.key
-                        ? 'bg-red-50 border-2 border-red-500'
-                        : 'bg-gray-50 border-2 border-transparent'
-                    }`}
-                  >
-                    <span className="text-2xl">{reason.icon}</span>
-                    <span className={`font-medium ${
-                      selectedRejectReason === reason.key ? 'text-red-700' : 'text-gray-700'
-                    }`}>
-                      {reason.label}
-                    </span>
-                    {selectedRejectReason === reason.key && (
-                      <CheckCircle2 size={20} className="mr-auto text-red-500" />
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Note */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  הערה נוספת (אופציונלי)
-                </label>
-                <textarea
-                  value={rejectNote}
-                  onChange={(e) => setRejectNote(e.target.value)}
-                  placeholder="פרט את הסיבה..."
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-                />
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="p-5 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-              <div className="flex gap-3">
-                <button
-                  onClick={handleCancelReject}
-                  disabled={isProcessing}
-                  className="flex-1 py-4 border-2 border-gray-200 bg-white text-gray-600 rounded-xl font-bold text-lg"
-                >
-                  חזור
-                </button>
-                <button
-                  onClick={handleConfirmReject}
-                  disabled={isProcessing || !selectedRejectReason}
-                  className="flex-1 py-4 bg-red-600 text-white rounded-xl font-bold text-lg flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    'אשר דחייה'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* New Task Modal */}
+        {showNewTaskModal && selectedTask && driverInfo && (
+          <NewTaskModal
+            task={selectedTask}
+            driverId={driverInfo.id}
+            companyId={driverInfo.company_id || ''}
+            hasActiveTask={hasActiveTask}
+            onClose={() => {
+              setShowNewTaskModal(false)
+              setSelectedTask(null)
+            }}
+            onAccept={() => {
+              loadData()
+              setShowNewTaskModal(false)
+              setSelectedTask(null)
+            }}
+          />
+        )}
     </div>
   )
 }

@@ -7,6 +7,8 @@ import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
 import { TowWithDetails } from '../lib/queries/tows'
 import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTriangle, FileText, Shield, CreditCard } from 'lucide-react'
 import Link from 'next/link'
+import { countPendingRejectionRequests, getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
+import { getAvailableDrivers } from '../lib/queries/drivers'
 
 // מיפוי סטטוסים לעברית וצבעים
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -40,26 +42,37 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
+  const [showApprovalModal, setShowApprovalModal] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<any>(null)
+  const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
+  const [selectedNewDriver, setSelectedNewDriver] = useState<string>('')
+  const [approvalAction, setApprovalAction] = useState<'reassign' | 'unassign'>('unassign')
+  const [processingRequest, setProcessingRequest] = useState(false)
 
   const loadData = async () => {
-    if (!companyId) return
-    
-    try {
-      const [statsData, towsData, alertsData] = await Promise.all([
-        getDashboardStats(companyId),
-        getRecentTows(companyId, 5),
-        getExpiryAlerts(companyId)
-      ])
-      setStats(statsData)
-      setRecentTows(towsData)
-      setAlerts(alertsData)
-    } catch (error) {
-      console.error('Error loading dashboard data:', error)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+  if (!companyId) return
+  
+  try {
+    const [statsData, towsData, alertsData, rejectionsData, driversData] = await Promise.all([
+      getDashboardStats(companyId),
+      getRecentTows(companyId, 5),
+      getExpiryAlerts(companyId),
+      getPendingRejectionRequests(companyId),
+      getAvailableDrivers(companyId)
+    ])
+    setStats(statsData)
+    setRecentTows(towsData)
+    setAlerts(alertsData)
+    setRejectionRequests(rejectionsData)
+    setAvailableDrivers(driversData)
+  } catch (error) {
+    console.error('Error loading dashboard data:', error)
+  } finally {
+    setLoading(false)
+    setRefreshing(false)
   }
+}
 
   useEffect(() => {
   if (!authLoading) {
@@ -217,6 +230,65 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* בקשות דחייה ממתינות */}
+      {rejectionRequests.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
+          <div className="p-4 border-b border-red-100 bg-red-50 flex items-center gap-2">
+            <AlertTriangle size={20} className="text-red-500" />
+            <h2 className="font-semibold text-red-800">בקשות דחייה ממתינות ({rejectionRequests.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {rejectionRequests.map((request) => {
+              const reasonInfo = REJECTION_REASONS.find(r => r.key === request.reason)
+              return (
+                <div key={request.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-gray-800">
+                          {request.driver?.user?.full_name || 'נהג'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                          {reasonInfo?.icon} {reasonInfo?.label || request.reason}
+                        </span>
+                      </div>
+                      {request.reason_note && (
+                        <p className="text-sm text-gray-500 mb-2">{request.reason_note}</p>
+                      )}
+                      <p className="text-xs text-gray-400">
+                        {new Date(request.created_at).toLocaleString('he-IL')}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => {
+                          setSelectedRequest(request)
+                          setShowApprovalModal(true)
+                        }}
+                        className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200 transition-colors"
+                      >
+                        אשר
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm('לדחות את הבקשה? הנהג יצטרך לבצע את המשימה.')) {
+                            await denyRejectionRequest(request.id, user?.id || '')
+                            loadData()
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        דחה
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* כרטיסי סטטיסטיקה */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {statCards.map((stat, index) => {
@@ -333,6 +405,111 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* מודל אישור בקשת דחייה */}
+      {showApprovalModal && selectedRequest && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-800">אישור בקשת דחייה</h3>
+              <p className="text-sm text-gray-500 mt-1">מה לעשות עם המשימה?</p>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="action"
+                  checked={approvalAction === 'reassign'}
+                  onChange={() => setApprovalAction('reassign')}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">העבר לנהג אחר</div>
+                  <div className="text-sm text-gray-500">בחר נהג שיקבל את המשימה</div>
+                </div>
+              </label>
+
+              {approvalAction === 'reassign' && (
+                <select
+                  value={selectedNewDriver}
+                  onChange={(e) => setSelectedNewDriver(e.target.value)}
+                  className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">בחר נהג...</option>
+                  {availableDrivers
+                    .filter(d => d.id !== selectedRequest.driver_id)
+                    .map(driver => (
+                      <option key={driver.id} value={driver.id}>
+                        {driver.user?.full_name || 'נהג'} {driver.status === 'available' ? '(זמין)' : ''}
+                      </option>
+                    ))
+                  }
+                </select>
+              )}
+
+              <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="action"
+                  checked={approvalAction === 'unassign'}
+                  onChange={() => setApprovalAction('unassign')}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">החזר לתור</div>
+                  <div className="text-sm text-gray-500">המשימה תחכה לשיבוץ חדש</div>
+                </div>
+              </label>
+            </div>
+
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowApprovalModal(false)
+                  setSelectedRequest(null)
+                  setSelectedNewDriver('')
+                  setApprovalAction('unassign')
+                }}
+                disabled={processingRequest}
+                className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={async () => {
+                  if (approvalAction === 'reassign' && !selectedNewDriver) {
+                    alert('יש לבחור נהג')
+                    return
+                  }
+                  setProcessingRequest(true)
+                  try {
+                    await approveRejectionRequest(
+                      selectedRequest.id,
+                      user?.id || '',
+                      approvalAction === 'reassign' ? selectedNewDriver : undefined
+                    )
+                    setShowApprovalModal(false)
+                    setSelectedRequest(null)
+                    setSelectedNewDriver('')
+                    setApprovalAction('unassign')
+                    loadData()
+                  } catch (err) {
+                    console.error('Error approving request:', err)
+                    alert('שגיאה באישור הבקשה')
+                  } finally {
+                    setProcessingRequest(false)
+                  }
+                }}
+                disabled={processingRequest || (approvalAction === 'reassign' && !selectedNewDriver)}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium disabled:opacity-50"
+              >
+                {processingRequest ? 'מעבד...' : 'אשר'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

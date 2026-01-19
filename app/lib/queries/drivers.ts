@@ -313,3 +313,37 @@ export async function updateDriverStatus(driverId: string, status: DriverStatus)
 
   return true
 }
+
+// שליפת נהגים זמינים
+// שליפת נהגים זמינים
+export async function getAvailableDrivers(companyId: string) {
+  const { data, error } = await supabase
+    .from('drivers')
+    .select(`
+      id,
+      status,
+      user_id
+    `)
+    .eq('company_id', companyId)
+
+  if (error) {
+    console.error('Error fetching available drivers:', error)
+    return []
+  }
+
+  // שליפת פרטי משתמשים בנפרד
+  if (data && data.length > 0) {
+    const userIds = data.map(d => d.user_id)
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, full_name, phone')
+      .in('id', userIds)
+
+    return data.map(driver => ({
+      ...driver,
+      user: users?.find(u => u.id === driver.user_id) || null
+    }))
+  }
+
+  return data || []
+}
