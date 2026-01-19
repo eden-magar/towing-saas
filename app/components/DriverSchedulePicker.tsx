@@ -84,7 +84,10 @@ export function DriverSchedulePicker({
 
       // מיפוי גררים לנהגים - עם סינון נהגים ללא user
       const driversWithTrucks = (driversData || [])
-        .filter(d => d.user && (Array.isArray(d.user) ? d.user[0] : d.user)) // סינון נהגים ללא user
+        .filter(d => {
+          const user = Array.isArray(d.user) ? d.user[0] : d.user
+          return user && user.full_name // מוודא שגם ה-user וגם ה-full_name קיימים
+        })        
         .map(d => ({
           id: d.id,
           user: Array.isArray(d.user) ? d.user[0] : d.user as { full_name: string; phone: string | null },
