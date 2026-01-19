@@ -13,25 +13,30 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
+
+    console.log('CLICKED LOGIN') // כדי לוודא שהכפתור בכלל מפעיל
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
+    console.log('AFTER signInWithPassword') // כדי לראות שעברנו את ההתחברות
+
     if (error) {
+      console.log('SIGN IN ERROR:', error)
       setError('אימייל או סיסמה שגויים')
       setLoading(false)
       return
     }
 
-    // בדוק את התפקיד של המשתמש
     console.log('User ID:', data.user.id)
     console.log('SIGNED IN user email:', data.user.email)
 
     const { data: currentUser, error: currentUserError } = await supabase.auth.getUser()
     console.log('getUser() returned:', currentUser?.user?.id, 'error:', currentUserError)
 
+    console.log('BEFORE users query')
 
     const { data: userData, error: userError } = await supabase
       .from('users')
@@ -39,10 +44,9 @@ export default function LoginPage() {
       .eq('id', data.user.id)
       .single()
 
+    console.log('AFTER users query')
     console.log('userData:', userData)
-    console.log('userError:', userError)
     console.log('userError FULL:', userError)
-
 
     if (userError || !userData) {
       console.log('Failed to get user role')
@@ -51,7 +55,6 @@ export default function LoginPage() {
       return
     }
 
-    // הפנה לפי תפקיד
     if (userData.role === 'driver') {
       window.location.href = '/driver'
     } else if (userData.role === 'super_admin') {
@@ -60,6 +63,7 @@ export default function LoginPage() {
       window.location.href = '/dashboard'
     }
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
