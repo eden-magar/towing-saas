@@ -160,48 +160,6 @@ const statusOptions = [
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Top Header */}
-      <header className="bg-cyan-500 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-40">
-        {/* Driver Info - Right Side */}
-        <div className="flex items-center gap-3">
-          {loading ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : (
-            <>
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center font-bold text-lg">
-                  {driverAvatar}
-                </div>
-                <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-cyan-500 ${getStatusColor(driverStatus)}`}></div>
-              </div>
-              <div>
-                <p className="font-bold">{driverName}</p>
-                <button 
-                  onClick={() => setShowStatusPicker(!showStatusPicker)}
-                  className="flex items-center gap-1 text-xs text-white/80 hover:text-white"
-                >
-                  <span>{getStatusText(driverStatus)}</span>
-                  <ChevronDown size={12} />
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Notifications - Left Side */}
-        <button 
-          onClick={() => setShowNotifications(!showNotifications)}
-          className="relative p-2 hover:bg-white/20 rounded-lg transition-colors"
-        >
-          <Bell size={22} />
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center font-bold">
-              {unreadCount}
-            </span>
-          )}
-        </button>
-      </header>
-
       {/* Status Picker Dropdown */}
       {showStatusPicker && (
         <>
@@ -270,8 +228,8 @@ const statusOptions = [
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-bottom">
-        <div className="flex">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-30 safe-area-bottom">
+        <div className="flex justify-around py-2 px-4">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
@@ -279,17 +237,14 @@ const statusOptions = [
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex-1 flex flex-col items-center py-3 relative transition-colors ${
+                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-colors ${
                   isActive 
-                    ? 'text-cyan-500' 
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'text-blue-600' 
+                    : 'text-gray-300 hover:text-gray-400'
                 }`}
               >
-                <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
-                <span className={`text-xs mt-1 ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
-                {isActive && (
-                  <div className="absolute bottom-0 w-12 h-1 bg-cyan-500 rounded-t-full"></div>
-                )}
+                <Icon size={24} strokeWidth={isActive ? 2 : 1.5} />
+                <span className={`text-xs mt-1 ${isActive ? 'font-medium' : ''}`}>{item.label}</span>
               </Link>
             )
           })}

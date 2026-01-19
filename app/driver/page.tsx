@@ -143,10 +143,13 @@ export default function DriverHomePage() {
   }
 
   const getVehicleInfo = (task: DriverTask) => {
-    if (task.vehicles.length === 0) return 'אין פרטי רכב'
-    const v = task.vehicles[0]
-    return `${v.manufacturer || ''} ${v.model || ''}`.trim() || v.plate_number
+  if (task.vehicles.length === 0) return { name: 'אין פרטי רכב', plate: '' }
+  const v = task.vehicles[0]
+  return {
+    name: `${v.manufacturer || ''} ${v.model || ''}`.trim() || 'רכב',
+    plate: v.plate_number || ''
   }
+}
 
   const getAddresses = (task: DriverTask) => {
     // קודם ננסה מ-points (המבנה החדש)
@@ -355,7 +358,9 @@ export default function DriverHomePage() {
               <div className="flex-1">
                 <div className="text-sm text-blue-100">הגרר שלי</div>
                 <div className="font-bold">{truckInfo.model}</div>
-                <div className="text-sm text-blue-200">{truckInfo.plate}</div>
+                <span className="inline-block bg-yellow-400 text-gray-900 text-sm font-mono font-bold px-3 py-1 rounded mt-1 border-2 border-yellow-500">
+                  {truckInfo.plate}
+                </span>
               </div>
             </div>
           </div>
@@ -386,7 +391,12 @@ export default function DriverHomePage() {
                   </div>
                   <div>
                     <div className="text-sm text-cyan-100">משימה פעילה</div>
-                    <div className="font-bold">{getVehicleInfo(currentTask)}</div>
+                    <div className="font-bold">{getVehicleInfo(currentTask).name}</div>
+                    {getVehicleInfo(currentTask).plate && (
+                      <span className="bg-white/20 text-xs font-mono px-2 py-0.5 rounded">
+                        {getVehicleInfo(currentTask).plate}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <ChevronLeft size={24} className="text-white/70" />
@@ -445,8 +455,13 @@ export default function DriverHomePage() {
                         {formatTime(task.scheduled_at || task.created_at)}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-800">
-                          {getVehicleInfo(task)}
+                        <div>
+                          <div className="font-medium text-gray-800">{getVehicleInfo(task).name}</div>
+                          {getVehicleInfo(task).plate && (
+                            <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-mono px-2 py-0.5 rounded mt-1">
+                              {getVehicleInfo(task).plate}
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-gray-500">
                           {task.vehicles.length} רכב{task.vehicles.length > 1 ? 'ים' : ''} • {addresses.totalPoints} נקודות
