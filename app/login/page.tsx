@@ -29,8 +29,9 @@ export default function LoginPage() {
     console.log('User ID:', data.user.id)
     console.log('SIGNED IN user email:', data.user.email)
 
-  const { data: currentUser, error: currentUserError } = await supabase.auth.getUser()
-  console.log('getUser() returned:', currentUser?.user?.id, 'error:', currentUserError)
+    const { data: currentUser, error: currentUserError } = await supabase.auth.getUser()
+    console.log('getUser() returned:', currentUser?.user?.id, 'error:', currentUserError)
+
 
     const { data: userData, error: userError } = await supabase
       .from('users')
