@@ -26,13 +26,18 @@ export default function LoginPage() {
     }
 
     // בדוק את התפקיד של המשתמש
+    console.log('User ID:', data.user.id)
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('role')
       .eq('id', data.user.id)
       .single()
 
+    console.log('userData:', userData)
+    console.log('userError:', userError)
+
     if (userError || !userData) {
+      console.log('Failed to get user role')
       setError('לא נמצא משתמש במערכת')
       setLoading(false)
       return
