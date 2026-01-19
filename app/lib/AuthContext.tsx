@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { supabase } from './supabase'
 import { User } from './types'
 
@@ -21,66 +21,72 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const fetchingRef = useRef(false)
 
   useEffect(() => {
-    checkUser()
+    let isMounted = true
+
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session?.user && isMounted) {
+          const userData = await fetchUserData(session.user.id)
+          if (isMounted) {
+            setUser(userData)
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error)
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    initAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event)
-      if (event === 'SIGNED_IN' && session?.user) {
-        await fetchUserData(session.user.id)
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null)
+      
+      if (event === 'SIGNED_OUT') {
+        if (isMounted) {
+          setUser(null)
+          setLoading(false)
+        }
       }
+      // לא מטפלים ב-SIGNED_IN כאן כי הלוגין עושה redirect
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
-  const checkUser = async () => {
+  const fetchUserData = async (authUserId: string): Promise<User | null> => {
+    console.log('fetchUserData started for:', authUserId)
+    
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        await fetchUserData(session.user.id)
-      } else {
-        setLoading(false)
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUserId)
+        .single()
+
+      console.log('fetchUserData result:', { data, error })
+
+      if (error) {
+        console.error('Error fetching user data:', error)
+        return null
       }
-    } catch (error) {
-      console.error('Error checking user:', error)
-      setLoading(false)
+      
+      return data as User
+    } catch (err) {
+      console.error('Fetch user error:', err)
+      return null
     }
   }
-
-  const fetchUserData = async (authUserId: string) => {
-  if (fetchingRef.current) return
-  fetchingRef.current = true
-  
-  console.log('fetchUserData started for:', authUserId)
-  
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authUserId)
-      .single()
-
-    console.log('fetchUserData result:', data, error)
-
-    if (error) {
-      console.error('Error fetching user data:', error)
-      setUser(null)
-    } else {
-      setUser(data as User)
-    }
-  } catch (err) {
-    console.error('Fetch user error:', err)
-    setUser(null)
-  } finally {
-    fetchingRef.current = false
-    setLoading(false)
-  }
-}
 
   const signOut = async () => {
     await supabase.auth.signOut()
