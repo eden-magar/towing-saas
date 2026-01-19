@@ -591,11 +591,26 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   // Get addresses from legs
+  // Get addresses - first try from points, fallback to legs
+const hasPoints = (task as any).points && (task as any).points.length > 0
+const points = (task as any).points || []
+
+let pickupAddress = 'לא צוין'
+let dropoffAddress = 'לא צוין'
+
+if (hasPoints) {
+  const firstPickup = points.find((p: any) => p.point_type === 'pickup') || points[0]
+  const lastDropoff = [...points].reverse().find((p: any) => p.point_type === 'dropoff') || points[points.length - 1]
+  pickupAddress = firstPickup?.address || 'לא צוין'
+  dropoffAddress = lastDropoff?.address || 'לא צוין'
+} else {
   const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
   const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
-  const pickupAddress = pickupLeg?.from_address || 'לא צוין'
-  const dropoffAddress = deliveryLeg?.to_address || pickupLeg?.to_address || 'לא צוין'
-  const totalDistance = task.legs.reduce((sum, leg) => sum + (leg.distance_km || 0), 0)
+  pickupAddress = pickupLeg?.from_address || 'לא צוין'
+  dropoffAddress = deliveryLeg?.to_address || pickupLeg?.to_address || 'לא צוין'
+}
+
+const totalDistance = task.legs.reduce((sum, leg) => sum + (leg.distance_km || 0), 0)
   const vehicle = task.vehicles[0]
 
   // חלוקת תמונות ל-2 קטגוריות

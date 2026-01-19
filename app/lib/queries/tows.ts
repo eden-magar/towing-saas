@@ -55,6 +55,41 @@ export interface TowLeg {
   created_at: string
 }
 
+// NEW: טייפ לנקודת גרירה (tow_point)
+export interface TowPoint {
+  id: string
+  tow_id: string
+  point_order: number
+  point_type: 'pickup' | 'dropoff'
+  address: string | null
+  lat: number | null
+  lng: number | null
+  contact_name: string | null
+  contact_phone: string | null
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
+  arrived_at: string | null
+  completed_at: string | null
+  recipient_name: string | null
+  recipient_phone: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TowPointWithDetails extends TowPoint {
+  vehicles: {
+    id: string
+    action: 'pickup' | 'dropoff'
+    vehicle: TowVehicle
+  }[]
+  images: {
+    id: string
+    image_url: string
+    image_type: string
+    created_at: string
+  }[]
+}
+
 export interface TowWithDetails {
   id: string
   company_id: string
@@ -70,7 +105,7 @@ export interface TowWithDetails {
   final_price: number | null
   price_breakdown: PriceBreakdown | null
   price_list_id: string | null
-  required_truck_types: string[] | null  // ← הוסיפי את זה!
+  required_truck_types: string[] | null
   started_at: string | null
   completed_at: string | null
   created_at: string
@@ -95,6 +130,8 @@ export interface TowWithDetails {
   } | null
   vehicles: TowVehicle[]
   legs: TowLeg[]
+  // NEW: נקודות גרירה
+  points?: TowPointWithDetails[]
 }
 
 // ==================== שליפת גרירות ====================
@@ -228,7 +265,65 @@ export async function getTow(towId: string): Promise<TowWithDetails | null> {
   }
 }
 
+// ==================== NEW: שליפת גרירה עם נקודות ====================
+
+export async function getTowWithPoints(towId: string): Promise<TowWithDetails | null> {
+  // שליפת הגרירה הבסיסית
+  const tow = await getTow(towId)
+  if (!tow) return null
+
+  // שליפת הנקודות
+  const { data: points, error: pointsError } = await supabase
+    .from('tow_points')
+    .select(`
+      *,
+      vehicles:tow_point_vehicles (
+        id,
+        action,
+        vehicle:tow_vehicles (
+          id,
+          plate_number,
+          manufacturer,
+          model,
+          color,
+          is_working
+        )
+      ),
+      images:tow_point_images (
+        id,
+        image_url,
+        image_type,
+        created_at
+      )
+    `)
+    .eq('tow_id', towId)
+    .order('point_order', { ascending: true })
+
+  if (pointsError) {
+    console.error('Error fetching tow points:', pointsError)
+  }
+
+  return {
+    ...tow,
+    points: points || []
+  }
+}
+
 // ==================== יצירת גרירה ====================
+
+// NEW: טייפ לנקודה מוכנה לשמירה
+export interface PreparedTowPoint {
+  point_order: number
+  point_type: 'pickup' | 'dropoff'
+  address: string | null
+  lat: number | null
+  lng: number | null
+  contact_name: string | null
+  contact_phone: string | null
+  notes: string | null
+  vehicleIndices: number[]
+  dropToStorage?: boolean
+}
 
 interface CreateTowInput {
   companyId: string
@@ -265,6 +360,8 @@ interface CreateTowInput {
     toAddress?: string
     towVehicleIndex?: number
   }[]
+  // NEW: נקודות גרירה
+  points?: PreparedTowPoint[]
 }
 
 export async function createTow(input: CreateTowInput) {
@@ -297,7 +394,7 @@ export async function createTow(input: CreateTowInput) {
     throw towError
   }
 
-  // יצירת כלי רכב
+  // יצירת כלי רכב - ושמירת מיפוי IDs
   const vehicleIds: string[] = []
   for (let i = 0; i < input.vehicles.length; i++) {
     const v = input.vehicles[i]
@@ -346,7 +443,7 @@ export async function createTow(input: CreateTowInput) {
     })
   }
 
-  // יצירת רגליים
+  // יצירת רגליים (לתאימות אחורה)
   for (let i = 0; i < legsToCreate.length; i++) {
     const leg = legsToCreate[i]
     const towVehicleId = leg.towVehicleIndex !== undefined ? vehicleIds[leg.towVehicleIndex] : null
@@ -368,6 +465,55 @@ export async function createTow(input: CreateTowInput) {
       await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
       await supabase.from('tows').delete().eq('id', towId)
       throw legError
+    }
+  }
+
+  // NEW: יצירת נקודות גרירה (tow_points)
+  if (input.points && input.points.length > 0) {
+    for (const point of input.points) {
+      const pointId = crypto.randomUUID()
+      
+      // שמירת הנקודה
+      const { error: pointError } = await supabase
+        .from('tow_points')
+        .insert({
+          id: pointId,
+          tow_id: towId,
+          point_order: point.point_order,
+          point_type: point.point_type,
+          address: point.address,
+          lat: point.lat,
+          lng: point.lng,
+          contact_name: point.contact_name,
+          contact_phone: point.contact_phone,
+          notes: point.notes,
+          status: 'pending'
+        })
+
+      if (pointError) {
+        console.error('Error creating tow point:', pointError)
+        // לא נעצור את כל התהליך - הנקודות הן תוספת
+      } else {
+        // שמירת הרכבים בנקודה
+        if (point.vehicleIndices && point.vehicleIndices.length > 0) {
+          for (const vehicleIndex of point.vehicleIndices) {
+            const vehicleId = vehicleIds[vehicleIndex]
+            if (!vehicleId) continue
+
+            const { error: pointVehicleError } = await supabase
+              .from('tow_point_vehicles')
+              .insert({
+                tow_point_id: pointId,
+                tow_vehicle_id: vehicleId,
+                action: point.point_type
+              })
+
+            if (pointVehicleError) {
+              console.error('Error creating tow point vehicle:', pointVehicleError)
+            }
+          }
+        }
+      }
     }
   }
 
@@ -465,6 +611,8 @@ interface UpdateTowInput {
     fromAddress?: string
     toAddress?: string
   }[]
+  // NEW: נקודות גרירה
+  points?: PreparedTowPoint[]
 }
 
 export async function updateTow(input: UpdateTowInput) {
@@ -540,12 +688,82 @@ export async function updateTow(input: UpdateTowInput) {
     }
   }
 
+  // NEW: עדכון נקודות
+  if (input.points) {
+    // מחיקת רכבים בנקודות קודם
+    const { data: existingPoints } = await supabase
+      .from('tow_points')
+      .select('id')
+      .eq('tow_id', input.towId)
+    
+    if (existingPoints && existingPoints.length > 0) {
+      const pointIds = existingPoints.map(p => p.id)
+      await supabase.from('tow_point_vehicles').delete().in('tow_point_id', pointIds)
+    }
+    
+    // מחיקת נקודות קיימות
+    await supabase.from('tow_points').delete().eq('tow_id', input.towId)
+
+    // שליפת מיפוי רכבים
+    const { data: vehicles } = await supabase
+      .from('tow_vehicles')
+      .select('id, plate_number')
+      .eq('tow_id', input.towId)
+      .order('order_index', { ascending: true })
+    
+    const vehicleIds = vehicles?.map(v => v.id) || []
+
+    // יצירת נקודות חדשות
+    for (const point of input.points) {
+      const pointId = crypto.randomUUID()
+      
+      await supabase.from('tow_points').insert({
+        id: pointId,
+        tow_id: input.towId,
+        point_order: point.point_order,
+        point_type: point.point_type,
+        address: point.address,
+        lat: point.lat,
+        lng: point.lng,
+        contact_name: point.contact_name,
+        contact_phone: point.contact_phone,
+        notes: point.notes,
+        status: 'pending'
+      })
+
+      for (const vehicleIndex of point.vehicleIndices || []) {
+        const vehicleId = vehicleIds[vehicleIndex]
+        if (vehicleId) {
+          await supabase.from('tow_point_vehicles').insert({
+            tow_point_id: pointId,
+            tow_vehicle_id: vehicleId,
+            action: point.point_type
+          })
+        }
+      }
+    }
+  }
+
   return true
 }
 
 // ==================== מחיקת גרירה ====================
 
 export async function deleteTow(towId: string) {
+  // מחיקת נקודות קודם (כולל רכבים ותמונות)
+  const { data: points } = await supabase
+    .from('tow_points')
+    .select('id')
+    .eq('tow_id', towId)
+  
+  if (points && points.length > 0) {
+    const pointIds = points.map(p => p.id)
+    await supabase.from('tow_point_images').delete().in('tow_point_id', pointIds)
+    await supabase.from('tow_point_vehicles').delete().in('tow_point_id', pointIds)
+  }
+  await supabase.from('tow_points').delete().eq('tow_id', towId)
+  
+  // מחיקת legs ו-vehicles
   await supabase.from('tow_legs').delete().eq('tow_id', towId)
   await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
   

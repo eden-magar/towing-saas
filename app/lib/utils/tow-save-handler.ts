@@ -77,6 +77,23 @@ export interface SaveTowInput {
   dropoffContactPhone?: string
 }
 
+// ==================== NEW: TowPoint Types ====================
+
+export interface PreparedTowPoint {
+  point_order: number
+  point_type: 'pickup' | 'dropoff'
+  address: string | null
+  lat: number | null
+  lng: number | null
+  contact_name: string | null
+  contact_phone: string | null
+  notes: string | null
+  // רכבים בנקודה - מכיל את ה-index של הרכב ב-vehicles array
+  vehicleIndices: number[]
+  // האם זו נקודה לאחסנה
+  dropToStorage?: boolean
+}
+
 // Output ל-createTow
 export interface PreparedTowData {
   companyId: string
@@ -115,6 +132,8 @@ export interface PreparedTowData {
     toLat?: number
     toLng?: number
   }[]
+  // NEW: נקודות גרירה
+  points: PreparedTowPoint[]
 }
 
 // ==================== Helper Functions ====================
@@ -194,6 +213,166 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
     totalWeight: v.vehicleData?.totalWeight ? Number(v.vehicleData.totalWeight) : undefined,
     gearType: v.vehicleData?.gearType
   }))
+}
+
+/**
+ * NEW: המרת נקודות מסלול (RoutePoints) לנקודות גרירה (TowPoints)
+ */
+export function convertRoutePointsToTowPoints(
+  routePoints: RoutePoint[], 
+  allVehicles: PreparedTowData['vehicles']
+): PreparedTowPoint[] {
+  const points: PreparedTowPoint[] = []
+  let pointOrder = 0
+  
+  // יצירת מפה של plateNumber -> index
+  const vehicleIndexMap = new Map<string, number>()
+  allVehicles.forEach((v, idx) => {
+    vehicleIndexMap.set(v.plateNumber, idx)
+  })
+  
+  // יצירת מפה של vehicle.id -> plateNumber (מ-RoutePoint)
+  const vehicleIdToPlate = new Map<string, string>()
+  for (const point of routePoints) {
+    for (const v of point.vehiclesToPickup) {
+      vehicleIdToPlate.set(v.id, v.plateNumber)
+    }
+  }
+  
+  for (const rp of routePoints) {
+    // דילוג על נקודות בסיס בלבד (בלי רכבים)
+    if (rp.type === 'base' && rp.vehiclesToPickup.length === 0 && rp.vehiclesToDropoff.length === 0) {
+      continue
+    }
+    
+    // קביעת סוג הנקודה
+    const hasPickup = rp.vehiclesToPickup.length > 0
+    const hasDropoff = rp.vehiclesToDropoff.length > 0 || rp.dropToStorage
+    
+    // אם יש גם איסוף וגם פריקה באותה נקודה - יוצרים 2 נקודות
+    if (hasPickup && hasDropoff) {
+      // נקודת פריקה קודם (אם מורידים לפני שמעלים)
+      const dropoffVehicleIndices = rp.vehiclesToDropoff
+        .map(vId => {
+          const plate = vehicleIdToPlate.get(vId)
+          return plate ? vehicleIndexMap.get(plate) : undefined
+        })
+        .filter((idx): idx is number => idx !== undefined)
+      
+      if (dropoffVehicleIndices.length > 0) {
+        points.push({
+          point_order: pointOrder++,
+          point_type: 'dropoff',
+          address: rp.address || null,
+          lat: rp.addressData?.lat || null,
+          lng: rp.addressData?.lng || null,
+          contact_name: rp.contactName || null,
+          contact_phone: rp.contactPhone || null,
+          notes: rp.notes || null,
+          vehicleIndices: dropoffVehicleIndices,
+          dropToStorage: rp.dropToStorage
+        })
+      }
+      
+      // נקודת איסוף
+      const pickupVehicleIndices = rp.vehiclesToPickup
+        .map(v => vehicleIndexMap.get(v.plateNumber))
+        .filter((idx): idx is number => idx !== undefined)
+      
+      points.push({
+        point_order: pointOrder++,
+        point_type: 'pickup',
+        address: rp.address || null,
+        lat: rp.addressData?.lat || null,
+        lng: rp.addressData?.lng || null,
+        contact_name: rp.contactName || null,
+        contact_phone: rp.contactPhone || null,
+        notes: rp.notes || null,
+        vehicleIndices: pickupVehicleIndices
+      })
+    }
+    // רק איסוף
+    else if (hasPickup) {
+      const vehicleIndices = rp.vehiclesToPickup
+        .map(v => vehicleIndexMap.get(v.plateNumber))
+        .filter((idx): idx is number => idx !== undefined)
+      
+      points.push({
+        point_order: pointOrder++,
+        point_type: 'pickup',
+        address: rp.address || null,
+        lat: rp.addressData?.lat || null,
+        lng: rp.addressData?.lng || null,
+        contact_name: rp.contactName || null,
+        contact_phone: rp.contactPhone || null,
+        notes: rp.notes || null,
+        vehicleIndices
+      })
+    }
+    // רק פריקה
+    else if (hasDropoff) {
+      const vehicleIndices = rp.vehiclesToDropoff
+        .map(vId => {
+          const plate = vehicleIdToPlate.get(vId)
+          return plate ? vehicleIndexMap.get(plate) : undefined
+        })
+        .filter((idx): idx is number => idx !== undefined)
+      
+      points.push({
+        point_order: pointOrder++,
+        point_type: 'dropoff',
+        address: rp.address || null,
+        lat: rp.addressData?.lat || null,
+        lng: rp.addressData?.lng || null,
+        contact_name: rp.contactName || null,
+        contact_phone: rp.contactPhone || null,
+        notes: rp.notes || null,
+        vehicleIndices,
+        dropToStorage: rp.dropToStorage
+      })
+    }
+  }
+  
+  return points
+}
+
+/**
+ * NEW: יצירת נקודות גרירה לגרירה פשוטה (single)
+ */
+export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
+  const points: PreparedTowPoint[] = []
+  
+  // נקודת איסוף
+  if (input.pickupAddress?.address) {
+    points.push({
+      point_order: 0,
+      point_type: 'pickup',
+      address: input.pickupAddress.address,
+      lat: input.pickupAddress.lat || null,
+      lng: input.pickupAddress.lng || null,
+      contact_name: input.pickupContactName || null,
+      contact_phone: input.pickupContactPhone || null,
+      notes: null,
+      vehicleIndices: [0] // הרכב היחיד
+    })
+  }
+  
+  // נקודת פריקה
+  if (input.dropoffAddress?.address) {
+    points.push({
+      point_order: 1,
+      point_type: 'dropoff',
+      address: input.dropoffAddress.address,
+      lat: input.dropoffAddress.lat || null,
+      lng: input.dropoffAddress.lng || null,
+      contact_name: input.dropoffContactName || null,
+      contact_phone: input.dropoffContactPhone || null,
+      notes: null,
+      vehicleIndices: [0] // הרכב היחיד
+    })
+  }
+  
+  return points
 }
 
 /**
@@ -393,6 +572,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       toLng: input.dropoffAddress?.lng
     }]
 
+    // NEW: יצירת נקודות גרירה
+    const points = createSingleTowPoints(input)
+
     return {
       companyId: input.companyId,
       createdBy: input.userId,
@@ -406,7 +588,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       priceMode: input.priceMode,
       priceBreakdown,
       vehicles,
-      legs
+      legs,
+      points
     }
   }
 
@@ -415,6 +598,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     const priceBreakdown = buildCustomTowPriceBreakdown(input, input.routePoints)
     const vehicles = collectVehiclesFromRoutePoints(input.routePoints)
     const legs = convertRoutePointsToLegs(input.routePoints)
+    
+    // NEW: יצירת נקודות גרירה
+    const points = convertRoutePointsToTowPoints(input.routePoints, vehicles)
 
     return {
       companyId: input.companyId,
@@ -429,7 +615,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       priceMode: input.priceMode,
       priceBreakdown,
       vehicles,
-      legs
+      legs,
+      points
     }
   }
 

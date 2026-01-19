@@ -7,11 +7,15 @@ import { useAuth } from '../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../lib/queries/driver-tasks'
 import { supabase } from '../lib/supabase'
 import { 
-  ClipboardList, 
-  User, 
+  Home,
+  History,
+  PieChart,
+  UserCircle,
   Bell,
   X,
-  Loader2
+  Loader2,
+  Truck,
+  ChevronDown
 } from 'lucide-react'
 
 interface Notification {
@@ -34,6 +38,7 @@ export default function DriverLayout({
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showStatusPicker, setShowStatusPicker] = useState(false)
 
   // טעינת פרטי נהג והתראות
   useEffect(() => {
@@ -71,6 +76,44 @@ export default function DriverLayout({
     }
   }
 
+  const updateDriverStatus = async (newStatus: string) => {
+    if (!driverInfo?.id) return
+    try {
+      await supabase
+        .from('drivers')
+        .update({ status: newStatus })
+        .eq('id', driverInfo.id)
+      
+      setDriverInfo(prev => prev ? { ...prev, status: newStatus as 'available' | 'busy' | 'unavailable' } : null)
+      setShowStatusPicker(false)
+    } catch (err) {
+      console.error('Error updating status:', err)
+    }
+  }
+
+const statusOptions = [
+  { id: 'available', label: 'זמין', icon: '🟢' },
+  { id: 'busy', label: 'בגרירה', icon: '🔵' },
+  { id: 'break', label: 'בהפסקה', icon: '🟡' },
+  { id: 'unavailable', label: 'לא זמין', icon: '🔴' },
+]
+
+  const navItems = [
+  { href: '/driver', label: 'בית', icon: Home },
+  { href: '/driver/history', label: 'היסטוריה', icon: History },
+  { href: '/driver/stats', label: 'סטטיסטיקות', icon: PieChart },
+  { href: '/driver/profile', label: 'פרופיל', icon: UserCircle },
+]
+
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'available': return 'bg-emerald-500'
+      case 'busy': return 'bg-amber-500'
+      case 'unavailable': return 'bg-gray-400'
+      default: return 'bg-gray-400'
+    }
+  }
+
   const markAsRead = async (notificationId: string) => {
     await supabase
       .from('notifications')
@@ -80,20 +123,6 @@ export default function DriverLayout({
     setNotifications(prev => 
       prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
     )
-  }
-
-  const navItems = [
-    { href: '/driver', label: 'משימות', icon: ClipboardList },
-    { href: '/driver/profile', label: 'פרופיל', icon: User },
-  ]
-
-  const getStatusColor = (status: string | null) => {
-    switch (status) {
-      case 'available': return 'bg-emerald-500'
-      case 'busy': return 'bg-amber-500'
-      case 'unavailable': return 'bg-gray-400'
-      default: return 'bg-gray-400'
-    }
   }
 
   const getStatusText = (status: string | null) => {
@@ -147,7 +176,13 @@ export default function DriverLayout({
               </div>
               <div>
                 <p className="font-bold">{driverName}</p>
-                <p className="text-xs text-white/80">{getStatusText(driverStatus)} • {driverTruck}</p>
+                <button 
+                  onClick={() => setShowStatusPicker(!showStatusPicker)}
+                  className="flex items-center gap-1 text-xs text-white/80 hover:text-white"
+                >
+                  <span>{getStatusText(driverStatus)}</span>
+                  <ChevronDown size={12} />
+                </button>
               </div>
             </>
           )}
@@ -166,6 +201,31 @@ export default function DriverLayout({
           )}
         </button>
       </header>
+
+      {/* Status Picker Dropdown */}
+      {showStatusPicker && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowStatusPicker(false)}></div>
+          <div className="absolute top-16 right-4 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden w-48">
+            <div className="p-2">
+              {statusOptions.map(option => (
+                <button
+                  key={option.id}
+                  onClick={() => updateDriverStatus(option.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                    driverStatus === option.id 
+                      ? 'bg-cyan-50 text-cyan-700' 
+                      : 'hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  <span>{option.icon}</span>
+                  <span className="font-medium">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Notifications Dropdown */}
       {showNotifications && (

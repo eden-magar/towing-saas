@@ -29,6 +29,26 @@ export interface DriverTaskLeg {
   status: 'pending' | 'in_progress' | 'completed' | null
 }
 
+export interface DriverTaskPoint {
+  id: string
+  point_order: number
+  point_type: 'pickup' | 'dropoff'
+  address: string | null
+  lat: number | null
+  lng: number | null
+  contact_name: string | null
+  contact_phone: string | null
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
+  arrived_at: string | null
+  completed_at: string | null
+  notes: string | null
+  vehicles?: {
+    id: string
+    action: 'pickup' | 'dropoff'
+    vehicle: DriverTaskVehicle
+  }[]
+}
+
 export interface DriverTask {
   id: string
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
@@ -47,6 +67,7 @@ export interface DriverTask {
   } | null
   vehicles: DriverTaskVehicle[]
   legs: DriverTaskLeg[]
+  points?: DriverTaskPoint[]
 }
 
 export interface DriverInfo {
@@ -165,6 +186,20 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     .in('tow_id', towIds)
     .order('leg_order', { ascending: true })
 
+  // שליפת נקודות (המבנה החדש)
+  const { data: points } = await supabase
+    .from('tow_points')
+    .select(`
+      *,
+      vehicles:tow_point_vehicles (
+        id,
+        action,
+        vehicle:tow_vehicles (*)
+      )
+    `)
+    .in('tow_id', towIds)
+    .order('point_order', { ascending: true })
+
   // מיפוי לפי tow_id
   const vehiclesByTow: Record<string, DriverTaskVehicle[]> = {}
   vehicles?.forEach(v => {
@@ -178,18 +213,25 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     legsByTow[l.tow_id].push(l)
   })
 
+  const pointsByTow: Record<string, DriverTaskPoint[]> = {}
+  points?.forEach(p => {
+    if (!pointsByTow[p.tow_id]) pointsByTow[p.tow_id] = []
+    pointsByTow[p.tow_id].push(p)
+  })
+
   return tows.map(tow => ({
-    id: tow.id,
-    status: tow.status,
-    tow_type: tow.tow_type,
-    scheduled_at: tow.scheduled_at,
-    notes: tow.notes,
-    created_at: tow.created_at,
-    customer: tow.customer as any,
-    truck: tow.truck as any,
-    vehicles: vehiclesByTow[tow.id] || [],
-    legs: legsByTow[tow.id] || []
-  }))
+  id: tow.id,
+  status: tow.status,
+  tow_type: tow.tow_type,
+  scheduled_at: tow.scheduled_at,
+  notes: tow.notes,
+  created_at: tow.created_at,
+  customer: tow.customer as any,
+  truck: tow.truck as any,
+  vehicles: vehiclesByTow[tow.id] || [],
+  legs: legsByTow[tow.id] || [],
+  points: pointsByTow[tow.id] || []
+}))
 }
 
 // ==================== משימות היום בלבד ====================

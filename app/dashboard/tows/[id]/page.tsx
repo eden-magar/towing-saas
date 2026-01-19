@@ -29,7 +29,7 @@ import {
   Receipt
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
-import { getTow, updateTow, updateTowStatus, assignDriver, TowWithDetails } from '../../../lib/queries/tows'
+import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, TowWithDetails } from '../../../lib/queries/tows'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
@@ -145,7 +145,7 @@ export default function TowDetailsPage() {
     setLoading(true)
     try {
       const [towData, driversData, trucksData, customersData, serviceSurcharges] = await Promise.all([
-        getTow(towId),
+        getTowWithPoints(towId),
         getDrivers(companyId),
         getTrucks(companyId),
         getCustomers(companyId),
@@ -206,11 +206,23 @@ export default function TowDetailsPage() {
   }
 
   const getFromAddress = () => {
+    // קודם ננסה מ-points (המבנה החדש)
+    if (tow?.points && tow.points.length > 0) {
+      const firstPoint = tow.points.find(p => p.point_type === 'pickup') || tow.points[0]
+      return firstPoint.address || 'לא צוין'
+    }
+    // fallback ל-legs (המבנה הישן)
     if (!tow?.legs || tow.legs.length === 0) return 'לא צוין'
     return tow.legs[0].from_address || 'לא צוין'
   }
 
   const getToAddress = () => {
+    // קודם ננסה מ-points (המבנה החדש)
+    if (tow?.points && tow.points.length > 0) {
+      const lastPoint = [...tow.points].reverse().find(p => p.point_type === 'dropoff') || tow.points[tow.points.length - 1]
+      return lastPoint.address || 'לא צוין'
+    }
+    // fallback ל-legs (המבנה הישן)
     if (!tow?.legs || tow.legs.length === 0) return 'לא צוין'
     return tow.legs[tow.legs.length - 1].to_address || 'לא צוין'
   }
@@ -985,6 +997,9 @@ export default function TowDetailsPage() {
                   <h2 className="font-bold text-gray-800 flex items-center gap-2">
                     <MapPin size={18} />
                     מסלול
+                    {tow.points && tow.points.length > 0 && (
+                      <span className="text-sm font-normal text-gray-500">({tow.points.length} נקודות)</span>
+                    )}
                   </h2>
                 </div>
                 <div className="p-4 sm:p-5">
@@ -1009,7 +1024,58 @@ export default function TowDetailsPage() {
                         />
                       </div>
                     </div>
+                  ) : tow.points && tow.points.length > 0 ? (
+                    /* תצוגת נקודות חדשה */
+                    <div className="space-y-3">
+                      {tow.points.map((point: any, idx: number) => (
+                        <div 
+                          key={point.id}
+                          className={`p-4 rounded-2xl ${point.point_type === 'pickup' ? 'bg-green-50' : 'bg-red-50'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex flex-col items-center">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${point.point_type === 'pickup' ? 'bg-green-500' : 'bg-red-500'}`}>
+                                {idx + 1}
+                              </div>
+                              {idx < (tow.points?.length || 0) - 1 && (
+                                <div className="w-0.5 h-6 bg-gray-300 mt-1" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className={`text-sm font-medium ${point.point_type === 'pickup' ? 'text-green-700' : 'text-red-700'}`}>
+                                {point.point_type === 'pickup' ? 'איסוף' : 'פריקה'}
+                              </div>
+                              <div className="text-gray-800 font-medium">{point.address || 'לא צוין'}</div>
+                              
+                              {/* רכבים בנקודה */}
+                              {point.vehicles && point.vehicles.length > 0 && (
+                                <div className="text-sm text-gray-500 mt-1">
+                                  {point.vehicles.map((v: any) => 
+                                    v.vehicle?.plate_number || v.vehicle?.manufacturer
+                                  ).filter(Boolean).join(', ') || `${point.vehicles.length} רכבים`}
+                                </div>
+                              )}
+                              
+                              {/* איש קשר */}
+                              {(point.contact_name || point.contact_phone) && (
+                                <div className="flex items-center gap-2 text-sm text-gray-400 mt-1">
+                                  <User size={12} />
+                                  <span>{point.contact_name}</span>
+                                  {point.contact_phone && (
+                                    <a href={`tel:${point.contact_phone}`} className="text-[#33d4ff] flex items-center gap-1">
+                                      <Phone size={12} />
+                                      {point.contact_phone}
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
+                    /* Fallback לתצוגה ישנה */
                     <div className="flex gap-3 sm:gap-4">
                       <div className="flex flex-col items-center pt-1">
                         <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
