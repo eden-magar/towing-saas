@@ -11,7 +11,6 @@ export interface DriverTaskVehicle {
   color: string | null
   is_working: boolean | null
   tow_reason: string | null
-  // שדות מורחבים ממשרד התחבורה
   fuel_type: string | null
   drive_type: string | null
   gear_type: string | null
@@ -38,21 +37,18 @@ export interface DriverTaskPoint {
   lng: number | null
   contact_name: string | null
   contact_phone: string | null
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
+  status: 'pending' | 'arrived' | 'completed' | 'skipped'
   arrived_at: string | null
   completed_at: string | null
+  recipient_name: string | null
+  recipient_phone: string | null
   notes: string | null
-  vehicles?: {
-    id: string
-    action: 'pickup' | 'dropoff'
-    vehicle: DriverTaskVehicle
-  }[]
 }
 
 export interface DriverTask {
   id: string
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
-  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle'
+  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
   scheduled_at: string | null
   notes: string | null
   created_at: string
@@ -67,7 +63,7 @@ export interface DriverTask {
   } | null
   vehicles: DriverTaskVehicle[]
   legs: DriverTaskLeg[]
-  points?: DriverTaskPoint[]
+  points: DriverTaskPoint[]
 }
 
 export interface DriverInfo {
@@ -86,22 +82,73 @@ export interface DriverInfo {
   }
 }
 
+export type TowImageType = 'before_pickup' | 'after_pickup' | 'before_dropoff' | 'after_dropoff' | 'damage' | 'other'
+
+export interface TowImage {
+  id: string
+  tow_id: string
+  tow_point_id: string | null
+  tow_vehicle_id: string | null
+  uploaded_by: string
+  image_url: string
+  image_type: TowImageType
+  notes: string | null
+  created_at: string
+}
+
+export interface TowStatusHistoryEntry {
+  id: string
+  tow_id: string
+  tow_leg_id: string | null
+  status: string
+  changed_by: string
+  notes: string | null
+  created_at: string
+}
+
+export interface TaskDetailFull {
+  id: string
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
+  scheduled_at: string | null
+  notes: string | null
+  final_price: number | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  customer: {
+    id: string
+    name: string
+    phone: string | null
+    email: string | null
+    customer_type: 'private' | 'business' | 'insurance' | 'fleet' | null
+  } | null
+  truck: {
+    id: string
+    plate_number: string
+    manufacturer: string | null
+    model: string | null
+  } | null
+  vehicles: DriverTaskVehicle[]
+  legs: DriverTaskLeg[]
+  points: DriverTaskPoint[]
+  images: TowImage[]
+}
+
 // ==================== שליפת פרטי נהג ====================
 
 export async function getDriverByUserId(userId: string): Promise<DriverInfo | null> {
-  // קודם מוצאים את הנהג לפי user_id
   const { data: driver, error: driverError } = await supabase
-  .from('drivers')
-  .select('id, status, company_id')
-  .eq('user_id', userId)
-  .single()
+    .from('drivers')
+    .select('id, status, company_id')
+    .eq('user_id', userId)
+    .single()
 
   if (driverError || !driver) {
     console.error('Error fetching driver:', driverError)
     return null
   }
 
-  // שליפת פרטי המשתמש
   const { data: user, error: userError } = await supabase
     .from('users')
     .select('full_name, phone')
@@ -113,7 +160,6 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
     return null
   }
 
-  // שליפת הגרר המשויך (חיפוש בטבלת tow_trucks לפי driver_id)
   const { data: assignment } = await supabase
     .from('driver_truck_assignments')
     .select(`
@@ -128,13 +174,11 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
     .eq('is_current', true)
     .single()
 
-  const truck = assignment?.truck as any || null
-
   return {
     id: driver.id,
     company_id: driver.company_id,
     status: driver.status,
-    truck: truck,
+    truck: assignment?.truck as any || null,
     user: user
   }
 }
@@ -142,7 +186,6 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
 // ==================== שליפת משימות הנהג ====================
 
 export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
-  // שליפת כל הגרירות של הנהג (לא בוטלו ולא הושלמו מזמן)
   const { data: tows, error } = await supabase
     .from('tows')
     .select(`
@@ -163,8 +206,8 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
       )
     `)
     .eq('driver_id', driverId)
-    .neq('status', 'cancelled')
-    .order('created_at', { ascending: false })
+    .in('status', ['assigned', 'in_progress'])
+    .order('scheduled_at', { ascending: true, nullsFirst: false })
 
   if (error) {
     console.error('Error fetching driver tasks:', error)
@@ -173,32 +216,26 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
 
   if (!tows || tows.length === 0) return []
 
-  // שליפת כלי רכב ורגליים
   const towIds = tows.map(t => t.id)
 
+  // שליפת כלי רכב
   const { data: vehicles } = await supabase
     .from('tow_vehicles')
     .select('*')
     .in('tow_id', towIds)
     .order('order_index', { ascending: true })
 
+  // שליפת רגליים (לתאימות לאחור)
   const { data: legs } = await supabase
     .from('tow_legs')
     .select('*')
     .in('tow_id', towIds)
     .order('leg_order', { ascending: true })
 
-  // שליפת נקודות (המבנה החדש)
+  // שליפת נקודות
   const { data: points } = await supabase
     .from('tow_points')
-    .select(`
-      *,
-      vehicles:tow_point_vehicles (
-        id,
-        action,
-        vehicle:tow_vehicles (*)
-      )
-    `)
+    .select('*')
     .in('tow_id', towIds)
     .order('point_order', { ascending: true })
 
@@ -222,18 +259,18 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
   })
 
   return tows.map(tow => ({
-  id: tow.id,
-  status: tow.status,
-  tow_type: tow.tow_type,
-  scheduled_at: tow.scheduled_at,
-  notes: tow.notes,
-  created_at: tow.created_at,
-  customer: tow.customer as any,
-  truck: tow.truck as any,
-  vehicles: vehiclesByTow[tow.id] || [],
-  legs: legsByTow[tow.id] || [],
-  points: pointsByTow[tow.id] || []
-}))
+    id: tow.id,
+    status: tow.status,
+    tow_type: tow.tow_type,
+    scheduled_at: tow.scheduled_at,
+    notes: tow.notes,
+    created_at: tow.created_at,
+    customer: tow.customer as any,
+    truck: tow.truck as any,
+    vehicles: vehiclesByTow[tow.id] || [],
+    legs: legsByTow[tow.id] || [],
+    points: pointsByTow[tow.id] || []
+  }))
 }
 
 // ==================== משימות היום בלבד ====================
@@ -285,6 +322,12 @@ export async function getDriverTasksToday(driverId: string): Promise<DriverTask[
     .in('tow_id', towIds)
     .order('leg_order', { ascending: true })
 
+  const { data: points } = await supabase
+    .from('tow_points')
+    .select('*')
+    .in('tow_id', towIds)
+    .order('point_order', { ascending: true })
+
   const vehiclesByTow: Record<string, DriverTaskVehicle[]> = {}
   vehicles?.forEach(v => {
     if (!vehiclesByTow[v.tow_id]) vehiclesByTow[v.tow_id] = []
@@ -297,6 +340,12 @@ export async function getDriverTasksToday(driverId: string): Promise<DriverTask[
     legsByTow[l.tow_id].push(l)
   })
 
+  const pointsByTow: Record<string, DriverTaskPoint[]> = {}
+  points?.forEach(p => {
+    if (!pointsByTow[p.tow_id]) pointsByTow[p.tow_id] = []
+    pointsByTow[p.tow_id].push(p)
+  })
+
   return tows.map(tow => ({
     id: tow.id,
     status: tow.status,
@@ -307,8 +356,118 @@ export async function getDriverTasksToday(driverId: string): Promise<DriverTask[
     customer: tow.customer as any,
     truck: tow.truck as any,
     vehicles: vehiclesByTow[tow.id] || [],
-    legs: legsByTow[tow.id] || []
+    legs: legsByTow[tow.id] || [],
+    points: pointsByTow[tow.id] || []
   }))
+}
+
+// ==================== שליפת פרטי משימה מלאים ====================
+
+export async function getTaskDetail(towId: string): Promise<TaskDetailFull | null> {
+  const { data: tow, error } = await supabase
+    .from('tows')
+    .select(`
+      id,
+      status,
+      tow_type,
+      scheduled_at,
+      notes,
+      final_price,
+      started_at,
+      completed_at,
+      created_at,
+      customer:customers (
+        id,
+        name,
+        phone,
+        email,
+        customer_type
+      ),
+      truck:tow_trucks (
+        id,
+        plate_number,
+        manufacturer,
+        model
+      )
+    `)
+    .eq('id', towId)
+    .single()
+
+  if (error || !tow) {
+    console.error('Error fetching task detail:', error)
+    return null
+  }
+
+  // שליפת כלי רכב
+  const { data: vehicles } = await supabase
+    .from('tow_vehicles')
+    .select('*')
+    .eq('tow_id', towId)
+    .order('order_index', { ascending: true })
+
+  // שליפת רגליים (לתאימות לאחור)
+  const { data: legs } = await supabase
+    .from('tow_legs')
+    .select('*')
+    .eq('tow_id', towId)
+    .order('leg_order', { ascending: true })
+
+  // שליפת נקודות
+  const { data: points } = await supabase
+    .from('tow_points')
+    .select('*')
+    .eq('tow_id', towId)
+    .order('point_order', { ascending: true })
+
+  // שליפת תמונות
+  const { data: images } = await supabase
+    .from('tow_images')
+    .select('*')
+    .eq('tow_id', towId)
+    .order('created_at', { ascending: true })
+
+  return {
+    id: tow.id,
+    status: tow.status,
+    tow_type: tow.tow_type,
+    scheduled_at: tow.scheduled_at,
+    notes: tow.notes,
+    final_price: tow.final_price,
+    started_at: tow.started_at,
+    completed_at: tow.completed_at,
+    created_at: tow.created_at,
+    customer: tow.customer as any,
+    truck: tow.truck as any,
+    vehicles: vehicles || [],
+    legs: legs || [],
+    points: points || [],
+    images: images || []
+  }
+}
+
+// ==================== סטטיסטיקות נהג ====================
+
+export async function getDriverStats(driverId: string) {
+  const today = new Date().toISOString().split('T')[0]
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  const { count: todayCount } = await supabase
+    .from('tows')
+    .select('*', { count: 'exact', head: true })
+    .eq('driver_id', driverId)
+    .gte('created_at', `${today}T00:00:00`)
+
+  const { count: weekCompleted } = await supabase
+    .from('tows')
+    .select('*', { count: 'exact', head: true })
+    .eq('driver_id', driverId)
+    .eq('status', 'completed')
+    .gte('completed_at', `${weekAgo}T00:00:00`)
+
+  return {
+    todayTasks: todayCount || 0,
+    weekCompleted: weekCompleted || 0
+  }
 }
 
 // ==================== עדכון סטטוס נהג ====================
@@ -350,7 +509,6 @@ export async function acceptTask(towId: string) {
 }
 
 export async function rejectTask(towId: string, reason: string, note?: string) {
-  // הסרת הנהג מהמשימה והחזרתה לסטטוס pending
   const { error } = await supabase
     .from('tows')
     .update({ 
@@ -399,163 +557,6 @@ export async function updateTaskStatus(
   return true
 }
 
-// ==================== סטטיסטיקות נהג ====================
-
-export async function getDriverStats(driverId: string) {
-  const today = new Date().toISOString().split('T')[0]
-  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
-  // משימות היום
-  const { count: todayCount } = await supabase
-    .from('tows')
-    .select('*', { count: 'exact', head: true })
-    .eq('driver_id', driverId)
-    .gte('created_at', `${today}T00:00:00`)
-
-  // משימות שהושלמו השבוע
-  const { count: weekCompleted } = await supabase
-    .from('tows')
-    .select('*', { count: 'exact', head: true })
-    .eq('driver_id', driverId)
-    .eq('status', 'completed')
-    .gte('completed_at', `${weekAgo}T00:00:00`)
-
-  return {
-    todayTasks: todayCount || 0,
-    weekCompleted: weekCompleted || 0
-  }
-}
-
-// ==================== טיפוסים לדף פרטי משימה ====================
-
-export type TowImageType = 'before_pickup' | 'after_pickup' | 'before_dropoff' | 'after_dropoff' | 'damage' | 'other'
-
-export interface TowImage {
-  id: string
-  tow_id: string
-  tow_vehicle_id: string | null
-  uploaded_by: string
-  image_url: string
-  image_type: TowImageType
-  notes: string | null
-  created_at: string
-}
-
-export interface TowStatusHistoryEntry {
-  id: string
-  tow_id: string
-  tow_leg_id: string | null
-  status: string
-  changed_by: string
-  notes: string | null
-  created_at: string
-}
-
-export interface TaskDetailFull {
-  id: string
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
-  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle'
-  scheduled_at: string | null
-  notes: string | null
-  final_price: number | null
-  started_at: string | null
-  completed_at: string | null
-  created_at: string
-  customer: {
-    id: string
-    name: string
-    phone: string | null
-    email: string | null
-    customer_type: 'private' | 'business' | 'insurance' | 'fleet' | null
-  } | null
-  truck: {
-    id: string
-    plate_number: string
-    manufacturer: string | null
-    model: string | null
-  } | null
-  vehicles: DriverTaskVehicle[]
-  legs: DriverTaskLeg[]
-  images: TowImage[]
-}
-
-// ==================== שליפת פרטי משימה מלאים ====================
-
-export async function getTaskDetail(towId: string): Promise<TaskDetailFull | null> {
-  // שליפת הגרירה הבסיסית
-  const { data: tow, error } = await supabase
-    .from('tows')
-    .select(`
-      id,
-      status,
-      tow_type,
-      scheduled_at,
-      notes,
-      final_price,
-      started_at,
-      completed_at,
-      created_at,
-      customer:customers (
-        id,
-        name,
-        phone,
-        email,
-        customer_type
-      ),
-      truck:tow_trucks (
-        id,
-        plate_number,
-        manufacturer,
-        model
-      )
-    `)
-    .eq('id', towId)
-    .single()
-
-  if (error || !tow) {
-    console.error('Error fetching task detail:', error)
-    return null
-  }
-
-  // שליפת כלי רכב
-  const { data: vehicles } = await supabase
-    .from('tow_vehicles')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('order_index', { ascending: true })
-
-  // שליפת רגליים (מסלול)
-  const { data: legs } = await supabase
-    .from('tow_legs')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('leg_order', { ascending: true })
-
-  // שליפת תמונות
-  const { data: images } = await supabase
-    .from('tow_images')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('created_at', { ascending: true })
-
-  return {
-    id: tow.id,
-    status: tow.status,
-    tow_type: tow.tow_type,
-    scheduled_at: tow.scheduled_at,
-    notes: tow.notes,
-    final_price: tow.final_price,
-    started_at: tow.started_at,
-    completed_at: tow.completed_at,
-    created_at: tow.created_at,
-    customer: tow.customer as any,
-    truck: tow.truck as any,
-    vehicles: vehicles || [],
-    legs: legs || [],
-    images: images || []
-  }
-}
-
 // ==================== עדכון סטטוס עם היסטוריה ====================
 
 export async function updateTaskStatusWithHistory(
@@ -566,7 +567,7 @@ export async function updateTaskStatusWithHistory(
   notes?: string
 ) {
   // רישום בהיסטוריה
-  const { error: historyError } = await supabase
+  await supabase
     .from('tow_status_history')
     .insert({
       tow_id: towId,
@@ -575,11 +576,6 @@ export async function updateTaskStatusWithHistory(
       changed_by: userId,
       notes: notes || null
     })
-
-  if (historyError) {
-    console.error('Error recording status history:', historyError)
-    // ממשיכים בכל מקרה
-  }
 
   // עדכון סטטוס הגרירה
   const updates: Record<string, any> = { 
@@ -606,7 +602,7 @@ export async function updateTaskStatusWithHistory(
   return true
 }
 
-// ==================== עדכון סטטוס רגל ====================
+// ==================== עדכון סטטוס רגל (לתאימות לאחור) ====================
 
 export async function updateLegStatus(
   legId: string,
@@ -628,6 +624,40 @@ export async function updateLegStatus(
   return true
 }
 
+// ==================== עדכון סטטוס נקודה ====================
+
+export async function updatePointStatus(
+  pointId: string,
+  status: 'pending' | 'arrived' | 'completed' | 'skipped',
+  recipientName?: string,
+  recipientPhone?: string
+) {
+  const updates: Record<string, any> = { 
+    status,
+    updated_at: new Date().toISOString()
+  }
+  
+  if (status === 'arrived') {
+    updates.arrived_at = new Date().toISOString()
+  } else if (status === 'completed') {
+    updates.completed_at = new Date().toISOString()
+    if (recipientName) updates.recipient_name = recipientName
+    if (recipientPhone) updates.recipient_phone = recipientPhone
+  }
+
+  const { error } = await supabase
+    .from('tow_points')
+    .update(updates)
+    .eq('id', pointId)
+
+  if (error) {
+    console.error('Error updating point status:', error)
+    throw error
+  }
+
+  return true
+}
+
 // ==================== העלאת תמונה ====================
 
 export async function uploadTowImage(
@@ -635,14 +665,13 @@ export async function uploadTowImage(
   userId: string,
   imageType: TowImageType,
   imageFile: File,
-  notes?: string,
-  vehicleId?: string
+  pointId?: string,
+  vehicleId?: string,
+  notes?: string
 ): Promise<TowImage | null> {
-  // יצירת שם ייחודי לקובץ
-  const fileName = `${towId}/${imageType}_${Date.now()}.${imageFile.name.split('.').pop()}`
+  const fileName = `${towId}/${imageType}_${Date.now()}.jpg`
   
-  // העלאה ל-Storage
-  const { data: uploadData, error: uploadError } = await supabase
+  const { error: uploadError } = await supabase
     .storage
     .from('tow-images')
     .upload(fileName, imageFile)
@@ -652,17 +681,16 @@ export async function uploadTowImage(
     throw uploadError
   }
 
-  // קבלת URL ציבורי
   const { data: urlData } = supabase
     .storage
     .from('tow-images')
     .getPublicUrl(fileName)
 
-  // שמירת רשומה בטבלה
   const { data: image, error: insertError } = await supabase
     .from('tow_images')
     .insert({
       tow_id: towId,
+      tow_point_id: pointId || null,
       tow_vehicle_id: vehicleId || null,
       uploaded_by: userId,
       image_url: urlData.publicUrl,
@@ -683,13 +711,11 @@ export async function uploadTowImage(
 // ==================== מחיקת תמונה ====================
 
 export async function deleteTowImage(imageId: string, imageUrl: string) {
-  // מחיקה מ-Storage
   const path = imageUrl.split('/tow-images/')[1]
   if (path) {
     await supabase.storage.from('tow-images').remove([path])
   }
 
-  // מחיקת הרשומה
   const { error } = await supabase
     .from('tow_images')
     .delete()
@@ -701,6 +727,23 @@ export async function deleteTowImage(imageId: string, imageUrl: string) {
   }
 
   return true
+}
+
+// ==================== שליפת תמונות לפי נקודה ====================
+
+export async function getPointImages(pointId: string): Promise<TowImage[]> {
+  const { data, error } = await supabase
+    .from('tow_images')
+    .select('*')
+    .eq('tow_point_id', pointId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching point images:', error)
+    return []
+  }
+
+  return data || []
 }
 
 // ==================== שליפת היסטוריית סטטוסים ====================
@@ -718,4 +761,19 @@ export async function getTowStatusHistory(towId: string): Promise<TowStatusHisto
   }
 
   return data || []
+}
+
+// ==================== פונקציות עזר לנקודות ====================
+
+export function areAllPointsCompleted(points: DriverTaskPoint[]): boolean {
+  return points.every(p => p.status === 'completed' || p.status === 'skipped')
+}
+
+export function getCurrentPoint(points: DriverTaskPoint[]): DriverTaskPoint | null {
+  return points.find(p => p.status !== 'completed' && p.status !== 'skipped') || null
+}
+
+export function getCurrentPointIndex(points: DriverTaskPoint[]): number {
+  const index = points.findIndex(p => p.status !== 'completed' && p.status !== 'skipped')
+  return index === -1 ? points.length : index
 }
