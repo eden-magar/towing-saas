@@ -1,5 +1,5 @@
 'use client'
-
+import { openWaze } from '../lib/utils/navigation'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -166,11 +166,6 @@ export default function DriverHomePage() {
   const formatTime = (dateStr: string | null) => {
     if (!dateStr) return '--:--'
     return new Date(dateStr).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-  }
-
-  const openWaze = (address: string) => {
-    const encoded = encodeURIComponent(address)
-    window.open(`https://waze.com/ul?q=${encoded}&navigate=yes`, '_blank')
   }
 
   const openPhone = (phone: string) => {

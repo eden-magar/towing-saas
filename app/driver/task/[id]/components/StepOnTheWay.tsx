@@ -1,5 +1,6 @@
 'use client'
 
+import { openWaze } from '@/app/lib/utils/navigation'
 import { useState } from 'react'
 import { 
   MapPin, 
@@ -36,13 +37,6 @@ export default function StepOnTheWay({
   const isPickup = point.point_type === 'pickup'
   const title = isPickup ? 'בדרך לאיסוף' : 'בדרך לפריקה'
   const subtitle = point.address || 'כתובת לא צוינה'
-
-  // פתיחת Waze
-  const openWaze = () => {
-    if (point.address) {
-      window.open(`https://waze.com/ul?q=${encodeURIComponent(point.address)}&navigate=yes`, '_blank')
-    }
-  }
 
   // פתיחת טלפון
   const openPhone = (phone: string) => {
@@ -199,7 +193,7 @@ export default function StepOnTheWay({
           </button>
           
           <button
-            onClick={openWaze}
+            onClick={() => point.address && openWaze(point.address)}
             className="py-4 px-6 bg-blue-100 text-blue-600 rounded-2xl font-bold flex items-center gap-2"
           >
             <Navigation size={20} />

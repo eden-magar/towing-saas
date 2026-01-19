@@ -1,5 +1,6 @@
 'use client'
 
+import { openWaze } from '@/app/lib/utils/navigation'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
@@ -118,7 +119,7 @@ export default function NewTaskModal({
   }
 
   const openWaze = (address: string) => {
-    window.open(`https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`, '_blank')
+    openWaze(address)
   }
 
   const openPhone = (phone: string) => {
