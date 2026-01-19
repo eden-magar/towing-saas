@@ -86,13 +86,16 @@ export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> 
   })
 
   // מיפוי שיוכים
-  const assignmentByTruck: Record<string, { id: string; user: { full_name: string; phone: string } }> = {}
-  assignments?.forEach(a => {
-    if (a.driver) {
-      const driver = a.driver as unknown as { id: string; user: { full_name: string; phone: string } }
-      assignmentByTruck[a.truck_id] = driver
+const assignmentByTruck: Record<string, { id: string; user: { full_name: string; phone: string } }> = {}
+assignments?.forEach(a => {
+  const driver = a.driver as unknown as { id: string; user: { full_name: string; phone: string } | null }
+  if (driver && driver.user && driver.user.full_name) {
+    assignmentByTruck[a.truck_id] = {
+      id: driver.id,
+      user: driver.user
     }
-  })
+  }
+})
 
   return trucks.map(truck => ({
     ...truck,

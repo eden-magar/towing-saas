@@ -54,6 +54,11 @@ export default function DriverHistoryPage() {
     if (!user) return
     setLoading(true)
 
+    console.log('History - user:', user.id)
+
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    console.log('History - auth user:', authUser?.id)
+
     try {
       const driver = await getDriverByUserId(user.id)
       if (!driver) {

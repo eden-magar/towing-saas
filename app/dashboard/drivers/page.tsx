@@ -90,12 +90,13 @@ export default function DriversPage() {
   }
 
   const filteredDrivers = drivers.filter(driver => {
-    const matchesSearch = 
-      driver.user.full_name.includes(searchQuery) || 
-      driver.user.phone?.includes(searchQuery)
-    const matchesStatus = statusFilter === 'all' || driver.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  // אם אין חיפוש - מתאים אוטומטית
+  const matchesSearch = !searchQuery || 
+    driver.user?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    driver.user?.phone?.includes(searchQuery)
+  const matchesStatus = statusFilter === 'all' || driver.status === statusFilter
+  return matchesSearch && matchesStatus
+})
 
   const resetForm = () => {
     setFormData({
@@ -129,14 +130,14 @@ export default function DriversPage() {
 
   const openEditModal = (driver: DriverWithDetails) => {
     setEditingDriver(driver)
-    const nameParts = driver.user.full_name.split(' ')
+    const nameParts = driver.user?.full_name?.split(' ') || ['', '']
     setFormData({
       firstName: nameParts[0] || '',
       lastName: nameParts.slice(1).join(' ') || '',
-      phone: driver.user.phone || '',
-      idNumber: driver.user.id_number || '',
-      email: driver.user.email || '',
-      address: driver.user.address || '',
+      phone: driver.user?.phone || '',
+      idNumber: driver.user?.id_number || '',
+      email: driver.user?.email || '',
+      address: driver.user?.address || '',
       licenseNumber: driver.license_number || '',
       licenseType: driver.license_type || '',
       licenseExpiry: driver.license_expiry || '',
@@ -264,7 +265,7 @@ export default function DriversPage() {
     if (!driver) return
 
     try {
-      await deleteDriver(driverId, driver.user.id)
+      await deleteDriver(driverId, driver.user?.id || '')
       await loadData()
       setShowDeleteConfirm(null)
     } catch (err) {
@@ -433,15 +434,15 @@ export default function DriversPage() {
                           <User size={20} className="text-gray-500" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800">{driver.user.full_name}</p>
-                          <p className="text-sm text-gray-500">ת.ז. {driver.user.id_number || '---'}</p>
+                          <p className="font-medium text-gray-800">{driver.user?.full_name || 'ללא שם'}</p>
+                          <p className="text-sm text-gray-500">ת.ז. {driver.user?.id_number || '---'}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2 text-gray-600">
                         <Phone size={16} />
-                        <span>{driver.user.phone || '---'}</span>
+                        <span>{driver.user?.phone || '---'}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
@@ -514,12 +515,12 @@ export default function DriversPage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-gray-800">{driver.user.full_name}</p>
+                        <p className="font-semibold text-gray-800">{driver.user?.full_name || 'ללא שם'}</p>
                         {licenseExpired && (
                           <span className="px-1.5 py-0.5 bg-red-50 text-red-600 rounded text-xs">פג תוקף</span>
                         )}
                       </div>
-                      <a href={`tel:${driver.user.phone}`} className="text-sm text-[#33d4ff]">{driver.user.phone}</a>
+                      <a href={`tel:${driver.user?.phone || ''}`} className="text-sm text-[#33d4ff]">{driver.user?.phone || '---'}</a>
                     </div>
                   </div>
                   

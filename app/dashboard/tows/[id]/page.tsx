@@ -174,19 +174,22 @@ export default function TowDetailsPage() {
 
   // סינון נהגים לפי סוג גרר נדרש ולפי חיפוש
   const filteredDrivers = drivers.filter(driver => {
-    // סינון לפי חיפוש
-    const matchesSearch = driver.user.full_name.toLowerCase().includes(driverSearch.toLowerCase()) || 
-                          (driver.user.phone && driver.user.phone.includes(driverSearch))
-    if (!matchesSearch) return false
-    
-    // אם אין דרישות גרר - מציגים את כולם
-    const requiredTypes = tow?.required_truck_types as string[] | undefined
-    if (!requiredTypes || requiredTypes.length === 0) return true
-    
-    // בדיקה אם לנהג יש גרר מתאים
-    const driverTrucks = trucks.filter(t => t.assigned_driver?.id === driver.id)
-    return driverTrucks.some(truck => requiredTypes.includes(truck.truck_type))
-  })
+  // הגנה על נהגים ללא user
+  if (!driver.user?.full_name) return false
+  
+  // סינון לפי חיפוש
+  const matchesSearch = driver.user.full_name.toLowerCase().includes(driverSearch.toLowerCase()) || 
+                        (driver.user.phone && driver.user.phone.includes(driverSearch))
+  if (!matchesSearch) return false
+  
+  // אם אין דרישות גרר - מציגים את כולם
+  const requiredTypes = tow?.required_truck_types as string[] | undefined
+  if (!requiredTypes || requiredTypes.length === 0) return true
+  
+  // בדיקה אם לנהג יש גרר מתאים
+  const driverTrucks = trucks.filter(t => t.assigned_driver?.id === driver.id)
+  return driverTrucks.some(truck => requiredTypes.includes(truck.truck_type))
+})
 
   // נהגים עם גרר מתאים
   const driversWithMatchingTruck = filteredDrivers.filter(driver => {
