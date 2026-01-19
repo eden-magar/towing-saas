@@ -82,14 +82,16 @@ export function DriverSchedulePicker({
         .eq('company_id', companyId)
         .eq('driver_truck_assignments.is_current', true)
 
-      // מיפוי גררים לנהגים
-      const driversWithTrucks = (driversData || []).map(d => ({
-        id: d.id,
-        user: Array.isArray(d.user) ? d.user[0] : d.user as { full_name: string; phone: string | null },
-        trucks: (trucksData || [])
-          .filter(t => t.assigned_driver?.some((a: any) => a.driver_id === d.id))
-          .map(t => ({ id: t.id, truck_type: t.truck_type, plate_number: t.plate_number }))
-      }))
+      // מיפוי גררים לנהגים - עם סינון נהגים ללא user
+      const driversWithTrucks = (driversData || [])
+        .filter(d => d.user && (Array.isArray(d.user) ? d.user[0] : d.user)) // סינון נהגים ללא user
+        .map(d => ({
+          id: d.id,
+          user: Array.isArray(d.user) ? d.user[0] : d.user as { full_name: string; phone: string | null },
+          trucks: (trucksData || [])
+            .filter(t => t.assigned_driver?.some((a: any) => a.driver_id === d.id))
+            .map(t => ({ id: t.id, truck_type: t.truck_type, plate_number: t.plate_number }))
+        }))
       setDrivers(driversWithTrucks)
 
       // טעינת גרירות ליום הנבחר
