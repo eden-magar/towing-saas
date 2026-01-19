@@ -10,18 +10,19 @@ export default function LoginPage() {
   const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
+  e.preventDefault()
+  setLoading(true)
+  setError('')
 
-    console.log('CLICKED LOGIN') // כדי לוודא שהכפתור בכלל מפעיל
+  try {
+    console.log('CLICKED LOGIN', 'path:', window.location.pathname)
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    console.log('AFTER signInWithPassword') // כדי לראות שעברנו את ההתחברות
+    console.log('AFTER signInWithPassword', 'path:', window.location.pathname)
 
     if (error) {
       console.log('SIGN IN ERROR:', error)
@@ -33,11 +34,13 @@ export default function LoginPage() {
     console.log('User ID:', data.user.id)
     console.log('SIGNED IN user email:', data.user.email)
 
+    console.log('BEFORE getUser()', 'path:', window.location.pathname)
     const { data: currentUser, error: currentUserError } = await supabase.auth.getUser()
+    console.log('AFTER getUser()', 'path:', window.location.pathname)
+
     console.log('getUser() returned:', currentUser?.user?.id, 'error:', currentUserError)
 
     console.log('BEFORE users query')
-
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('role')
@@ -55,14 +58,16 @@ export default function LoginPage() {
       return
     }
 
-    if (userData.role === 'driver') {
-      window.location.href = '/driver'
-    } else if (userData.role === 'super_admin') {
-      window.location.href = '/superadmin'
-    } else {
-      window.location.href = '/dashboard'
-    }
+    if (userData.role === 'driver') window.location.href = '/driver'
+    else if (userData.role === 'super_admin') window.location.href = '/superadmin'
+    else window.location.href = '/dashboard'
+  } catch (err) {
+    console.log('HANDLE LOGIN CRASH:', err)
+    setError('שגיאה לא צפויה בהתחברות (בדקי Console)')
+    setLoading(false)
   }
+}
+
 
 
   return (
