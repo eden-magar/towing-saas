@@ -53,30 +53,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const fetchUserData = async (authUserId: string) => {
-    if (fetchingRef.current) return
-    fetchingRef.current = true
-    
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUserId)
-        .single()
+  if (fetchingRef.current) return
+  fetchingRef.current = true
+  
+  console.log('fetchUserData started for:', authUserId)
+  
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authUserId)
+      .single()
 
-      if (error) {
-        console.error('Error fetching user data:', error)
-        setUser(null)
-      } else {
-        setUser(data as User)
-      }
-    } catch (err) {
-      console.error('Fetch user error:', err)
+    console.log('fetchUserData result:', data, error)
+
+    if (error) {
+      console.error('Error fetching user data:', error)
       setUser(null)
-    } finally {
-      fetchingRef.current = false
-      setLoading(false)
+    } else {
+      setUser(data as User)
     }
+  } catch (err) {
+    console.error('Fetch user error:', err)
+    setUser(null)
+  } finally {
+    fetchingRef.current = false
+    setLoading(false)
   }
+}
 
   const signOut = async () => {
     await supabase.auth.signOut()
