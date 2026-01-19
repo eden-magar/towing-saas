@@ -37,6 +37,9 @@ export default function LoginPage() {
       .eq('id', data.user.id)
       .single()
 
+    console.log('User query result:', { userData, userError })
+
+
     if (userError || !userData) {
       setError('לא נמצא משתמש במערכת')
       setLoading(false)
