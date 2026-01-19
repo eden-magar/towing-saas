@@ -65,9 +65,7 @@ export async function getDrivers(companyId: string): Promise<DriverWithDetails[]
   })
 
   // חיבור הכל יחד
-  return drivers
-  .filter(driver => driver.user)  // סינון נהגים בלי user
-  .map(driver => ({
+  return drivers.map(driver => ({
     ...driver,
     user: driver.user as User,
     current_truck: assignmentByDriver[driver.id] || null,

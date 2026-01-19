@@ -10,65 +10,43 @@ export default function LoginPage() {
   const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setLoading(true)
-  setError('')
-
-  try {
-    console.log('CLICKED LOGIN', 'path:', window.location.pathname)
-
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    console.log('AFTER signInWithPassword', 'path:', window.location.pathname)
-
     if (error) {
-      console.log('SIGN IN ERROR:', error)
       setError('אימייל או סיסמה שגויים')
       setLoading(false)
       return
     }
 
-    console.log('User ID:', data.user.id)
-    console.log('SIGNED IN user email:', data.user.email)
-
-    console.log('BEFORE getUser()', 'path:', window.location.pathname)
-    const { data: currentUser, error: currentUserError } = await supabase.auth.getUser()
-    console.log('AFTER getUser()', 'path:', window.location.pathname)
-
-    console.log('getUser() returned:', currentUser?.user?.id, 'error:', currentUserError)
-
-    console.log('BEFORE users query')
+    // בדוק את התפקיד של המשתמש
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('role')
       .eq('id', data.user.id)
       .single()
 
-    console.log('AFTER users query')
-    console.log('userData:', userData)
-    console.log('userError FULL:', userError)
-
     if (userError || !userData) {
-      console.log('Failed to get user role')
-      setError(userError?.message || 'לא נמצא משתמש במערכת')
+      setError('לא נמצא משתמש במערכת')
       setLoading(false)
       return
     }
 
-    if (userData.role === 'driver') window.location.href = '/driver'
-    else if (userData.role === 'super_admin') window.location.href = '/superadmin'
-    else window.location.href = '/dashboard'
-  } catch (err) {
-    console.log('HANDLE LOGIN CRASH:', err)
-    setError('שגיאה לא צפויה בהתחברות (בדקי Console)')
-    setLoading(false)
+    // הפנה לפי תפקיד
+    if (userData.role === 'driver') {
+      window.location.href = '/driver'
+    } else if (userData.role === 'super_admin') {
+      window.location.href = '/superadmin'
+    } else {
+      window.location.href = '/dashboard'
+    }
   }
-}
-
-
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">

@@ -239,7 +239,7 @@ export default function StepCamera({
       </div>
 
       {/* Bottom Actions - Fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-slate-900 p-4 pb-8">
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900 p-4 pb-28">
         {images.length > 0 && (
           <div className="flex gap-3">
             <button

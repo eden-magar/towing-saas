@@ -62,7 +62,7 @@ export default function StepDelivery({
       </div>
 
       {/* Content Card */}
-      <div className="flex-1 bg-white rounded-t-3xl px-5 pt-8 pb-32">
+      <div className="flex-1 bg-white rounded-t-3xl px-5 pt-6 pb-40">
         {/* שם מלא */}
         <div className="mb-6">
           <label className="block text-sm text-gray-500 mb-2 text-right">שם מלא</label>
@@ -103,7 +103,7 @@ export default function StepDelivery({
       </div>
 
       {/* Bottom Action - Fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-32">
         <button
           onClick={handleSubmit}
           disabled={loading || !canSubmit}

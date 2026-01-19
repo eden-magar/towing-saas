@@ -177,7 +177,7 @@ export default function StepOnTheWay({
       </div>
 
       {/* Bottom Actions - Fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-32">
         <div className="flex gap-3">
           <button
             onClick={handleArrived}
