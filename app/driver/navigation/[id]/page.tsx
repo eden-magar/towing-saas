@@ -117,9 +117,24 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
 
   // External navigation
   const openWaze = () => {
-    const encoded = encodeURIComponent(navData.address)
-    window.open(`https://waze.com/ul?q=${encoded}&navigate=yes`, '_blank')
+  const encoded = encodeURIComponent(navData.address)
+  // ניסיון לפתוח באפליקציה, אם לא מותקנת - פותח בדפדפן
+  const wazeAppUrl = `waze://?q=${encoded}&navigate=yes`
+  const wazeWebUrl = `https://waze.com/ul?q=${encoded}&navigate=yes`
+  
+  // בודק אם זה מובייל
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  
+  if (isMobile) {
+    window.location.href = wazeAppUrl
+    // fallback אם האפליקציה לא נפתחה תוך 2 שניות
+    setTimeout(() => {
+      window.open(wazeWebUrl, '_blank')
+    }, 2000)
+  } else {
+    window.open(wazeWebUrl, '_blank')
   }
+}
 
   const openGoogleMaps = () => {
     const encoded = encodeURIComponent(navData.address)
