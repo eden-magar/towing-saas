@@ -91,8 +91,7 @@ export default function DriverHistoryPage() {
         created_at,
         completed_at,
         started_at,
-        final_price,
-        cancel_reason
+        final_price
       `)
       .eq('driver_id', driverId)
       .in('status', ['completed', 'cancelled'])
@@ -186,7 +185,7 @@ export default function DriverHistoryPage() {
         status: tow.status as 'completed' | 'cancelled',
         price: tow.final_price || 0,
         duration,
-        cancelReason: tow.cancel_reason || 'בוטלה'
+        cancelReason: 'בוטלה'
       }
     })
   }
