@@ -111,7 +111,10 @@ export default function StepCamera({
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        await videoRef.current.play()
+        // לחכות שהוידאו יהיה מוכן לפני הפעלה
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play()
+        }
       }
       setCameraActive(true)
     } catch (error) {
