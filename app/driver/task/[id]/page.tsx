@@ -8,11 +8,11 @@ import {
   updateTaskStatus,
   updatePointStatus,
   getCurrentPointIndex,
-  areAllPointsCompleted,
+  rejectTask,
   type TaskDetailFull,
   type DriverTaskPoint
 } from '@/app/lib/queries/driver-tasks'
-import { ArrowRight, Loader2, AlertCircle } from 'lucide-react'
+import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle } from 'lucide-react'
 
 // קומפוננטות השלבים
 import StepOnTheWay from './components/StepOnTheWay'
@@ -22,6 +22,17 @@ import StepComplete from './components/StepComplete'
 
 // שלבים בכל נקודה
 type PointStep = 'on_the_way' | 'camera' | 'delivery'
+
+// סיבות דחייה
+const rejectionReasons = [
+  'תקלה ברכב הגרר',
+  'תאונה בדרך',
+  'הלקוח ביטל',
+  'לא מצאתי את הכתובת',
+  'הרכב לא נגיש',
+  'בעיה בטיחותית',
+  'אחר'
+]
 
 export default function TaskFlowPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -34,6 +45,12 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const [currentPointIndex, setCurrentPointIndex] = useState(0)
   const [pointStep, setPointStep] = useState<PointStep>('on_the_way')
   const [isCompleted, setIsCompleted] = useState(false)
+  
+  // Rejection modal state
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
+  const [rejecting, setRejecting] = useState(false)
 
   // טעינת המשימה
   useEffect(() => {
@@ -90,7 +107,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     }
   }
 
-  // סיום צילום - עובר לשלב סיום (גם באיסוף וגם בפריקה)
+  // סיום צילום - עובר לשלב סיום
   const handleCameraComplete = async () => {
     setPointStep('delivery')
   }
@@ -126,6 +143,22 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     }
   }
 
+  // דחיית הגרירה
+  const handleReject = async () => {
+    if (!task || !rejectReason) return
+    
+    setRejecting(true)
+    try {
+      await rejectTask(task.id, rejectReason, rejectNote.trim() || undefined)
+      router.push('/driver')
+    } catch (error) {
+      console.error('Error rejecting task:', error)
+      alert('שגיאה בדחיית הגרירה')
+    } finally {
+      setRejecting(false)
+    }
+  }
+
   // צבע הרקע לפי השלב
   const getBackgroundColor = () => {
     if (isCompleted) return 'bg-emerald-500'
@@ -138,7 +171,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   // Loading
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="fixed inset-0 flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <Loader2 className="w-10 h-10 animate-spin text-blue-600 mx-auto mb-3" />
           <p className="text-gray-500">טוען משימה...</p>
@@ -150,7 +183,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   // לא נמצא
   if (!task) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 p-4">
         <AlertCircle size={48} className="text-red-400 mb-4" />
         <p className="text-gray-600 mb-4">המשימה לא נמצאה</p>
         <button 
@@ -166,7 +199,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   // אין נקודות
   if (task.points.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-gray-100 p-4">
         <AlertCircle size={48} className="text-amber-400 mb-4" />
         <p className="text-gray-600 mb-4">אין נקודות במשימה זו</p>
         <button 
@@ -185,9 +218,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div dir="rtl" className={`min-h-screen ${getBackgroundColor()} transition-colors duration-300`}>
+    <div dir="rtl" className={`fixed inset-0 ${getBackgroundColor()} transition-colors duration-300 overflow-hidden`}>
       {/* Header */}
-      <div className="sticky top-0 z-10 px-4 pt-4 pb-3">
+      <div className="absolute top-0 left-0 right-0 z-10 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <button 
             onClick={() => router.push('/driver')}
@@ -202,37 +235,128 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             </span>
           </div>
           
-          <div className="w-10" /> {/* Spacer */}
+          {/* כפתור דחייה */}
+          <button 
+            onClick={() => setShowRejectModal(true)}
+            className="w-10 h-10 bg-red-500/80 backdrop-blur rounded-xl flex items-center justify-center"
+          >
+            <X size={20} className="text-white" />
+          </button>
         </div>
       </div>
 
       {/* תוכן לפי השלב */}
-      {pointStep === 'on_the_way' && currentPoint && (
-        <StepOnTheWay
-          point={currentPoint}
-          vehicle={task.vehicles[0]}
-          customer={task.customer}
-          totalPoints={totalPoints}
-          currentIndex={currentPointIndex}
-          onArrived={handleArrived}
-        />
-      )}
+      <div className="pt-16 h-full overflow-auto">
+        {pointStep === 'on_the_way' && currentPoint && (
+          <StepOnTheWay
+            point={currentPoint}
+            vehicle={task.vehicles[0]}
+            customer={task.customer}
+            totalPoints={totalPoints}
+            currentIndex={currentPointIndex}
+            onArrived={handleArrived}
+          />
+        )}
 
-      {pointStep === 'camera' && currentPoint && (
-        <StepCamera
-          towId={task.id}
-          point={currentPoint}
-          userId={user?.id || ''}
-          onComplete={handleCameraComplete}
-        />
-      )}
+        {pointStep === 'camera' && currentPoint && (
+          <StepCamera
+            towId={task.id}
+            point={currentPoint}
+            userId={user?.id || ''}
+            onComplete={handleCameraComplete}
+          />
+        )}
 
-      {pointStep === 'delivery' && currentPoint && (
-        <StepDelivery
-          pointType={currentPoint.point_type}
-          customer={task.customer}
-          onComplete={handleDeliveryComplete}
-        />
+        {pointStep === 'delivery' && currentPoint && (
+          <StepDelivery
+            pointType={currentPoint.point_type}
+            customer={task.customer}
+            onComplete={handleDeliveryComplete}
+          />
+        )}
+      </div>
+
+      {/* מודל דחיית גרירה */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end z-50">
+          <div className="bg-white w-full rounded-t-3xl max-h-[85vh] overflow-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800">דחיית גרירה</h2>
+              <button 
+                onClick={() => setShowRejectModal(false)}
+                className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"
+              >
+                <X size={20} className="text-gray-600" />
+              </button>
+            </div>
+
+            {/* תוכן */}
+            <div className="p-5">
+              {/* אזהרה */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex gap-3">
+                <AlertTriangle size={24} className="text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-amber-800">שים לב</p>
+                  <p className="text-sm text-amber-700">דחיית הגרירה תחזיר אותה למוקד לשיבוץ מחדש</p>
+                </div>
+              </div>
+
+              {/* סיבות דחייה */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">סיבת הדחייה</label>
+                <div className="space-y-2">
+                  {rejectionReasons.map((reason) => (
+                    <button
+                      key={reason}
+                      onClick={() => setRejectReason(reason)}
+                      className={`w-full p-4 rounded-xl text-right transition-colors ${
+                        rejectReason === reason
+                          ? 'bg-red-50 border-2 border-red-500 text-red-700'
+                          : 'bg-gray-50 border-2 border-transparent text-gray-700'
+                      }`}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* הערה נוספת */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">הערה נוספת (אופציונלי)</label>
+                <textarea
+                  value={rejectNote}
+                  onChange={(e) => setRejectNote(e.target.value)}
+                  placeholder="פרט את הסיבה..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* כפתורים */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-5 flex gap-3">
+              <button
+                onClick={() => setShowRejectModal(false)}
+                className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-xl font-medium"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={!rejectReason || rejecting}
+                className="flex-1 py-4 bg-red-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {rejecting ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  'דחה גרירה'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

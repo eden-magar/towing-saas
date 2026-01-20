@@ -40,6 +40,9 @@ export default function DriverLayout({
   const [loading, setLoading] = useState(true)
   const [showStatusPicker, setShowStatusPicker] = useState(false)
 
+  // בדיקה אם אנחנו בדף משימה
+  const isTaskPage = pathname.includes('/driver/task/')
+
   // טעינת פרטי נהג והתראות
   useEffect(() => {
     if (!authLoading && user) {
@@ -91,19 +94,19 @@ export default function DriverLayout({
     }
   }
 
-const statusOptions = [
-  { id: 'available', label: 'זמין', icon: '🟢' },
-  { id: 'busy', label: 'בגרירה', icon: '🔵' },
-  { id: 'break', label: 'בהפסקה', icon: '🟡' },
-  { id: 'unavailable', label: 'לא זמין', icon: '🔴' },
-]
+  const statusOptions = [
+    { id: 'available', label: 'זמין', icon: '🟢' },
+    { id: 'busy', label: 'בגרירה', icon: '🔵' },
+    { id: 'break', label: 'בהפסקה', icon: '🟡' },
+    { id: 'unavailable', label: 'לא זמין', icon: '🔴' },
+  ]
 
   const navItems = [
-  { href: '/driver', label: 'בית', icon: Home },
-  { href: '/driver/history', label: 'היסטוריה', icon: History },
-  { href: '/driver/stats', label: 'סטטיסטיקות', icon: PieChart },
-  { href: '/driver/profile', label: 'פרופיל', icon: UserCircle },
-]
+    { href: '/driver', label: 'בית', icon: Home },
+    { href: '/driver/history', label: 'היסטוריה', icon: History },
+    { href: '/driver/stats', label: 'סטטיסטיקות', icon: PieChart },
+    { href: '/driver/profile', label: 'פרופיל', icon: UserCircle },
+  ]
 
   const getStatusColor = (status: string | null) => {
     switch (status) {
@@ -157,6 +160,15 @@ const statusOptions = [
   const driverTruck = driverInfo?.truck 
     ? `${driverInfo.truck.manufacturer || ''} ${driverInfo.truck.model || ''} - ${driverInfo.truck.plate_number}`.trim()
     : 'אין גרר משויך'
+
+  // בדף משימה - לא מציגים את הניווט התחתון
+  if (isTaskPage) {
+    return (
+      <div dir="rtl" className="h-screen overflow-hidden">
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-50 flex flex-col">
