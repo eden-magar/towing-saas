@@ -6,8 +6,7 @@ import {
   X, 
   Trash2, 
   Check, 
-  Loader2,
-  RotateCcw
+  Loader2
 } from 'lucide-react'
 import { 
   uploadTowImage, 
@@ -83,6 +82,7 @@ export default function StepCamera({
   const [images, setImages] = useState<{ file: File; url: string }[]>([])
   const [uploading, setUploading] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
+  const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
   const isPickup = point.point_type === 'pickup'
@@ -98,28 +98,49 @@ export default function StepCamera({
   // הפעלת המצלמה
   const startCamera = async () => {
     setCameraError(null)
+    setCameraReady(false)
+    setCameraActive(true)
+    
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: false
-      })
+      // נסה קודם מצלמה אחורית, אם לא עובד - כל מצלמה
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: { exact: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        })
+      } catch {
+        // fallback - כל מצלמה זמינה
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        })
+      }
       
       streamRef.current = stream
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        // לחכות שהוידאו יהיה מוכן לפני הפעלה
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play()
+        
+        // מחכים שהוידאו יטען
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            await videoRef.current?.play()
+            setCameraReady(true)
+          } catch (playError) {
+            console.error('Play error:', playError)
+            setCameraError('שגיאה בהפעלת המצלמה')
+          }
         }
       }
-      setCameraActive(true)
     } catch (error) {
       console.error('Camera error:', error)
       setCameraError('לא ניתן לגשת למצלמה. אנא אשר הרשאות.')
+      setCameraActive(false)
     }
   }
 
@@ -133,11 +154,12 @@ export default function StepCamera({
       videoRef.current.srcObject = null
     }
     setCameraActive(false)
+    setCameraReady(false)
   }
 
   // צילום תמונה מה-video stream
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return
+    if (!videoRef.current || !canvasRef.current || !cameraReady) return
 
     const video = videoRef.current
     const canvas = canvasRef.current
@@ -236,11 +258,42 @@ export default function StepCamera({
             autoPlay
             playsInline
             muted
-            className="flex-1 object-cover"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
+
+          {/* Loading indicator */}
+          {!cameraReady && !cameraError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="text-center">
+                <Loader2 size={40} className="animate-spin text-white mx-auto mb-3" />
+                <p className="text-white">טוען מצלמה...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error in camera view */}
+          {cameraError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="text-center p-6">
+                <p className="text-red-400 mb-4">{cameraError}</p>
+                <button
+                  onClick={() => { stopCamera(); startCamera(); }}
+                  className="bg-white text-black px-6 py-3 rounded-xl font-medium"
+                >
+                  נסה שוב
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Top Bar - Counter & Close */}
           <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+            <button
+              onClick={stopCamera}
+              className="bg-black/50 p-2 rounded-full"
+            >
+              <X size={24} className="text-white" />
+            </button>
             <div className="bg-black/50 px-4 py-2 rounded-full">
               <span className="text-white font-bold text-lg">
                 {images.length}/{minPhotos}
@@ -281,24 +334,28 @@ export default function StepCamera({
           )}
 
           {/* Capture Button */}
-          <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 flex justify-center bg-gradient-to-t from-black/60 to-transparent">
-            <button
-              onClick={capturePhoto}
-              className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-gray-300 active:scale-95 transition-transform"
-            >
-              <div className="w-16 h-16 bg-white rounded-full border-2 border-gray-400" />
-            </button>
-          </div>
+          {cameraReady && (
+            <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 flex justify-center bg-gradient-to-t from-black/60 to-transparent">
+              <button
+                onClick={capturePhoto}
+                className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-gray-300 active:scale-95 transition-transform"
+              >
+                <div className="w-16 h-16 bg-white rounded-full border-2 border-gray-400" />
+              </button>
+            </div>
+          )}
 
           {/* Instructions */}
-          <div className="absolute bottom-32 left-0 right-0 text-center">
-            <p className="text-white/80 text-sm">
-              {images.length < minPhotos 
-                ? `צלם עוד ${minPhotos - images.length} תמונות`
-                : 'אפשר להמשיך לצלם או ללחוץ "סיימתי"'
-              }
-            </p>
-          </div>
+          {cameraReady && (
+            <div className="absolute bottom-32 left-0 right-0 text-center">
+              <p className="text-white/80 text-sm">
+                {images.length < minPhotos 
+                  ? `צלם עוד ${minPhotos - images.length} תמונות`
+                  : 'אפשר להמשיך לצלם או ללחוץ "סיימתי"'
+                }
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -313,13 +370,6 @@ export default function StepCamera({
 
           {/* Content */}
           <div className="flex-1 bg-slate-900 rounded-t-3xl px-5 pt-6 pb-32">
-            {/* Error Message */}
-            {cameraError && (
-              <div className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-xl mb-6 text-center">
-                {cameraError}
-              </div>
-            )}
-
             {/* Status */}
             <div className="flex items-center justify-center gap-2 mb-6">
               {images.length >= minPhotos ? (
