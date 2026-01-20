@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { 
   Camera, 
   X, 
   Trash2, 
   Check, 
   Loader2,
-  Plus
+  RotateCcw
 } from 'lucide-react'
 import { 
   uploadTowImage, 
@@ -76,10 +76,14 @@ export default function StepCamera({
   userId,
   onComplete
 }: StepCameraProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  
   const [images, setImages] = useState<{ file: File; url: string }[]>([])
   const [uploading, setUploading] = useState(false)
-  const [showCamera, setShowCamera] = useState(false)
+  const [cameraActive, setCameraActive] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
 
   const isPickup = point.point_type === 'pickup'
   const title = 'צלם את הרכב'
@@ -91,23 +95,74 @@ export default function StepCamera({
     return isPickup ? 'before_pickup' : 'before_dropoff'
   }
 
-  // בחירת/צילום תמונה
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    const newImages = Array.from(files).map(file => ({
-      file,
-      url: URL.createObjectURL(file)
-    }))
-    
-    setImages(prev => [...prev, ...newImages])
-    setShowCamera(false)
-    
-    if (fileInputRef.current) fileInputRef.current.value = ''
+  // הפעלת המצלמה
+  const startCamera = async () => {
+    setCameraError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
+        audio: false
+      })
+      
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        await videoRef.current.play()
+      }
+      setCameraActive(true)
+    } catch (error) {
+      console.error('Camera error:', error)
+      setCameraError('לא ניתן לגשת למצלמה. אנא אשר הרשאות.')
+    }
   }
 
-  // מחיקת תמונה מהתור
+  // עצירת המצלמה
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    setCameraActive(false)
+  }
+
+  // צילום תמונה מה-video stream
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // התאמת גודל הקנבס לגודל הוידאו
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    
+    // ציור הפריים הנוכחי
+    ctx.drawImage(video, 0, 0)
+
+    // המרה לקובץ
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
+          const url = URL.createObjectURL(blob)
+          setImages(prev => [...prev, { file, url }])
+        }
+      },
+      'image/jpeg',
+      0.85
+    )
+  }
+
+  // מחיקת תמונה
   const handleRemoveImage = (index: number) => {
     setImages(prev => {
       const newImages = [...prev]
@@ -117,10 +172,9 @@ export default function StepCamera({
     })
   }
 
-  // פתיחת מצלמה
-  const openCamera = () => {
-    setShowCamera(true)
-    setTimeout(() => fileInputRef.current?.click(), 100)
+  // סיום וסגירת מצלמה
+  const handleDone = () => {
+    stopCamera()
   }
 
   // שמירת כל התמונות
@@ -157,115 +211,202 @@ export default function StepCamera({
     }
   }
 
+  // ניקוי בעת unmount
+  useEffect(() => {
+    return () => {
+      stopCamera()
+      images.forEach(img => URL.revokeObjectURL(img.url))
+    }
+  }, [])
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
-      {/* Hidden File Input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        multiple
-        onChange={handleFileSelect}
-        className="hidden"
-      />
+      {/* Hidden Canvas for capturing */}
+      <canvas ref={canvasRef} className="hidden" />
 
-      {/* Header Info */}
-      <div className="px-5 pt-2 pb-6 text-white text-center">
-        <h1 className="text-2xl font-bold mb-1">{title}</h1>
-        <p className="text-white/80">{subtitle}</p>
-      </div>
+      {/* Camera View - Full Screen */}
+      {cameraActive && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          {/* Video Stream */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="flex-1 object-cover"
+          />
 
-      {/* Content */}
-      <div className="flex-1 bg-slate-900 rounded-t-3xl px-5 pt-6 pb-32">
-        {/* Status */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          {images.length >= minPhotos ? (
-            <div className="flex items-center gap-2 text-emerald-400">
-              <Check size={20} />
-              <span className="font-medium">{images.length} תמונות צולמו</span>
+          {/* Top Bar - Counter & Close */}
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+            <div className="bg-black/50 px-4 py-2 rounded-full">
+              <span className="text-white font-bold text-lg">
+                {images.length}/{minPhotos}
+              </span>
             </div>
-          ) : (
-            <span className="text-gray-400">
-              {images.length}/{minPhotos} תמונות
-            </span>
-          )}
-        </div>
-
-        {/* Images Grid */}
-        {images.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-              <Camera size={40} className="text-slate-600" />
-            </div>
-            <p className="text-gray-500 mb-6">לחץ לצילום תמונות</p>
-            <button
-              onClick={openCamera}
-              className="px-8 py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg flex items-center gap-2"
-            >
-              <Camera size={22} />
-              פתח מצלמה
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {images.map((img, idx) => (
-              <div key={idx} className="relative aspect-square bg-slate-800 rounded-2xl overflow-hidden">
-                <img src={img.url} className="w-full h-full object-cover" alt={`תמונה ${idx + 1}`} />
-                <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
-                  {idx + 1}
-                </div>
-                <button
-                  onClick={() => handleRemoveImage(idx)}
-                  className="absolute top-2 left-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-            
-            {/* Add More Button */}
-            {images.length < 8 && (
+            {images.length >= minPhotos && (
               <button
-                onClick={openCamera}
-                className="aspect-square bg-slate-800 rounded-2xl flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700"
+                onClick={handleDone}
+                className="bg-emerald-500 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2"
               >
-                <Plus size={32} />
-                <span className="text-sm mt-1">צלם עוד</span>
+                <Check size={20} />
+                סיימתי
               </button>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Bottom Actions - Fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-slate-900 p-4 pb-28">
-        {images.length > 0 && (
-          <div className="flex gap-3">
+          {/* Thumbnails Strip */}
+          {images.length > 0 && (
+            <div className="absolute top-20 left-0 right-0 px-4">
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative flex-shrink-0">
+                    <img 
+                      src={img.url} 
+                      className="w-14 h-14 object-cover rounded-lg border-2 border-white/50" 
+                      alt={`תמונה ${idx + 1}`} 
+                    />
+                    <button
+                      onClick={() => handleRemoveImage(idx)}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Capture Button */}
+          <div className="absolute bottom-0 left-0 right-0 pb-10 pt-6 flex justify-center bg-gradient-to-t from-black/60 to-transparent">
             <button
-              onClick={openCamera}
-              className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-medium flex items-center justify-center gap-2"
+              onClick={capturePhoto}
+              className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-gray-300 active:scale-95 transition-transform"
             >
-              <Plus size={20} />
-              צלם עוד
-            </button>
-            <button
-              onClick={handleSaveAll}
-              disabled={uploading || images.length < minPhotos}
-              className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {uploading ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <>
-                  <Check size={20} />
-                  אישור והמשך
-                </>
-              )}
+              <div className="w-16 h-16 bg-white rounded-full border-2 border-gray-400" />
             </button>
           </div>
-        )}
-      </div>
+
+          {/* Instructions */}
+          <div className="absolute bottom-32 left-0 right-0 text-center">
+            <p className="text-white/80 text-sm">
+              {images.length < minPhotos 
+                ? `צלם עוד ${minPhotos - images.length} תמונות`
+                : 'אפשר להמשיך לצלם או ללחוץ "סיימתי"'
+              }
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Main Screen - When camera is not active */}
+      {!cameraActive && (
+        <>
+          {/* Header Info */}
+          <div className="px-5 pt-2 pb-6 text-white text-center">
+            <h1 className="text-2xl font-bold mb-1">{title}</h1>
+            <p className="text-white/80">{subtitle}</p>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 bg-slate-900 rounded-t-3xl px-5 pt-6 pb-32">
+            {/* Error Message */}
+            {cameraError && (
+              <div className="bg-red-500/20 border border-red-500 text-red-400 p-4 rounded-xl mb-6 text-center">
+                {cameraError}
+              </div>
+            )}
+
+            {/* Status */}
+            <div className="flex items-center justify-center gap-2 mb-6">
+              {images.length >= minPhotos ? (
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <Check size={20} />
+                  <span className="font-medium">{images.length} תמונות צולמו</span>
+                </div>
+              ) : (
+                <span className="text-gray-400">
+                  {images.length}/{minPhotos} תמונות
+                </span>
+              )}
+            </div>
+
+            {/* Images Grid */}
+            {images.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
+                  <Camera size={40} className="text-slate-600" />
+                </div>
+                <p className="text-gray-500 mb-6">לחץ לפתיחת המצלמה</p>
+                <button
+                  onClick={startCamera}
+                  className="px-8 py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg flex items-center gap-2"
+                >
+                  <Camera size={22} />
+                  פתח מצלמה
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative aspect-square bg-slate-800 rounded-2xl overflow-hidden">
+                    <img src={img.url} className="w-full h-full object-cover" alt={`תמונה ${idx + 1}`} />
+                    <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
+                      {idx + 1}
+                    </div>
+                    <button
+                      onClick={() => handleRemoveImage(idx)}
+                      className="absolute top-2 left-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                
+                {/* Add More Button */}
+                {images.length < 8 && (
+                  <button
+                    onClick={startCamera}
+                    className="aspect-square bg-slate-800 rounded-2xl flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700"
+                  >
+                    <Camera size={32} />
+                    <span className="text-sm mt-1">צלם עוד</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Actions - Fixed */}
+          <div className="fixed bottom-0 left-0 right-0 bg-slate-900 p-4 pb-28">
+            {images.length > 0 && (
+              <div className="flex gap-3">
+                <button
+                  onClick={startCamera}
+                  className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-medium flex items-center justify-center gap-2"
+                >
+                  <Camera size={20} />
+                  צלם עוד
+                </button>
+                <button
+                  onClick={handleSaveAll}
+                  disabled={uploading || images.length < minPhotos}
+                  className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {uploading ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Check size={20} />
+                      אישור והמשך
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Uploading Overlay */}
       {uploading && (
