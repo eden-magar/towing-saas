@@ -4,22 +4,29 @@ import { useState } from 'react'
 import { 
   FileText, 
   Check, 
-  Loader2
+  Loader2,
+  MessageSquare,
+  Package
 } from 'lucide-react'
 
 interface StepDeliveryProps {
+  pointType: 'pickup' | 'dropoff'
   customer: { name: string; phone: string | null } | null
-  onComplete: (recipientName: string, recipientPhone: string) => Promise<void>
+  onComplete: (recipientName: string, recipientPhone: string, notes?: string) => Promise<void>
 }
 
 export default function StepDelivery({
+  pointType,
   customer,
   onComplete
 }: StepDeliveryProps) {
   const [recipientName, setRecipientName] = useState('')
   const [recipientPhone, setRecipientPhone] = useState('')
+  const [notes, setNotes] = useState('')
   const [sameAsCustomer, setSameAsCustomer] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  const isPickup = pointType === 'pickup'
 
   // העתקה מהלקוח
   const handleSameAsCustomer = (checked: boolean) => {
@@ -35,70 +42,112 @@ export default function StepDelivery({
 
   // שליחה
   const handleSubmit = async () => {
-    if (!recipientName.trim()) {
+    // בפריקה חובה שם מקבל
+    if (!isPickup && !recipientName.trim()) {
       alert('יש להזין שם מקבל')
       return
     }
 
     setLoading(true)
     try {
-      await onComplete(recipientName.trim(), recipientPhone.trim())
+      await onComplete(
+        recipientName.trim(), 
+        recipientPhone.trim(),
+        notes.trim() || undefined
+      )
     } finally {
       setLoading(false)
     }
   }
 
-  const canSubmit = recipientName.trim().length > 0
+  // באיסוף תמיד אפשר להמשיך, בפריקה צריך שם
+  const canSubmit = isPickup || recipientName.trim().length > 0
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
       {/* Header Info */}
       <div className="px-5 pt-2 pb-6 text-white text-center">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <FileText size={24} />
-          <h1 className="text-2xl font-bold">פרטי מסירה</h1>
+          {isPickup ? <Package size={24} /> : <FileText size={24} />}
+          <h1 className="text-2xl font-bold">
+            {isPickup ? 'סיום העמסה' : 'פרטי מסירה'}
+          </h1>
         </div>
-        <p className="text-white/80">למי נמסר הרכב?</p>
+        <p className="text-white/80">
+          {isPickup ? 'הרכב הועמס בהצלחה' : 'למי נמסר הרכב?'}
+        </p>
       </div>
 
       {/* Content Card */}
       <div className="flex-1 bg-white rounded-t-3xl px-5 pt-6 pb-40">
-        {/* שם מלא */}
-        <div className="mb-6">
-          <label className="block text-sm text-gray-500 mb-2 text-right">שם מלא</label>
-          <input
-            type="text"
-            value={recipientName}
-            onChange={(e) => setRecipientName(e.target.value)}
-            placeholder="הכנס שם"
-            className="w-full p-4 border border-gray-200 rounded-xl text-right text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
+        
+        {/* פרטי מקבל - רק בפריקה */}
+        {!isPickup && (
+          <>
+            {/* שם מלא */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-500 mb-2 text-right">
+                שם מקבל <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={recipientName}
+                onChange={(e) => setRecipientName(e.target.value)}
+                placeholder="הכנס שם"
+                className="w-full p-4 border border-gray-200 rounded-xl text-right text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
 
-        {/* טלפון */}
-        <div className="mb-6">
-          <label className="block text-sm text-gray-500 mb-2 text-right">טלפון</label>
-          <input
-            type="tel"
-            value={recipientPhone}
-            onChange={(e) => setRecipientPhone(e.target.value)}
-            placeholder="050-0000000"
-            className="w-full p-4 border border-gray-200 rounded-xl text-right text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-            dir="ltr"
-          />
-        </div>
+            {/* טלפון */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-500 mb-2 text-right">טלפון</label>
+              <input
+                type="tel"
+                value={recipientPhone}
+                onChange={(e) => setRecipientPhone(e.target.value)}
+                placeholder="050-0000000"
+                className="w-full p-4 border border-gray-200 rounded-xl text-right text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                dir="ltr"
+              />
+            </div>
 
-        {/* זהה למזמין */}
-        {customer && (
-          <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
-            <input
-              type="checkbox"
-              checked={sameAsCustomer}
-              onChange={(e) => handleSameAsCustomer(e.target.checked)}
-              className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            <span className="text-gray-700">זהה למזמין</span>
+            {/* זהה למזמין */}
+            {customer && (
+              <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer mb-6">
+                <input
+                  type="checkbox"
+                  checked={sameAsCustomer}
+                  onChange={(e) => handleSameAsCustomer(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-gray-700">זהה למזמין ({customer.name})</span>
+              </label>
+            )}
+          </>
+        )}
+
+        {/* הערות - תמיד מוצג */}
+        <div className="mb-6">
+          <label className="block text-sm text-gray-500 mb-2 text-right flex items-center gap-2 justify-end">
+            <span>הערות (אופציונלי)</span>
+            <MessageSquare size={16} />
           </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={isPickup ? 'הערות לגבי האיסוף...' : 'הערות לגבי המסירה...'}
+            rows={3}
+            className="w-full p-4 border border-gray-200 rounded-xl text-right text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+          />
+        </div>
+
+        {/* הודעה באיסוף */}
+        {isPickup && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+            <p className="text-blue-700 text-sm">
+              ✓ התמונות נשמרו בהצלחה
+            </p>
+          </div>
         )}
       </div>
 
@@ -114,7 +163,7 @@ export default function StepDelivery({
           ) : (
             <>
               <Check size={22} />
-              סיים גרירה
+              {isPickup ? 'המשך לנקודה הבאה' : 'סיים גרירה'}
             </>
           )}
         </button>

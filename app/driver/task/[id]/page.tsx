@@ -90,30 +90,22 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     }
   }
 
-  // סיום צילום - עובר לשלב הבא
+  // סיום צילום - עובר לשלב סיום (גם באיסוף וגם בפריקה)
   const handleCameraComplete = async () => {
-    if (!currentPoint) return
-    
-    // אם זו נקודת פריקה - עובר לפרטי מסירה
-    if (currentPoint.point_type === 'dropoff') {
-      setPointStep('delivery')
-    } else {
-      // נקודת איסוף - מסמן כהושלם ועובר לנקודה הבאה
-      await completeCurrentPoint()
-    }
+    setPointStep('delivery')
   }
 
-  // סיום פרטי מסירה
-  const handleDeliveryComplete = async (recipientName: string, recipientPhone: string) => {
-    await completeCurrentPoint(recipientName, recipientPhone)
+  // סיום פרטי מסירה/הערות
+  const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string) => {
+    await completeCurrentPoint(recipientName, recipientPhone, notes)
   }
 
   // השלמת הנקודה הנוכחית
-  const completeCurrentPoint = async (recipientName?: string, recipientPhone?: string) => {
+  const completeCurrentPoint = async (recipientName?: string, recipientPhone?: string, notes?: string) => {
     if (!currentPoint || !user || !task) return
     
     try {
-      await updatePointStatus(currentPoint.id, 'completed', recipientName, recipientPhone)
+      await updatePointStatus(currentPoint.id, 'completed', recipientName, recipientPhone, notes)
       
       // בדיקה אם זו הנקודה האחרונה
       const nextIndex = currentPointIndex + 1
@@ -237,6 +229,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
       {pointStep === 'delivery' && currentPoint && (
         <StepDelivery
+          pointType={currentPoint.point_type}
           customer={task.customer}
           onComplete={handleDeliveryComplete}
         />

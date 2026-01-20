@@ -630,7 +630,8 @@ export async function updatePointStatus(
   pointId: string,
   status: 'pending' | 'arrived' | 'completed' | 'skipped',
   recipientName?: string,
-  recipientPhone?: string
+  recipientPhone?: string,
+  notes?: string
 ) {
   const updates: Record<string, any> = { 
     status,
@@ -643,6 +644,7 @@ export async function updatePointStatus(
     updates.completed_at = new Date().toISOString()
     if (recipientName) updates.recipient_name = recipientName
     if (recipientPhone) updates.recipient_phone = recipientPhone
+    if (notes) updates.notes = notes
   }
 
   const { error } = await supabase
