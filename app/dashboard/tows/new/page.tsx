@@ -39,6 +39,8 @@ import { getCustomerStoredVehicles, StoredVehicleWithCustomer, addVehicleToStora
 import { CustomerSection, TowTypeSelector, TowType, PaymentSection, PriceSummary } from '../../../components/tow-forms/sections'
 import { SingleRoute, RouteBuilder, RoutePoint } from '../../../components/tow-forms/routes'
 import { SelectedService } from '../../../components/tow-forms/shared'
+import { generateOrderNumber } from '../../../lib/utils/order-number'
+
 
 // ==================== Types ====================
 interface AddressData {
@@ -551,6 +553,8 @@ function NewTowForm() {
   const [priceMode, setPriceMode] = useState<'recommended' | 'fixed' | 'customer' | 'custom'>('recommended')
   const [selectedPriceItem, setSelectedPriceItem] = useState<PriceItem | null>(null)
   const [customPrice, setCustomPrice] = useState<string>('')
+
+  const [orderNumber, setOrderNumber] = useState('')
   
   // Customer info
   const [customerName, setCustomerName] = useState('')
@@ -1071,6 +1075,7 @@ function NewTowForm() {
       companyId,
       userId: user.id,
       towType,
+      orderNumber,
       customerId: selectedCustomerId,
       customerName,
       customerPhone,
@@ -1226,6 +1231,13 @@ function NewTowForm() {
               onTowDateChange={setTowDate}
               onTowTimeChange={setTowTime}
               onIsTodayChange={setIsToday}
+              orderNumber={orderNumber}
+              onOrderNumberChange={setOrderNumber}
+              onOrderNumberBlur={() => {
+                if (!orderNumber.trim()) {
+                  setOrderNumber(generateOrderNumber())
+                }
+              }}
             />
 
             {/* Section 2 - Tow Type */}

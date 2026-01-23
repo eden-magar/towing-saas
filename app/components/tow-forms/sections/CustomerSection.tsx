@@ -20,6 +20,9 @@ interface CustomerSectionProps {
   onTowDateChange: (date: string) => void
   onTowTimeChange: (time: string) => void
   onIsTodayChange: (isToday: boolean) => void
+  orderNumber: string
+  onOrderNumberChange: (value: string) => void
+  onOrderNumberBlur: () => void
 }
 
 export function CustomerSection({
@@ -36,7 +39,10 @@ export function CustomerSection({
   isToday,
   onTowDateChange,
   onTowTimeChange,
-  onIsTodayChange
+  onIsTodayChange,
+  orderNumber,
+  onOrderNumberChange,
+  onOrderNumberBlur
 }: CustomerSectionProps) {
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('new')
   const [searchCustomer, setSearchCustomer] = useState('')
@@ -153,8 +159,8 @@ export function CustomerSection({
               </div>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 שם לקוח <span className="text-red-500">*</span>
@@ -174,6 +180,18 @@ export function CustomerSection({
                 type="tel"
                 value={customerPhone}
                 onChange={(e) => onCustomerPhoneChange(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                מספר הזמנה
+              </label>
+              <input
+                type="text"
+                value={orderNumber}
+                onChange={(e) => onOrderNumberChange(e.target.value)}
+                onBlur={onOrderNumberBlur}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
               />
             </div>

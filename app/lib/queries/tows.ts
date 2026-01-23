@@ -92,6 +92,7 @@ export interface TowPointWithDetails extends TowPoint {
 
 export interface TowWithDetails {
   id: string
+  order_number: string | null
   company_id: string
   customer_id: string | null
   driver_id: string | null
@@ -328,6 +329,7 @@ export interface PreparedTowPoint {
 interface CreateTowInput {
   companyId: string
   createdBy: string
+  orderNumber?: string
   customerId?: string
   driverId?: string
   truckId?: string
@@ -375,6 +377,7 @@ export async function createTow(input: CreateTowInput) {
       id: towId,
       company_id: input.companyId,
       created_by: input.createdBy,
+      order_number: input.orderNumber || null,
       customer_id: input.customerId || null,
       driver_id: input.driverId || null,
       truck_id: input.truckId || null,
