@@ -103,60 +103,103 @@ export function CustomerSection({
 
         {customerType === 'existing' ? (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">חיפוש לקוח</label>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="שם, טלפון או ח.פ..."
-                value={searchCustomer}
-                onChange={(e) => {
-                  setSearchCustomer(e.target.value)
-                  setShowCustomerResults(e.target.value.length > 0)
-                }}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-              />
-              {showCustomerResults && filteredCustomers.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden max-h-60 overflow-y-auto">
-                  {filteredCustomers.map((customer) => (
-                    <div
-                      key={customer.id}
-                      onClick={() => {
-                        onCustomerSelect(customer.id, customer.name, customer.phone || '')
-                        setSearchCustomer(customer.name)
-                        setShowCustomerResults(false)
-                      }}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-gray-800">{customer.name}</p>
-                          <p className="text-sm text-gray-500">{customer.phone}</p>
+            {/* שדה חיפוש - מוסתר אחרי בחירת לקוח */}
+            {!selectedCustomerId && (
+              <>
+                <label className="block text-sm font-medium text-gray-700 mb-1">חיפוש לקוח</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="שם, טלפון או ח.פ..."
+                    value={searchCustomer}
+                    onChange={(e) => {
+                      setSearchCustomer(e.target.value)
+                      setShowCustomerResults(e.target.value.length > 0)
+                    }}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  />
+                  {showCustomerResults && filteredCustomers.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden max-h-60 overflow-y-auto">
+                      {filteredCustomers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          onClick={() => {
+                            onCustomerSelect(customer.id, customer.name, customer.phone || '')
+                            setSearchCustomer(customer.name)
+                            setShowCustomerResults(false)
+                          }}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-gray-800">{customer.name}</p>
+                              <p className="text-sm text-gray-500">{customer.phone}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 text-xs rounded ${
+                              customer.customer_type === 'business'
+                                ? 'bg-purple-100 text-purple-600' 
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {customer.customer_type === 'business' ? 'עסקי' : 'פרטי'}
+                            </span>
+                          </div>
                         </div>
-                        <span className={`px-2 py-0.5 text-xs rounded ${
-                          customer.customer_type === 'business'
-                            ? 'bg-purple-100 text-purple-600' 
-                            : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {customer.customer_type === 'business' ? 'עסקי' : 'פרטי'}
-                        </span>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {selectedCustomerId && (
-              <div className="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <div className="flex items-center gap-2 text-emerald-700">
-                  <Check size={18} />
-                  <span className="font-medium">{customerName}</span>
-                  {selectedCustomerPricing && (selectedCustomerPricing.discount_percent > 0 || selectedCustomerPricing.price_items.length > 0) && (
-                    <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full mr-auto">
-                      יש מחירון מותאם
-                    </span>
                   )}
                 </div>
-              </div>
+              </>
+            )}
+            
+            {/* פרטי לקוח שנבחר */}
+            {selectedCustomerId && (
+              <>
+                {selectedCustomerPricing && (selectedCustomerPricing.discount_percent > 0 || selectedCustomerPricing.price_items.length > 0) && (
+                  <div className="mb-2 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg inline-flex items-center gap-1">
+                    <span className="text-xs text-purple-600">🏷️ יש מחירון מותאם</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      שם לקוח <Check size={14} className="inline text-emerald-500" />
+                    </label>
+                    <input
+                      type="text"
+                      value={customerName}
+                      readOnly
+                      onClick={() => {
+                        onCustomerSelect(null, '', '')
+                        setSearchCustomer('')
+                      }}
+                      className="w-full px-4 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-sm text-gray-700 cursor-pointer hover:bg-emerald-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      טלפון <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => onCustomerPhoneChange(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      מספר הזמנה
+                    </label>
+                    <input
+                      type="text"
+                      value={orderNumber}
+                      onChange={(e) => onOrderNumberChange(e.target.value)}
+                      onBlur={onOrderNumberBlur}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                </div>
+              </>
             )}
           </div>
           ) : (

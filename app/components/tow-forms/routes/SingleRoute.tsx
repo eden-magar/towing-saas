@@ -269,37 +269,41 @@ export function SingleRoute({
           </h2>
         </div>
         <div className="p-4 sm:p-5 space-y-4">
-          {/* כתובות */}
-          <div className="flex items-start gap-3 sm:gap-4">
-            <div className="flex flex-col items-center pt-8">
-              <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
-              <div className="w-0.5 h-20 bg-gray-200"></div>
-              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+           {/* כתובות */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex items-start gap-2">
+              <div className="w-3 h-3 bg-emerald-500 rounded-full mt-9 flex-shrink-0"></div>
+              <div className="flex-1">
+                <AddressInput
+                  label="מוצא"
+                  value={pickupAddress}
+                  onChange={onPickupAddressChange}
+                  placeholder="הזן כתובת איסוף..."
+                  required
+                  onPinDropClick={() => onPinDropClick('pickup')}
+                />
+              </div>
             </div>
-            <div className="flex-1 space-y-4">
-              <AddressInput
-                label="מוצא"
-                value={pickupAddress}
-                onChange={onPickupAddressChange}
-                placeholder="הזן כתובת איסוף..."
-                required
-                onPinDropClick={() => onPinDropClick('pickup')}
-              />
-              <AddressInput
-                label="יעד"
-                value={dropoffAddress}
-                onChange={onDropoffAddressChange}
-                placeholder="הזן כתובת יעד..."
-                required
-                onPinDropClick={() => onPinDropClick('dropoff')}
-              />
+            <div className="flex items-start gap-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full mt-9 flex-shrink-0"></div>
+              <div className="flex-1">
+                <AddressInput
+                  label="יעד"
+                  value={dropoffAddress}
+                  onChange={onDropoffAddressChange}
+                  placeholder="הזן כתובת יעד..."
+                  required
+                  onPinDropClick={() => onPinDropClick('dropoff')}
+                />
+              </div>
             </div>
           </div>
 
-          {/* === Toggle יעד לאחסנה - חדש! === */}
-          {onDropoffToStorageChange && (
-            <div className="mt-2">
-              <label className="flex items-center gap-3 cursor-pointer p-3 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition-colors">
+          {/* צ'קבוקסים - אחסנה + יציאה מהבסיס */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* יעד לאחסנה */}
+            {onDropoffToStorageChange && (
+              <label className="flex items-center gap-2 cursor-pointer p-2 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
                 <input
                   type="checkbox"
                   checked={dropoffToStorage}
@@ -312,31 +316,27 @@ export function SingleRoute({
                       })
                     }
                   }}
-                  className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                  className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
-                <div className="flex items-center gap-2">
-                  <Package size={18} className="text-purple-600" />
-                  <span className="text-sm font-medium text-gray-700">היעד הוא לאחסנה (הרכב יכנס למאגר)</span>
-                </div>
+                <Package size={16} className="text-purple-600" />
+                <span className="text-xs font-medium text-gray-700">היעד הוא לאחסנה</span>
               </label>
-              {dropoffToStorage && (
-                <p className="text-xs text-purple-600 mt-2 mr-11">
-                  📦 הרכב יכנס אוטומטית לאחסנה בשמירת הגרירה
-                </p>
-              )}
-            </div>
-          )}
-          {/* === סוף Toggle === */}
+            )}
 
-          {/* יציאה מהבסיס */}
-          <StartFromBase
-            baseAddress={basePriceList?.base_address}
-            checked={startFromBase}
-            onChange={onStartFromBaseChange}
-            baseToPickupDistance={baseToPickupDistance}
-            isLoading={baseToPickupLoading}
-            hasPickupAddress={!!pickupAddress.address}
-          />
+            {/* יציאה מהבסיס */}
+            {basePriceList?.base_address && (
+              <label className="flex items-center gap-2 cursor-pointer p-2 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={startFromBase}
+                  onChange={(e) => onStartFromBaseChange(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-base">🏠</span>
+                <span className="text-xs font-medium text-gray-700">יציאה מהבסיס</span>
+              </label>
+            )}
+          </div>
 
           {/* תצוגת מרחק */}
           {(distanceLoading || baseToPickupLoading) && (

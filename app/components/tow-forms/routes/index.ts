@@ -11,3 +11,4 @@ export { StorageVehicleSelector, StorageNotification } from './StorageVehicleSel
 
 // Keep old components for backward compatibility
 export { SingleRoute } from './SingleRoute'
+export { ExchangeRoute } from './ExchangeRoute'

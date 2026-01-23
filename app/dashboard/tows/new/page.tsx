@@ -37,7 +37,7 @@ import { getCustomerStoredVehicles, StoredVehicleWithCustomer, addVehicleToStora
 
 // Import form components
 import { CustomerSection, TowTypeSelector, TowType, PaymentSection, PriceSummary } from '../../../components/tow-forms/sections'
-import { SingleRoute, RouteBuilder, RoutePoint } from '../../../components/tow-forms/routes'
+import { SingleRoute, RouteBuilder, RoutePoint, ExchangeRoute } from '../../../components/tow-forms/routes'
 import { SelectedService } from '../../../components/tow-forms/shared'
 import { generateOrderNumber } from '../../../lib/utils/order-number'
 
@@ -49,6 +49,14 @@ interface AddressData {
   lat?: number
   lng?: number
   isPinDropped?: boolean
+}
+
+interface RouteStop {
+  id: string
+  address: AddressData
+  contactName: string
+  contactPhone: string
+  notes: string
 }
 
 interface DistanceResult {
@@ -623,6 +631,36 @@ function NewTowForm() {
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
   const [storageLoading, setStorageLoading] = useState(false)
 
+  // Exchange specific state
+  const [workingVehicleSource, setWorkingVehicleSource] = useState<'storage' | 'address'>('storage')
+  const [selectedWorkingVehicleId, setSelectedWorkingVehicleId] = useState<string | null>(null)
+  const [workingVehiclePlate, setWorkingVehiclePlate] = useState('')
+  const [workingVehicleData, setWorkingVehicleData] = useState<VehicleLookupResult | null>(null)
+  const [workingVehicleType, setWorkingVehicleType] = useState<VehicleType | ''>('')
+  const [workingVehicleCode, setWorkingVehicleCode] = useState('')
+  const [workingVehicleAddress, setWorkingVehicleAddress] = useState<AddressData>({ address: '' })
+  const [workingVehicleContact, setWorkingVehicleContact] = useState('')
+  const [workingVehicleContactPhone, setWorkingVehicleContactPhone] = useState('')
+  
+  const [exchangeAddress, setExchangeAddress] = useState<AddressData>({ address: '' })
+  const [exchangeContactName, setExchangeContactName] = useState('')
+  const [exchangeContactPhone, setExchangeContactPhone] = useState('')
+  
+  const [defectiveVehiclePlate, setDefectiveVehiclePlate] = useState('')
+  const [defectiveVehicleData, setDefectiveVehicleData] = useState<VehicleLookupResult | null>(null)
+  const [defectiveVehicleType, setDefectiveVehicleType] = useState<VehicleType | ''>('')
+  const [defectiveVehicleCode, setDefectiveVehicleCode] = useState('')
+  const [defectiveDestination, setDefectiveDestination] = useState<'storage' | 'address'>('storage')
+  const [defectiveDestinationAddress, setDefectiveDestinationAddress] = useState<AddressData>({ address: '' })
+  const [defectiveDestinationContact, setDefectiveDestinationContact] = useState('')
+  const [defectiveDestinationContactPhone, setDefectiveDestinationContactPhone] = useState('')
+  
+  const [stopsBeforeExchange, setStopsBeforeExchange] = useState<RouteStop[]>([])
+  const [stopsAfterExchange, setStopsAfterExchange] = useState<RouteStop[]>([])
+  
+  const [exchangeTotalDistance, setExchangeTotalDistance] = useState<DistanceResult | null>(null)
+  const [exchangeDistanceLoading, setExchangeDistanceLoading] = useState(false)
+
   // Single tow - Addresses
   const [pickupAddress, setPickupAddress] = useState<AddressData>({ address: '' })
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
@@ -948,6 +986,15 @@ function NewTowForm() {
     setSelectedCustomerId(customerId)
     setCustomerName(name)
     setCustomerPhone(phone)
+  }
+
+  // Exchange helpers
+  const handleSelectWorkingVehicle = (vehicle: StoredVehicleWithCustomer) => {
+    setSelectedWorkingVehicleId(vehicle.id)
+  }
+
+  const handleClearWorkingVehicle = () => {
+    setSelectedWorkingVehicleId(null)
   }
 
   const handleSelectStoredVehicle = (vehicle: StoredVehicleWithCustomer) => {
@@ -1293,6 +1340,82 @@ function NewTowForm() {
               />
             )}
 
+            {towType === 'exchange' && (
+              <ExchangeRoute
+                customerName={customerName}
+                customerPhone={customerPhone}
+                workingVehicleSource={workingVehicleSource}
+                onWorkingVehicleSourceChange={setWorkingVehicleSource}
+                customerStoredVehicles={customerStoredVehicles}
+                selectedWorkingVehicleId={selectedWorkingVehicleId}
+                onSelectWorkingVehicle={handleSelectWorkingVehicle}
+                onClearWorkingVehicle={handleClearWorkingVehicle}
+                workingVehicleAddress={workingVehicleAddress}
+                onWorkingVehicleAddressChange={setWorkingVehicleAddress}
+                workingVehicleContact={workingVehicleContact}
+                onWorkingVehicleContactChange={setWorkingVehicleContact}
+                workingVehicleContactPhone={workingVehicleContactPhone}
+                onWorkingVehicleContactPhoneChange={setWorkingVehicleContactPhone}
+                workingVehiclePlate={workingVehiclePlate}
+                onWorkingVehiclePlateChange={setWorkingVehiclePlate}
+                workingVehicleData={workingVehicleData}
+                onWorkingVehicleDataChange={setWorkingVehicleData}
+                workingVehicleType={workingVehicleType}
+                onWorkingVehicleTypeChange={setWorkingVehicleType}
+                workingVehicleCode={workingVehicleCode}
+                onWorkingVehicleCodeChange={setWorkingVehicleCode}
+                storageLoading={storageLoading}
+                exchangeAddress={exchangeAddress}
+                onExchangeAddressChange={setExchangeAddress}
+                exchangeContactName={exchangeContactName}
+                onExchangeContactNameChange={setExchangeContactName}
+                exchangeContactPhone={exchangeContactPhone}
+                onExchangeContactPhoneChange={setExchangeContactPhone}
+                defectiveVehiclePlate={defectiveVehiclePlate}
+                onDefectiveVehiclePlateChange={setDefectiveVehiclePlate}
+                defectiveVehicleData={defectiveVehicleData}
+                onDefectiveVehicleDataChange={setDefectiveVehicleData}
+                defectiveVehicleType={defectiveVehicleType}
+                onDefectiveVehicleTypeChange={setDefectiveVehicleType}
+                defectiveVehicleCode={defectiveVehicleCode}
+                onDefectiveVehicleCodeChange={setDefectiveVehicleCode}
+                selectedDefects={selectedDefects}
+                onDefectsChange={setSelectedDefects}
+                defectiveDestination={defectiveDestination}
+                onDefectiveDestinationChange={setDefectiveDestination}
+                defectiveDestinationAddress={defectiveDestinationAddress}
+                onDefectiveDestinationAddressChange={setDefectiveDestinationAddress}
+                defectiveDestinationContact={defectiveDestinationContact}
+                onDefectiveDestinationContactChange={setDefectiveDestinationContact}
+                defectiveDestinationContactPhone={defectiveDestinationContactPhone}
+                onDefectiveDestinationContactPhoneChange={setDefectiveDestinationContactPhone}
+                stopsBeforeExchange={stopsBeforeExchange}
+                onStopsBeforeExchangeChange={setStopsBeforeExchange}
+                stopsAfterExchange={stopsAfterExchange}
+                onStopsAfterExchangeChange={setStopsAfterExchange}
+                serviceSurchargesData={serviceSurchargesData}
+                selectedServices={selectedServices}
+                onSelectedServicesChange={setSelectedServices}
+                requiredTruckTypes={requiredTruckTypes}
+                onRequiredTruckTypesChange={setRequiredTruckTypes}
+                truckTypeSectionRef={truckTypeSectionRef}
+                truckTypeError={truckTypeError}
+                basePriceList={basePriceList}
+                startFromBase={startFromBase}
+                onStartFromBaseChange={setStartFromBase}
+                totalDistance={exchangeTotalDistance}
+                distanceLoading={exchangeDistanceLoading}
+                activeTimeSurcharges={activeTimeSurchargesList}
+                isHoliday={isHoliday}
+                onIsHolidayChange={setIsHoliday}
+                locationSurchargesData={locationSurchargesData}
+                selectedLocationSurcharges={selectedLocationSurcharges}
+                onLocationSurchargesChange={setSelectedLocationSurcharges}
+                onPinDropClick={(field) => setPinDropModal({ isOpen: true, field })}
+                storageAddress={basePriceList?.base_address || ''}
+              />
+            )}
+
             {towType === 'custom' && (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
@@ -1371,8 +1494,8 @@ function NewTowForm() {
                       <div className="space-y-3">
                         <input type="text" value={pickupContactName} onChange={(e) => setPickupContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
                         <div className="flex gap-2">
-                          <input type="tel" value={pickupContactPhone} onChange={(e) => setPickupContactPhone(e.target.value)} placeholder="טלפון" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
-                          <button onClick={() => copyFromCustomer('pickup')} className="px-3 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs hover:bg-gray-100 whitespace-nowrap">זהה ללקוח</button>
+                          <input type="tel" value={pickupContactPhone} onChange={(e) => setPickupContactPhone(e.target.value)} placeholder="טלפון" className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
+                          <button onClick={() => copyFromCustomer('pickup')} className="px-2 py-2 bg-cyan-50 border border-cyan-200 text-cyan-600 rounded-lg text-xs hover:bg-cyan-100">👤</button>
                         </div>
                       </div>
                     </div>
@@ -1381,8 +1504,8 @@ function NewTowForm() {
                       <div className="space-y-3">
                         <input type="text" value={dropoffContactName} onChange={(e) => setDropoffContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
                         <div className="flex gap-2">
-                          <input type="tel" value={dropoffContactPhone} onChange={(e) => setDropoffContactPhone(e.target.value)} placeholder="טלפון" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
-                          <button onClick={() => copyFromCustomer('dropoff')} className="px-3 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs hover:bg-gray-100 whitespace-nowrap">זהה ללקוח</button>
+                          <input type="tel" value={dropoffContactPhone} onChange={(e) => setDropoffContactPhone(e.target.value)} placeholder="טלפון" className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
+                          <button onClick={() => copyFromCustomer('dropoff')} className="px-2 py-2 bg-cyan-50 border border-cyan-200 text-cyan-600 rounded-lg text-xs hover:bg-cyan-100">👤</button>
                         </div>
                       </div>
                     </div>
