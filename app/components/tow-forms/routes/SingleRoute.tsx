@@ -319,7 +319,7 @@ export function SingleRoute({
                   className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
                 <Package size={16} className="text-purple-600" />
-                <span className="text-xs font-medium text-gray-700">היעד הוא לאחסנה</span>
+                <span className="text-xs font-medium text-gray-700">לאחסנה</span>
               </label>
             )}
 
@@ -333,7 +333,7 @@ export function SingleRoute({
                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-base">🏠</span>
-                <span className="text-xs font-medium text-gray-700">יציאה מהבסיס</span>
+                <span className="text-xs font-medium text-gray-700">מהבסיס</span>
               </label>
             )}
           </div>

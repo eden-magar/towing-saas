@@ -1258,7 +1258,7 @@ function NewTowForm() {
           </div>
         )}
 
-        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
           {/* Main Form */}
           <div className="flex-1 space-y-4 sm:space-y-6">
             
@@ -1538,11 +1538,11 @@ function NewTowForm() {
               />
             )}
 
-            {/* Mobile Price Summary */}
-            <div className="lg:hidden">
+            {/* Price Summary */}
+            <div>
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 bg-gray-800 text-white">
-                  <h3 className="font-bold text-sm">סיכום מחיר</h3>
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-800 text-white">
+                  <h3 className="font-bold text-sm sm:text-base">סיכום מחיר</h3>
                 </div>
                 <div className="p-4">
                   <PriceSummary
@@ -1571,40 +1571,6 @@ function NewTowForm() {
                     customRouteVehicleCount={customRouteData.vehicles.length}
                   />
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar - Price Summary */}
-          <div className="hidden lg:block w-80 flex-shrink-0">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden sticky top-24">
-              <div className="px-5 py-4 bg-gray-800 text-white">
-                <h3 className="font-bold">סיכום מחיר</h3>
-              </div>
-              <div className="p-5">
-                <PriceSummary
-                  hasTowType={!!towType}
-                  hasVehicleType={towType === 'custom' ? customRouteData.vehicles.length > 0 : !!vehicleType}
-                  vehicleType={vehicleType}
-                  basePriceList={basePriceList}
-                  distance={towType === 'custom' ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 } : distance}
-                  baseToPickupDistance={baseToPickupDistance}
-                  startFromBase={startFromBase}
-                  activeTimeSurcharges={activeTimeSurchargesList}
-                  selectedLocationSurcharges={selectedLocationSurcharges}
-                  locationSurchargesData={locationSurchargesData}
-                  selectedServices={selectedServices}
-                  serviceSurchargesData={serviceSurchargesData}
-                  selectedCustomerPricing={selectedCustomerPricing}
-                  priceMode={priceMode}
-                  selectedPriceItem={selectedPriceItem}
-                  customPrice={customPrice}
-                  finalPrice={finalPrice}
-                  onSave={handleSave}
-                  saving={saving}
-                  towType={towType}
-                  customRouteVehicleCount={customRouteData.vehicles.length}
-                />
               </div>
             </div>
           </div>
