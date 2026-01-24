@@ -17,12 +17,15 @@ interface ServiceSurchargeSelectorProps {
   label?: string
 }
 
+import { useState } from 'react'
+
 export function ServiceSurchargeSelector({
   services,
   selectedServices,
   onChange,
   label = 'שירותים נוספים'
 }: ServiceSurchargeSelectorProps) {
+  const [showModal, setShowModal] = useState(false)
   const activeServices = services.filter(s => s.is_active)
   
   if (activeServices.length === 0) return null
@@ -85,7 +88,84 @@ export function ServiceSurchargeSelector({
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <div className="flex flex-wrap gap-2">
+      
+      {/* כפתור מובייל */}
+      <button
+        type="button"
+        onClick={() => setShowModal(true)}
+        className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+      >
+        <span className="text-gray-600">
+          {selectedServices.length > 0 
+            ? activeServices.filter(s => isSelected(s.id)).map(s => s.label).join(', ')
+            : 'בחר שירותים...'}
+        </span>
+        <span className="text-gray-400">▼</span>
+      </button>
+
+      {/* מודל מובייל */}
+      {showModal && (
+        <div className="sm:hidden fixed inset-0 bg-black/50 z-50 flex items-end">
+          <div className="bg-white w-full rounded-t-2xl max-h-[80vh] overflow-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+              <h3 className="font-bold text-gray-800">{label}</h3>
+              <button type="button" onClick={() => setShowModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
+            </div>
+            <div className="p-4 space-y-2">
+              {activeServices.map((service) => (
+                <div key={`modal-${service.id}`} className={`p-3 rounded-xl border transition-all ${isSelected(service.id) ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200'}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleService(service)}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <span className={`font-medium ${isSelected(service.id) ? 'text-[#33d4ff]' : 'text-gray-700'}`}>{service.label}</span>
+                    <span className="text-sm text-gray-500">{getPriceDisplay(service)}</span>
+                  </button>
+                  
+                  {/* פקדים נוספים בתוך המודל */}
+                  {isSelected(service.id) && service.price_type === 'per_unit' && (
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">{service.unit_label && `לכל ${service.unit_label}`}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center bg-white rounded-lg border border-gray-200">
+                          <button type="button" onClick={() => updateQuantity(service.id, (getSelected(service.id)?.quantity || 1) - 1)} className="w-8 h-8 flex items-center justify-center text-gray-500">
+                            <Minus size={14} />
+                          </button>
+                          <span className="w-8 text-center text-sm font-medium">{getSelected(service.id)?.quantity || 1}</span>
+                          <button type="button" onClick={() => updateQuantity(service.id, (getSelected(service.id)?.quantity || 1) + 1)} className="w-8 h-8 flex items-center justify-center text-gray-500">
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                        <span className="text-sm font-bold w-14 text-left">₪{service.price * (getSelected(service.id)?.quantity || 1)}</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {isSelected(service.id) && service.price_type === 'manual' && (
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">הזן מחיר</span>
+                      <div className="relative">
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                        <input
+                          type="number"
+                          value={getSelected(service.id)?.manualPrice || ''}
+                          onChange={(e) => updateManualPrice(service.id, Number(e.target.value))}
+                          placeholder="0"
+                          className="w-20 pr-6 pl-2 py-1.5 border border-gray-200 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* דסקטופ */}
+      <div className="hidden sm:flex flex-wrap gap-2">
         {activeServices.map((service) => {
           const selected = isSelected(service.id)
           

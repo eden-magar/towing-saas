@@ -63,7 +63,7 @@ export function VehicleLookup({
   return (
     <div className="space-y-2">
       {/* שורה ראשית: מספר רכב + חפש + סוג + קוד */}
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-4 sm:flex sm:flex-wrap gap-2">
         {/* מספר רכב */}
         <input
           type="text"
@@ -78,7 +78,7 @@ export function VehicleLookup({
           }}
           placeholder="מספר רכב *"
           disabled={disabled}
-         className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"
+          className="col-span-3 sm:flex-1 sm:min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"
           onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
           onBlur={() => {
             if (!vehicleData?.found && plateNumber.replace(/[^0-9]/g, '').length >= 5) {
@@ -91,8 +91,8 @@ export function VehicleLookup({
         <button
           onClick={handleLookup}
           disabled={loading || plateNumber.length < 5 || disabled}
-          className="px-3 py-2 bg-[#33d4ff] text-white rounded-lg text-sm font-medium hover:bg-[#21b8e6] transition-colors disabled:opacity-50 flex items-center justify-center"
-        >
+          className="col-span-1 px-3 py-2 bg-[#33d4ff] text-white rounded-lg text-sm font-medium hover:bg-[#21b8e6] transition-colors disabled:opacity-50 flex items-center justify-center"
+          >
           {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
         </button>
 
@@ -101,8 +101,8 @@ export function VehicleLookup({
           value={vehicleType}
           onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
           disabled={vehicleData?.found || disabled}
-          className={`min-w-0 px-2 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
-            vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+          className={`col-span-2 sm:col-span-1 sm:min-w-[80px] px-2 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
+          vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
           } disabled:bg-gray-100`}
         >
           <option value="">סוג</option>
@@ -120,8 +120,8 @@ export function VehicleLookup({
             onChange={(e) => onVehicleCodeChange(e.target.value)}
             placeholder="קוד"
             disabled={disabled}
-            className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
-          />
+            className="col-span-2 sm:col-span-1 sm:w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+            />
         )}
       </div>
       
@@ -136,7 +136,7 @@ export function VehicleLookup({
               {vehicleData.data.manufacturer} {vehicleData.data.model}
             </span>
             {vehicleData.data.year && <span className="text-gray-600">{vehicleData.data.year}</span>}
-            <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
+            <span className="hidden sm:inline px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
               {vehicleData.sourceLabel}
             </span>
           </div>
