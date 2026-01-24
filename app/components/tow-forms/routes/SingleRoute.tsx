@@ -355,23 +355,23 @@ export function SingleRoute({
                 <span className="font-medium text-blue-800 text-sm">מידע מסלול</span>
               </div>
               <div className="p-4">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-800">
+                    <div className="text-xl sm:text-2xl font-bold text-gray-800">
                       {totalDistance.distanceKm}
                       <span className="text-sm font-normal text-gray-500 mr-1">ק״מ</span>
                     </div>
                     <div className="text-xs text-gray-500">מרחק</div>
                   </div>
-                  <div className="text-center border-x border-blue-200">
-                    <div className="text-2xl font-bold text-gray-800">
+                  <div className="text-center sm:border-x border-blue-200">
+                    <div className="text-xl sm:text-2xl font-bold text-gray-800">
                       {totalDistance.durationMinutes}
                       <span className="text-sm font-normal text-gray-500 mr-1">דק׳</span>
                     </div>
                     <div className="text-xs text-gray-500">זמן נסיעה</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-emerald-600">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">
                       ₪{Math.round((basePriceList?.[`base_price_${vehicleType || 'private'}`] || 180) + totalDistance.distanceKm * (basePriceList?.price_per_km || 12))}
                     </div>
                     <div className="text-xs text-gray-500">מחיר משוער</div>

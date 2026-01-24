@@ -67,7 +67,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="lg:hidden fixed top-0 right-0 left-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4">
+      <div className="lg:hidden fixed top-0 right-0 left-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 overflow-hidden">
         <button
           onClick={() => setIsOpen(true)}
           className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
@@ -98,7 +98,7 @@ export default function Sidebar() {
         fixed lg:static inset-y-0 right-0 z-50
         w-72 lg:w-64 bg-white min-h-screen flex flex-col border-l border-gray-200 shadow-lg lg:shadow-sm
         transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+        ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0 invisible lg:visible'}
       `}>
         
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">

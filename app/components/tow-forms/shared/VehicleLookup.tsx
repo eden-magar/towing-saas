@@ -78,7 +78,7 @@ export function VehicleLookup({
           }}
           placeholder="מספר רכב *"
           disabled={disabled}
-          className="flex-1 min-w-[120px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"
+         className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"
           onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
           onBlur={() => {
             if (!vehicleData?.found && plateNumber.replace(/[^0-9]/g, '').length >= 5) {
@@ -101,7 +101,7 @@ export function VehicleLookup({
           value={vehicleType}
           onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
           disabled={vehicleData?.found || disabled}
-          className={`min-w-[80px] px-2 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
+          className={`min-w-0 px-2 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
             vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
           } disabled:bg-gray-100`}
         >

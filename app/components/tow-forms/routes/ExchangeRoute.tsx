@@ -835,7 +835,7 @@ export function ExchangeRoute({
                 <span className="font-medium text-blue-800 text-sm">מידע מסלול</span>
               </div>
               <div className="p-4">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                   <div className="text-center">
                     <div className="text-xl sm:text-2xl font-bold text-gray-800">
                       {totalDistance.distanceKm}
