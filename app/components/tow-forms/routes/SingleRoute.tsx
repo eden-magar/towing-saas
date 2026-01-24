@@ -1,5 +1,5 @@
 'use client'
-
+import { useState } from 'react'
 
 import { VehicleLookup, DefectSelector, StartFromBase, TowTruckTypeSelector, ServiceSurchargeSelector, SelectedService } from '../shared'
 import { Loader2, Navigation, Package } from 'lucide-react'
@@ -132,6 +132,7 @@ export function SingleRoute({
   truckTypeSectionRef,
   truckTypeError = false,
 }: SingleRouteProps) {
+  const [showSurchargesModal, setShowSurchargesModal] = useState(false)
   
   const toggleLocationSurcharge = (id: string) => {
     if (selectedLocationSurcharges.includes(id)) {
@@ -300,7 +301,7 @@ export function SingleRoute({
           </div>
 
           {/* צ'קבוקסים - אחסנה + יציאה מהבסיס */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+           <div className="grid grid-cols-2 gap-2">
             {/* יעד לאחסנה */}
             {onDropoffToStorageChange && (
               <label className="flex items-center gap-2 cursor-pointer p-2 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors">
@@ -349,54 +350,93 @@ export function SingleRoute({
           )}
 
           {!distanceLoading && !baseToPickupLoading && totalDistance && (
-            <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl overflow-hidden">
-              <div className="px-4 py-2 bg-blue-100/50 border-b border-blue-200 flex items-center gap-2">
-                <Navigation size={16} className="text-blue-600" />
-                <span className="font-medium text-blue-800 text-sm">מידע מסלול</span>
-              </div>
-              <div className="p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
-                  <div className="text-center">
-                    <div className="text-xl sm:text-2xl font-bold text-gray-800">
-                      {totalDistance.distanceKm}
-                      <span className="text-sm font-normal text-gray-500 mr-1">ק״מ</span>
-                    </div>
-                    <div className="text-xs text-gray-500">מרחק</div>
-                  </div>
-                  <div className="text-center sm:border-x border-blue-200">
-                    <div className="text-xl sm:text-2xl font-bold text-gray-800">
-                      {totalDistance.durationMinutes}
-                      <span className="text-sm font-normal text-gray-500 mr-1">דק׳</span>
-                    </div>
-                    <div className="text-xs text-gray-500">זמן נסיעה</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">
-                      ₪{Math.round((basePriceList?.[`base_price_${vehicleType || 'private'}`] || 180) + totalDistance.distanceKm * (basePriceList?.price_per_km || 12))}
-                    </div>
-                    <div className="text-xs text-gray-500">מחיר משוער</div>
-                  </div>
-                </div>
-              </div>
+            <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+              <Navigation size={16} className="text-blue-600 flex-shrink-0" />
+              <span className="text-sm text-blue-800">
+                <span className="font-bold">{totalDistance.distanceKm}</span> ק״מ
+                <span className="mx-2">•</span>
+                <span className="font-bold">{totalDistance.durationMinutes}</span> דק׳
+              </span>
             </div>
           )}
 
           {/* תוספות זמן - אוטומטיות */}
           {activeTimeSurcharges.length > 0 && (
-            <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
-              <p className="text-sm font-medium text-orange-800 mb-2">🕐 תוספות זמן פעילות:</p>
-              <div className="flex flex-wrap gap-2">
-                {activeTimeSurcharges.map(s => (
-                  <span key={s.id} className="px-3 py-1 bg-orange-500 text-white rounded-full text-sm">
-                    {s.label} (+{s.surcharge_percent}%)
-                  </span>
-                ))}
+            <div className="flex items-center gap-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+              <span className="text-xs text-orange-700">🕐</span>
+              {activeTimeSurcharges.map(s => (
+                <span key={s.id} className="px-2 py-0.5 bg-orange-500 text-white rounded-full text-xs">
+                  {s.label} (+{s.surcharge_percent}%)
+                </span>
+              ))}
+            </div>
+          )}
+          {/* תוספות (חג + מיקום) - כפתור מובייל */}
+          <button
+            type="button"
+            onClick={() => setShowSurchargesModal(true)}
+            className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+          >
+            <span className="text-gray-600">
+              {isHoliday || selectedLocationSurcharges.length > 0
+                ? `${isHoliday ? '🎉 חג' : ''}${isHoliday && selectedLocationSurcharges.length > 0 ? ', ' : ''}${locationSurchargesData.filter(l => selectedLocationSurcharges.includes(l.id)).map(l => l.label).join(', ')}`
+                : 'תוספות חג/מיקום...'}
+            </span>
+            <span className="text-gray-400">▼</span>
+          </button>
+
+          {/* מודל מובייל - תוספות */}
+          {showSurchargesModal && (
+            <div className="sm:hidden fixed inset-0 bg-black/50 z-50 flex items-end">
+              <div className="bg-white w-full rounded-t-2xl max-h-[80vh] overflow-auto">
+                <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+                  <h3 className="font-bold text-gray-800">תוספות חג ומיקום</h3>
+                  <button type="button" onClick={() => setShowSurchargesModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
+                </div>
+                <div className="p-4 space-y-4">
+                  {/* חג */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">🎉 חג</p>
+                    <button 
+                      type="button"
+                      onClick={() => onIsHolidayChange(!isHoliday)} 
+                      className={`w-full p-3 rounded-xl text-sm transition-colors flex items-center justify-between ${
+                        isHoliday ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <span>סמן כחג</span>
+                      {isHoliday && <span>✓</span>}
+                    </button>
+                  </div>
+                  
+                  {/* מיקום */}
+                  {locationSurchargesData.filter(l => l.is_active).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">📍 תוספות מיקום</p>
+                      <div className="space-y-2">
+                        {locationSurchargesData.filter(l => l.is_active).map(s => (
+                          <button
+                            key={`modal-${s.id}`}
+                            type="button"
+                            onClick={() => toggleLocationSurcharge(s.id)}
+                            className={`w-full p-3 rounded-xl text-sm transition-colors flex items-center justify-between ${
+                              selectedLocationSurcharges.includes(s.id) ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            <span>{s.label} (+{s.surcharge_percent}%)</span>
+                            {selectedLocationSurcharges.includes(s.id) && <span>✓</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          {/* כפתור חג */}
-          <div className="flex items-center gap-3">
+          {/* דסקטופ - כפתור חג */}
+          <div className="hidden sm:flex items-center gap-3">
             <button 
               type="button"
               onClick={() => onIsHolidayChange(!isHoliday)} 
@@ -411,9 +451,9 @@ export function SingleRoute({
             )}
           </div>
 
-          {/* תוספות מיקום */}
+          {/* דסקטופ - תוספות מיקום */}
           {locationSurchargesData.filter(l => l.is_active).length > 0 && (
-            <div>
+            <div className="hidden sm:block">
               <p className="text-sm font-medium text-gray-700 mb-2">📍 תוספות מיקום:</p>
               <div className="flex flex-wrap gap-2">
                 {locationSurchargesData.filter(l => l.is_active).map(s => (
