@@ -6,17 +6,22 @@ import {
   X, 
   Trash2, 
   Check, 
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Car
 } from 'lucide-react'
 import { 
   uploadTowImage, 
   DriverTaskPoint,
+  DriverTaskVehicle,
   TowImageType
 } from '@/app/lib/queries/driver-tasks'
 
 interface StepCameraProps {
   towId: string
   point: DriverTaskPoint
+  vehicles: DriverTaskVehicle[]
   userId: string
   onComplete: () => Promise<void>
 }
@@ -72,6 +77,7 @@ async function compressImage(file: File, maxSizeMB: number = 1): Promise<File> {
 export default function StepCamera({
   towId,
   point,
+  vehicles,
   userId,
   onComplete
 }: StepCameraProps) {
@@ -79,21 +85,38 @@ export default function StepCamera({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   
-  const [images, setImages] = useState<{ file: File; url: string }[]>([])
+  // אינדקס הרכב הנוכחי
+  const [currentVehicleIndex, setCurrentVehicleIndex] = useState(0)
+  
+  // תמונות לכל רכב - מפתח הוא plate_number
+  const [imagesByVehicle, setImagesByVehicle] = useState<Record<string, { file: File; url: string }[]>>({})
+  
   const [uploading, setUploading] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
 
   const isPickup = point.point_type === 'pickup'
-  const title = 'צלם את הרכב'
-  const subtitle = 'מינימום 4 תמונות'
-  const minPhotos = 4
+  const minPhotosPerVehicle = 4
+  const currentVehicle = vehicles[currentVehicleIndex]
+  const currentVehicleKey = currentVehicle?.plate_number || `vehicle_${currentVehicleIndex}`
+  const currentImages = imagesByVehicle[currentVehicleKey] || []
 
   // קביעת סוג התמונה
   const getImageType = (): TowImageType => {
     return isPickup ? 'before_pickup' : 'before_dropoff'
   }
+
+  // בדיקה אם כל הרכבים צולמו
+  const allVehiclesComplete = vehicles.every(v => {
+    const key = v.plate_number || `vehicle_${vehicles.indexOf(v)}`
+    const imgs = imagesByVehicle[key] || []
+    return imgs.length >= minPhotosPerVehicle
+  })
+
+  // ספירת תמונות כוללת
+  const totalImages = Object.values(imagesByVehicle).reduce((sum, imgs) => sum + imgs.length, 0)
+  const totalRequired = vehicles.length * minPhotosPerVehicle
 
   // הפעלת המצלמה
   const startCamera = async () => {
@@ -102,7 +125,6 @@ export default function StepCamera({
     setCameraActive(true)
     
     try {
-      // נסה קודם מצלמה אחורית, אם לא עובד - כל מצלמה
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -114,7 +136,6 @@ export default function StepCamera({
           audio: false
         })
       } catch {
-        // fallback - כל מצלמה זמינה
         stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false
@@ -126,7 +147,6 @@ export default function StepCamera({
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         
-        // מחכים שהוידאו יטען
         videoRef.current.onloadedmetadata = async () => {
           try {
             await videoRef.current?.play()
@@ -157,7 +177,7 @@ export default function StepCamera({
     setCameraReady(false)
   }
 
-  // צילום תמונה מה-video stream
+  // צילום תמונה
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current || !cameraReady) return
 
@@ -166,20 +186,19 @@ export default function StepCamera({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // התאמת גודל הקנבס לגודל הוידאו
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
-    
-    // ציור הפריים הנוכחי
     ctx.drawImage(video, 0, 0)
 
-    // המרה לקובץ
     canvas.toBlob(
       (blob) => {
         if (blob) {
-          const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
+          const file = new File([blob], `photo_${currentVehicleKey}_${Date.now()}.jpg`, { type: 'image/jpeg' })
           const url = URL.createObjectURL(blob)
-          setImages(prev => [...prev, { file, url }])
+          setImagesByVehicle(prev => ({
+            ...prev,
+            [currentVehicleKey]: [...(prev[currentVehicleKey] || []), { file, url }]
+          }))
         }
       },
       'image/jpeg',
@@ -189,23 +208,40 @@ export default function StepCamera({
 
   // מחיקת תמונה
   const handleRemoveImage = (index: number) => {
-    setImages(prev => {
-      const newImages = [...prev]
-      URL.revokeObjectURL(newImages[index].url)
-      newImages.splice(index, 1)
-      return newImages
+    setImagesByVehicle(prev => {
+      const vehicleImages = [...(prev[currentVehicleKey] || [])]
+      URL.revokeObjectURL(vehicleImages[index].url)
+      vehicleImages.splice(index, 1)
+      return { ...prev, [currentVehicleKey]: vehicleImages }
     })
   }
 
-  // סיום וסגירת מצלמה
-  const handleDone = () => {
+  // מעבר לרכב הבא
+  const goToNextVehicle = () => {
+    if (currentVehicleIndex < vehicles.length - 1) {
+      setCurrentVehicleIndex(currentVehicleIndex + 1)
+    }
+  }
+
+  // מעבר לרכב הקודם
+  const goToPrevVehicle = () => {
+    if (currentVehicleIndex > 0) {
+      setCurrentVehicleIndex(currentVehicleIndex - 1)
+    }
+  }
+
+  // סיום צילום לרכב נוכחי
+  const handleDoneWithVehicle = () => {
     stopCamera()
+    if (currentVehicleIndex < vehicles.length - 1 && currentImages.length >= minPhotosPerVehicle) {
+      goToNextVehicle()
+    }
   }
 
   // שמירת כל התמונות
   const handleSaveAll = async () => {
-    if (images.length < minPhotos) {
-      alert(`יש לצלם לפחות ${minPhotos} תמונות`)
+    if (!allVehiclesComplete) {
+      alert(`יש לצלם לפחות ${minPhotosPerVehicle} תמונות לכל רכב`)
       return
     }
 
@@ -213,19 +249,24 @@ export default function StepCamera({
     try {
       const imageType = getImageType()
       
-      for (const img of images) {
-        const compressed = await compressImage(img.file)
-        await uploadTowImage(
-          towId,
-          userId,
-          imageType,
-          compressed,
-          point.id
-        )
+      for (const [vehicleKey, imgs] of Object.entries(imagesByVehicle)) {
+        for (const img of imgs) {
+          const compressed = await compressImage(img.file)
+          await uploadTowImage(
+            towId,
+            userId,
+            imageType,
+            compressed,
+            point.id,
+            vehicleKey // מעבירים את מספר הרכב
+          )
+        }
       }
 
       // ניקוי URLs
-      images.forEach(img => URL.revokeObjectURL(img.url))
+      Object.values(imagesByVehicle).forEach(imgs => {
+        imgs.forEach(img => URL.revokeObjectURL(img.url))
+      })
       
       await onComplete()
     } catch (error) {
@@ -240,19 +281,19 @@ export default function StepCamera({
   useEffect(() => {
     return () => {
       stopCamera()
-      images.forEach(img => URL.revokeObjectURL(img.url))
+      Object.values(imagesByVehicle).forEach(imgs => {
+        imgs.forEach(img => URL.revokeObjectURL(img.url))
+      })
     }
   }, [])
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
-      {/* Hidden Canvas for capturing */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Camera View - Full Screen */}
+      {/* Camera View */}
       {cameraActive && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col">
-          {/* Video Stream */}
           <video
             ref={videoRef}
             autoPlay
@@ -261,7 +302,6 @@ export default function StepCamera({
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
 
-          {/* Loading indicator */}
           {!cameraReady && !cameraError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black">
               <div className="text-center">
@@ -271,7 +311,6 @@ export default function StepCamera({
             </div>
           )}
 
-          {/* Error in camera view */}
           {cameraError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black">
               <div className="text-center p-6">
@@ -286,41 +325,45 @@ export default function StepCamera({
             </div>
           )}
 
-          {/* Top Bar - Counter & Close */}
-          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
-            <button
-              onClick={stopCamera}
-              className="bg-black/50 p-2 rounded-full"
-            >
-              <X size={24} className="text-white" />
-            </button>
-            <div className="bg-black/50 px-4 py-2 rounded-full">
-              <span className="text-white font-bold text-lg">
-                {images.length}/{minPhotos}
-              </span>
-            </div>
-            {images.length >= minPhotos && (
-              <button
-                onClick={handleDone}
-                className="bg-emerald-500 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2"
-              >
-                <Check size={20} />
-                סיימתי
+          {/* Top Bar */}
+          <div className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/60 to-transparent">
+            <div className="flex justify-between items-center">
+              <button onClick={stopCamera} className="bg-black/50 p-2 rounded-full">
+                <X size={24} className="text-white" />
               </button>
-            )}
+              
+              {/* Vehicle indicator */}
+              <div className="bg-black/50 px-4 py-2 rounded-full text-center">
+                <p className="text-white text-xs">{currentVehicle?.plate_number}</p>
+                <p className="text-white font-bold">{currentImages.length}/{minPhotosPerVehicle}</p>
+              </div>
+              
+              {currentImages.length >= minPhotosPerVehicle && (
+                <button
+                  onClick={handleDoneWithVehicle}
+                  className="bg-emerald-500 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2"
+                >
+                  <Check size={20} />
+                  {currentVehicleIndex < vehicles.length - 1 ? 'רכב הבא' : 'סיימתי'}
+                </button>
+              )}
+            </div>
+            
+            {/* Vehicle name */}
+            <div className="mt-2 text-center">
+              <p className="text-white/80 text-sm">
+                רכב {currentVehicleIndex + 1}/{vehicles.length}: {currentVehicle?.manufacturer} {currentVehicle?.model}
+              </p>
+            </div>
           </div>
 
-          {/* Thumbnails Strip */}
-          {images.length > 0 && (
-            <div className="absolute top-20 left-0 right-0 px-4">
+          {/* Thumbnails */}
+          {currentImages.length > 0 && (
+            <div className="absolute top-28 left-0 right-0 px-4">
               <div className="flex gap-2 overflow-x-auto pb-2">
-                {images.map((img, idx) => (
+                {currentImages.map((img, idx) => (
                   <div key={idx} className="relative flex-shrink-0">
-                    <img 
-                      src={img.url} 
-                      className="w-14 h-14 object-cover rounded-lg border-2 border-white/50" 
-                      alt={`תמונה ${idx + 1}`} 
-                    />
+                    <img src={img.url} className="w-14 h-14 object-cover rounded-lg border-2 border-white/50" alt={`תמונה ${idx + 1}`} />
                     <button
                       onClick={() => handleRemoveImage(idx)}
                       className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center"
@@ -345,13 +388,14 @@ export default function StepCamera({
             </div>
           )}
 
-          {/* Instructions */}
           {cameraReady && (
             <div className="absolute bottom-32 left-0 right-0 text-center">
               <p className="text-white/80 text-sm">
-                {images.length < minPhotos 
-                  ? `צלם עוד ${minPhotos - images.length} תמונות`
-                  : 'אפשר להמשיך לצלם או ללחוץ "סיימתי"'
+                {currentImages.length < minPhotosPerVehicle 
+                  ? `צלם עוד ${minPhotosPerVehicle - currentImages.length} תמונות לרכב זה`
+                  : currentVehicleIndex < vehicles.length - 1
+                    ? 'לחץ "רכב הבא" להמשיך'
+                    : 'לחץ "סיימתי" לסיום'
                 }
               </p>
             </div>
@@ -359,34 +403,93 @@ export default function StepCamera({
         </div>
       )}
 
-      {/* Main Screen - When camera is not active */}
+      {/* Main Screen */}
       {!cameraActive && (
         <>
-          {/* Header Info */}
           <div className="px-5 pt-2 pb-6 text-white text-center">
-            <h1 className="text-2xl font-bold mb-1">{title}</h1>
-            <p className="text-white/80">{subtitle}</p>
+            <h1 className="text-2xl font-bold mb-1">צלם את הרכבים</h1>
+            <p className="text-white/80">{minPhotosPerVehicle} תמונות לכל רכב</p>
           </div>
 
-          {/* Content */}
           <div className="flex-1 bg-slate-900 rounded-t-3xl px-5 pt-6 pb-32">
-            {/* Status */}
-            <div className="flex items-center justify-center gap-2 mb-6">
-              {images.length >= minPhotos ? (
-                <div className="flex items-center gap-2 text-emerald-400">
-                  <Check size={20} />
-                  <span className="font-medium">{images.length} תמונות צולמו</span>
+            {/* Vehicle Selector */}
+            {vehicles.length > 1 && (
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={goToPrevVehicle}
+                  disabled={currentVehicleIndex === 0}
+                  className="p-2 bg-slate-800 rounded-lg disabled:opacity-30"
+                >
+                  <ChevronRight size={20} className="text-white" />
+                </button>
+                
+                <div className="text-center">
+                  <p className="text-white font-bold">
+                    רכב {currentVehicleIndex + 1}/{vehicles.length}
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    {currentVehicle?.manufacturer} {currentVehicle?.model}
+                  </p>
                 </div>
-              ) : (
-                <span className="text-gray-400">
-                  {images.length}/{minPhotos} תמונות
-                </span>
-              )}
+                
+                <button
+                  onClick={goToNextVehicle}
+                  disabled={currentVehicleIndex === vehicles.length - 1}
+                  className="p-2 bg-slate-800 rounded-lg disabled:opacity-30"
+                >
+                  <ChevronLeft size={20} className="text-white" />
+                </button>
+              </div>
+            )}
+
+            {/* Current Vehicle Card */}
+            <div className="bg-slate-800 rounded-2xl p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-slate-700 rounded-xl flex items-center justify-center">
+                  <Car size={24} className="text-slate-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-white">{currentVehicle?.plate_number}</p>
+                  <p className="text-gray-400 text-sm">{currentVehicle?.manufacturer} {currentVehicle?.model}</p>
+                </div>
+                <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                  currentImages.length >= minPhotosPerVehicle 
+                    ? 'bg-emerald-500 text-white' 
+                    : 'bg-slate-700 text-gray-300'
+                }`}>
+                  {currentImages.length}/{minPhotosPerVehicle}
+                </div>
+              </div>
             </div>
 
+            {/* Progress for all vehicles */}
+            {vehicles.length > 1 && (
+              <div className="mb-4">
+                <div className="flex gap-1">
+                  {vehicles.map((v, idx) => {
+                    const key = v.plate_number || `vehicle_${idx}`
+                    const imgs = imagesByVehicle[key] || []
+                    const complete = imgs.length >= minPhotosPerVehicle
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => setCurrentVehicleIndex(idx)}
+                        className={`flex-1 h-2 rounded-full cursor-pointer ${
+                          complete ? 'bg-emerald-500' : idx === currentVehicleIndex ? 'bg-purple-500' : 'bg-slate-700'
+                        }`}
+                      />
+                    )
+                  })}
+                </div>
+                <p className="text-center text-gray-500 text-xs mt-2">
+                  {totalImages}/{totalRequired} תמונות סה"כ
+                </p>
+              </div>
+            )}
+
             {/* Images Grid */}
-            {images.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16">
+            {currentImages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
                 <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
                   <Camera size={40} className="text-slate-600" />
                 </div>
@@ -401,7 +504,7 @@ export default function StepCamera({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {images.map((img, idx) => (
+                {currentImages.map((img, idx) => (
                   <div key={idx} className="relative aspect-square bg-slate-800 rounded-2xl overflow-hidden">
                     <img src={img.url} className="w-full h-full object-cover" alt={`תמונה ${idx + 1}`} />
                     <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-full">
@@ -416,8 +519,7 @@ export default function StepCamera({
                   </div>
                 ))}
                 
-                {/* Add More Button */}
-                {images.length < 8 && (
+                {currentImages.length < 8 && (
                   <button
                     onClick={startCamera}
                     className="aspect-square bg-slate-800 rounded-2xl flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700"
@@ -430,9 +532,9 @@ export default function StepCamera({
             )}
           </div>
 
-          {/* Bottom Actions - Fixed */}
+          {/* Bottom Actions */}
           <div className="fixed bottom-0 left-0 right-0 bg-slate-900 p-4 pb-28">
-            {images.length > 0 && (
+            {currentImages.length > 0 && (
               <div className="flex gap-3">
                 <button
                   onClick={startCamera}
@@ -443,7 +545,7 @@ export default function StepCamera({
                 </button>
                 <button
                   onClick={handleSaveAll}
-                  disabled={uploading || images.length < minPhotos}
+                  disabled={uploading || !allVehiclesComplete}
                   className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {uploading ? (
@@ -466,7 +568,7 @@ export default function StepCamera({
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 flex flex-col items-center gap-3">
             <Loader2 size={40} className="animate-spin text-purple-600" />
-            <p className="font-medium text-gray-700">מעלה {images.length} תמונות...</p>
+            <p className="font-medium text-gray-700">מעלה {totalImages} תמונות...</p>
           </div>
         </div>
       )}

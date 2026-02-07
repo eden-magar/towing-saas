@@ -359,7 +359,7 @@ export interface TruckWithDetails extends TowTruck {
 
 export type PointType = 'pickup' | 'dropoff'
 
-export type PointStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
+export type PointStatus = 'pending' | 'en_route' | 'arrived' | 'completed' | 'skipped'
 
 export type PointVehicleAction = 'pickup' | 'dropoff'
 

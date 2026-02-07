@@ -250,7 +250,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
         {pointStep === 'on_the_way' && currentPoint && (
           <StepOnTheWay
             point={currentPoint}
-            vehicle={task.vehicles[0]}
+            vehicles={task.vehicles}
             customer={task.customer}
             totalPoints={totalPoints}
             currentIndex={currentPointIndex}
@@ -262,6 +262,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           <StepCamera
             towId={task.id}
             point={currentPoint}
+            vehicles={task.vehicles}
             userId={user?.id || ''}
             onComplete={handleCameraComplete}
           />

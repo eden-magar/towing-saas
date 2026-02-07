@@ -16,7 +16,7 @@ import { DriverTaskPoint, DriverTaskVehicle } from '@/app/lib/queries/driver-tas
 
 interface StepOnTheWayProps {
   point: DriverTaskPoint
-  vehicle: DriverTaskVehicle | undefined
+  vehicles: DriverTaskVehicle[]
   customer: { name: string; phone: string | null } | null
   totalPoints: number
   currentIndex: number
@@ -25,7 +25,7 @@ interface StepOnTheWayProps {
 
 export default function StepOnTheWay({
   point,
-  vehicle,
+  vehicles,
   customer,
   totalPoints,
   currentIndex,
@@ -35,6 +35,8 @@ export default function StepOnTheWay({
   const [showRoute, setShowRoute] = useState(false)
 
   const isPickup = point.point_type === 'pickup'
+
+  
   const title = isPickup ? 'בדרך לאיסוף' : 'בדרך לפריקה'
   const subtitle = point.address || 'כתובת לא צוינה'
 
@@ -46,10 +48,10 @@ export default function StepOnTheWay({
   // פתיחת WhatsApp
   const openWhatsApp = (phone: string) => {
     const phoneClean = phone.replace(/^0/, '972').replace(/-/g, '')
-    const vehicleInfo = vehicle?.plate_number || ''
+    const vehicleInfo = vehicles.length > 0 ? vehicles.map(v => v.plate_number).join(', ') : ''
     const message = isPickup 
-      ? `שלום, אני הגרריסט בדרך לאסוף את הרכב ${vehicleInfo}`
-      : `שלום, אני הגרריסט בדרך למסור את הרכב ${vehicleInfo}`
+      ? `שלום, אני הגררסיט בדרך לאסוף את הרכב ${vehicleInfo}`
+      : `שלום, אני הגררסיט בדרך למסור את הרכב ${vehicleInfo}`
     window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
@@ -93,20 +95,35 @@ export default function StepOnTheWay({
           ))}
         </div>
 
-        {/* Vehicle Info */}
-        {vehicle && (
-          <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
-                <Car size={24} className="text-gray-500" />
+        {/* Vehicles Info - תמיכה בריבוי רכבים */}
+        {vehicles.length > 0 && (
+          <div className="space-y-3 mb-4">
+            <p className="text-sm text-gray-500 font-medium">
+              {vehicles.length > 1 ? `${vehicles.length} רכבים` : 'רכב'}
+            </p>
+            {vehicles.map((vehicle, idx) => (
+              <div key={vehicle.id || idx} className="bg-white rounded-2xl p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
+                    <Car size={24} className="text-gray-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-800">
+                      {vehicle.manufacturer} {vehicle.model}
+                    </p>
+                    <p className="text-gray-500 font-mono">{vehicle.plate_number}</p>
+                    {vehicle.color && (
+                      <p className="text-sm text-gray-400">{vehicle.color}</p>
+                    )}
+                  </div>
+                  {vehicles.length > 1 && (
+                    <div className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">
+                      {idx + 1}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-gray-800">
-                  {vehicle.manufacturer} {vehicle.model}
-                </p>
-                <p className="text-gray-500 font-mono">{vehicle.plate_number}</p>
-              </div>
-            </div>
+            ))}
           </div>
         )}
 

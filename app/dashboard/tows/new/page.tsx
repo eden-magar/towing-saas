@@ -1237,7 +1237,7 @@ function NewTowForm() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6 overflow-x-hidden">
+      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-6 overflow-x-hidden">
         {/* Driver Pre-Selected Banner */}
         {preSelectedDriverId && drivers.length > 0 && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
