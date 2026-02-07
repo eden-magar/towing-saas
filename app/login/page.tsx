@@ -51,6 +51,8 @@ export default function LoginPage() {
       window.location.href = '/driver'
     } else if (userData.role === 'super_admin') {
       window.location.href = '/superadmin'
+    } else if (userData.role === 'customer') {
+      window.location.href = '/customer'
     } else {
       window.location.href = '/dashboard'
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { 
   Search, 
@@ -24,6 +25,7 @@ import {
 
 export default function CustomersPage() {
   const { companyId } = useAuth()
+  const router = useRouter()
 
   // Data states
   const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
@@ -439,7 +441,7 @@ export default function CustomersPage() {
                     {customer.open_balance > 0 && (
                       <span className="font-medium text-red-600">{customer.open_balance.toLocaleString()} ש״ח</span>
                     )}
-                    <button onClick={() => handleEditCustomer(customer)} className="p-2 text-gray-400">
+                    <button onClick={() => router.push(`/dashboard/customers/${customer.id}`)} className="p-2 text-gray-400">
                       <ChevronLeft size={20} />
                     </button>
                   </div>

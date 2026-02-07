@@ -474,3 +474,75 @@ export interface DriverActiveTow {
   points: DriverTowPoint[]
   total_vehicles: number
 }
+
+
+// ==================== CUSTOMER PORTAL ====================
+
+export type CustomerUserRole = 'admin' | 'manager' | 'viewer'
+
+export interface CustomerUser {
+  id: string
+  customer_id: string
+  user_id: string
+  role: CustomerUserRole
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerUserWithDetails extends CustomerUser {
+  user: {
+    full_name: string
+    email: string
+    phone: string | null
+  }
+}
+
+export interface CustomerPortalTow {
+  id: string
+  order_number: string | null
+  status: TowStatus
+  tow_type: TowType
+  scheduled_at: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  vehicles: {
+    plate_number: string
+    manufacturer: string | null
+    model: string | null
+    color: string | null
+  }[]
+  points: {
+    id: string
+    point_order: number
+    point_type: PointType
+    address: string | null
+    status: PointStatus
+    arrived_at: string | null
+    completed_at: string | null
+  }[]
+  driver: {
+    full_name: string
+    phone: string | null
+  } | null
+}
+
+export interface CustomerPortalTowDetail extends CustomerPortalTow {
+  notes: string | null
+  points: (CustomerPortalTow['points'][0] & {
+    contact_name: string | null
+    contact_phone: string | null
+    recipient_name: string | null
+    recipient_phone: string | null
+    notes: string | null
+  })[]
+  images: {
+    id: string
+    image_url: string
+    image_type: ImageType
+    tow_point_id: string | null
+    tow_vehicle_id: string | null
+    created_at: string
+  }[]
+}
