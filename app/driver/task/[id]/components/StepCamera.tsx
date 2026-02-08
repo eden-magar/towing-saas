@@ -426,9 +426,8 @@ export default function StepCamera({
       {/* Main Screen */}
       {!cameraActive && (
         <>
-          <div className="px-5 pt-2 pb-6 text-white text-center">
-            <h1 className="text-2xl font-bold mb-1">צלם את הרכבים</h1>
-            <p className="text-white/80">{minPhotosPerVehicle} תמונות לכל רכב</p>
+          <div className="px-5 pt-1 pb-2 text-white text-center">
+            <h1 className="text-lg font-bold">צלם את הרכבים</h1>
           </div>
 
           <div className="flex-1 bg-slate-900 rounded-t-3xl px-5 pt-6 pb-32">
@@ -509,7 +508,7 @@ export default function StepCamera({
 
             {/* Images Grid */}
             {currentImages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-6">
+               <div className="flex flex-col items-center justify-center py-3">
                 <button
                   onClick={startCamera}
                   className="w-20 h-20 bg-purple-600 rounded-2xl flex items-center justify-center mb-3 active:scale-95 transition-transform"
