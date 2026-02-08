@@ -1074,6 +1074,47 @@ export default function TowDetailsPage() {
                                   )}
                                 </div>
                               )}
+
+                              {/* סטטוס נקודה */}
+                              {point.status && point.status !== 'pending' && (
+                                <div className="mt-2 pt-2 border-t border-gray-200/50 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      point.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                      point.status === 'arrived' ? 'bg-blue-100 text-blue-700' :
+                                      'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {point.status === 'completed' ? 'הושלם' : point.status === 'arrived' ? 'הנהג הגיע' : point.status}
+                                    </span>
+                                    {point.arrived_at && (
+                                      <span className="text-xs text-gray-400">הגעה: {new Date(point.arrived_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    )}
+                                    {point.completed_at && (
+                                      <span className="text-xs text-gray-400">סיום: {new Date(point.completed_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    )}
+                                  </div>
+                                  {point.recipient_name && (
+                                    <div className="text-sm text-gray-500">מקבל: {point.recipient_name} {point.recipient_phone && `(${point.recipient_phone})`}</div>
+                                  )}
+                                  {point.notes && (
+                                    <div className="text-sm text-gray-500">הערות: {point.notes}</div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* תמונות נקודה */}
+                              {point.images && point.images.length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-gray-200/50">
+                                  <div className="text-xs text-gray-400 mb-1">{point.images.length} תמונות</div>
+                                  <div className="flex gap-2 overflow-x-auto">
+                                    {point.images.map((img: any) => (
+                                      <a key={img.id} href={img.image_url} target="_blank" rel="noopener noreferrer">
+                                        <img src={img.image_url} alt={img.image_type} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
