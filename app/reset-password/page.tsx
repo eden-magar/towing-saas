@@ -1,37 +1,36 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { Lock, Check, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
+  const handleReset = async () => {
+    if (password.length < 6) {
+      setError('הסיסמה חייבת להכיל לפחות 6 תווים')
+      return
+    }
     if (password !== confirmPassword) {
       setError('הסיסמאות לא תואמות')
       return
     }
 
-    if (password.length < 6) {
-      setError('הסיסמה חייבת להכיל לפחות 6 תווים')
-      return
-    }
-
     setLoading(true)
+    setError('')
 
-    const { error } = await supabase.auth.updateUser({
+    const { error: updateError } = await supabase.auth.updateUser({
       password: password
     })
 
-    if (error) {
-      setError('שגיאה בעדכון הסיסמה. נסי שוב.')
+    if (updateError) {
+      setError(updateError.message)
       setLoading(false)
       return
     }
@@ -40,78 +39,84 @@ export default function ResetPasswordPage() {
     setLoading(false)
   }
 
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check size={32} className="text-emerald-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">הסיסמה עודכנה!</h1>
+          <p className="text-gray-500 mb-6">הסיסמה שונתה בהצלחה. ניתן להתחבר עם הסיסמה החדשה.</p>
+          <a
+            href="/login"
+            className="block w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] transition-colors"
+          >
+            התחבר
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        
-        {/* כותרת */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">איפוס סיסמה</h1>
-          <p className="text-slate-400">הזיני סיסמה חדשה</p>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock size={32} className="text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">איפוס סיסמה</h1>
+          <p className="text-gray-500 mt-2">הזיני סיסמה חדשה</p>
         </div>
 
-        {/* הודעת הצלחה */}
-        {success ? (
-          <div className="bg-slate-800 rounded-xl p-6 text-center">
-            <div className="text-green-400 text-5xl mb-4">✅</div>
-            <h2 className="text-xl font-semibold mb-2">הסיסמה עודכנה!</h2>
-            <p className="text-slate-400 mb-4">את יכולה להתחבר עם הסיסמה החדשה.</p>
-            <a 
-              href="/login" 
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
-            >
-              להתחברות
-            </a>
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-sm">
+            <AlertCircle size={16} />
+            {error}
           </div>
-        ) : (
-          /* טופס */
-          <form onSubmit={handleSubmit} className="bg-slate-800 rounded-xl p-6 space-y-4">
-            
-            {/* שגיאה */}
-            {error && (
-              <div className="bg-red-500/20 border border-red-500 text-red-300 p-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            {/* סיסמה חדשה */}
-            <div>
-              <label className="block text-sm font-medium mb-2">סיסמה חדשה</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            {/* אישור סיסמה */}
-            <div>
-              <label className="block text-sm font-medium mb-2">אישור סיסמה</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            {/* כפתור שמירה */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-medium py-3 rounded-lg transition-colors"
-            >
-              {loading ? 'שומר...' : 'שמור סיסמה חדשה'}
-            </button>
-
-          </form>
         )}
 
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">סיסמה חדשה</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-gray-800"
+                placeholder="לפחות 6 תווים"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">אימות סיסמה</label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-gray-800"
+              placeholder="הזיני שוב את הסיסמה"
+            />
+          </div>
+
+          <button
+            onClick={handleReset}
+            disabled={loading || !password || !confirmPassword}
+            className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] transition-colors disabled:opacity-50"
+          >
+            {loading ? 'מעדכן...' : 'עדכן סיסמה'}
+          </button>
+        </div>
       </div>
     </div>
   )
