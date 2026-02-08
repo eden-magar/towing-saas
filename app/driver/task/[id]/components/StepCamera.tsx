@@ -120,49 +120,35 @@ export default function StepCamera({
 
   // הפעלת המצלמה
   const startCamera = async () => {
-    setCameraError(null)
-    setCameraReady(false)
-    setCameraActive(true)
-    
+  setCameraError(null)
+  setCameraReady(false)
+  setCameraActive(true)
+  
+  try {
+    let stream: MediaStream
     try {
-      let stream: MediaStream
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: { exact: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        })
-      } catch {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        })
-      }
-      
-      streamRef.current = stream
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        
-        videoRef.current.onloadedmetadata = async () => {
-          try {
-            await videoRef.current?.play()
-            setCameraReady(true)
-          } catch (playError) {
-            console.error('Play error:', playError)
-            setCameraError('שגיאה בהפעלת המצלמה')
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Camera error:', error)
-      setCameraError('לא ניתן לגשת למצלמה. אנא אשר הרשאות.')
-      setCameraActive(false)
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      })
+    } catch {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false
+      })
     }
+    
+    streamRef.current = stream
+  } catch (error) {
+    console.error('Camera error:', error)
+    setCameraError('לא ניתן לגשת למצלמה. אנא אשר הרשאות.')
+    setCameraActive(false)
   }
+}
 
   // עצירת המצלמה
   const stopCamera = () => {
@@ -286,6 +272,36 @@ export default function StepCamera({
       })
     }
   }, [])
+
+  useEffect(() => {
+  if (!cameraActive || !streamRef.current || !videoRef.current) return
+  
+  const video = videoRef.current
+  const stream = streamRef.current
+  
+  video.srcObject = stream
+  
+  const timeout = setTimeout(() => {
+    if (!cameraReady) {
+      setCameraError('שגיאה בהפעלת המצלמה. נסה שוב.')
+      stopCamera()
+    }
+  }, 8000)
+  
+  video.onloadedmetadata = async () => {
+    try {
+      await video.play()
+      setCameraReady(true)
+      clearTimeout(timeout)
+    } catch (playError) {
+      console.error('Play error:', playError)
+      setCameraError('שגיאה בהפעלת המצלמה')
+      stopCamera()
+    }
+  }
+  
+  return () => clearTimeout(timeout)
+}, [cameraActive])
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
