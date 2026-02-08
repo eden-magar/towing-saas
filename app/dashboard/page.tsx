@@ -330,6 +330,7 @@ export default function DashboardPage() {
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מס' הזמנה</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">רכב</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מסלול</th>
@@ -351,6 +352,7 @@ export default function DashboardPage() {
                         <td className="px-4 py-3 text-gray-600 text-sm">
                           {new Date(tow.created_at).toLocaleDateString('he-IL')}
                         </td>
+                        <td className="px-4 py-3 font-mono text-gray-500 text-sm">{tow.order_number || '-'}</td>
                         <td className="px-4 py-3 font-mono text-gray-600">{getFirstVehicle(tow)}</td>
                         <td className="px-4 py-3 text-gray-600">{tow.customer?.name || '-'}</td>
                         <td className="px-4 py-3">

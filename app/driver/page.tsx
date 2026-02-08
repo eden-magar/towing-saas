@@ -411,6 +411,9 @@ export default function DriverHomePage() {
                       <div>
                         <div>
                           <div className="font-medium text-gray-800">{getVehicleInfo(task).name}</div>
+                          {task.order_number && (
+                        <div className="text-xs font-mono text-gray-400">#{task.order_number}</div>
+                      )}
                           {getVehicleInfo(task).plate && (
                             <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-mono px-2 py-0.5 rounded mt-1">
                               {getVehicleInfo(task).plate}
