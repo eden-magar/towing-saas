@@ -509,18 +509,14 @@ export default function StepCamera({
 
             {/* Images Grid */}
             {currentImages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-20 h-20 bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-                  <Camera size={40} className="text-slate-600" />
-                </div>
-                <p className="text-gray-500 mb-6">לחץ לפתיחת המצלמה</p>
+              <div className="flex flex-col items-center justify-center py-6">
                 <button
                   onClick={startCamera}
-                  className="px-8 py-4 bg-purple-600 text-white rounded-2xl font-bold text-lg flex items-center gap-2"
+                  className="w-20 h-20 bg-purple-600 rounded-2xl flex items-center justify-center mb-3 active:scale-95 transition-transform"
                 >
-                  <Camera size={22} />
-                  פתח מצלמה
+                  <Camera size={36} className="text-white" />
                 </button>
+                <p className="text-gray-400 text-sm">לחץ לפתיחת המצלמה</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
