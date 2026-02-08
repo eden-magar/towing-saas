@@ -290,10 +290,13 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
           is_working
         )
       ),
-      images:tow_point_images (
+      images:tow_images (
         id,
         image_url,
         image_type,
+        tow_point_id,
+        tow_vehicle_id,
+        notes,
         created_at
       )
     `)
@@ -763,7 +766,7 @@ export async function deleteTow(towId: string) {
   
   if (points && points.length > 0) {
     const pointIds = points.map(p => p.id)
-    await supabase.from('tow_point_images').delete().in('tow_point_id', pointIds)
+    await supabase.from('tow_images').delete().in('tow_point_id', pointIds)
     await supabase.from('tow_point_vehicles').delete().in('tow_point_id', pointIds)
   }
   await supabase.from('tow_points').delete().eq('tow_id', towId)
