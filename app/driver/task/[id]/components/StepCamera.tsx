@@ -95,6 +95,8 @@ export default function StepCamera({
   const [cameraActive, setCameraActive] = useState(false)
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
+  const [streamReady, setStreamReady] = useState(false)
+
 
   const isPickup = point.point_type === 'pickup'
   const minPhotosPerVehicle = 4
@@ -143,6 +145,7 @@ export default function StepCamera({
     }
     
     streamRef.current = stream
+    setStreamReady(true)
   } catch (error) {
     console.error('Camera error:', error)
     setCameraError('לא ניתן לגשת למצלמה. אנא אשר הרשאות.')
@@ -160,6 +163,7 @@ export default function StepCamera({
       videoRef.current.srcObject = null
     }
     setCameraActive(false)
+    setStreamReady(false)
     setCameraReady(false)
   }
 
@@ -301,7 +305,7 @@ export default function StepCamera({
   }
   
   return () => clearTimeout(timeout)
-}, [cameraActive])
+}, [cameraActive, streamReady])
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
