@@ -66,10 +66,16 @@ export default function TowsPage() {
       const driverName = tow.driver?.user?.full_name?.toLowerCase() || ''
       const orderNum = tow.order_number?.toLowerCase() || ''
       
+      // חיפוש עם # מחפש רק מספר הזמנה
+      if (query.startsWith('#')) {
+        const orderQuery = query.slice(1)
+        return orderNum.startsWith(orderQuery)
+      }
+      
       if (!vehiclePlate.includes(query) && 
           !customerName.includes(query) && 
           !driverName.includes(query) &&
-          !orderNum.includes(query)) {
+          !orderNum.startsWith(query)) {
         return false
       }
     }

@@ -344,7 +344,9 @@ export default function DriverHomePage() {
                     <Navigation size={24} />
                   </div>
                   <div>
-                    <div className="text-sm text-cyan-100">משימה פעילה</div>
+                    <div className="text-sm text-cyan-100">
+                      משימה פעילה {currentTask.order_number && `#${currentTask.order_number}`}
+                    </div>
                     <div className="font-bold">{getVehicleInfo(currentTask).name}</div>
                     {getVehicleInfo(currentTask).plate && (
                       <span className="bg-white/20 text-xs font-mono px-2 py-0.5 rounded">
