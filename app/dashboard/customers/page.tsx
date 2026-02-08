@@ -335,7 +335,7 @@ export default function CustomersPage() {
 
         <div className="divide-y divide-gray-100">
           {filteredCustomers.map((customer) => (
-            <div key={customer.id} className="px-5 py-4 hover:bg-gray-50 transition-colors">
+            <div key={customer.id} className="px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/customers/${customer.id}`)}>
               {/* Desktop */}
               <div className="hidden lg:grid lg:grid-cols-12 gap-4 items-center">
                 <div className="col-span-3">
