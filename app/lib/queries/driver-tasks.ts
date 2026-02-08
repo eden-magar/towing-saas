@@ -43,6 +43,7 @@ export interface DriverTaskPoint {
   recipient_name: string | null
   recipient_phone: string | null
   notes: string | null
+  point_vehicles?: { id: string; tow_vehicle_id: string; action: string }[]
 }
 
 export interface DriverTask {
@@ -412,10 +413,17 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     .eq('tow_id', towId)
     .order('leg_order', { ascending: true })
 
-  // שליפת נקודות
+  // שליפת נקודות עם רכבים משויכים
   const { data: points } = await supabase
     .from('tow_points')
-    .select('*')
+    .select(`
+      *,
+      point_vehicles:tow_point_vehicles (
+        id,
+        tow_vehicle_id,
+        action
+      )
+    `)
     .eq('tow_id', towId)
     .order('point_order', { ascending: true })
 

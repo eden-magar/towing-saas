@@ -91,6 +91,12 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // הנקודה הנוכחית
   const currentPoint = task?.points[currentPointIndex] || null
+  const currentPointVehicles = (() => {
+    if (!currentPoint?.point_vehicles?.length) return task?.vehicles || []
+    const pointVehicleIds = currentPoint.point_vehicles.map((pv: any) => pv.tow_vehicle_id)
+    const filtered = (task?.vehicles || []).filter((v: any) => pointVehicleIds.includes(v.id))
+    return filtered.length > 0 ? filtered : task?.vehicles || []
+  })()
   const totalPoints = task?.points.length || 0
 
   // הגעתי לנקודה
@@ -250,7 +256,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
         {pointStep === 'on_the_way' && currentPoint && (
           <StepOnTheWay
             point={currentPoint}
-            vehicles={task.vehicles}
+            vehicles={currentPointVehicles}
             customer={task.customer}
             totalPoints={totalPoints}
             currentIndex={currentPointIndex}
@@ -262,7 +268,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           <StepCamera
             towId={task.id}
             point={currentPoint}
-            vehicles={task.vehicles}
+            vehicles={currentPointVehicles}
             userId={user?.id || ''}
             onComplete={handleCameraComplete}
           />
