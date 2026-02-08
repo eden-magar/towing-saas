@@ -411,7 +411,7 @@ export default function CustomerDetailPage() {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className={`font-medium ${cu.is_active ? 'text-gray-800' : 'text-gray-400'}`}>
-                                {cu.user.full_name}
+                                {cu.user?.full_name || 'ללא שם'}
                               </span>
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${roleCfg.bg} ${roleCfg.color}`}>
                                 {roleCfg.label}
@@ -423,8 +423,8 @@ export default function CustomerDetailPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
-                              <span>{cu.user.email}</span>
-                              {cu.user.phone && <span>{cu.user.phone}</span>}
+                              <span>{cu.user?.email}</span>
+                              {cu.user?.phone && <span>{cu.user.phone}</span>}
                             </div>
                           </div>
                         </div>
