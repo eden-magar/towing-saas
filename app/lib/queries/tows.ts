@@ -626,6 +626,8 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
   if (input.priceBreakdown !== undefined) towUpdates.price_breakdown = input.priceBreakdown
   if (input.requiredTruckTypes !== undefined) towUpdates.required_truck_types = input.requiredTruckTypes
+  if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
+
 
   if (Object.keys(towUpdates).length > 0) {
     const { error: towError } = await supabase

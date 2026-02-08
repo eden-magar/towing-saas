@@ -258,7 +258,7 @@ export default function StepCamera({
             imageType,
             compressed,
             point.id,
-            vehicleKey // מעבירים את מספר הרכב
+            vehicles.find(v => v.plate_number === vehicleKey)?.id
           )
         }
       }
