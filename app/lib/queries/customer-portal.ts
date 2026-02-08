@@ -26,8 +26,7 @@ export async function getCustomerForUser(userId: string) {
     .eq('is_active', true)
     .single()
 
-  if (error || !data) return null
-
+  if (error || !data || !data.customer) return null
   return {
     customerId: (data.customer as any).id,
     customerName: (data.customer as any).name,
