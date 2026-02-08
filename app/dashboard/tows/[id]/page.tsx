@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverSchedulePicker } from '../../../components/DriverSchedulePicker'
@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, TowWithDetails } from '../../../lib/queries/tows'
+import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
@@ -139,6 +140,37 @@ export default function TowDetailsPage() {
       loadData()
     }
   }, [companyId, towId])
+
+  // Realtime - עדכון חי כשהנהג מעדכן
+  useEffect(() => {
+    if (!towId) return
+
+    const channel = supabase
+      .channel(`tow-realtime-${towId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tow_points',
+        filter: `tow_id=eq.${towId}`
+      }, () => loadData())
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tow_images',
+        filter: `tow_id=eq.${towId}`
+      }, () => loadData())
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'tows',
+        filter: `id=eq.${towId}`
+      }, () => loadData())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [towId])
 
   const loadData = async () => {
     if (!companyId) return

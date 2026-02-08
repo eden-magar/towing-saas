@@ -62,6 +62,25 @@ export default function DriverHomePage() {
     }
   }, [authLoading, user])
 
+  // Realtime - גרירות חדשות/עדכונים בזמן אמת
+  useEffect(() => {
+    if (!driverInfo?.id) return
+
+    const channel = supabase
+      .channel(`driver-realtime-${driverInfo.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tows',
+        filter: `driver_id=eq.${driverInfo.id}`
+      }, () => loadData())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [driverInfo?.id])
+
   const loadData = async () => {
     if (!user) return
     
