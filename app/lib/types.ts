@@ -163,6 +163,7 @@ export interface Tow {
   completed_at: string | null
   created_at: string
   updated_at: string
+  order_number: string | null
 }
 
 export interface TowVehicle {

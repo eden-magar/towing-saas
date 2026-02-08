@@ -235,7 +235,10 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             <ArrowRight size={20} className="text-white" />
           </button>
           
-          <div className="bg-white/20 backdrop-blur rounded-full px-4 py-1.5">
+          <div className="bg-white/20 backdrop-blur rounded-full px-4 py-1.5 text-center">
+            {task.order_number && (
+              <span className="text-white/80 text-xs block">#{task.order_number}</span>
+            )}
             <span className="text-white text-sm font-medium">
               שלב {currentPointIndex + 1}/{totalPoints}
             </span>

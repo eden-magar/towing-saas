@@ -642,7 +642,9 @@ export default function TowDetailsPage() {
               </Link>
               <div>
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <h1 className="font-bold text-gray-800 text-base sm:text-lg font-mono">{tow.id.slice(0, 8)}</h1>
+                  <h1 className="font-bold text-gray-800 text-base sm:text-lg font-mono">
+                    {tow.order_number ? `#${tow.order_number}` : tow.id.slice(0, 8)}
+                  </h1>
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${statusConfig[tow.status]?.color}`}>
                     {statusConfig[tow.status]?.label}
                   </span>

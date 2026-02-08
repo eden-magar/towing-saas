@@ -64,10 +64,12 @@ export default function TowsPage() {
       const vehiclePlate = tow.vehicles[0]?.plate_number?.toLowerCase() || ''
       const customerName = tow.customer?.name?.toLowerCase() || ''
       const driverName = tow.driver?.user?.full_name?.toLowerCase() || ''
+      const orderNum = tow.order_number?.toLowerCase() || ''
       
       if (!vehiclePlate.includes(query) && 
           !customerName.includes(query) && 
-          !driverName.includes(query)) {
+          !driverName.includes(query) &&
+          !orderNum.includes(query)) {
         return false
       }
     }
@@ -168,7 +170,7 @@ export default function TowsPage() {
             <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="חיפוש לפי מספר רכב, לקוח או נהג..."
+              placeholder="חיפוש לפי מס' הזמנה, רכב, לקוח או נהג..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
@@ -218,6 +220,7 @@ export default function TowsPage() {
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
+                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מס' הזמנה</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">רכב</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
                     <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">נהג</th>
@@ -236,6 +239,13 @@ export default function TowsPage() {
                         <td className="px-4 py-4">
                           <span className="font-medium text-gray-800">{formatDate(tow.created_at)}</span>
                           <p className="text-xs text-gray-500">{formatTime(tow.created_at)}</p>
+                        </td>
+                        <td className="px-4 py-4">
+                          {tow.order_number ? (
+                            <span className="font-mono text-gray-800">{tow.order_number}</span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-4">
                           {vehicle ? (
@@ -326,6 +336,9 @@ export default function TowsPage() {
                         <p className="text-sm text-gray-500 mt-0.5">
                           {formatDate(tow.created_at)} | {formatTime(tow.created_at)}
                         </p>
+                        {tow.order_number && (
+                          <p className="text-xs font-mono text-gray-400 mt-0.5">#{tow.order_number}</p>
+                        )}
                       </div>
                       {tow.final_price && (
                         <span className="font-bold text-[#33d4ff]">{tow.final_price} ש״ח</span>

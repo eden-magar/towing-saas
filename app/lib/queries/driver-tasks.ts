@@ -109,6 +109,7 @@ export interface TowStatusHistoryEntry {
 
 export interface TaskDetailFull {
   id: string
+  order_number: string | null
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
   scheduled_at: string | null
@@ -191,6 +192,7 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     .from('tows')
     .select(`
       id,
+      order_number,
       status,
       tow_type,
       scheduled_at,
@@ -369,6 +371,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     .from('tows')
     .select(`
       id,
+      order_number,
       status,
       tow_type,
       scheduled_at,
@@ -436,6 +439,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
 
   return {
     id: tow.id,
+    order_number: tow.order_number,
     status: tow.status,
     tow_type: tow.tow_type,
     scheduled_at: tow.scheduled_at,
