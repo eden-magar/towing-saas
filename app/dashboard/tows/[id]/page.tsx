@@ -1396,19 +1396,61 @@ export default function TowDetailsPage() {
               <h2 className="font-bold text-gray-800">היסטוריית סטטוסים</h2>
             </div>
             <div className="p-4 sm:p-5">
-              <div className="flex gap-4 pb-6">
-                <div className="flex flex-col items-center">
-                  <div className="w-3 h-3 rounded-full bg-[#33d4ff]"></div>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusConfig[tow.status]?.color}`}>
-                      {statusConfig[tow.status]?.label}
-                    </span>
-                    <span className="text-sm text-gray-500">{new Date(tow.created_at).toLocaleString('he-IL')}</span>
+              {(() => {
+                const events: { time: string; label: string; color: string }[] = []
+                
+                // יצירת הגרירה
+                events.push({ time: tow.created_at, label: 'גרירה נוצרה', color: 'bg-gray-400' })
+                
+                // שיבוץ נהג
+                if (tow.driver) {
+                  events.push({ time: tow.created_at, label: `שובצה לנהג ${tow.driver.user?.full_name || ''}`, color: 'bg-blue-500' })
+                }
+                
+                // התחלה
+                if (tow.started_at) {
+                  events.push({ time: tow.started_at, label: 'גרירה החלה', color: 'bg-indigo-500' })
+                }
+                
+                // אירועי נקודות
+                tow.points?.forEach((point: any) => {
+                  const pointLabel = `${point.point_type === 'pickup' ? 'איסוף' : 'פריקה'} — ${point.address?.split(',')[0] || 'נקודה ' + point.point_order}`
+                  
+                  if (point.arrived_at) {
+                    events.push({ time: point.arrived_at, label: `הנהג הגיע: ${pointLabel}`, color: 'bg-cyan-500' })
+                  }
+                  if (point.completed_at) {
+                    events.push({ time: point.completed_at, label: `הושלם: ${pointLabel}`, color: 'bg-emerald-500' })
+                  }
+                })
+                
+                // סיום
+                if (tow.completed_at) {
+                  events.push({ time: tow.completed_at, label: 'גרירה הושלמה', color: 'bg-emerald-600' })
+                }
+                
+                // מיון לפי זמן
+                events.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+
+                return (
+                  <div className="space-y-0">
+                    {events.map((event, idx) => (
+                      <div key={idx} className="flex gap-4 pb-6 relative">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-3 h-3 rounded-full ${event.color} z-10`}></div>
+                          {idx < events.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1"></div>}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-800">{event.label}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {new Date(event.time).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              </div>
+                )
+              })()}
             </div>
           </div>
         )}
@@ -1419,10 +1461,68 @@ export default function TowDetailsPage() {
               <h2 className="font-bold text-gray-800">תמונות</h2>
             </div>
             <div className="p-4 sm:p-5">
-              <div className="text-center py-12 text-gray-400">
-                <Image size={48} className="mx-auto mb-4 opacity-50" />
-                <p>אין תמונות עדיין</p>
-              </div>
+              {(() => {
+                const allImages = tow.points?.flatMap((point: any) => 
+                  (point.images || []).map((img: any) => ({ ...img, point }))
+                ) || []
+                
+                if (allImages.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-gray-400">
+                      <Image size={48} className="mx-auto mb-4 opacity-50" />
+                      <p>אין תמונות עדיין</p>
+                    </div>
+                  )
+                }
+
+                const imageTypeLabels: Record<string, string> = {
+                  before_pickup: 'לפני איסוף',
+                  after_pickup: 'אחרי איסוף',
+                  before_dropoff: 'לפני פריקה',
+                  after_dropoff: 'אחרי פריקה',
+                  damage: 'נזק',
+                  other: 'אחר'
+                }
+
+                // קיבוץ לפי נקודה
+                const grouped: Record<string, any[]> = {}
+                allImages.forEach((img: any) => {
+                  const key = img.point.id
+                  if (!grouped[key]) grouped[key] = []
+                  grouped[key].push(img)
+                })
+
+                return (
+                  <div className="space-y-6">
+                    {Object.entries(grouped).map(([pointId, images]) => {
+                      const point = images[0].point
+                      return (
+                        <div key={pointId}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${point.point_type === 'pickup' ? 'bg-green-500' : 'bg-red-500'}`}>
+                              {point.point_order}
+                            </div>
+                            <span className="text-sm font-medium text-gray-700">
+                              {point.point_type === 'pickup' ? 'איסוף' : 'פריקה'} — {point.address?.split(',')[0] || 'לא צוין'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {images.map((img: any) => (
+                              <a key={img.id} href={img.image_url} target="_blank" rel="noopener noreferrer" className="group">
+                                <div className="aspect-square rounded-xl overflow-hidden border border-gray-200 group-hover:border-[#33d4ff] transition-colors">
+                                  <img src={img.image_url} alt={img.image_type} className="w-full h-full object-cover" />
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1 text-center">{imageTypeLabels[img.image_type] || img.image_type}</p>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <p className="text-sm text-gray-400 text-center">{allImages.length} תמונות סה"כ</p>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )}
