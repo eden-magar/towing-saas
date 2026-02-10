@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+
 
 // Admin client with service role (server-side only!)
 const supabaseAdmin = createClient(
@@ -9,6 +11,15 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
+
+    // === AUTH CHECK ===
+    const currentUser = await getAuthUser()
+    if (!currentUser) return unauthorizedResponse()
+    if (currentUser.role !== 'company_admin' && currentUser.role !== 'super_admin') {
+      return forbiddenResponse()
+    }
+    // === END AUTH CHECK ===
+
     const body = await request.json()
     const {
       companyId,

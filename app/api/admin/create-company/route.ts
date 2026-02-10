@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -11,6 +13,14 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
+
+    // === AUTH CHECK ===
+    const currentUser = await getAuthUser()
+    if (!currentUser) return unauthorizedResponse()
+    if (currentUser.role !== 'super_admin') {
+      return forbiddenResponse('רק סופר אדמין יכול ליצור חברה')
+    }
+    // === END AUTH CHECK ===
     console.log('RESEND_API_KEY exists:', !!process.env.RESEND_API_KEY)
     
     const body = await request.json()

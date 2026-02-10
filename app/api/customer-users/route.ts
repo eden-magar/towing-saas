@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,6 +10,14 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: NextRequest) {
   try {
+
+    // === AUTH CHECK ===
+    const authUser = await getAuthUser()
+    if (!authUser) return unauthorizedResponse()
+    if (authUser.role !== 'company_admin' && authUser.role !== 'super_admin') {
+      return forbiddenResponse()
+    }
+    // === END AUTH CHECK ===
     const { email, fullName, phone, customerId, role } = await req.json()
 
     if (!email || !fullName || !customerId) {

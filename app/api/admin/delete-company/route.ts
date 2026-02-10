@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,6 +10,14 @@ const supabaseAdmin = createClient(
 
 export async function DELETE(request: NextRequest) {
   try {
+
+    // === AUTH CHECK ===
+    const currentUser = await getAuthUser()
+    if (!currentUser) return unauthorizedResponse()
+    if (currentUser.role !== 'super_admin') {
+      return forbiddenResponse('רק סופר אדמין יכול למחוק חברה')
+    }
+    // === END AUTH CHECK ===
     const { searchParams } = new URL(request.url)
     const companyId = searchParams.get('companyId')
 
