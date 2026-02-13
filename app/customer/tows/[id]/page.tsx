@@ -49,6 +49,7 @@ export default function CustomerTowDetail() {
   const [showImages, setShowImages] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
+  const [userRole, setUserRole] = useState<string>('viewer')
 
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function CustomerTowDetail() {
       if (!info) return
        setCustomerId(info.customerId)
        setPortalSettings(info.portalSettings || {})
+       setUserRole(info.customerUserRole || 'viewer')
 
       const data = await getCustomerTowDetail(params.id as string, info.customerId)
       setTow(data)
@@ -325,7 +327,7 @@ export default function CustomerTowDetail() {
                   </button>
 
                   {/* Expanded Details */}
-                  {isExpanded && (
+                  {isExpanded && userRole !== 'viewer' && (
                     <div className="mt-3 space-y-3 bg-gray-50 rounded-lg p-3">
                       {/* Times */}
                       <div className="grid grid-cols-2 gap-3 text-xs">
