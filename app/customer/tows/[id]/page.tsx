@@ -48,6 +48,7 @@ export default function CustomerTowDetail() {
   const [expandedPoint, setExpandedPoint] = useState<string | null>(null)
   const [showImages, setShowImages] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
+  const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
 
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function CustomerTowDetail() {
       const info = await getCustomerForUser(user.id)
       if (!info) return
        setCustomerId(info.customerId)
+       setPortalSettings(info.portalSettings || {})
 
       const data = await getCustomerTowDetail(params.id as string, info.customerId)
       setTow(data)
@@ -201,7 +203,7 @@ export default function CustomerTowDetail() {
       </div>
 
       {/* Driver Card */}
-      {tow.driver && (
+      {tow.driver && portalSettings.show_driver_info !== false && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
             <Truck size={16} />
@@ -214,12 +216,12 @@ export default function CustomerTowDetail() {
               </div>
               <div>
                 <p className="font-medium text-gray-900">{tow.driver.full_name}</p>
-                {tow.driver.phone && (
+                {tow.driver.phone && portalSettings.show_driver_phone !== false && (
                   <p className="text-sm text-gray-500">{tow.driver.phone}</p>
                 )}
               </div>
             </div>
-            {tow.driver.phone && (
+            {tow.driver.phone && portalSettings.show_driver_phone !== false && (
               <a
                 href={`tel:${tow.driver.phone}`}
                 className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors"
@@ -232,7 +234,7 @@ export default function CustomerTowDetail() {
       )}
 
       {/* Vehicles */}
-      {tow.vehicles.length > 0 && (
+      {tow.vehicles.length > 0 && portalSettings.show_vehicles !== false && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h2 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
             <Car size={16} />
@@ -257,6 +259,7 @@ export default function CustomerTowDetail() {
       )}
 
       {/* Timeline */}
+      {portalSettings.show_status_history !== false && (
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
           <MapPin size={16} />
@@ -406,9 +409,10 @@ export default function CustomerTowDetail() {
           })}
         </div>
       </div>
+      )}
 
       {/* All Images */}
-      {tow.images.length > 0 && (
+      {tow.images.length > 0 && portalSettings.show_photos !== false && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <button
             onClick={() => setShowImages(!showImages)}
@@ -448,7 +452,7 @@ export default function CustomerTowDetail() {
       )}
 
       {/* Notes */}
-      {tow.notes && (
+      {tow.notes && portalSettings.show_notes !== false && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h2 className="text-sm font-bold text-gray-900 mb-2">הערות</h2>
           <p className="text-sm text-gray-600">{tow.notes}</p>

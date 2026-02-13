@@ -19,7 +19,8 @@ export async function getCustomerForUser(userId: string) {
         name,
         customer_type,
         phone,
-        email
+        email,
+        portal_settings
       )
     `)
     .eq('user_id', userId)
@@ -32,6 +33,7 @@ export async function getCustomerForUser(userId: string) {
     customerName: (data.customer as any).name,
     customerType: (data.customer as any).customer_type,
     customerUserRole: data.role,
+    portalSettings: (data.customer as any).portal_settings || {},
   }
 }
 
