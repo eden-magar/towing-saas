@@ -139,7 +139,7 @@ export default function CustomerDetailPage() {
     setError('')
 
     try {
-      const result = await createCustomerUser(
+      await createCustomerUser(
         newUserForm.email,
         newUserForm.fullName,
         newUserForm.phone || null,
@@ -147,9 +147,10 @@ export default function CustomerDetailPage() {
         newUserForm.role
       )
 
-      setTempPassword(result.tempPassword)
       await loadData()
       setNewUserForm({ fullName: '', email: '', phone: '', role: 'viewer' })
+      setShowAddUser(false)
+      // TODO: אפשר להוסיף toast notification
     } catch (err: any) {
       setError(err.message || 'שגיאה ביצירת המשתמש')
     } finally {
@@ -489,42 +490,7 @@ export default function CustomerDetailPage() {
               </button>
             </div>
 
-            {tempPassword ? (
-              /* Success - Show temp password */
-              <div className="p-5 space-y-4">
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-                  <Check size={32} className="mx-auto text-green-600 mb-2" />
-                  <p className="font-bold text-green-800 mb-1">המשתמש נוצר בהצלחה!</p>
-                  <p className="text-sm text-green-700">שלח ללקוח את הסיסמה הזמנית</p>
-                </div>
-
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs text-gray-500 mb-2">סיסמה זמנית:</p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 font-mono text-lg text-center">
-                      {tempPassword}
-                    </code>
-                    <button
-                      onClick={copyPassword}
-                      className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      {copiedPassword ? <Check size={18} className="text-green-600" /> : <Copy size={18} className="text-gray-600" />}
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setShowAddUser(false)
-                    setTempPassword(null)
-                  }}
-                  className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] transition-colors"
-                >
-                  סגור
-                </button>
-              </div>
-            ) : (
-              /* Form */
+              {/* Form */}
               <div className="p-5 space-y-4">
                 {error && (
                   <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
@@ -612,7 +578,6 @@ export default function CustomerDetailPage() {
                   </button>
                 </div>
               </div>
-            )}
           </div>
         </div>
       )}
