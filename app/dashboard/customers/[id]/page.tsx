@@ -23,7 +23,8 @@ import {
   UserCheck,
   UserX,
   Copy,
-  Check
+  Check,
+  Settings
 } from 'lucide-react'
 import { supabase } from '@/app/lib/supabase'
 import {
@@ -70,7 +71,8 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [customerUsers, setCustomerUsers] = useState<CustomerUserWithDetails[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'users'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'settings'>('info')
+  const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
 
   // Modal states
   const [showAddUser, setShowAddUser] = useState(false)
@@ -100,7 +102,7 @@ export default function CustomerDetailPage() {
       const { data: custData, error: custError } = await supabase
         .from('customers')
         .select(`
-          id, name, customer_type, id_number, phone, email, address, notes, created_at,
+          id, name, customer_type, id_number, phone, email, address, notes, created_at, portal_settings,
           customer_company (
             id, payment_terms, credit_limit, discount_percent, notes, is_active
           )
@@ -121,6 +123,7 @@ export default function CustomerDetailPage() {
         customer_type: custData.customer_type as 'private' | 'business',
         company_relation: relation,
       })
+      setPortalSettings((custData as { portal_settings?: Record<string, boolean> }).portal_settings || {})
 
       // Load customer users
       const users = await getCustomerUsers(customerId)
@@ -191,6 +194,20 @@ export default function CustomerDetailPage() {
       navigator.clipboard.writeText(tempPassword)
       setCopiedPassword(true)
       setTimeout(() => setCopiedPassword(false), 2000)
+    }
+  }
+
+  const handlePortalSettingChange = async (key: string, value: boolean) => {
+    const newSettings = { ...portalSettings, [key]: value }
+    setPortalSettings(newSettings)
+    try {
+      await supabase
+        .from('customers')
+        .update({ portal_settings: newSettings })
+        .eq('id', customerId)
+    } catch (err) {
+      console.error('Error updating portal settings:', err)
+      setPortalSettings(portalSettings)
     }
   }
 
@@ -266,6 +283,17 @@ export default function CustomerDetailPage() {
               {customerUsers.length}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'settings'
+              ? 'bg-[#33d4ff] text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Settings size={16} />
+          הגדרות פורטל
         </button>
       </div>
 
@@ -470,6 +498,39 @@ export default function CustomerDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Settings Tab */}
+      {activeTab === 'settings' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="font-bold text-gray-800 mb-4">הגדרות פורטל</h2>
+          <p className="text-sm text-gray-500 mb-6">מה הלקוח רואה כשנכנס לפורטל — גרירות, תמונות, מחירים ועוד.</p>
+          <div className="space-y-4">
+            {[
+              { key: 'show_photos', label: 'הצגת תמונות', desc: 'תמונות שצולמו במהלך הגרירה' },
+              { key: 'show_price', label: 'הצגת מחיר', desc: 'מחיר הגרירה ופירוט עלויות' },
+              { key: 'show_driver_info', label: 'הצגת שם נהג', desc: 'שם הנהג שמבצע את הגרירה' },
+              { key: 'show_driver_phone', label: 'הצגת טלפון נהג', desc: 'מספר הטלפון של הנהג' },
+              { key: 'show_status_history', label: 'הצגת היסטוריית סטטוסים', desc: 'ציר זמן של שלבי הגרירה' },
+              { key: 'show_vehicles', label: 'הצגת פרטי רכבים', desc: 'פרטי הרכבים שנגררו' },
+              { key: 'show_notes', label: 'הצגת הערות', desc: 'הערות פנימיות על הגרירה' },
+            ].map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+                <div>
+                  <p className="font-medium text-gray-800">{label}</p>
+                  <p className="text-sm text-gray-500 mt-0.5">{desc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handlePortalSettingChange(key, !portalSettings[key])}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${portalSettings[key] ? 'bg-green-500' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${portalSettings[key] ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
