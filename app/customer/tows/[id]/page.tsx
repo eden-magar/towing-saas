@@ -1,5 +1,6 @@
 'use client'
 
+import { supabase } from '@/app/lib/supabase'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
@@ -46,6 +47,8 @@ export default function CustomerTowDetail() {
   const [loading, setLoading] = useState(true)
   const [expandedPoint, setExpandedPoint] = useState<string | null>(null)
   const [showImages, setShowImages] = useState(false)
+  const [customerId, setCustomerId] = useState<string | null>(null)
+
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -53,6 +56,7 @@ export default function CustomerTowDetail() {
     const load = async () => {
       const info = await getCustomerForUser(user.id)
       if (!info) return
+       setCustomerId(info.customerId)
 
       const data = await getCustomerTowDetail(params.id as string, info.customerId)
       setTow(data)
@@ -61,6 +65,29 @@ export default function CustomerTowDetail() {
 
     load()
   }, [user, authLoading, params.id])
+
+  // Realtime — עדכון חי של פרטי הגרירה
+  useEffect(() => {
+    if (!customerId) return
+    const towId = params.id as string
+
+    const channel = supabase
+      .channel(`customer-tow-${towId}-realtime`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `id=eq.${towId}` }, () => {
+        getCustomerTowDetail(towId, customerId).then(setTow)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_points' }, () => {
+        getCustomerTowDetail(towId, customerId).then(setTow)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_images' }, () => {
+        getCustomerTowDetail(towId, customerId).then(setTow)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [customerId, params.id])
 
   const formatDate = (date: string | null) => {
     if (!date) return '—'

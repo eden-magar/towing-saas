@@ -1,5 +1,6 @@
 'use client'
 
+import { supabase } from '@/app/lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
@@ -56,6 +57,24 @@ export default function CustomerDashboard() {
 
     load()
   }, [user, authLoading, statusFilter])
+
+  // Realtime — עדכון חי כשגרירות משתנות
+  useEffect(() => {
+    if (!customerId) return
+
+    const channel = supabase
+      .channel('customer-tows-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tows' }, () => {
+        // טוען מחדש את הרשימה
+        getCustomerTows(customerId, { status: statusFilter }).then(setTows)
+        getCustomerStats(customerId).then(setStats)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [customerId, statusFilter])
 
   // סינון חיפוש לוקלי
   const filteredTows = tows.filter(tow => {
