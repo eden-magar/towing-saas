@@ -14,6 +14,10 @@ interface CustomerSectionProps {
   customerPhone: string
   onCustomerNameChange: (name: string) => void
   onCustomerPhoneChange: (phone: string) => void
+  customerEmail: string
+  customerAddress: string
+  onCustomerEmailChange: (email: string) => void
+  onCustomerAddressChange: (address: string) => void
   towDate: string
   towTime: string
   isToday: boolean
@@ -34,6 +38,10 @@ export function CustomerSection({
   customerPhone,
   onCustomerNameChange,
   onCustomerPhoneChange,
+  customerEmail,
+  customerAddress,
+  onCustomerEmailChange,
+  onCustomerAddressChange,
   towDate,
   towTime,
   isToday,
@@ -125,6 +133,8 @@ export function CustomerSection({
                           key={customer.id}
                           onClick={() => {
                             onCustomerSelect(customer.id, customer.name, customer.phone || '')
+                            onCustomerEmailChange(customer.email || '')
+                            onCustomerAddressChange(customer.address || '')
                             setSearchCustomer(customer.name)
                             setShowCustomerResults(false)
                           }}
@@ -199,6 +209,28 @@ export function CustomerSection({
                     />
                   </div>
                 </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
+                  <input
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => onCustomerEmailChange(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">כתובת</label>
+                  <input
+                    type="text"
+                    value={customerAddress}
+                    onChange={(e) => onCustomerAddressChange(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  />
+                </div>
+
+
               </>
             )}
           </div>
@@ -238,6 +270,26 @@ export function CustomerSection({
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
+              <input
+                type="email"
+                value={customerEmail}
+                onChange={(e) => onCustomerEmailChange(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">כתובת</label>
+              <input
+                type="text"
+                value={customerAddress}
+                onChange={(e) => onCustomerAddressChange(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+              />
+            </div>
+            
           </div>
         )}
 

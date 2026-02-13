@@ -26,6 +26,7 @@ import {
   Trash2,
   Save,
   RefreshCw,
+  Mail,
   Receipt
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
@@ -816,6 +817,18 @@ export default function TowDetailsPage() {
                             <Phone size={14} />
                             {tow.customer.phone}
                           </a>
+                        )}
+                        {tow.customer?.email && (
+                          <a href={`mailto:${tow.customer.email}`} className="text-[#33d4ff] text-sm flex items-center gap-1 mt-1">
+                            <Mail size={14} />
+                            {tow.customer.email}
+                          </a>
+                        )}
+                        {tow.customer?.address && (
+                          <p className="text-gray-500 text-sm flex items-center gap-1 mt-1">
+                            <MapPin size={14} />
+                            {tow.customer.address}
+                          </p>
                         )}
                       </div>
                     </div>

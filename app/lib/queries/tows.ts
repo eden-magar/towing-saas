@@ -117,6 +117,8 @@ export interface TowWithDetails {
     id: string
     name: string
     phone: string | null
+    email: string | null
+    address: string | null
   } | null
   driver: {
     id: string
@@ -218,7 +220,9 @@ export async function getTow(towId: string): Promise<TowWithDetails | null> {
       customer:customers (
         id,
         name,
-        phone
+        phone,
+        email,
+        address
       ),
       driver:drivers (
         id,

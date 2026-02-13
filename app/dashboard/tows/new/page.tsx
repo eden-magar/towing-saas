@@ -6,7 +6,8 @@ declare global {
     google: typeof google
   }
 }
-
+import { createCustomer } from '@/app/lib/queries/customers'
+import { supabase } from '@/app/lib/supabase'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { ArrowRight, Check, Truck, Loader2, MapPin, Navigation, X } from 'lucide-react'
@@ -567,6 +568,8 @@ function NewTowForm() {
   // Customer info
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  const [customerEmail, setCustomerEmail] = useState('')
+  const [customerAddress, setCustomerAddress] = useState('')
   
   // Date/Time
   const [towDate, setTowDate] = useState('')
@@ -1118,12 +1121,31 @@ function NewTowForm() {
   setError('')
   
   try {
+    // יצירת לקוח חדש אם צריך
+    let finalCustomerId = selectedCustomerId
+    if (!selectedCustomerId && customerName.trim()) {
+      try {
+        const result = await createCustomer({
+          companyId,
+          customerType: 'private',
+          name: customerName.trim(),
+          phone: customerPhone.trim() || undefined,
+          email: customerEmail.trim() || undefined,
+          address: customerAddress.trim() || undefined,
+          paymentTerms: 'immediate',
+        })
+        finalCustomerId = result.id
+      } catch (err) {
+        console.error('Error creating customer:', err)
+      }
+    }
+    
     const towData = prepareTowData({
       companyId,
       userId: user.id,
       towType,
       orderNumber,
-      customerId: selectedCustomerId,
+      customerId: finalCustomerId,
       customerName,
       customerPhone,
       towDate,
@@ -1272,6 +1294,10 @@ function NewTowForm() {
               customerPhone={customerPhone}
               onCustomerNameChange={setCustomerName}
               onCustomerPhoneChange={setCustomerPhone}
+              customerEmail={customerEmail}
+              customerAddress={customerAddress}
+              onCustomerEmailChange={setCustomerEmail}
+              onCustomerAddressChange={setCustomerAddress}
               towDate={towDate}
               towTime={towTime}
               isToday={isToday}
