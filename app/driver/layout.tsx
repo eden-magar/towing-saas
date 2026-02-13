@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../lib/queries/driver-tasks'
 import { supabase } from '../lib/supabase'
@@ -32,6 +32,7 @@ export default function DriverLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   
   const [driverInfo, setDriverInfo] = useState<DriverInfo | null>(null)
@@ -45,6 +46,10 @@ export default function DriverLayout({
 
   // טעינת פרטי נהג והתראות
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login')
+      return
+    }
     if (!authLoading && user) {
       loadDriverInfo()
       loadNotifications()
