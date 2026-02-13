@@ -12,7 +12,7 @@ export async function DELETE(request: NextRequest) {
   try {
 
     // === AUTH CHECK ===
-    const currentUser = await getAuthUser()
+    const currentUser = await getAuthUser(request)
     if (!currentUser) return unauthorizedResponse()
     if (currentUser.role !== 'super_admin') {
       return forbiddenResponse('רק סופר אדמין יכול למחוק חברה')

@@ -92,10 +92,12 @@ interface CreateDriverInput {
 }
 
 export async function createDriver(input: CreateDriverInput) {
+  const { data: { session } } = await supabase.auth.getSession()
   const response = await fetch('/api/drivers', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session?.access_token}`,
     },
     body: JSON.stringify({
       companyId: input.companyId,

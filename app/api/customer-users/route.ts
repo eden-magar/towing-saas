@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 
 const supabaseAdmin = createClient(
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
   try {
 
     // === AUTH CHECK ===
-    const authUser = await getAuthUser()
+    const authUser = await getAuthUser(req)
     if (!authUser) return unauthorizedResponse()
     if (authUser.role !== 'company_admin' && authUser.role !== 'super_admin') {
       return forbiddenResponse()
@@ -75,10 +78,43 @@ export async function POST(req: NextRequest) {
       throw cuError
     }
 
+    // 4. שלח מייל עם לינק להגדרת סיסמה
+    try {
+      const { data: resetData } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+      })
+
+      const resetLink = resetData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/login`
+
+      await resend.emails.send({
+        from: 'מגרר <onboarding@resend.dev>',
+        to: email,
+        subject: 'הוזמנת לפורטל הלקוח — מגרר',
+        html: `
+          <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #8b5cf6;">ברוכים הבאים למגרר! 🚗</h1>
+            <p>שלום ${fullName},</p>
+            <p>הוזמנת לפורטל הלקוח של מערכת מגרר לניהול גרירות.</p>
+            <p>לחץ/י על הכפתור להגדרת הסיסמה שלך והתחברות:</p>
+            <a href="${resetLink}" style="display: inline-block; background: #8b5cf6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 16px 0;">
+              הגדר סיסמה והתחבר
+            </a>
+            <p style="color: #666; font-size: 14px;">אם הכפתור לא עובד, העתק/י את הקישור:</p>
+            <p style="color: #666; font-size: 12px; word-break: break-all;">${resetLink}</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="color: #999; font-size: 12px;">מגרר - ניהול גרירות חכם</p>
+          </div>
+        `,
+      })
+    } catch (emailErr) {
+      console.error('Failed to send invite email:', emailErr)
+      // לא מכשילים את היצירה — המשתמש נוצר בהצלחה
+    }
+
     return NextResponse.json({
       success: true,
       userId,
-      tempPassword,
     })
   } catch (err: any) {
     console.error('Error creating customer user:', err)

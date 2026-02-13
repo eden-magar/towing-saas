@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   try {
 
     // === AUTH CHECK ===
-    const currentUser = await getAuthUser()
+    const currentUser = await getAuthUser(request)
     if (!currentUser) return unauthorizedResponse()
     if (currentUser.role !== 'super_admin') {
       return forbiddenResponse('רק סופר אדמין יכול ליצור חברה')

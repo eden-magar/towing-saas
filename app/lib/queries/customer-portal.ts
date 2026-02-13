@@ -221,9 +221,13 @@ export async function createCustomerUser(
   role: 'admin' | 'manager' | 'viewer' = 'viewer'
 ) {
   // 1. צור user ב-auth דרך API route
+  const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch('/api/customer-users', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session?.access_token}`,
+    },
     body: JSON.stringify({ email, fullName, phone, customerId, role }),
   })
 
