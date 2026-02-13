@@ -21,6 +21,8 @@ export interface StoredVehicle {
   last_stored_at: string
   notes: string | null
   created_at: string
+  vehicle_condition: 'operational' | 'faulty'
+  vehicle_code: string | null
   updated_at: string
 }
 
@@ -122,6 +124,8 @@ interface AddToStorageInput {
   towId?: string
   performedBy?: string
   notes?: string
+  vehicleCondition?: 'operational' | 'faulty'
+  vehicleCode?: string
 }
 
 export async function addVehicleToStorage(input: AddToStorageInput): Promise<string> {
@@ -146,7 +150,9 @@ export async function addVehicleToStorage(input: AddToStorageInput): Promise<str
     p_location: input.location || null,
     p_tow_id: input.towId || null,
     p_performed_by: input.performedBy || null,
-    p_notes: input.notes || null
+    p_notes: input.notes || null,
+    p_vehicle_condition: input.vehicleCondition || 'operational',
+    p_vehicle_code: input.vehicleCode || null
   })
 
   if (error) {
@@ -164,6 +170,8 @@ interface ReleaseFromStorageInput {
   towId?: string
   performedBy?: string
   notes?: string
+  vehicleCondition?: 'operational' | 'faulty'
+  vehicleCode?: string
 }
 
 export async function releaseVehicleFromStorage(input: ReleaseFromStorageInput): Promise<boolean> {

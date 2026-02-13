@@ -53,6 +53,7 @@ export default function StoragePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'stored' | 'released' | 'all'>('stored')
   const [customerFilter, setCustomerFilter] = useState<string>('')
+  const [conditionFilter, setConditionFilter] = useState<'all' | 'operational' | 'faulty'>('all')
   const [showModal, setShowModal] = useState(false)
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'release'>('add')
   const [selectedVehicle, setSelectedVehicle] = useState<StoredVehicleWithCustomer | null>(null)
@@ -69,7 +70,9 @@ export default function StoragePage() {
     customerId: '',
     location: '',
     notes: '',
-    vehicleData: null as any
+    vehicleData: null as any,
+    vehicleCondition: 'operational' as 'operational' | 'faulty',
+    vehicleCode: ''
   })
   const [vehicleLookupLoading, setVehicleLookupLoading] = useState(false)
 
@@ -130,8 +133,10 @@ export default function StoragePage() {
       vehicle.customer_name?.includes(searchQuery) ||
       vehicle.location?.includes(searchQuery) ||
       vehicle.vehicle_data?.manufacturer?.includes(searchQuery) ||
-      vehicle.vehicle_data?.model?.includes(searchQuery)
-    return matchesSearch
+      vehicle.vehicle_data?.model?.includes(searchQuery) ||
+      (vehicle as any).vehicle_code?.includes(searchQuery)
+    const matchesCondition = conditionFilter === 'all' || (vehicle as any).vehicle_condition === conditionFilter
+    return matchesSearch && matchesCondition
   })
 
   const resetForm = () => {
@@ -140,7 +145,9 @@ export default function StoragePage() {
       customerId: '',
       location: '',
       notes: '',
-      vehicleData: null
+      vehicleData: null,
+      vehicleCondition: 'operational',
+      vehicleCode: ''
     })
     setError('')
   }
@@ -160,7 +167,9 @@ export default function StoragePage() {
       customerId: vehicle.customer_id || '',
       location: vehicle.location || '',
       notes: vehicle.notes || '',
-      vehicleData: vehicle.vehicle_data
+      vehicleData: vehicle.vehicle_data,
+      vehicleCondition: (vehicle as any).vehicle_condition || 'operational',
+      vehicleCode: (vehicle as any).vehicle_code || ''
     })
     setShowModal(true)
     setOpenMenuId(null)
@@ -229,7 +238,9 @@ export default function StoragePage() {
           vehicleData: formData.vehicleData,
           location: formData.location || undefined,
           performedBy: user?.id,
-          notes: formData.notes || undefined
+          notes: formData.notes || undefined,
+          vehicleCondition: formData.vehicleCondition,
+          vehicleCode: formData.vehicleCode || undefined
         })
       } else if (modalMode === 'edit' && selectedVehicle) {
         await updateStoredVehicle({
@@ -389,6 +400,21 @@ export default function StoragePage() {
                   </button>
                 ))}
               </div>
+               <div className="flex gap-1">
+                {(['all', 'operational', 'faulty'] as const).map((cond) => (
+                  <button
+                    key={cond}
+                    onClick={() => setConditionFilter(cond)}
+                    className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors ${
+                      conditionFilter === cond
+                        ? cond === 'faulty' ? 'bg-red-500 text-white' : cond === 'operational' ? 'bg-emerald-500 text-white' : 'bg-[#33d4ff] text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {cond === 'all' ? 'כל המצבים' : cond === 'operational' ? 'תקינים' : 'תקולים'}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -415,8 +441,18 @@ export default function StoragePage() {
                         <Car size={20} className="text-gray-500" />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-800">{vehicle.plate_number}</p>
-                        <p className="text-sm text-gray-500">{getVehicleDisplayName(vehicle)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-800">{vehicle.plate_number}</p>
+                          {(vehicle as any).vehicle_condition === 'faulty' && (
+                            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-gray-500">{getVehicleDisplayName(vehicle)}</p>
+                          {(vehicle as any).vehicle_code && (
+                            <span className="text-xs text-blue-600">#{(vehicle as any).vehicle_code}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -505,8 +541,18 @@ export default function StoragePage() {
                     }`}></div>
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-800">{vehicle.plate_number}</p>
-                    <p className="text-sm text-gray-500">{getVehicleDisplayName(vehicle)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-800">{vehicle.plate_number}</p>
+                      {(vehicle as any).vehicle_condition === 'faulty' && (
+                        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-gray-500">{getVehicleDisplayName(vehicle)}</p>
+                      {(vehicle as any).vehicle_code && (
+                        <span className="text-xs text-blue-600">#{(vehicle as any).vehicle_code}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 
@@ -694,6 +740,47 @@ export default function StoragePage() {
                       placeholder="למשל: חניה 5, מגרש אחורי..."
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
+                  </div>
+
+                  {/* קוד רכב */}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">קוד רכב</label>
+                    <input
+                      type="text"
+                      value={formData.vehicleCode}
+                      onChange={(e) => setFormData({ ...formData, vehicleCode: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      placeholder="קוד זיהוי פנימי"
+                    />
+                  </div>
+
+                  {/* מצב רכב */}
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">מצב רכב</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, vehicleCondition: 'operational' })}
+                        className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
+                          formData.vehicleCondition === 'operational'
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        תקין
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, vehicleCondition: 'faulty' })}
+                        className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
+                          formData.vehicleCondition === 'faulty'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        תקול
+                      </button>
+                    </div>
                   </div>
 
                   {/* הערות */}
