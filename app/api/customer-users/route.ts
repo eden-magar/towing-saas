@@ -124,3 +124,57 @@ export async function POST(req: NextRequest) {
     )
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    // === AUTH CHECK ===
+    const currentUser = await getAuthUser(req)
+    if (!currentUser) return unauthorizedResponse()
+    if (currentUser.role !== 'company_admin' && currentUser.role !== 'super_admin') {
+      return forbiddenResponse()
+    }
+    // === END AUTH CHECK ===
+
+    const { customerUserId } = await req.json()
+
+    if (!customerUserId) {
+      return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
+    }
+
+    // 1. שליפת ה-user_id לפני מחיקה
+    const { data: cu, error: cuError } = await supabaseAdmin
+      .from('customer_users')
+      .select('user_id')
+      .eq('id', customerUserId)
+      .single()
+
+    if (cuError || !cu) {
+      return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
+    }
+
+    const userId = cu.user_id
+
+    // 2. מחיקה מ-customer_users
+    await supabaseAdmin
+      .from('customer_users')
+      .delete()
+      .eq('id', customerUserId)
+
+    // 3. מחיקה מ-users
+    await supabaseAdmin
+      .from('users')
+      .delete()
+      .eq('id', userId)
+
+    // 4. מחיקה מ-auth.users
+    await supabaseAdmin.auth.admin.deleteUser(userId)
+
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    console.error('Error deleting customer user:', err)
+    return NextResponse.json(
+      { error: err.message || 'שגיאה במחיקת המשתמש' },
+      { status: 500 }
+    )
+  }
+}

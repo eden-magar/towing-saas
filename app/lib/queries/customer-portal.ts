@@ -264,10 +264,18 @@ export async function toggleCustomerUserActive(customerUserId: string, isActive:
 
 // מחיקת משתמש לקוח
 export async function deleteCustomerUser(customerUserId: string) {
-  const { error } = await supabase
-    .from('customer_users')
-    .delete()
-    .eq('id', customerUserId)
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch('/api/customer-users', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session?.access_token}`,
+    },
+    body: JSON.stringify({ customerUserId }),
+  })
 
-  if (error) throw error
+  if (!res.ok) {
+    const data = await res.json()
+    throw new Error(data.error || 'שגיאה במחיקת המשתמש')
+  }
 }
