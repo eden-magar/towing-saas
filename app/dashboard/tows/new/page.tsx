@@ -1214,7 +1214,8 @@ function NewTowForm() {
     location: undefined,
     towId: result.id,
     performedBy: user?.id,
-    notes: 'נכנס מגרירה'
+    notes: 'נכנס מגרירה',
+    vehicleCondition: selectedDefects.length > 0 ? 'faulty' : 'operational',
   })
 }
 

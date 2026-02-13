@@ -187,8 +187,14 @@ export function SingleRoute({
                     onClick={() => onSelectStoredVehicle?.(vehicle)}
                     className="px-3 py-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex items-center gap-2"
                   >
-                    <Package size={14} className="text-purple-500" />
+                     <Package size={14} className="text-purple-500" />
                     <span className="font-medium text-gray-800">{vehicle.plate_number}</span>
+                    {(vehicle as any).vehicle_condition === 'faulty' && (
+                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
+                    )}
+                    {(vehicle as any).vehicle_code && (
+                      <span className="text-xs text-blue-600">#{(vehicle as any).vehicle_code}</span>
+                    )}
                     {vehicle.vehicle_data && (
                       <span className="text-xs text-gray-500">
                         {vehicle.vehicle_data.manufacturer} {vehicle.vehicle_data.model}
