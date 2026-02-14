@@ -12,6 +12,8 @@ import {
   type TaskDetailFull,
   type DriverTaskPoint
 } from '@/app/lib/queries/driver-tasks'
+import { createCashCollection, updateTowCashPayment } from '@/app/lib/queries/driver-cash'
+import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
 import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle } from 'lucide-react'
 
 // קומפוננטות השלבים
@@ -119,12 +121,12 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   }
 
   // סיום פרטי מסירה/הערות
-  const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string) => {
-    await completeCurrentPoint(recipientName, recipientPhone, notes)
+  const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => {
+    await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
   }
 
   // השלמת הנקודה הנוכחית
-  const completeCurrentPoint = async (recipientName?: string, recipientPhone?: string, notes?: string) => {
+  const completeCurrentPoint = async (recipientName?: string, recipientPhone?: string, notes?: string, cashCollected?: number) => {
     if (!currentPoint || !user || !task) return
     
     try {
@@ -133,6 +135,15 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       // בדיקה אם זו הנקודה האחרונה
       const nextIndex = currentPointIndex + 1
       if (nextIndex >= totalPoints) {
+        // סיום המשימה
+        // שמירת מזומן אם נגבה
+        if (cashCollected && cashCollected > 0) {
+          await updateTowCashPayment(task.id, 'cash', cashCollected)
+          const driver = await getDriverByUserId(user.id)
+          if (driver) {
+            await createCashCollection(driver.id, task.id, cashCollected, user.id)
+          }
+        }
         // סיום המשימה
         await updateTaskStatus(task.id, 'completed')
         setIsCompleted(true)
@@ -282,6 +293,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             pointType={currentPoint.point_type}
             customer={task.customer}
             onComplete={handleDeliveryComplete}
+            isLastPoint={currentPointIndex + 1 >= totalPoints}
           />
         )}
       </div>

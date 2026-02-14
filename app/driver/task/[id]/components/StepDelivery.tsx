@@ -12,19 +12,23 @@ import {
 interface StepDeliveryProps {
   pointType: 'pickup' | 'dropoff'
   customer: { name: string; phone: string | null } | null
-  onComplete: (recipientName: string, recipientPhone: string, notes?: string) => Promise<void>
+  onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
+  isLastPoint: boolean
 }
 
 export default function StepDelivery({
   pointType,
   customer,
-  onComplete
+  onComplete,
+  isLastPoint
 }: StepDeliveryProps) {
   const [recipientName, setRecipientName] = useState('')
   const [recipientPhone, setRecipientPhone] = useState('')
   const [notes, setNotes] = useState('')
   const [sameAsCustomer, setSameAsCustomer] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [cashReceived, setCashReceived] = useState(false)
+  const [cashAmount, setCashAmount] = useState('')
 
   const isPickup = pointType === 'pickup'
 
@@ -53,7 +57,8 @@ export default function StepDelivery({
       await onComplete(
         recipientName.trim(), 
         recipientPhone.trim(),
-        notes.trim() || undefined
+        notes.trim() || undefined,
+        cashReceived && cashAmount ? Number(cashAmount) : undefined
       )
     } finally {
       setLoading(false)
@@ -80,7 +85,33 @@ export default function StepDelivery({
 
       {/* Content Card */}
       <div className="flex-1 bg-white rounded-t-3xl px-5 pt-6 pb-40">
-        
+        {isLastPoint && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <label className="flex items-center justify-between cursor-pointer mb-3">
+              <span className="font-medium text-gray-800">💰 התקבל מזומן?</span>
+              <div
+                onClick={() => setCashReceived(!cashReceived)}
+                className={`w-12 h-7 rounded-full transition-colors relative ${cashReceived ? 'bg-amber-500' : 'bg-gray-300'}`}
+              >
+                <div className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${cashReceived ? 'right-0.5' : 'right-[22px]'}`} />
+              </div>
+            </label>
+            {cashReceived && (
+              <div>
+                <label className="block text-sm text-gray-500 mb-1 text-right">סכום שנגבה (₪)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={cashAmount}
+                  onChange={(e) => setCashAmount(e.target.value)}
+                  placeholder="0"
+                  className="w-full p-3 border border-amber-300 rounded-xl text-lg text-center font-bold focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* פרטי מקבל - רק בפריקה */}
         {!isPickup && (
           <>

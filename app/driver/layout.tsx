@@ -11,6 +11,7 @@ import {
   History,
   PieChart,
   UserCircle,
+  Wallet,
   Bell,
   X,
   Loader2,
@@ -108,6 +109,7 @@ export default function DriverLayout({
 
   const navItems = [
     { href: '/driver', label: 'בית', icon: Home },
+    { href: '/driver/cash', label: 'קופה', icon: Wallet },
     { href: '/driver/history', label: 'היסטוריה', icon: History },
     { href: '/driver/stats', label: 'סטטיסטיקות', icon: PieChart },
     { href: '/driver/profile', label: 'פרופיל', icon: UserCircle },

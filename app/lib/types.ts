@@ -164,6 +164,8 @@ export interface Tow {
   created_at: string
   updated_at: string
   order_number: string | null
+  payment_method: string | null
+  cash_collected: number | null
 }
 
 export interface TowVehicle {
@@ -546,4 +548,18 @@ export interface CustomerPortalTowDetail extends CustomerPortalTow {
     tow_vehicle_id: string | null
     created_at: string
   }[]
+}
+
+// ==================== קופה קטנה ====================
+export type CashTransactionType = 'collection' | 'transfer' | 'approval'
+
+export interface DriverCashTransaction {
+  id: string
+  driver_id: string
+  tow_id: string | null
+  amount: number
+  type: CashTransactionType
+  notes: string | null
+  created_at: string
+  created_by: string
 }

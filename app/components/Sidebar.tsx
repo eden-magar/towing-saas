@@ -18,7 +18,8 @@ import {
   X,
   Plus,
   Calendar,
-  Package
+  Package,
+  Wallet
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
@@ -29,6 +30,7 @@ const menuItems = [
   { href: '/dashboard/drivers', label: 'נהגים', icon: UserCircle },
   { href: '/dashboard/trucks', label: 'גררים', icon: Car },
   { href: '/dashboard/storage', label: 'אחסנה', icon: Package },
+  { href: '/dashboard/cash', label: 'קופות נהגים', icon: Wallet },
   { href: '/dashboard/customers', label: 'לקוחות', icon: Users },
   { href: '/dashboard/price-lists', label: 'מחירונים', icon: ClipboardList },
   { href: '/dashboard/invoices', label: 'חשבוניות', icon: FileText },
