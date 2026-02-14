@@ -209,6 +209,8 @@ export default function CashManagementPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סוג</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">גרירה</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סכום</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">הערות</th>
@@ -227,6 +229,12 @@ export default function CashManagementPage() {
                           <span className="text-sm">{info.label}</span>
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-sm">
+                        {(tx as any).order_number ? (
+                          <span className="text-blue-600 font-medium">#{(tx as any).order_number}</span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{(tx as any).customer_name || '—'}</td>
                       <td className="px-4 py-3 font-bold">₪{Number(tx.amount).toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{formatDate(tx.created_at)} {formatTime(tx.created_at)}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{tx.notes || '—'}</td>

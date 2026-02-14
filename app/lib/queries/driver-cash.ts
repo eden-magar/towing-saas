@@ -33,7 +33,13 @@ export async function getDriverCashBalance(driverId: string): Promise<number> {
 export async function getDriverCashTransactions(driverId: string): Promise<DriverCashTransaction[]> {
   const { data, error } = await supabase
     .from('driver_cash_transactions')
-    .select('*')
+    .select(`
+      *,
+      tow:tows!driver_cash_transactions_tow_id_fkey(
+        order_number,
+        customer:customers!tows_customer_id_fkey(name)
+      )
+    `)
     .eq('driver_id', driverId)
     .order('created_at', { ascending: false })
 
@@ -42,7 +48,12 @@ export async function getDriverCashTransactions(driverId: string): Promise<Drive
     throw error
   }
 
-  return data || []
+  return (data || []).map((tx: any) => ({
+    ...tx,
+    order_number: tx.tow?.order_number || null,
+    customer_name: tx.tow?.customer?.name || null,
+    tow: undefined
+  }))
 }
 
 // יצירת רשומת גבייה (נהג גבה מזומן)
@@ -125,6 +136,10 @@ export async function getCompanyCashTransactions(
       driver:drivers!driver_cash_transactions_driver_id_fkey(
         id,
         user:users!drivers_user_id_fkey(full_name)
+      ),
+      tow:tows!driver_cash_transactions_tow_id_fkey(
+        order_number,
+        customer:customers!tows_customer_id_fkey(name)
       )
     `)
     .order('created_at', { ascending: false })
@@ -149,7 +164,10 @@ export async function getCompanyCashTransactions(
   return (data || []).map((tx: any) => ({
     ...tx,
     driver_name: tx.driver?.user?.full_name || 'לא ידוע',
-    driver: undefined
+    order_number: tx.tow?.order_number || null,
+    customer_name: tx.tow?.customer?.name || null,
+    driver: undefined,
+    tow: undefined
   }))
 }
 
