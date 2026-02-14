@@ -164,6 +164,7 @@ export interface Tow {
   created_at: string
   updated_at: string
   order_number: string | null
+  customer_order_number: string | null
   payment_method: string | null
   cash_collected: number | null
 }

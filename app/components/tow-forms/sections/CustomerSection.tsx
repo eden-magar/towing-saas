@@ -24,9 +24,8 @@ interface CustomerSectionProps {
   onTowDateChange: (date: string) => void
   onTowTimeChange: (time: string) => void
   onIsTodayChange: (isToday: boolean) => void
-  orderNumber: string
-  onOrderNumberChange: (value: string) => void
-  onOrderNumberBlur: () => void
+  customerOrderNumber: string
+  onCustomerOrderNumberChange: (value: string) => void
 }
 
 export function CustomerSection({
@@ -48,9 +47,8 @@ export function CustomerSection({
   onTowDateChange,
   onTowTimeChange,
   onIsTodayChange,
-  orderNumber,
-  onOrderNumberChange,
-  onOrderNumberBlur
+  customerOrderNumber,
+  onCustomerOrderNumberChange
 }: CustomerSectionProps) {
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('new')
   const [searchCustomer, setSearchCustomer] = useState('')
@@ -202,9 +200,9 @@ export function CustomerSection({
                     </label>
                     <input
                       type="text"
-                      value={orderNumber}
-                      onChange={(e) => onOrderNumberChange(e.target.value)}
-                      onBlur={onOrderNumberBlur}
+                      value={customerOrderNumber}
+                      onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
+                      placeholder="אופציונלי"
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
                   </div>
@@ -264,9 +262,9 @@ export function CustomerSection({
               </label>
               <input
                 type="text"
-                value={orderNumber}
-                onChange={(e) => onOrderNumberChange(e.target.value)}
-                onBlur={onOrderNumberBlur}
+                value={customerOrderNumber}
+                onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
+                placeholder="אופציונלי"
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
               />
             </div>

@@ -23,7 +23,7 @@ export interface SaveTowInput {
   // Company & User
   companyId: string
   userId: string
-  orderNumber?: string
+  customerOrderNumber?: string
   
   // Tow Type
   towType: 'single' | 'custom'
@@ -99,7 +99,7 @@ export interface PreparedTowPoint {
 export interface PreparedTowData {
   companyId: string
   createdBy: string
-  orderNumber?: string
+  customerOrderNumber?: string
   customerId?: string
   driverId?: string
   towType: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle'
@@ -580,7 +580,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     return {
       companyId: input.companyId,
       createdBy: input.userId,
-      orderNumber: input.orderNumber,
+      customerOrderNumber: input.customerOrderNumber,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
       towType: 'simple',
@@ -608,7 +608,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     return {
       companyId: input.companyId,
       createdBy: input.userId,
-      orderNumber: input.orderNumber,
+      customerOrderNumber: input.customerOrderNumber,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
       towType: 'multi_vehicle',

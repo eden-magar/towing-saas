@@ -336,7 +336,7 @@ export interface PreparedTowPoint {
 interface CreateTowInput {
   companyId: string
   createdBy: string
-  orderNumber?: string
+  customerOrderNumber?: string
   customerId?: string
   driverId?: string
   truckId?: string
@@ -384,7 +384,7 @@ export async function createTow(input: CreateTowInput) {
       id: towId,
       company_id: input.companyId,
       created_by: input.createdBy,
-      order_number: input.orderNumber || null,
+      customer_order_number: input.customerOrderNumber || null,
       customer_id: input.customerId || null,
       driver_id: input.driverId || null,
       truck_id: input.truckId || null,
