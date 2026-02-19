@@ -28,6 +28,7 @@ export default function DriverCashPage() {
   const [transferring, setTransferring] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [transferNotes, setTransferNotes] = useState('')
+const [transferAmount, setTransferAmount] = useState<number>(0)
 
   useEffect(() => {
     if (user) loadData()
@@ -54,12 +55,13 @@ export default function DriverCashPage() {
   }
 
   const handleTransfer = async () => {
-    if (!driverId || !user || balance <= 0) return
+    if (!driverId || !user || transferAmount <= 0) return
     setTransferring(true)
     try {
-      await createCashTransfer(driverId, balance, user.id, transferNotes || undefined)
+      await createCashTransfer(driverId, transferAmount, user.id, transferNotes || undefined)
       setShowTransferModal(false)
       setTransferNotes('')
+      setTransferAmount(0)
       await loadData()
     } catch (error) {
       console.error('Error creating transfer:', error)
@@ -123,7 +125,7 @@ export default function DriverCashPage() {
         {/* Transfer Button */}
         {balance > 0 && (
           <button
-            onClick={() => setShowTransferModal(true)}
+            onClick={() => { setShowTransferModal(true); setTransferAmount(balance); }}
             className="w-full mt-4 py-3 bg-white text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"
           >
             <Send size={18} />
@@ -175,7 +177,14 @@ export default function DriverCashPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
           <div className="w-full bg-white rounded-t-3xl p-6 pb-8">
             <h3 className="text-xl font-bold text-gray-800 mb-1 text-center">דיווח העברה לחברה</h3>
-            <p className="text-gray-500 text-center mb-6">סכום: ₪{balance.toLocaleString()}</p>
+            <p className="text-gray-500 text-center mb-4">יתרה: ₪{balance.toLocaleString()}</p>
+            <input
+              type="number"
+              value={transferAmount || ''}
+              onChange={(e) => setTransferAmount(Number(e.target.value))}
+              placeholder="סכום להעברה"
+              className="w-full p-3 border border-gray-200 rounded-xl text-right mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
             
             <textarea
               value={transferNotes}
