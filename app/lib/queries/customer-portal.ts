@@ -261,12 +261,17 @@ export async function updateCustomerUserRole(
 
 // השבתת/הפעלת משתמש לקוח
 export async function toggleCustomerUserActive(customerUserId: string, isActive: boolean) {
-  const { error } = await supabase
-    .from('customer_users')
-    .update({ is_active: isActive, updated_at: new Date().toISOString() })
-    .eq('id', customerUserId)
-
-  if (error) throw error
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  const res = await fetch('/api/customer-users', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ customerUserId, is_active: isActive })
+  })
+  if (!res.ok) throw new Error('שגיאה בעדכון סטטוס')
 }
 
 // מחיקת משתמש לקוח

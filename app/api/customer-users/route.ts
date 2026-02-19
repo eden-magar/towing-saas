@@ -205,14 +205,18 @@ export async function PATCH(req: NextRequest) {
     const isDashboardAdmin = dashboardUser?.role === 'company_admin' || dashboardUser?.role === 'super_admin'
 
     if (!isPortalAdmin && !isDashboardAdmin) return forbiddenResponse()
-    const { customerUserId, role } = await req.json()
-    if (!customerUserId || !role) {
-      return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
-    }
-    const { error } = await supabaseAdmin
-      .from('customer_users')
-      .update({ role, updated_at: new Date().toISOString() })
-      .eq('id', customerUserId)
+    const { customerUserId, role, is_active } = await req.json()
+if (!customerUserId || (role === undefined && is_active === undefined)) {
+  return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
+}
+const updateData: any = { updated_at: new Date().toISOString() }
+if (role !== undefined) updateData.role = role
+if (is_active !== undefined) updateData.is_active = is_active
+
+const { error } = await supabaseAdmin
+  .from('customer_users')
+  .update(updateData)
+  .eq('id', customerUserId)
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (err: any) {
