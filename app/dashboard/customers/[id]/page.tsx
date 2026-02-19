@@ -524,10 +524,10 @@ export default function CustomerDetailPage() {
                 <button
                   type="button"
                   onClick={() => handlePortalSettingChange(key, !portalSettings[key])}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors cursor-pointer ${portalSettings[key] ? 'bg-green-500' : 'bg-gray-300'}`}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${portalSettings[key] ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}
                 >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${portalSettings[key] ? 'translate-x-1' : 'translate-x-5'}`} />
-              </button>
+                  <span className="inline-block h-4 w-4 rounded-full bg-white shadow" />
+                </button>
               </div>
             ))}
           </div>
