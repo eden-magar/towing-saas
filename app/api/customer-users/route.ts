@@ -178,3 +178,29 @@ export async function DELETE(req: NextRequest) {
     )
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const currentUser = await getAuthUser(req)
+    if (!currentUser) return unauthorizedResponse()
+    if (currentUser.role !== 'company_admin' && currentUser.role !== 'super_admin') {
+      return forbiddenResponse()
+    }
+    const { customerUserId, role } = await req.json()
+    if (!customerUserId || !role) {
+      return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
+    }
+    const { error } = await supabaseAdmin
+      .from('customer_users')
+      .update({ role, updated_at: new Date().toISOString() })
+      .eq('id', customerUserId)
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    console.error('Error updating customer user role:', err)
+    return NextResponse.json(
+      { error: err.message || 'שגיאה בעדכון תפקיד' },
+      { status: 500 }
+    )
+  }
+}
