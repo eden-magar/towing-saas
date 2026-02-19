@@ -151,8 +151,8 @@ export async function getCompanyCashTransactions(
     query = query.gte('created_at', filters.fromDate)
   }
   if (filters?.toDate) {
-    query = query.lte('created_at', filters.toDate)
-  }
+    query = query.lte('created_at', filters.toDate + 'T23:59:59')
+}
 
   const { data, error } = await query
 
