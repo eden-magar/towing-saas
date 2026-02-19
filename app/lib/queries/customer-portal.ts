@@ -246,9 +246,14 @@ export async function updateCustomerUserRole(
   customerUserId: string,
   role: 'admin' | 'manager' | 'viewer'
 ) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
   const res = await fetch('/api/customer-users', {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
     body: JSON.stringify({ customerUserId, role })
   })
   if (!res.ok) throw new Error('שגיאה בעדכון תפקיד')
