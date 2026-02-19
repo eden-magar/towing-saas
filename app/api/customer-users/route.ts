@@ -181,11 +181,30 @@ export async function DELETE(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const currentUser = await getAuthUser(req)
-    if (!currentUser) return unauthorizedResponse()
-    if (currentUser.role !== 'company_admin' && currentUser.role !== 'super_admin') {
-      return forbiddenResponse()
-    }
+    const authHeader = req.headers.get('authorization')
+    if (!authHeader) return unauthorizedResponse()
+    const token = authHeader.replace('Bearer ', '')
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+    if (!user) return unauthorizedResponse()
+
+    // בדוק אם admin בפורטל
+    const { data: customerUser } = await supabaseAdmin
+      .from('customer_users')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+
+    // בדוק אם company_admin בדשבורד
+    const { data: dashboardUser } = await supabaseAdmin
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const isPortalAdmin = customerUser?.role === 'admin'
+    const isDashboardAdmin = dashboardUser?.role === 'company_admin' || dashboardUser?.role === 'super_admin'
+
+    if (!isPortalAdmin && !isDashboardAdmin) return forbiddenResponse()
     const { customerUserId, role } = await req.json()
     if (!customerUserId || !role) {
       return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
