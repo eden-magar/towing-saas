@@ -201,7 +201,7 @@ export default function CustomerDashboard() {
                   <div className="flex items-center gap-2">
                     {tow.order_number && (
                       <span className="text-sm font-bold text-gray-900">
-                        #{tow.order_number}
+                        #{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}
                       </span>
                     )}
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${config.bg} ${config.color}`}>

@@ -248,7 +248,7 @@ export default function TowsPage() {
                         </td>
                         <td className="px-4 py-4">
                           {tow.order_number ? (
-                            <span className="font-mono text-gray-800">{tow.order_number}</span>
+                            <span className="font-mono text-gray-800">{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
@@ -343,7 +343,7 @@ export default function TowsPage() {
                           {formatDate(tow.created_at)} | {formatTime(tow.created_at)}
                         </p>
                         {tow.order_number && (
-                          <p className="text-xs font-mono text-gray-400 mt-0.5">#{tow.order_number}</p>
+                          <p className="text-xs font-mono text-gray-400 mt-0.5">#{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</p>
                         )}
                       </div>
                       {tow.final_price && (

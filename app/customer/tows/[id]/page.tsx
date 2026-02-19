@@ -159,7 +159,7 @@ export default function CustomerTowDetail() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             {tow.order_number && (
-              <h1 className="text-xl font-bold text-gray-900">#{tow.order_number}</h1>
+              <h1 className="text-xl font-bold text-gray-900">#{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</h1>
             )}
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bg} ${config.color}`}>
               {config.label}

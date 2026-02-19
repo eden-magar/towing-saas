@@ -231,7 +231,7 @@ export default function CashManagementPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {(tx as any).order_number ? (
-                          <span className="text-blue-600 font-medium">#{(tx as any).order_number}</span>
+                          <span className="text-blue-600 font-medium">#{(tx as any).order_number}{(tx as any).customer_order_number ? ` (${(tx as any).customer_order_number})` : ''}</span>
                         ) : '—'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">{(tx as any).customer_name || '—'}</td>

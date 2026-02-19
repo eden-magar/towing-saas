@@ -505,6 +505,7 @@ export interface CustomerUserWithDetails extends CustomerUser {
 export interface CustomerPortalTow {
   id: string
   order_number: string | null
+  customer_order_number: string | null
   status: TowStatus
   tow_type: TowType
   scheduled_at: string | null

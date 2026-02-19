@@ -154,7 +154,7 @@ export default function DriverCashPage() {
                     <p className="font-medium text-gray-800">{info.label}</p>
                      <p className="text-xs text-gray-400">
                       {formatDate(tx.created_at)} • {formatTime(tx.created_at)}
-                      {(tx as any).order_number && <span className="mr-1">• גרירה #{(tx as any).order_number}</span>}
+                      {(tx as any).order_number && <span className="mr-1">• גרירה #{(tx as any).order_number}{(tx as any).customer_order_number ? ` (${(tx as any).customer_order_number})` : ''}</span>}
                     </p>
                     {tx.notes && (
                       <p className="text-xs text-gray-500 mt-0.5 truncate">{tx.notes}</p>
