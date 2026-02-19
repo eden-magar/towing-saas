@@ -130,7 +130,7 @@ export async function DELETE(req: NextRequest) {
     // === AUTH CHECK ===
     const currentUser = await getAuthUser(req)
     if (!currentUser) return unauthorizedResponse()
-    if (currentUser.role !== 'company_admin' && currentUser.role !== 'super_admin') {
+    if (currentUser.role !== 'company_admin' && currentUser.role !== 'super_admin' && currentUser.role !== 'customer') {
       return forbiddenResponse()
     }
     // === END AUTH CHECK ===
