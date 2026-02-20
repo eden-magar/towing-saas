@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Search, MapPin, User, ChevronLeft, Truck, Calendar, Phone } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '../../lib/AuthContext'
@@ -8,6 +9,7 @@ import { getTows, TowWithDetails } from '../../lib/queries/tows'
 
 export default function TowsPage() {
   const { companyId } = useAuth()
+  const router = useRouter()
   
   const [tows, setTows] = useState<TowWithDetails[]>([])
   const [pageLoading, setPageLoading] = useState(true)
@@ -241,7 +243,8 @@ export default function TowsPage() {
                     const { from, to } = getFromTo(tow)
                     const vehicle = tow.vehicles[0]
                     return (
-                      <tr key={tow.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={tow.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/tows/${tow.id}`)}>
+
                         <td className="px-4 py-4">
                           <span className="font-medium text-gray-800">{formatDate(tow.created_at)}</span>
                           <p className="text-xs text-gray-500">{formatTime(tow.created_at)}</p>
