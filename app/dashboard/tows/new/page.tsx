@@ -827,12 +827,14 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
           setRequiredTruckTypes(tow.required_truck_types as string[])
         }
         // Single tow - vehicle
-        if (tow.tow_type === 'simple' && tow.vehicles?.[0]) {
-          const v = tow.vehicles[0]
-          setVehiclePlate(v.plate_number || '')
-          setVehicleCode((v as any).vehicle_code || '')
-          setVehicleType((v as any).vehicle_type || '')
-          setSelectedDefects((v as any).defects || [])
+        const firstVehicle = tow.points
+          ?.flatMap((p: any) => p.vehicles || [])
+          ?.find((pv: any) => pv.vehicle)?.vehicle
+        if (firstVehicle) {
+          setVehiclePlate(firstVehicle.plate_number || '')
+          setVehicleCode((firstVehicle as any).vehicle_code || '')
+          setVehicleType((firstVehicle as any).vehicle_type || '')
+          setSelectedDefects((firstVehicle as any).defects || [])
         }
         // Points / addresses
         if (tow.points && tow.points.length > 0) {
@@ -865,8 +867,23 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
             contactName: p.contact_name || '',
             contactPhone: p.contact_phone || '',
             notes: p.notes || '',
-            vehiclesToPickup: [],
-            vehiclesToDropoff: [],
+            vehiclesToPickup: (p.vehicles || [])
+              .filter((pv: any) => pv.action === 'pickup' && pv.vehicle)
+              .map((pv: any) => ({
+                id: pv.vehicle.id,
+                plateNumber: pv.vehicle.plate_number || '',
+                isWorking: pv.vehicle.is_working !== false,
+                defects: [],
+                vehicleCode: '',
+                vehicleData: {
+                  manufacturer: pv.vehicle.manufacturer,
+                  model: pv.vehicle.model,
+                  color: pv.vehicle.color,
+                }
+              })),
+            vehiclesToDropoff: (p.vehicles || [])
+              .filter((pv: any) => pv.action === 'dropoff')
+              .map((pv: any) => pv.vehicle?.id || ''),
           }))
           setRoutePoints(points)
         }
