@@ -40,6 +40,7 @@ interface UseTowPricingParams {
   timeSurchargesData: TimeSurcharge[]
   isHoliday: boolean
   setActiveTimeSurchargesList: (list: TimeSurcharge[]) => void
+  isEditMode?: boolean
 }
 
 export function useTowPricing(params: UseTowPricingParams) {
@@ -71,6 +72,7 @@ export function useTowPricing(params: UseTowPricingParams) {
     timeSurchargesData,
     isHoliday,
     setActiveTimeSurchargesList,
+    isEditMode,
   } = params
 
   // Customer pricing
@@ -81,9 +83,11 @@ export function useTowPricing(params: UseTowPricingParams) {
     } else {
       setSelectedCustomerPricing(null)
     }
-    setPriceMode('recommended')
-    setSelectedPriceItem(null)
-    setCustomPrice('')
+    if (!isEditMode) {
+      setPriceMode('recommended')
+      setSelectedPriceItem(null)
+      setCustomPrice('')
+    }
   }, [selectedCustomerId, customersWithPricing])
 
   // Time surcharges calculation

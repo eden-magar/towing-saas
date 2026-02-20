@@ -481,6 +481,7 @@ export function useTowForm(editTowId?: string) {
     timeSurchargesData,
     isHoliday,
     setActiveTimeSurchargesList,
+    isEditMode: !!editTowId,
   })
 
   // ==================== Handlers ====================
