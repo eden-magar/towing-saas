@@ -244,11 +244,13 @@ export default function StoragePage() {
         })
       } else if (modalMode === 'edit' && selectedVehicle) {
         await updateStoredVehicle({
-          id: selectedVehicle.id,
-          customerId: formData.customerId || null,
-          location: formData.location || null,
-          notes: formData.notes || null
-        })
+        id: selectedVehicle.id,
+        customerId: formData.customerId || null,
+        location: formData.location || null,
+        notes: formData.notes || null,
+        vehicleCondition: formData.vehicleCondition,
+        vehicleCode: formData.vehicleCode || null
+      })
       } else if (modalMode === 'release' && selectedVehicle) {
         await releaseVehicleFromStorage({
           storedVehicleId: selectedVehicle.id,

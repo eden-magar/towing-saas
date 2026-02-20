@@ -197,15 +197,18 @@ interface UpdateStoredVehicleInput {
   customerId?: string | null
   location?: string | null
   notes?: string | null
+  vehicleCondition?: string | null
+  vehicleCode?: string | null
 }
-
 export async function updateStoredVehicle(input: UpdateStoredVehicleInput): Promise<boolean> {
   const { error } = await supabase
     .from('stored_vehicles')
     .update({
       customer_id: input.customerId,
       location: input.location,
-      notes: input.notes
+      notes: input.notes,
+      vehicle_condition: input.vehicleCondition,
+      vehicle_code: input.vehicleCode
     })
     .eq('id', input.id)
 
