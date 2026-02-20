@@ -810,12 +810,66 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
           setTowTime(d.toTimeString().slice(0, 5))
         }
         // Type
-        setTowType(tow.tow_type as TowType)
+        const towTypeMap: Record<string, TowType> = {
+          'simple': 'single',
+          'with_base': 'single',
+          'transfer': 'custom',
+          'multi_vehicle': 'custom',
+        }
+        setTowType(towTypeMap[tow.tow_type] || 'single')
         // Notes
         setNotes(tow.notes || '')
         // Price
-        setCustomPrice(String(tow.final_price || 0))
+        setCustomPrice(String(tow.final_price ?? 0))
         setCustomerOrderNumber(tow.customer_order_number || '')
+        // Required truck types
+        if (tow.required_truck_types) {
+          setRequiredTruckTypes(tow.required_truck_types as string[])
+        }
+        // Single tow - vehicle
+        if (tow.tow_type === 'simple' && tow.vehicles?.[0]) {
+          const v = tow.vehicles[0]
+          setVehiclePlate(v.plate_number || '')
+          setVehicleCode((v as any).vehicle_code || '')
+          setVehicleType((v as any).vehicle_type || '')
+          setSelectedDefects((v as any).defects || [])
+        }
+        // Points / addresses
+        if (tow.points && tow.points.length > 0) {
+          const pickup = tow.points.find((p: any) => p.point_type === 'pickup')
+          const dropoff = tow.points.find((p: any) => p.point_type === 'dropoff')
+          if (pickup) {
+            setPickupAddress({ 
+              address: pickup.address || '',
+              lat: pickup.lat ?? undefined,
+              lng: pickup.lng ?? undefined
+            })
+          }
+          if (dropoff) {
+            setDropoffAddress({ 
+              address: dropoff.address || '',
+              lat: dropoff.lat ?? undefined,
+              lng: dropoff.lng ?? undefined
+            })
+          }
+        }
+        // Custom tow - route points
+
+        if (tow.tow_type === 'multi_vehicle' && tow.points) {
+          const points: RoutePoint[] = tow.points.map((p: any) => ({
+            id: p.id,
+            type: p.point_type === 'pickup' ? 'stop' : 'stop',
+            isStopOnly: false,
+            address: p.address || '',
+            addressData: { lat: p.lat ?? undefined, lng: p.lng ?? undefined },
+            contactName: p.contact_name || '',
+            contactPhone: p.contact_phone || '',
+            notes: p.notes || '',
+            vehiclesToPickup: [],
+            vehiclesToDropoff: [],
+          }))
+          setRoutePoints(points)
+        }
       } catch (err) {
         console.error('Error loading tow for edit:', err)
       }
