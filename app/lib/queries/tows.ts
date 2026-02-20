@@ -116,6 +116,9 @@ export interface TowWithDetails {
   price_mode: 'recommended' | 'fixed' | 'customer' | 'custom' | null
   payment_method: string | null
   invoice_name: string | null
+  start_from_base: boolean | null
+  dropoff_to_storage: boolean | null
+
   // שדות מורחבים
   customer: {
     id: string
@@ -375,6 +378,11 @@ interface CreateTowInput {
   }[]
   // NEW: נקודות גרירה
   points?: PreparedTowPoint[]
+  paymentMethod?: string
+  invoiceName?: string
+  startFromBase?: boolean
+  dropoffToStorage?: boolean
+
 }
 
 export async function createTow(input: CreateTowInput) {
@@ -399,7 +407,11 @@ export async function createTow(input: CreateTowInput) {
       scheduled_at: input.scheduledAt || null,
       notes: input.notes || null,
       price_mode: input.priceMode || 'recommended',
-      final_price: input.finalPrice || null
+      final_price: input.finalPrice || null,
+      payment_method: input.paymentMethod || null,
+      invoice_name: input.invoiceName || null,
+      start_from_base: input.startFromBase || false,
+      dropoff_to_storage: input.dropoffToStorage || false
       
     })
 
@@ -629,6 +641,8 @@ interface UpdateTowInput {
   points?: PreparedTowPoint[]
   paymentMethod?: string | null
   invoiceName?: string | null
+  startFromBase?: boolean | null
+  dropoffToStorage?: boolean | null
 }
 
 export async function updateTow(input: UpdateTowInput) {

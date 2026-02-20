@@ -76,6 +76,10 @@ export interface SaveTowInput {
   pickupContactPhone?: string
   dropoffContactName?: string
   dropoffContactPhone?: string
+
+  paymentMethod?: string
+  invoiceName?: string
+  dropoffToStorage?: boolean
 }
 
 // ==================== NEW: TowPoint Types ====================
@@ -134,6 +138,10 @@ export interface PreparedTowData {
     toLat?: number
     toLng?: number
   }[]
+  paymentMethod?: string
+  invoiceName?: string
+  startFromBase?: boolean
+  dropoffToStorage?: boolean
   // NEW: נקודות גרירה
   points: PreparedTowPoint[]
 }
@@ -592,7 +600,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       priceBreakdown,
       vehicles,
       legs,
-      points
+      points,
+      paymentMethod: input.paymentMethod || undefined,
+      invoiceName: input.invoiceName || undefined,
+      startFromBase: input.startFromBase || false,
+      dropoffToStorage: input.dropoffToStorage || false
     }
   }
 
@@ -620,7 +632,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       priceBreakdown,
       vehicles,
       legs,
-      points
+      points,
+      paymentMethod: input.paymentMethod || undefined,
+      invoiceName: input.invoiceName || undefined,
+      startFromBase: input.startFromBase || false,
+      dropoffToStorage: input.dropoffToStorage || false
     }
   }
 

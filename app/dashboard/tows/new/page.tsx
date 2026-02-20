@@ -824,6 +824,9 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
         // Price
         setCustomPrice(String(tow.final_price ?? 0))
         setCustomerOrderNumber(tow.customer_order_number || '')
+        // Payment
+        setPaymentMethod((tow as any).payment_method || 'cash')
+        setInvoiceName((tow as any).invoice_name || '')
         // Required truck types
         if (tow.required_truck_types) {
           setRequiredTruckTypes(tow.required_truck_types as string[])
@@ -1292,7 +1295,10 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
       pickupContactName,
       pickupContactPhone,
       dropoffContactName,
-      dropoffContactPhone
+      dropoffContactPhone,
+      paymentMethod: paymentMethod || undefined,
+      invoiceName: invoiceName || undefined,
+      dropoffToStorage,
     })
 
     const result = await createTow(towData)

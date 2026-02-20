@@ -1402,6 +1402,29 @@ export default function TowDetailsPage() {
                 </div>
               </div>
 
+              {/* תשלום */}
+              {(tow.payment_method || tow.invoice_name) && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                    <h2 className="font-bold text-gray-800">פרטי תשלום</h2>
+                  </div>
+                  <div className="p-4 sm:p-5 space-y-3">
+                    {tow.payment_method && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">אמצעי תשלום</span>
+                        <span className="font-medium text-gray-800">{tow.payment_method}</span>
+                      </div>
+                    )}
+                    {tow.invoice_name && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">שם לחשבונית</span>
+                        <span className="font-medium text-gray-800">{tow.invoice_name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* חשבונית */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-emerald-500 text-white">
