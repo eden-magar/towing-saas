@@ -135,6 +135,13 @@ export default function TowDetailsPage() {
     cancelled: { label: 'בוטל', color: 'bg-gray-100 text-gray-500 border-gray-200' },
   }
 
+  const towTypeLabels: Record<string, string> = {
+    simple: 'גרירה פשוטה',
+    with_base: 'יציאה מבסיס',
+    transfer: 'העברה',
+    multi_vehicle: 'מרובת רכבים',
+  }
+
   // טעינת נתונים
   useEffect(() => {
     if (companyId && towId) {
@@ -680,6 +687,11 @@ export default function TowDetailsPage() {
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${statusConfig[tow.status]?.color}`}>
                     {statusConfig[tow.status]?.label}
                   </span>
+                  {tow.tow_type && (
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-gray-100 text-gray-700 border-gray-200">
+                      {towTypeLabels[tow.tow_type] || tow.tow_type}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-500 hidden sm:block">נוצר ב-{new Date(tow.created_at).toLocaleString('he-IL')}</p>
               </div>
@@ -996,6 +1008,9 @@ export default function TowDetailsPage() {
                             )}
                             {vehicle.color && (
                               <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.color}</span>
+                            )}
+                            {vehicle.vehicle_code && (
+                              <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm">#{vehicle.vehicle_code}</span>
                             )}
                             {vehicle.tow_reason && (
                               <span className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-sm">{vehicle.tow_reason}</span>
