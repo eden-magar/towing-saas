@@ -1106,6 +1106,12 @@ function NewTowForm() {
     return
   }
   setTruckTypeError(false)
+
+  // Validation - vehicle plate required for storage dropoff
+  if (dropoffToStorage && !vehiclePlate) {
+    setError('יש להזין מספר לוחית לרכב המיועד לאחסנה')
+    return
+  }
   
   // Validation for single tow
   if (towType === 'single') {
