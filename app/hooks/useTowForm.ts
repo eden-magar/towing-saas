@@ -335,6 +335,7 @@ export function useTowForm(editTowId?: string) {
         setNotes(tow.notes || '')
         // Price
         setCustomPrice(String(tow.final_price ?? 0))
+        setPriceMode('custom')
         setCustomerOrderNumber(tow.customer_order_number || '')
         // Payment
         setPaymentMethod((tow as any).payment_method || 'cash')
