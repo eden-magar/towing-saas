@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { FixedPriceItem, CustomerWithPricing } from '../../../lib/queries/price-lists'
 
 // ==================== Types ====================
@@ -10,25 +11,24 @@ export interface PriceItem {
   price: number
 }
 
-export type PriceMode = 'recommended' | 'fixed' | 'customer' | 'custom'
-
-interface DistanceResult {
+export interface DistanceResult {
   distanceKm: number
   durationMinutes: number
 }
 
 interface PriceSelectorProps {
-  priceMode: PriceMode
-  setPriceMode: (mode: PriceMode) => void
+  priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
+  setPriceMode: (mode: 'recommended' | 'fixed' | 'customer' | 'custom') => void
   selectedPriceItem: PriceItem | null
   setSelectedPriceItem: (item: PriceItem | null) => void
   customPrice: string
   setCustomPrice: (price: string) => void
   recommendedPrice: number
   distance: DistanceResult | null
-  basePriceList: { price_per_km?: number } | null
+  basePriceList: any
   fixedPriceItems: FixedPriceItem[]
   selectedCustomerPricing: CustomerWithPricing | null
+  showRecommended?: boolean
 }
 
 // ==================== Component ====================
@@ -44,88 +44,60 @@ export function PriceSelector({
   distance,
   basePriceList,
   fixedPriceItems,
-  selectedCustomerPricing
+  selectedCustomerPricing,
+  showRecommended = true
 }: PriceSelectorProps) {
   const hasCustomerPricing = selectedCustomerPricing && selectedCustomerPricing.price_items.length > 0
   const hasFixedPrices = fixedPriceItems.length > 0
 
+  // If recommended is hidden and priceMode is recommended, switch to another mode
+  useEffect(() => {
+    if (!showRecommended && priceMode === 'recommended') {
+      if (hasCustomerPricing) {
+        setPriceMode('customer')
+      } else if (hasFixedPrices) {
+        setPriceMode('fixed')
+      } else {
+        setPriceMode('custom')
+      }
+    }
+  }, [showRecommended, priceMode, hasCustomerPricing, hasFixedPrices, setPriceMode])
+
   return (
     <div className="space-y-3">
-      {/* מחיר מומלץ */}
-      <button
-        type="button"
-        onClick={() => { setPriceMode('recommended'); setSelectedPriceItem(null); setCustomPrice('') }}
-        className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
-          priceMode === 'recommended' ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200 hover:border-gray-300'
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              priceMode === 'recommended' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-500'
-            }`}>
-              📊
-            </div>
-            <div>
-              <p className={`font-medium ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-700'}`}>מחיר מומלץ</p>
-              <p className="text-xs text-gray-500">
-                {distance ? `${distance.distanceKm} ק״מ × ₪${basePriceList?.price_per_km || 12}` : 'חישוב אוטומטי לפי מחירון'}
-              </p>
-            </div>
-          </div>
-          <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
-            ₪{recommendedPrice}
-          </span>
-        </div>
-      </button>
-
-      {/* מחירון כללי */}
-      {hasFixedPrices && (
-        <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'fixed' ? 'border-emerald-500' : 'border-gray-200'}`}>
-          <button
-            type="button"
-            onClick={() => { setPriceMode('fixed'); setSelectedPriceItem(null); setCustomPrice('') }}
-            className={`w-full p-4 text-right ${priceMode === 'fixed' ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
-          >
+      {/* מחיר מומלץ - only show for single tow */}
+      {showRecommended && (
+        <button
+          onClick={() => { setPriceMode('recommended'); setSelectedPriceItem(null); setCustomPrice('') }}
+          className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
+            priceMode === 'recommended' ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${priceMode === 'fixed' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                📋
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                priceMode === 'recommended' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                📊
               </div>
               <div>
-                <p className={`font-medium ${priceMode === 'fixed' ? 'text-emerald-700' : 'text-gray-700'}`}>מחירון כללי</p>
-                <p className="text-xs text-gray-500">תעריפים קבועים</p>
+                <p className={`font-medium ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-700'}`}>מחיר מומלץ</p>
+                <p className="text-xs text-gray-500">
+                  {distance ? `${distance.distanceKm} ק״מ × ₪${basePriceList?.price_per_km || 12}` : 'חישוב אוטומטי לפי מחירון'}
+                </p>
               </div>
             </div>
-          </button>
-          
-          {priceMode === 'fixed' && (
-            <div className="p-3 pt-0 space-y-2">
-              {fixedPriceItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedPriceItem({ id: item.id, label: item.label, price: item.price })}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
-                    selectedPriceItem?.id === item.id ? 'border-emerald-500 bg-emerald-100' : 'border-gray-200 bg-white hover:border-emerald-300'
-                  }`}
-                >
-                  <div className="text-right">
-                    <span className={`font-medium ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-700'}`}>{item.label}</span>
-                    {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
-                  </div>
-                  <span className={`font-bold ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-800'}`}>₪{item.price}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
+              ₪{recommendedPrice}
+            </span>
+          </div>
+        </button>
       )}
 
-      {/* מחירון לקוח */}
+      {/* מחירון לקוח - show first if customer is selected */}
       {hasCustomerPricing && (
         <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'customer' ? 'border-purple-500' : 'border-gray-200'}`}>
           <button
-            type="button"
             onClick={() => { setPriceMode('customer'); setSelectedPriceItem(null); setCustomPrice('') }}
             className={`w-full p-4 text-right ${priceMode === 'customer' ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
           >
@@ -152,7 +124,6 @@ export function PriceSelector({
               {selectedCustomerPricing.price_items.map((item) => (
                 <button
                   key={item.id}
-                  type="button"
                   onClick={() => setSelectedPriceItem({ id: item.id, label: item.label, price: item.price })}
                   className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
                     selectedPriceItem?.id === item.id ? 'border-purple-500 bg-purple-100' : 'border-gray-200 bg-white hover:border-purple-300'
@@ -167,10 +138,49 @@ export function PriceSelector({
         </div>
       )}
 
+      {/* מחירון כללי */}
+      {hasFixedPrices && (
+        <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'fixed' ? 'border-emerald-500' : 'border-gray-200'}`}>
+          <button
+            onClick={() => { setPriceMode('fixed'); setSelectedPriceItem(null); setCustomPrice('') }}
+            className={`w-full p-4 text-right ${priceMode === 'fixed' ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${priceMode === 'fixed' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                📋
+              </div>
+              <div>
+                <p className={`font-medium ${priceMode === 'fixed' ? 'text-emerald-700' : 'text-gray-700'}`}>מחירון כללי</p>
+                <p className="text-xs text-gray-500">תעריפים קבועים</p>
+              </div>
+            </div>
+          </button>
+          
+          {priceMode === 'fixed' && (
+            <div className="p-3 pt-0 space-y-2">
+              {fixedPriceItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedPriceItem({ id: item.id, label: item.label, price: item.price })}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    selectedPriceItem?.id === item.id ? 'border-emerald-500 bg-emerald-100' : 'border-gray-200 bg-white hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="text-right">
+                    <span className={`font-medium ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-700'}`}>{item.label}</span>
+                    {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
+                  </div>
+                  <span className={`font-bold ${selectedPriceItem?.id === item.id ? 'text-emerald-700' : 'text-gray-800'}`}>₪{item.price}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* מחיר ידני */}
       <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'custom' ? 'border-amber-500' : 'border-gray-200'}`}>
         <button
-          type="button"
           onClick={() => { setPriceMode('custom'); setSelectedPriceItem(null) }}
           className={`w-full p-4 text-right ${priceMode === 'custom' ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
         >
