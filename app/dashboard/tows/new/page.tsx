@@ -841,15 +841,15 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
           if (pickup) {
             setPickupAddress({ 
               address: pickup.address || '',
-              lat: pickup.lat ?? undefined,
-              lng: pickup.lng ?? undefined
+              lat: pickup.lat ? Number(pickup.lat) : undefined,
+              lng: pickup.lng ? Number(pickup.lng) : undefined
             })
           }
           if (dropoff) {
             setDropoffAddress({ 
               address: dropoff.address || '',
-              lat: dropoff.lat ?? undefined,
-              lng: dropoff.lng ?? undefined
+              lat: dropoff.lat ? Number(dropoff.lat) : undefined,
+              lng: dropoff.lng ? Number(dropoff.lng) : undefined
             })
           }
         }
@@ -861,7 +861,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
             type: p.point_type === 'pickup' ? 'stop' : 'stop',
             isStopOnly: false,
             address: p.address || '',
-            addressData: { lat: p.lat ?? undefined, lng: p.lng ?? undefined },
+            addressData: { lat: p.lat ? Number(p.lat) : undefined, lng: p.lng ? Number(p.lng) : undefined },
             contactName: p.contact_name || '',
             contactPhone: p.contact_phone || '',
             notes: p.notes || '',
