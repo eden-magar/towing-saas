@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import type { TowChangeLog } from '../types'
 
 // ==================== טיפוסים ====================
 
@@ -925,4 +926,39 @@ export async function recalculateTowPrice(
     newPrice: newTotal,
     newBreakdown
   }
+}
+
+// שמירת לוג שינויים
+export async function saveTowChangeLogs(
+  towId: string,
+  changedBy: string,
+  changes: { field_name: string; old_value: string | null; new_value: string | null }[]
+) {
+  if (changes.length === 0) return
+  const { error } = await supabase
+    .from('tow_change_log')
+    .insert(changes.map(c => ({
+      tow_id: towId,
+      changed_by: changedBy,
+      field_name: c.field_name,
+      old_value: c.old_value,
+      new_value: c.new_value
+    })))
+  if (error) throw error
+}
+
+// טעינת לוג שינויים
+export async function getTowChangeLogs(towId: string): Promise<TowChangeLog[]> {
+  const { data, error } = await supabase
+    .from('tow_change_log')
+    .select(`
+      *,
+      user:users!tow_change_log_changed_by_fkey (
+        full_name
+      )
+    `)
+    .eq('tow_id', towId)
+    .order('changed_at', { ascending: false })
+  if (error) throw error
+  return data || []
 }

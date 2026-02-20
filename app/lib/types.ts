@@ -565,3 +565,16 @@ export interface DriverCashTransaction {
   created_at: string
   created_by: string
 }
+
+export interface TowChangeLog {
+  id: string
+  tow_id: string
+  changed_by: string
+  changed_at: string
+  field_name: string
+  old_value: string | null
+  new_value: string | null
+  user?: {
+    full_name: string
+  }
+}
