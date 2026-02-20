@@ -14,7 +14,7 @@ import { ArrowRight, Check, Truck, Loader2, MapPin, Navigation, X } from 'lucide
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../lib/AuthContext'
-import { createTow, getTowWithPoints } from '../../../lib/queries/tows'
+import { createTow, getTowWithPoints, updateTow } from '../../../lib/queries/tows'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
@@ -1301,54 +1301,57 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
       dropoffToStorage,
     })
 
-    const result = await createTow(towData)
-
-    // Handle storage operations
-  if (selectedStoredVehicleId && companyId) {
-    // Release vehicle from storage
-    await releaseVehicleFromStorage({
-      storedVehicleId: selectedStoredVehicleId,
-      towId: result.id,
-      performedBy: user?.id,
-      notes: 'שוחרר לגרירה'
-    })
-  }
-
-  if (dropoffToStorage && companyId) {
-  await addVehicleToStorage({
-    companyId,
-    customerId: selectedCustomerId || undefined,
-    plateNumber: vehiclePlate,
-    vehicleData: vehicleData?.data ? {
-      manufacturer: vehicleData.data.manufacturer || undefined,
-      model: vehicleData.data.model || undefined,
-      year: vehicleData.data.year?.toString() || undefined,
-      color: vehicleData.data.color || undefined,
-      gearType: vehicleData.data.gearType || undefined,
-      driveType: vehicleData.data.driveType || undefined,
-      totalWeight: vehicleData.data.totalWeight?.toString() || undefined,
-    } : undefined,
-    location: undefined,
-    towId: result.id,
-    performedBy: user?.id,
-    notes: 'נכנס מגרירה',
-    vehicleCondition: selectedDefects.length > 0 ? 'faulty' : 'operational',
-  })
-}
-
-    setSavedTowId(result.id)
-    if (!preSelectedDriverId) {
-      setShowAssignNowModal(true)
+    if (editTowId) {
+      await updateTow({ ...towData, towId: editTowId })
+      router.push(`/dashboard/tows/${editTowId}`)
     } else {
-      router.push('/dashboard/calendar')
+      const result = await createTow(towData)
+
+      if (selectedStoredVehicleId && companyId) {
+        await releaseVehicleFromStorage({
+          storedVehicleId: selectedStoredVehicleId,
+          towId: result.id,
+          performedBy: user?.id,
+          notes: 'שוחרר לגרירה'
+        })
+      }
+
+      if (dropoffToStorage && companyId) {
+        await addVehicleToStorage({
+          companyId,
+          customerId: selectedCustomerId || undefined,
+          plateNumber: vehiclePlate,
+          vehicleData: vehicleData?.data ? {
+            manufacturer: vehicleData.data.manufacturer || undefined,
+            model: vehicleData.data.model || undefined,
+            year: vehicleData.data.year?.toString() || undefined,
+            color: vehicleData.data.color || undefined,
+            gearType: vehicleData.data.gearType || undefined,
+            driveType: vehicleData.data.driveType || undefined,
+            totalWeight: vehicleData.data.totalWeight?.toString() || undefined,
+          } : undefined,
+          location: undefined,
+          towId: result.id,
+          performedBy: user?.id,
+          notes: 'נכנס מגרירה',
+          vehicleCondition: selectedDefects.length > 0 ? 'faulty' : 'operational',
+        })
+      }
+
+      setSavedTowId(result.id)
+      if (!preSelectedDriverId) {
+        setShowAssignNowModal(true)
+      } else {
+        router.push('/dashboard/calendar')
+      }
     }
-  } catch (err) {
-    console.error('Error creating tow:', err)
-    setError('שגיאה ביצירת הגרירה')
-  } finally {
-    setSaving(false)
-  }
-}
+    } catch (err) {
+      console.error('Error saving tow:', err)
+      setError(editTowId ? 'שגיאה בעדכון הגרירה' : 'שגיאה ביצירת הגרירה')
+    } finally {
+      setSaving(false)
+    }
+    }
 
   // ==================== Render ====================
   
