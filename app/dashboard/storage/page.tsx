@@ -443,8 +443,10 @@ export default function StoragePage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-800">{vehicle.plate_number}</p>
-                          {(vehicle as any).vehicle_condition === 'faulty' && (
+                          {(vehicle as any).vehicle_condition === 'faulty' ? (
                             <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">תקין</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -543,8 +545,10 @@ export default function StoragePage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-gray-800">{vehicle.plate_number}</p>
-                      {(vehicle as any).vehicle_condition === 'faulty' && (
+                     {(vehicle as any).vehicle_condition === 'faulty' ? (
                         <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">תקין</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
