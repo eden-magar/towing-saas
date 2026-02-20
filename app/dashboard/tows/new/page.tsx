@@ -14,7 +14,7 @@ import { ArrowRight, Check, Truck, Loader2, MapPin, Navigation, X } from 'lucide
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../lib/AuthContext'
-import { createTow } from '../../../lib/queries/tows'
+import { createTow, getTowWithPoints } from '../../../lib/queries/tows'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
@@ -522,7 +522,7 @@ function PriceSelector({
 }
 
 // ==================== Main Form Component ====================
-function NewTowForm() {
+function NewTowForm({ editTowId }: { editTowId?: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, companyId } = useAuth()
@@ -789,6 +789,39 @@ function NewTowForm() {
   useEffect(() => {
     if (companyId) loadData()
   }, [companyId])
+
+  // Load existing tow for editing
+  useEffect(() => {
+    if (!editTowId || !companyId) return
+    const loadTowForEdit = async () => {
+      try {
+        const tow = await getTowWithPoints(editTowId)
+        if (!tow) return
+        // Customer
+        setSelectedCustomerId(tow.customer_id)
+        setCustomerName(tow.customer?.name || '')
+        setCustomerPhone(tow.customer?.phone || '')
+        setCustomerEmail(tow.customer?.email || '')
+        setCustomerAddress(tow.customer?.address || '')
+        // Date/Time
+        if (tow.scheduled_at) {
+          const d = new Date(tow.scheduled_at)
+          setTowDate(d.toISOString().split('T')[0])
+          setTowTime(d.toTimeString().slice(0, 5))
+        }
+        // Type
+        setTowType(tow.tow_type as TowType)
+        // Notes
+        setNotes(tow.notes || '')
+        // Price
+        setCustomPrice(String(tow.final_price || 0))
+        setCustomerOrderNumber(tow.customer_order_number || '')
+      } catch (err) {
+        console.error('Error loading tow for edit:', err)
+      }
+    }
+    loadTowForEdit()
+  }, [editTowId, companyId])
 
   const loadData = async () => {
     if (!companyId) return
@@ -1650,13 +1683,15 @@ function NewTowForm() {
 
 // Wrapper with Suspense
 export default function NewTowPage() {
+  const searchParams = useSearchParams()
+  const editTowId = searchParams.get('edit') || undefined
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-500">טוען...</div>
       </div>
     }>
-      <NewTowForm />
+      <NewTowForm editTowId={editTowId} />
     </Suspense>
   )
 }
