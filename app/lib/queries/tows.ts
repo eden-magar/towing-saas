@@ -114,6 +114,8 @@ export interface TowWithDetails {
   created_at: string
   updated_at: string
   price_mode: 'recommended' | 'fixed' | 'customer' | 'custom' | null
+  payment_method: string | null
+  invoice_name: string | null
   // שדות מורחבים
   customer: {
     id: string
@@ -625,6 +627,8 @@ interface UpdateTowInput {
   }[]
   // NEW: נקודות גרירה
   points?: PreparedTowPoint[]
+  paymentMethod?: string | null
+  invoiceName?: string | null
 }
 
 export async function updateTow(input: UpdateTowInput) {
@@ -636,6 +640,8 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.priceBreakdown !== undefined) towUpdates.price_breakdown = input.priceBreakdown
   if (input.requiredTruckTypes !== undefined) towUpdates.required_truck_types = input.requiredTruckTypes
   if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
+  if (input.paymentMethod !== undefined) towUpdates.payment_method = input.paymentMethod
+if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
 
 
   if (Object.keys(towUpdates).length > 0) {
