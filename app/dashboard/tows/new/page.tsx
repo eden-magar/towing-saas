@@ -154,6 +154,7 @@ function PinDropModal({
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
   const markerRef = useRef<google.maps.Marker | null>(null)
+  const isLoadingEdit = useRef(false)
   const [currentAddress, setCurrentAddress] = useState('')
   const [currentPosition, setCurrentPosition] = useState<{ lat: number; lng: number } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -583,7 +584,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
 
   // Reset when tow type changes
   useEffect(() => {
-    if (towType) {
+    if (towType && !isLoadingEdit.current) {
       resetForm(true)
     }
   }, [towType])
@@ -626,6 +627,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
   const [requiredTruckTypes, setRequiredTruckTypes] = useState<string[]>([])
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
+  const isLoadingEdit = useRef(false)
 
   // Storage
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
@@ -795,6 +797,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     if (!editTowId || !companyId) return
     const loadTowForEdit = async () => {
       try {
+        isLoadingEdit.current = true
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
         // Customer
@@ -889,6 +892,8 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
         }
       } catch (err) {
         console.error('Error loading tow for edit:', err)
+      } finally {
+        isLoadingEdit.current = false
       }
     }
     loadTowForEdit()
