@@ -47,6 +47,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     priceMode, setPriceMode,
     selectedPriceItem, setSelectedPriceItem,
     customPrice, setCustomPrice,
+    customPriceIncludesVat, setCustomPriceIncludesVat,
     // Customer
     customerOrderNumber, setCustomerOrderNumber,
     customerName, setCustomerName,
@@ -398,6 +399,8 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                     basePriceList={basePriceList}
                     fixedPriceItems={fixedPriceItems}
                     selectedCustomerPricing={selectedCustomerPricing}
+                    customPriceIncludesVat={customPriceIncludesVat}
+                    setCustomPriceIncludesVat={setCustomPriceIncludesVat}
                   />
                 </div>
               </div>

@@ -298,7 +298,8 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
           manufacturer,
           model,
           color,
-          is_working
+          is_working,
+          vehicle_type
         )
       ),
       images:tow_images (
@@ -352,7 +353,7 @@ interface CreateTowInput {
   notes?: string
   finalPrice?: number
   priceMode?: 'recommended' | 'fixed' | 'customer' | 'custom'
-  priceBreakdown?: PriceBreakdown
+  priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles: {
     plateNumber: string
@@ -659,6 +660,7 @@ if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
 
 
   if (Object.keys(towUpdates).length > 0) {
+    console.log('updateTow DB payload:', { towId: input.towId, towUpdates })
     const { error: towError } = await supabase
       .from('tows')
       .update(towUpdates)

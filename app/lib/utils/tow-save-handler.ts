@@ -111,7 +111,7 @@ export interface PreparedTowData {
   notes?: string
   finalPrice?: number
   priceMode?: 'recommended' | 'fixed' | 'customer' | 'custom'
-  priceBreakdown?: PriceBreakdown
+  priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles: {
     plateNumber: string
@@ -554,7 +554,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירה רגילה
   if (input.towType === 'single') {
-    const priceBreakdown = buildSingleTowPriceBreakdown(input)
+    const priceBreakdown = input.priceMode === 'custom' ? null : buildSingleTowPriceBreakdown(input)
     
     const vehicles: PreparedTowData['vehicles'] = [{
       plateNumber: input.vehiclePlate || '',
@@ -610,7 +610,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירה מותאמת
   if (input.towType === 'custom' && input.routePoints) {
-    const priceBreakdown = buildCustomTowPriceBreakdown(input, input.routePoints)
+    const priceBreakdown = input.priceMode === 'custom' ? null : buildSingleTowPriceBreakdown(input)
     const vehicles = collectVehiclesFromRoutePoints(input.routePoints)
     const legs = convertRoutePointsToLegs(input.routePoints)
     

@@ -74,6 +74,7 @@ export function useTowForm(editTowId?: string) {
   const [priceMode, setPriceMode] = useState<'recommended' | 'fixed' | 'customer' | 'custom'>('recommended')
   const [selectedPriceItem, setSelectedPriceItem] = useState<PriceItem | null>(null)
   const [customPrice, setCustomPrice] = useState<string>('')
+  const [customPriceIncludesVat, setCustomPriceIncludesVat] = useState(true)
 
   const [customerOrderNumber, setCustomerOrderNumber] = useState('')
   
@@ -349,6 +350,7 @@ export function useTowForm(editTowId?: string) {
           ?.flatMap((p: any) => p.vehicles || [])
           ?.find((pv: any) => pv.vehicle)?.vehicle
         if (firstVehicle) {
+          console.log('firstVehicle:', firstVehicle)
           setVehiclePlate(firstVehicle.plate_number || '')
           setVehicleCode((firstVehicle as any).vehicle_code || '')
           setVehicleType((firstVehicle as any).vehicle_type || '')
@@ -482,6 +484,7 @@ export function useTowForm(editTowId?: string) {
     isHoliday,
     setActiveTimeSurchargesList,
     isEditMode: !!editTowId,
+    customPriceIncludesVat,
   })
 
   // ==================== Handlers ====================
@@ -682,6 +685,7 @@ export function useTowForm(editTowId?: string) {
     priceMode, setPriceMode,
     selectedPriceItem, setSelectedPriceItem,
     customPrice, setCustomPrice,
+    customPriceIncludesVat, setCustomPriceIncludesVat,
     // Customer
     customerOrderNumber, setCustomerOrderNumber,
     customerName, setCustomerName,

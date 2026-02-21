@@ -228,6 +228,7 @@ export function useTowSave(params: UseTowSaveParams) {
     })
 
     if (editTowId) {
+      console.log('updateTow data:', { ...towData, towId: editTowId, finalPrice: towData.finalPrice, priceMode: towData.priceMode })
       await updateTow({ ...towData, towId: editTowId })
       router.push(`/dashboard/tows/${editTowId}`)
     } else {

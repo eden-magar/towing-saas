@@ -1394,11 +1394,17 @@ export default function TowDetailsPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-gray-800">סה״כ</span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm text-gray-500">
+                      <span>מע"מ (18%)</span>
+                      <span>{Math.round((tow.final_price || 0) * 18 / 118)} ש״ח</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t pt-2">
+                      <span className="font-bold text-gray-800">סה״כ כולל מע"מ</span>
                       <span className="text-2xl font-bold text-gray-800">{tow.final_price || 0} ש״ח</span>
                     </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
 

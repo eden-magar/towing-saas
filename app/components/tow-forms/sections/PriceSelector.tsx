@@ -29,6 +29,8 @@ interface PriceSelectorProps {
   fixedPriceItems: FixedPriceItem[]
   selectedCustomerPricing: CustomerWithPricing | null
   showRecommended?: boolean
+  customPriceIncludesVat?: boolean
+  setCustomPriceIncludesVat?: (v: boolean) => void
 }
 
 // ==================== Component ====================
@@ -45,7 +47,9 @@ export function PriceSelector({
   basePriceList,
   fixedPriceItems,
   selectedCustomerPricing,
-  showRecommended = true
+  showRecommended = true,
+  customPriceIncludesVat = true,
+  setCustomPriceIncludesVat,
 }: PriceSelectorProps) {
   const hasCustomerPricing = selectedCustomerPricing && selectedCustomerPricing.price_items.length > 0
   const hasFixedPrices = fixedPriceItems.length > 0
@@ -196,7 +200,7 @@ export function PriceSelector({
         </button>
         
         {priceMode === 'custom' && (
-          <div className="p-3 pt-0">
+          <div className="p-3 pt-0 space-y-2">
             <div className="relative">
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">₪</span>
               <input
@@ -208,6 +212,15 @@ export function PriceSelector({
                 autoFocus
               />
             </div>
+            <button
+              onClick={() => setCustomPriceIncludesVat?.(!customPriceIncludesVat)}
+              className="flex items-center gap-2 py-1"
+            >
+              <div className={`relative w-10 h-5 rounded-full transition-colors ${customPriceIncludesVat ? 'bg-amber-500' : 'bg-gray-300'}`}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${customPriceIncludesVat ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </div>
+              <span className="text-sm text-gray-600">כולל מע״מ</span>
+            </button>
           </div>
         )}
       </div>

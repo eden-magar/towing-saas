@@ -41,6 +41,7 @@ interface UseTowPricingParams {
   isHoliday: boolean
   setActiveTimeSurchargesList: (list: TimeSurcharge[]) => void
   isEditMode?: boolean
+  customPriceIncludesVat?: boolean
 }
 
 export function useTowPricing(params: UseTowPricingParams) {
@@ -73,6 +74,7 @@ export function useTowPricing(params: UseTowPricingParams) {
     isHoliday,
     setActiveTimeSurchargesList,
     isEditMode,
+    customPriceIncludesVat = true,
   } = params
 
   // Customer pricing
@@ -213,7 +215,10 @@ export function useTowPricing(params: UseTowPricingParams) {
   }
 
   const calculateFinalPrice = () => {
-    if (priceMode === 'custom' && customPrice) return parseFloat(customPrice)
+    if (priceMode === 'custom' && customPrice) {
+      const price = parseFloat(customPrice)
+      return customPriceIncludesVat ? price : Math.round(price * 1.18)
+    }
     if ((priceMode === 'fixed' || priceMode === 'customer') && selectedPriceItem) {
       let price = selectedPriceItem.price
       if (priceMode === 'fixed' && selectedCustomerPricing?.discount_percent) {
