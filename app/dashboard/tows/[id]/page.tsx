@@ -1064,6 +1064,12 @@ export default function TowDetailsPage() {
                     {tow.points && tow.points.length > 0 && (
                       <span className="text-sm font-normal text-gray-500">({tow.points.length} נקודות)</span>
                     )}
+                    {tow.start_from_base && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700 border border-blue-200">יציאה מבסיס</span>
+                    )}
+                    {tow.dropoff_to_storage && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700 border border-orange-200">פריקה למגרש</span>
+                    )}
                   </h2>
                 </div>
                 <div className="p-4 sm:p-5">
