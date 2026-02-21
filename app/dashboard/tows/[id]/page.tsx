@@ -30,7 +30,7 @@ import {
   Receipt
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
-import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, TowWithDetails } from '../../../lib/queries/tows'
+import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails } from '../../../lib/queries/tows'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
@@ -123,6 +123,8 @@ export default function TowDetailsPage() {
   const [showAllDrivers, setShowAllDrivers] = useState(false)
   const [scheduleDate, setScheduleDate] = useState(new Date())
 
+  const [changeLogs, setChangeLogs] = useState<any[]>([])
+
   const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'ממתין לשיבוץ', color: 'bg-orange-100 text-orange-700 border-orange-200' },
     assigned: { label: 'שובץ נהג', color: 'bg-amber-100 text-amber-700 border-amber-200' },
@@ -202,6 +204,8 @@ export default function TowDetailsPage() {
         const invoiceExists = await towHasInvoice(towId)
         setHasInvoice(invoiceExists)
       }
+      const logs = await getTowChangeLogs(towId)
+      setChangeLogs(logs)
     } catch (err) {
       console.error('Error loading tow:', err)
       setError('שגיאה בטעינת הגרירה')
@@ -1487,67 +1491,91 @@ export default function TowDetailsPage() {
         )}
 
         {activeTab === 'history' && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
-              <h2 className="font-bold text-gray-800">היסטוריית סטטוסים</h2>
-            </div>
-            <div className="p-4 sm:p-5">
-              {(() => {
-                const events: { time: string; label: string; color: string }[] = []
-                
-                // יצירת הגרירה
-                events.push({ time: tow.created_at, label: 'גרירה נוצרה', color: 'bg-gray-400' })
-                
-                // שיבוץ נהג
-                if (tow.driver) {
-                  events.push({ time: tow.created_at, label: `שובצה לנהג ${tow.driver.user?.full_name || ''}`, color: 'bg-blue-500' })
-                }
-                
-                // התחלה
-                if (tow.started_at) {
-                  events.push({ time: tow.started_at, label: 'גרירה החלה', color: 'bg-indigo-500' })
-                }
-                
-                // אירועי נקודות
-                tow.points?.forEach((point: any) => {
-                  const pointLabel = `${point.point_type === 'pickup' ? 'איסוף' : 'פריקה'} — ${point.address?.split(',')[0] || 'נקודה ' + point.point_order}`
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                <h2 className="font-bold text-gray-800">היסטוריית סטטוסים</h2>
+              </div>
+              <div className="p-4 sm:p-5">
+                {(() => {
+                  const events: { time: string; label: string; color: string }[] = []
                   
-                  if (point.arrived_at) {
-                    events.push({ time: point.arrived_at, label: `הנהג הגיע: ${pointLabel}`, color: 'bg-cyan-500' })
+                  events.push({ time: tow.created_at, label: 'גרירה נוצרה', color: 'bg-gray-400' })
+                  
+                  if (tow.driver) {
+                    events.push({ time: tow.created_at, label: `שובצה לנהג ${tow.driver.user?.full_name || ''}`, color: 'bg-blue-500' })
                   }
-                  if (point.completed_at) {
-                    events.push({ time: point.completed_at, label: `הושלם: ${pointLabel}`, color: 'bg-emerald-500' })
+                  
+                  if (tow.started_at) {
+                    events.push({ time: tow.started_at, label: 'גרירה החלה', color: 'bg-indigo-500' })
                   }
-                })
-                
-                // סיום
-                if (tow.completed_at) {
-                  events.push({ time: tow.completed_at, label: 'גרירה הושלמה', color: 'bg-emerald-600' })
-                }
-                
-                // מיון לפי זמן
-                events.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+                  
+                  tow.points?.forEach((point: any) => {
+                    const pointLabel = `${point.point_type === 'pickup' ? 'איסוף' : 'פריקה'} — ${point.address?.split(',')[0] || 'נקודה ' + point.point_order}`
+                    
+                    if (point.arrived_at) {
+                      events.push({ time: point.arrived_at, label: `הנהג הגיע: ${pointLabel}`, color: 'bg-cyan-500' })
+                    }
+                    if (point.completed_at) {
+                      events.push({ time: point.completed_at, label: `הושלם: ${pointLabel}`, color: 'bg-emerald-500' })
+                    }
+                  })
+                  
+                  if (tow.completed_at) {
+                    events.push({ time: tow.completed_at, label: 'גרירה הושלמה', color: 'bg-emerald-600' })
+                  }
+                  
+                  events.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
 
-                return (
-                  <div className="space-y-0">
-                    {events.map((event, idx) => (
-                      <div key={idx} className="flex gap-4 pb-6 relative">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-3 h-3 rounded-full ${event.color} z-10`}></div>
-                          {idx < events.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1"></div>}
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-800">{event.label}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">
-                            {new Date(event.time).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  return (
+                    <div className="space-y-0">
+                      {events.map((event, idx) => (
+                        <div key={idx} className="flex gap-4 pb-6 relative">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-3 h-3 rounded-full ${event.color} z-10`}></div>
+                            {idx < events.length - 1 && <div className="w-0.5 flex-1 bg-gray-200 mt-1"></div>}
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-800">{event.label}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              {new Date(event.time).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
             </div>
+
+            {changeLogs.length > 0 && (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+                  <h2 className="font-bold text-gray-800">שינויים</h2>
+                </div>
+                <div className="p-4 sm:p-5 space-y-3">
+                  {changeLogs.map((log) => (
+                    <div key={log.id} className="border border-gray-100 rounded-xl p-3 text-sm">
+                      <div className="flex justify-between items-start">
+                        <span className="font-medium text-gray-800">{log.field_name}</span>
+                        <span className="text-xs text-gray-400">
+                          {new Date(log.changed_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-gray-500">
+                        <span className="line-through">{log.old_value || '—'}</span>
+                        <span className="mx-2">→</span>
+                        <span className="text-gray-800">{log.new_value || '—'}</span>
+                      </div>
+                      {log.user?.full_name && (
+                        <div className="mt-1 text-xs text-gray-400">על ידי {log.user.full_name}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
