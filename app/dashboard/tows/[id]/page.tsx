@@ -1418,7 +1418,9 @@ export default function TowDetailsPage() {
                     {tow.payment_method && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">אמצעי תשלום</span>
-                        <span className="font-medium text-gray-800">{tow.payment_method}</span>
+                        <span className="font-medium text-gray-800">
+                          {tow.payment_method === 'cash' ? 'מזומן' : tow.payment_method === 'credit' ? 'אשראי' : tow.payment_method === 'invoice' ? 'חשבונית' : tow.payment_method}
+                        </span>
                       </div>
                     )}
                     {tow.invoice_name && (
