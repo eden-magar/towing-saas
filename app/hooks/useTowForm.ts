@@ -366,6 +366,8 @@ export function useTowForm(editTowId?: string) {
               lat: pickup.lat ? Number(pickup.lat) : undefined,
               lng: pickup.lng ? Number(pickup.lng) : undefined
             })
+            setPickupContactName(pickup.contact_name || '')
+            setPickupContactPhone(pickup.contact_phone || '')
           }
           if (dropoff) {
             setDropoffAddress({ 
@@ -373,6 +375,8 @@ export function useTowForm(editTowId?: string) {
               lat: dropoff.lat ? Number(dropoff.lat) : undefined,
               lng: dropoff.lng ? Number(dropoff.lng) : undefined
             })
+            setDropoffContactName(dropoff.contact_name || '')
+            setDropoffContactPhone(dropoff.contact_phone || '')
           }
         }
         // Custom tow - route points
