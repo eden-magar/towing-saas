@@ -37,6 +37,45 @@ const statusLabels: Record<string, string> = {
   cancelled: 'בוטלה'
 }
 
+function getCollisionLayout(towList: TowWithDetails[], TOW_DURATION = 1) {
+  const layout = new Map<string, { columnIndex: number; totalColumns: number }>()
+  const byDay = new Map<string, { tow: TowWithDetails; start: number }[]>()
+  for (const tow of towList) {
+    const d = new Date(tow.scheduled_at || tow.created_at)
+    const dayKey = d.toDateString()
+    const start = d.getHours() + d.getMinutes() / 60
+    if (!byDay.has(dayKey)) byDay.set(dayKey, [])
+    byDay.get(dayKey)!.push({ tow, start })
+  }
+  for (const group of byDay.values()) {
+    group.sort((a, b) => a.start - b.start)
+    const clusters: { tow: TowWithDetails; start: number; end: number; col: number }[][] = []
+    for (const item of group) {
+      const end = item.start + TOW_DURATION
+      let placed = false
+      for (const cluster of clusters) {
+        const overlaps = cluster.some(c => item.start < c.end && end > c.start)
+        if (overlaps) {
+          const usedCols = new Set(cluster.map(c => c.col))
+          let col = 0
+          while (usedCols.has(col)) col++
+          cluster.push({ ...item, end, col })
+          placed = true
+          break
+        }
+      }
+      if (!placed) clusters.push([{ ...item, end, col: 0 }])
+    }
+    for (const cluster of clusters) {
+      const totalColumns = Math.max(...cluster.map(c => c.col)) + 1
+      for (const entry of cluster) {
+        layout.set(entry.tow.id, { columnIndex: entry.col, totalColumns })
+      }
+    }
+  }
+  return layout
+}
+
 export default function CalendarPage() {
   const { companyId, loading: authLoading } = useAuth()
   const [view, setView] = useState<'week' | 'day'>('week')
@@ -241,6 +280,16 @@ export default function CalendarPage() {
       return towDate.toDateString() === selectedDate.toDateString()
     })
   }, [filteredTows, selectedDate])
+
+  const weekCollisionLayout = useMemo(
+    () => getCollisionLayout(filteredTows),
+    [filteredTows]
+  )
+
+  const dayCollisionLayout = useMemo(
+    () => getCollisionLayout(dayFilteredTows),
+    [dayFilteredTows]
+  )
 
   // חישוב מיקום גרירה בלוח
   const getTowPosition = (tow: TowWithDetails) => {
@@ -721,7 +770,9 @@ const handleSkipPriceUpdate = () => {
                   const height = 50
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
-                  const right = displayIndex * dayWidth
+                  const collision = weekCollisionLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
+                  const slotWidth = dayWidth / collision.totalColumns
+                  const right = displayIndex * dayWidth + collision.columnIndex * slotWidth
                   const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                   const route = getRoute(tow)
 
@@ -744,8 +795,8 @@ const handleSkipPriceUpdate = () => {
                       style={{
                         top: `${top}px`,
                         height: `${Math.max(height - 4, 20)}px`,
-                        right: `${right + 0.5}%`,
-                        width: `${dayWidth - 1}%`,
+                        right: `${right + 0.3}%`,
+                        width: `${slotWidth - 0.6}%`,
                         backgroundColor: driverColor,
                         borderRightColor: driverColor,
                       }}
@@ -854,6 +905,7 @@ const handleSkipPriceUpdate = () => {
                       const towDate = new Date(tow.scheduled_at || tow.created_at)
                       const hour = towDate.getHours() + towDate.getMinutes() / 60
                       const top = hour * 60
+                      const collision = dayCollisionLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
                       const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                       const route = getRoute(tow)
 
@@ -876,8 +928,8 @@ const handleSkipPriceUpdate = () => {
                           style={{
                             top: `${top}px`,
                             height: '56px',
-                            right: '4px',
-                            left: '4px',
+                            right: `calc(${(collision.columnIndex / collision.totalColumns) * 100}% + 2px)`,
+                            left: `calc(${((collision.totalColumns - collision.columnIndex - 1) / collision.totalColumns) * 100}% + 2px)`,
                             backgroundColor: driverColor,
                             borderRightColor: driverColor,
                           }}
