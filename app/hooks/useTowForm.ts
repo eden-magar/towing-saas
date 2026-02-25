@@ -341,6 +341,8 @@ export function useTowForm(editTowId?: string) {
         // Payment
         setPaymentMethod((tow as any).payment_method || 'cash')
         setInvoiceName((tow as any).invoice_name || '')
+        setStartFromBase(tow.start_from_base || false)
+        setDropoffToStorage(tow.dropoff_to_storage || false)
         // Required truck types
         if (tow.required_truck_types) {
           setRequiredTruckTypes(tow.required_truck_types as string[])

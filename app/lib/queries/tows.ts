@@ -656,7 +656,9 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.requiredTruckTypes !== undefined) towUpdates.required_truck_types = input.requiredTruckTypes
   if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
   if (input.paymentMethod !== undefined) towUpdates.payment_method = input.paymentMethod
-if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
+  if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
+  if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase
+  if (input.dropoffToStorage !== undefined) towUpdates.dropoff_to_storage = input.dropoffToStorage
 
 
   if (Object.keys(towUpdates).length > 0) {
