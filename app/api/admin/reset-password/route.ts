@@ -28,6 +28,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
     }
 
+    // Fetch target user and verify company access
+    const { data: targetUser, error: targetError } = await supabaseAdmin
+      .from('users')
+      .select('id, company_id')
+      .eq('id', userId)
+      .single()
+
+    if (targetError || !targetUser) {
+      return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
+    }
+
+    if (currentUser.role === 'company_admin' && targetUser.company_id !== currentUser.company_id) {
+      return NextResponse.json({ error: 'אין הרשאה לאיפוס סיסמה למשתמש מחברה אחרת' }, { status: 403 })
+    }
+
     // Method 1: Send reset email
     if (method === 'email') {
       const { data, error } = await supabaseAdmin.auth.admin.generateLink({

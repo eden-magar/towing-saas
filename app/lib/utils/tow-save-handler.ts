@@ -406,6 +406,21 @@ function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['s
     .filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
 }
 
+  function buildLocationSurchargesBreakdown(
+    input: SaveTowInput,
+    subtotalForLocation: number
+  ): PriceBreakdown['location_surcharges'] {
+    return (input.selectedLocationSurcharges || [])
+      .map(id => input.locationSurchargesData?.find(l => l.id === id))
+      .filter(Boolean)
+      .map(s => ({
+        id: s!.id,
+        label: s!.label,
+        percent: s!.surcharge_percent,
+        amount: Math.round(subtotalForLocation * s!.surcharge_percent / 100)
+      }))
+  }
+
 /**
  * בניית פירוט מחיר לגרירה רגילה (single)
  */
@@ -577,7 +592,14 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   if (input.towType === 'single') {
     const priceBreakdown = input.priceMode === 'custom'
   ? (input.existingPriceBreakdown
-      ? { ...input.existingPriceBreakdown, service_surcharges: buildServiceSurchargesBreakdown(input) }
+      ? {
+          ...input.existingPriceBreakdown,
+          location_surcharges: buildLocationSurchargesBreakdown(
+            input,
+            input.existingPriceBreakdown.base_price + input.existingPriceBreakdown.distance_price
+          ),
+          service_surcharges: buildServiceSurchargesBreakdown(input)
+        }
       : null)
   : buildSingleTowPriceBreakdown(input)
     
@@ -637,7 +659,14 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   if (input.towType === 'custom' && input.routePoints) {
     const priceBreakdown = input.priceMode === 'custom'
   ? (input.existingPriceBreakdown
-      ? { ...input.existingPriceBreakdown, service_surcharges: buildServiceSurchargesBreakdown(input) }
+      ? {
+          ...input.existingPriceBreakdown,
+          location_surcharges: buildLocationSurchargesBreakdown(
+            input,
+            input.existingPriceBreakdown.base_price + input.existingPriceBreakdown.distance_price
+          ),
+          service_surcharges: buildServiceSurchargesBreakdown(input)
+        }
       : null)
   : buildSingleTowPriceBreakdown(input)
     const vehicles = collectVehiclesFromRoutePoints(input.routePoints)

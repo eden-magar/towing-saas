@@ -336,7 +336,7 @@ export function useTowForm(editTowId?: string) {
         setNotes(tow.notes || '')
         // Price
         setCustomPrice(String(tow.final_price ?? 0))
-        setPriceMode('custom')
+        setPriceMode(tow.price_mode || 'custom')
         setCustomerOrderNumber(tow.customer_order_number || '')
         // Payment
         setPaymentMethod((tow as any).payment_method || 'cash')
@@ -359,6 +359,11 @@ export function useTowForm(editTowId?: string) {
         } else {
           setSelectedServices([])
         }
+
+        // Selected location surcharges from price breakdown
+        setSelectedLocationSurcharges(
+          (tow.price_breakdown?.location_surcharges ?? []).map((s: { id: string }) => s.id)
+        )
         // Single tow - vehicle
         const firstVehicle = tow.points
           ?.flatMap((p: any) => p.vehicles || [])

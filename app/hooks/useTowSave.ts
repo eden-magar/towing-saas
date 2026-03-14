@@ -259,7 +259,7 @@ export function useTowSave(params: UseTowSaveParams) {
       }
     }
     
-    await updateTow({ ...towData, towId: editTowId })
+    await updateTow({ ...towData, towId: editTowId, priceMode })
     router.push(`/dashboard/tows/${editTowId}`)
     } else {
       const result = await createTow(towData)
