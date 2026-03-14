@@ -162,12 +162,17 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // דחיית הגרירה
   const handleReject = async () => {
-    if (!task || !rejectReason) return
-    
-    setRejecting(true)
-    try {
-      await rejectTask(task.id, rejectReason, rejectNote.trim() || undefined)
-      router.push('/driver')
+  if (!task || !rejectReason || !user) return
+  
+  setRejecting(true)
+  try {
+    const driver = await getDriverByUserId(user.id)
+    if (!driver) {
+      alert('לא נמצא פרופיל נהג')
+      return
+    }
+    await rejectTask(task.id, driver.id, driver.company_id, rejectReason, rejectNote.trim() || undefined)
+    router.push('/driver')
     } catch (error) {
       console.error('Error rejecting task:', error)
       alert('שגיאה בדחיית הגרירה')

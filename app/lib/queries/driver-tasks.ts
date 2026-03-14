@@ -524,22 +524,21 @@ export async function acceptTask(towId: string) {
   return true
 }
 
-export async function rejectTask(towId: string, reason: string, note?: string) {
-  const { error } = await supabase
-    .from('tows')
-    .update({ 
-      driver_id: null,
-      truck_id: null,
-      status: 'pending',
-      notes: note ? `דחייה: ${reason} - ${note}` : `דחייה: ${reason}`
-    })
-    .eq('id', towId)
-
-  if (error) {
-    console.error('Error rejecting task:', error)
-    throw error
-  }
-
+export async function rejectTask(
+  towId: string,
+  driverId: string,
+  companyId: string,
+  reason: string,
+  note?: string
+) {
+  const { createRejectionRequest } = await import('./rejection-requests')
+  await createRejectionRequest(
+    towId,
+    driverId,
+    companyId,
+    'other',
+    note ? `${reason} - ${note}` : reason
+  )
   return true
 }
 
