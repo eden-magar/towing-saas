@@ -144,12 +144,25 @@ export async function DELETE(req: NextRequest) {
     // 1. שליפת ה-user_id לפני מחיקה
     const { data: cu, error: cuError } = await supabaseAdmin
       .from('customer_users')
-      .select('user_id')
+      .select('user_id, customer_id')
       .eq('id', customerUserId)
       .single()
 
     if (cuError || !cu) {
       return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
+    }
+
+    // Verify company access
+    if (currentUser.role === 'company_admin') {
+      const { data: relation } = await supabaseAdmin
+        .from('customer_company')
+        .select('id')
+        .eq('customer_id', cu.customer_id)
+        .eq('company_id', currentUser.company_id)
+        .maybeSingle()
+      if (!relation) {
+        return forbiddenResponse('אין הרשאה למחוק משתמש מלקוח מחברה אחרת')
+      }
     }
 
     const userId = cu.user_id
@@ -190,14 +203,14 @@ export async function PATCH(req: NextRequest) {
     // בדוק אם admin בפורטל
     const { data: customerUser } = await supabaseAdmin
       .from('customer_users')
-      .select('role')
+      .select('role, customer_id')
       .eq('user_id', user.id)
       .single()
 
     // בדוק אם company_admin בדשבורד
     const { data: dashboardUser } = await supabaseAdmin
       .from('users')
-      .select('role')
+      .select('role, company_id')
       .eq('id', user.id)
       .single()
 
@@ -206,6 +219,33 @@ export async function PATCH(req: NextRequest) {
 
     if (!isPortalAdmin && !isDashboardAdmin) return forbiddenResponse()
     const { customerUserId, role, is_active } = await req.json()
+      // Fetch target customer_user with customer_id
+    const { data: targetCu, error: targetError } = await supabaseAdmin
+      .from('customer_users')
+      .select('id, customer_id')
+      .eq('id', customerUserId)
+      .single()
+
+    if (targetError || !targetCu) {
+      return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
+    }
+
+    // Verify company/customer access
+    if (isDashboardAdmin && dashboardUser?.role !== 'super_admin') {
+      const { data: relation } = await supabaseAdmin
+        .from('customer_company')
+        .select('id')
+        .eq('customer_id', targetCu.customer_id)
+        .eq('company_id', dashboardUser.company_id)
+        .maybeSingle()
+      if (!relation) {
+        return forbiddenResponse('אין הרשאה לעדכן משתמש מלקוח מחברה אחרת')
+      }
+    } else if (isPortalAdmin) {
+      if (targetCu.customer_id !== customerUser.customer_id) {
+        return forbiddenResponse('אין הרשאה לעדכן משתמש מלקוח אחר')
+      }
+    }
 if (!customerUserId || (role === undefined && is_active === undefined)) {
   return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
 }
