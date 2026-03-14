@@ -131,6 +131,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const { data: companies } = await supabase
     .from('companies')
     .select('id, status, created_at')
+    .eq('is_active', true)
 
   const companiesStats = {
     total: companies?.length || 0,
@@ -220,6 +221,7 @@ export async function getRecentCompanies(limit: number = 5): Promise<CompanyWith
         plan:subscription_plans (*)
       )
     `)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -250,6 +252,7 @@ export async function getTopCompanies(limit: number = 5) {
     .from('companies')
     .select('id, name')
     .eq('status', 'active')
+    .eq('is_active', true)
 
   if (!companies) return []
 
@@ -292,6 +295,7 @@ export async function getCompanies(filters?: {
         plan:subscription_plans (*)
       )
     `)
+    .eq('is_active', true)
     .order('created_at', { ascending: false })
 
   if (filters?.status && filters.status !== 'all') {
@@ -369,6 +373,7 @@ export async function getCompanyById(companyId: string): Promise<CompanyDetails 
       )
     `)
     .eq('id', companyId)
+    .eq('is_active', true)
     .single()
 
   if (error || !company) {
