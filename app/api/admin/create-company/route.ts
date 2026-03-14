@@ -211,6 +211,10 @@ export async function POST(request: NextRequest) {
 
     if (userError) {
       console.error('Error creating user record:', userError)
+      await supabaseAdmin.auth.admin.deleteUser(authUser.id)
+      await supabaseAdmin.from('company_subscriptions').delete().eq('company_id', company.id)
+      await supabaseAdmin.from('companies').delete().eq('id', company.id)
+      return NextResponse.json({ error: 'שגיאה ביצירת רשומת המשתמש' }, { status: 500 })
     }
 
     // 5. Create company_settings
