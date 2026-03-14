@@ -26,15 +26,8 @@ import StepComplete from './components/StepComplete'
 type PointStep = 'on_the_way' | 'camera' | 'delivery'
 
 // סיבות דחייה
-const rejectionReasons = [
-  'תקלה ברכב הגרר',
-  'תאונה בדרך',
-  'הלקוח ביטל',
-  'לא מצאתי את הכתובת',
-  'הרכב לא נגיש',
-  'בעיה בטיחותית',
-  'אחר'
-]
+import { REJECTION_REASONS } from '@/app/lib/queries/rejection-requests'
+
 
 export default function TaskFlowPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -53,6 +46,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const [rejectReason, setRejectReason] = useState('')
   const [rejectNote, setRejectNote] = useState('')
   const [rejecting, setRejecting] = useState(false)
+  const [rejectionPending, setRejectionPending] = useState(false)
 
   // טעינת המשימה
   useEffect(() => {
@@ -65,6 +59,13 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       const data = await getTaskDetail(id)
       if (data) {
         setTask(data)
+        // בדוק אם יש בקשת דחייה ממתינה
+        const driver = await getDriverByUserId(user?.id || '')
+        if (driver) {
+          const { getPendingRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
+          const pending = await getPendingRejectionRequest(id, driver.id)
+          if (pending) setRejectionPending(true)
+        }
         
         // קביעת המצב הנוכחי
         if (data.status === 'completed') {
@@ -162,6 +163,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // דחיית הגרירה
   const handleReject = async () => {
+
   if (!task || !rejectReason || !user) return
   
   setRejecting(true)
@@ -172,7 +174,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       return
     }
     await rejectTask(task.id, driver.id, driver.company_id, rejectReason, rejectNote.trim() || undefined)
-    router.push('/driver')
+    setRejecting(false)
+    setShowRejectModal(false)
+    setRejectionPending(true)
     } catch (error) {
       console.error('Error rejecting task:', error)
       alert('שגיאה בדחיית הגרירה')
@@ -237,6 +241,19 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   // מסך סיום
   if (isCompleted) {
     return <StepComplete onGoHome={() => router.push('/driver')} />
+  }
+
+  if (rejectionPending) {
+    return (
+      <div dir="rtl" className="fixed inset-0 bg-orange-50 flex flex-col items-center justify-center p-6">
+        <div className="bg-white rounded-2xl p-8 shadow-lg text-center max-w-sm w-full">
+          <div className="text-5xl mb-4">⏳</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">בקשת הדחייה נשלחה</h2>
+          <p className="text-gray-500 mb-6">ממתין לאישור המנהל</p>
+          <p className="text-sm text-gray-400">הגרירה תוסר מהתור שלך לאחר אישור המנהל</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -333,17 +350,17 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">סיבת הדחייה</label>
                 <div className="space-y-2">
-                  {rejectionReasons.map((reason) => (
+                  {REJECTION_REASONS.map((reason) => (
                     <button
-                      key={reason}
-                      onClick={() => setRejectReason(reason)}
+                      key={reason.key}
+                      onClick={() => setRejectReason(reason.key)}
                       className={`w-full p-4 rounded-xl text-right transition-colors ${
-                        rejectReason === reason
+                        rejectReason === reason.key
                           ? 'bg-red-50 border-2 border-red-500 text-red-700'
                           : 'bg-gray-50 border-2 border-transparent text-gray-700'
                       }`}
                     >
-                      {reason}
+                      {reason.icon} {reason.label}
                     </button>
                   ))}
                 </div>
