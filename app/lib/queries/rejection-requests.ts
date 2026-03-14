@@ -176,3 +176,23 @@ export async function denyRejectionRequest(
 
   return true
 }
+
+export async function cancelRejectionRequest(requestId: string) {
+  const { error } = await supabase
+    .from('tow_rejection_requests')
+    .update({ status: 'cancelled' })
+    .eq('id', requestId)
+  if (error) throw error
+  return true
+}
+
+export async function getApprovedRejectionRequestsForDriver(driverId: string) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await supabase
+    .from('tow_rejection_requests')
+    .select('id, tow_id, reviewed_at, tow:tows(order_number)')
+    .eq('driver_id', driverId)
+    .eq('status', 'approved')
+    .gte('reviewed_at', since)
+  return data || []
+}

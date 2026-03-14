@@ -55,6 +55,8 @@ export default function DriverHomePage() {
   const [selectedTask, setSelectedTask] = useState<DriverTask | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
+
   // טעינת נתונים
   useEffect(() => {
     if (!authLoading && user) {
@@ -99,6 +101,11 @@ export default function DriverHomePage() {
 
       const driverTasks = await getDriverTasks(driver.id)
       setTasks(driverTasks)
+      const { getApprovedRejectionRequestsForDriver } = await import('@/app/lib/queries/rejection-requests')
+      const approvedRequests = await getApprovedRejectionRequestsForDriver(driver.id)
+      const acknowledgedIds: string[] = JSON.parse(localStorage.getItem('acknowledgedRejectionIds') || '[]')
+      const unacknowledged = approvedRequests.filter((r: any) => !acknowledgedIds.includes(r.id))
+      setApprovedRejectionNotifications(unacknowledged)
 
       const driverStats = await getDriverStats(driver.id)
       setStats(driverStats)
@@ -408,6 +415,30 @@ export default function DriverHomePage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {approvedRejectionNotifications.map((notification) => (
+            <div key={notification.id} className="bg-green-50 rounded-2xl p-4 shadow-sm border border-green-200">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="text-2xl">✅</div>
+                <div>
+                  <div className="font-bold text-green-800">בקשת הדחייה אושרה</div>
+                  <div className="text-sm text-green-600">
+                    גרירה #{notification.tow?.order_number || notification.tow_id.slice(0, 8)}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  const acknowledgedIds: string[] = JSON.parse(localStorage.getItem('acknowledgedRejectionIds') || '[]')
+                  acknowledgedIds.push(notification.id)
+                  localStorage.setItem('acknowledgedRejectionIds', JSON.stringify(acknowledgedIds))
+                  setApprovedRejectionNotifications(prev => prev.filter(n => n.id !== notification.id))
+                }}
+                className="w-full py-2 rounded-xl bg-green-600 text-white font-medium"
+              >
+                אישור
+              </button>
+            </div>
+          ))}
             {activeTasks.map((task) => {
               const addresses = getAddresses(task)
               const isInProgress = task.status === 'in_progress'

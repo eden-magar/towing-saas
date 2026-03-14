@@ -9,6 +9,7 @@ import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTr
 import Link from 'next/link'
 import { countPendingRejectionRequests, getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
 import { getAvailableDrivers } from '../lib/queries/drivers'
+import { supabase } from '../lib/supabase'
 
 // מיפוי סטטוסים לעברית וצבעים
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -83,6 +84,34 @@ export default function DashboardPage() {
     }
   }
 }, [companyId, authLoading])
+
+useEffect(() => {
+  if (!companyId) return
+  const channel = supabase
+    .channel(`rejection-requests-${companyId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'tow_rejection_requests',
+      filter: `company_id=eq.${companyId}`
+    }, () => loadData())
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'tow_rejection_requests',
+      filter: `company_id=eq.${companyId}`
+    }, () => loadData())
+    .on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'tow_rejection_requests',
+      filter: `company_id=eq.${companyId}`
+    }, () => loadData())
+    .subscribe()
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}, [companyId])
 
   const handleRefresh = () => {
     setRefreshing(true)
