@@ -1343,7 +1343,7 @@ export default function TowDetailsPage() {
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
                     </div>
-                  ) : tow.price_breakdown ? (
+                  ) : tow.price_breakdown && tow.price_mode !== 'custom' ? (
                     <div className="space-y-2 text-sm">
                       {/* מחיר בסיס */}
                       <div className="flex justify-between">
@@ -1400,7 +1400,22 @@ export default function TowDetailsPage() {
                       {/* סה"כ */}
                       <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200 mt-2">
                         <span>סה״כ כולל מע״מ</span>
-                        <span className="text-gray-800">₪{tow.price_breakdown.total}</span>
+                        <span className="text-gray-800">₪{(tow.price_mode as string) === 'custom' ? (tow.final_price ?? 0) : tow.price_breakdown.total}</span>
+                      </div>
+                    </div>
+                  ) : tow.price_mode === 'custom' ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between text-gray-600">
+                        <span>מחיר לפני מע"מ</span>
+                        <span>₪{Math.round((tow.final_price ?? 0) / 1.18)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600">
+                        <span>מע"מ (18%)</span>
+                        <span>₪{Math.round((tow.final_price ?? 0) - (tow.final_price ?? 0) / 1.18)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200 mt-2">
+                        <span>סה"כ כולל מע"מ</span>
+                        <span className="text-gray-800">₪{tow.final_price ?? 0}</span>
                       </div>
                     </div>
                   ) : (
