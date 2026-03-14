@@ -180,6 +180,11 @@ export function useTowSave(params: UseTowSaveParams) {
       }
     }
     
+    let originalTow = null
+    if (editTowId) {
+      originalTow = await getTowWithPoints(editTowId)
+    }
+
     const towData = prepareTowData({
       companyId,
       userId: user.id,
@@ -225,13 +230,13 @@ export function useTowSave(params: UseTowSaveParams) {
       paymentMethod: paymentMethod || undefined,
       invoiceName: invoiceName || undefined,
       dropoffToStorage,
+      existingPriceBreakdown: originalTow?.price_breakdown ?? null,
     })
 
     if (editTowId) {
     console.log('updateTow data:', { ...towData, towId: editTowId, finalPrice: towData.finalPrice, priceMode: towData.priceMode })
     
     // שמירת לוג שינויים
-    const originalTow = await getTowWithPoints(editTowId)
     if (originalTow && user) {
       const changes: { field_name: string; old_value: string | null; new_value: string | null }[] = []
       

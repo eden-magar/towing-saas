@@ -80,6 +80,7 @@ export interface SaveTowInput {
   paymentMethod?: string
   invoiceName?: string
   dropoffToStorage?: boolean
+  existingPriceBreakdown?: PriceBreakdown | null
 }
 
 // ==================== NEW: TowPoint Types ====================
@@ -385,6 +386,26 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
   return points
 }
 
+function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['service_surcharges'] {
+  return (input.selectedServices || [])
+    .map(selected => {
+      const surcharge = input.serviceSurchargesData?.find(s => s.id === selected.id)
+      if (!surcharge) return null
+      let amount = 0
+      let units: number | undefined = undefined
+      if (surcharge.price_type === 'manual') {
+        amount = selected.manualPrice || 0
+      } else if (surcharge.price_type === 'per_unit') {
+        units = selected.quantity || 1
+        amount = surcharge.price * units
+      } else {
+        amount = surcharge.price
+      }
+      return { id: surcharge.id, label: surcharge.label, price: surcharge.price, units, amount }
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
+}
+
 /**
  * בניית פירוט מחיר לגרירה רגילה (single)
  */
@@ -554,7 +575,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירה רגילה
   if (input.towType === 'single') {
-    const priceBreakdown = input.priceMode === 'custom' ? null : buildSingleTowPriceBreakdown(input)
+    const priceBreakdown = input.priceMode === 'custom'
+  ? (input.existingPriceBreakdown
+      ? { ...input.existingPriceBreakdown, service_surcharges: buildServiceSurchargesBreakdown(input) }
+      : null)
+  : buildSingleTowPriceBreakdown(input)
     
     const vehicles: PreparedTowData['vehicles'] = [{
       plateNumber: input.vehiclePlate || '',
@@ -610,7 +635,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירה מותאמת
   if (input.towType === 'custom' && input.routePoints) {
-    const priceBreakdown = input.priceMode === 'custom' ? null : buildSingleTowPriceBreakdown(input)
+    const priceBreakdown = input.priceMode === 'custom'
+  ? (input.existingPriceBreakdown
+      ? { ...input.existingPriceBreakdown, service_surcharges: buildServiceSurchargesBreakdown(input) }
+      : null)
+  : buildSingleTowPriceBreakdown(input)
     const vehicles = collectVehiclesFromRoutePoints(input.routePoints)
     const legs = convertRoutePointsToLegs(input.routePoints)
     

@@ -347,14 +347,25 @@ export function useTowForm(editTowId?: string) {
         if (tow.required_truck_types) {
           setRequiredTruckTypes(tow.required_truck_types as string[])
         }
+        // Selected services from price breakdown
+        if (tow.price_breakdown?.service_surcharges?.length) {
+          setSelectedServices(
+            tow.price_breakdown.service_surcharges.map((s: { id: string; price: number; units?: number; amount: number }) => ({
+              id: s.id,
+              quantity: s.units,
+              manualPrice: s.units === undefined && s.amount !== s.price ? s.amount : undefined
+            }))
+          )
+        } else {
+          setSelectedServices([])
+        }
         // Single tow - vehicle
         const firstVehicle = tow.points
           ?.flatMap((p: any) => p.vehicles || [])
           ?.find((pv: any) => pv.vehicle)?.vehicle
         if (firstVehicle) {
-          console.log('firstVehicle:', firstVehicle)
           setVehiclePlate(firstVehicle.plate_number || '')
-          setVehicleCode((firstVehicle as any).vehicle_code || '')
+          setVehicleCode('')
           setVehicleType((firstVehicle as any).vehicle_type || '')
           const defectsRaw = firstVehicle.tow_reason || ''
           setSelectedDefects(
