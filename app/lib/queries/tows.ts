@@ -299,7 +299,8 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
           model,
           color,
           is_working,
-          vehicle_type
+          vehicle_type,
+          tow_reason
         )
       ),
       images:tow_images (

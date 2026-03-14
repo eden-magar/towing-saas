@@ -356,7 +356,10 @@ export function useTowForm(editTowId?: string) {
           setVehiclePlate(firstVehicle.plate_number || '')
           setVehicleCode((firstVehicle as any).vehicle_code || '')
           setVehicleType((firstVehicle as any).vehicle_type || '')
-          setSelectedDefects((firstVehicle as any).defects || [])
+          const defectsRaw = firstVehicle.tow_reason || ''
+          setSelectedDefects(
+            defectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean)
+          )
         }
         // Points / addresses
         if (tow.points && tow.points.length > 0) {
