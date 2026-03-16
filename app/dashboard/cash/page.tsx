@@ -154,7 +154,14 @@ export default function CashManagementPage() {
   const filteredDrivers = drivers.filter(d => d.driverName.includes(searchQuery))
   const totalCash = drivers.reduce((sum, d) => sum + d.balance, 0)
   const driversWithBalance = drivers.filter(d => d.balance > 0).length
-  const pendingTransfers = transactions.filter(t => t.type === 'transfer').length
+  const approvedAmounts = transactions
+  .filter(t => t.type === 'approval')
+  .map(t => t.driver_id + '_' + t.amount)
+
+const pendingTransfers = transactions.filter(t => 
+  t.type === 'transfer' && 
+  !approvedAmounts.includes(t.driver_id + '_' + t.amount)
+).length
 
   if (loading) {
     return (
