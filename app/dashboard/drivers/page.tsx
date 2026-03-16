@@ -69,6 +69,20 @@ export default function DriversPage() {
     }
   }, [companyId])
 
+  useEffect(() => {
+  if (!companyId) return
+  const channel = supabase
+    .channel(`drivers-location-${companyId}`)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'drivers',
+      filter: `company_id=eq.${companyId}`
+    }, () => loadData())
+    .subscribe()
+  return () => { supabase.removeChannel(channel) }
+}, [companyId])
+
   const loadData = async () => {
     if (!companyId) return
     
