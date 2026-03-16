@@ -31,8 +31,8 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
     loadGoogleMaps().then(() => {
       if (!mapInstanceRef.current) {
         mapInstanceRef.current = new window.google.maps.Map(mapRef.current!, {
-          center: { lat: 32.0853, lng: 34.7818 },
-          zoom: 10,
+          center: { lat: 32.0181, lng: 34.7746 },
+          zoom: 12,
           mapTypeControl: false,
           streetViewControl: false,
         })
