@@ -7,12 +7,13 @@ import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates }
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
 import DriversMap from '../../components/DriversMap'
+import DriverHoursTab from '../../components/DriverHoursTab'
 
 
 export default function DriversPage() {
   const { companyId } = useAuth()
   
-  const [activeTab, setActiveTab] = useState<'list' | 'map'>('list')
+  const [activeTab, setActiveTab] = useState<'list' | 'map' | 'hours'>('list')
   const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
 
   // Data states
@@ -395,9 +396,23 @@ export default function DriversPage() {
         >
           🗺️ מפה חיה
         </button>
+        <button
+          onClick={() => setActiveTab('hours')}
+          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+            activeTab === 'hours'
+              ? 'bg-[#33d4ff] text-white'
+              : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          📊 דוחות שעות
+        </button>
       </div>
       {activeTab === 'map' && (
         <DriversMap drivers={driversWithLocation} />
+      )}
+
+      {activeTab === 'hours' && (
+        <DriverHoursTab companyId={companyId || ''} />
       )}
 
       {activeTab === 'list' && <>
