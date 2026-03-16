@@ -27,7 +27,8 @@ import {
   Save,
   RefreshCw,
   Mail,
-  Receipt
+  Receipt,
+  Eye
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails } from '../../../lib/queries/tows'
@@ -77,7 +78,7 @@ export default function TowDetailsPage() {
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
   
-  const [activeTab, setActiveTab] = useState<'details' | 'history' | 'images'>('details')
+  const [activeTab, setActiveTab] = useState<'details' | 'history' | 'images' | 'portal'>('details')
   const [isEditing, setIsEditing] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showChangeDriverModal, setShowChangeDriverModal] = useState(false)
@@ -772,6 +773,15 @@ export default function TowDetailsPage() {
           >
             <Image size={16} />
             תמונות
+          </button>
+          <button
+            onClick={() => setActiveTab('portal')}
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'portal' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Eye size={16} />
+            פורטל לקוח
           </button>
         </div>
 
@@ -1662,6 +1672,91 @@ export default function TowDetailsPage() {
                   </div>
                 )
               })()}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'portal' && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+              <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                <Eye size={18} />
+                הגדרות תצוגה בפורטל לקוח
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">הגדרות אלו דורסות את ברירת המחדל של הלקוח עבור גרירה זו בלבד</p>
+            </div>
+            <div className="p-4 sm:p-5 space-y-3">
+              {[
+                { key: 'show_photos', label: 'תמונות', description: 'תמונות שצולמו במהלך הגרירה' },
+                { key: 'show_price', label: 'מחיר', description: 'מחיר הגרירה ופירוט עלויות' },
+                { key: 'show_driver_info', label: 'שם נהג', description: 'שם הנהג שמבצע את הגרירה' },
+                { key: 'show_driver_phone', label: 'טלפון נהג', description: 'מספר הטלפון של הנהג' },
+                { key: 'show_status_history', label: 'היסטוריית סטטוסים', description: 'ציר זמן של שלבי הגרירה' },
+                { key: 'show_vehicles', label: 'פרטי רכבים', description: 'פרטי הרכבים שנגררו' },
+                { key: 'show_notes', label: 'הערות', description: 'הערות פנימיות על הגרירה' },
+              ].map(({ key, label, description }) => {
+                const overrideValue = tow.visibility_overrides?.[key]
+                const isOverridden = overrideValue !== undefined
+
+                const handleToggle = async (value: boolean | null) => {
+                  const current = tow.visibility_overrides || {}
+                  let updated: Record<string, boolean> | null
+
+                  if (value === null) {
+                    const { [key]: _, ...rest } = current
+                    updated = Object.keys(rest).length > 0 ? rest : null
+                  } else {
+                    updated = { ...current, [key]: value }
+                  }
+
+                  await updateTow({ towId: tow.id, visibilityOverrides: updated })
+                  await loadData()
+                }
+
+                return (
+                  <div key={key} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">{label}</p>
+                      <p className="text-xs text-gray-400">{description}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isOverridden && (
+                        <button
+                          onClick={() => handleToggle(null)}
+                          className="text-xs text-gray-400 hover:text-gray-600 underline"
+                        >
+                          איפוס
+                        </button>
+                      )}
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleToggle(true)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            overrideValue === true
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          כן
+                        </button>
+                        <button
+                          onClick={() => handleToggle(false)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                            overrideValue === false
+                              ? 'bg-red-500 text-white'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          לא
+                        </button>
+                      </div>
+                      {!isOverridden && (
+                        <span className="text-xs text-gray-400 mr-1">ברירת מחדל</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

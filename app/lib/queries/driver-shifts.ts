@@ -77,13 +77,29 @@ export async function getDriversOvertime(companyId: string) {
   if (!data) return []
 
   const now = new Date()
-  const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0')
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const todayStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jerusalem' })
 
-  return data.filter((shift: any) => {
-    const driver = shift.driver as any
-    if (!driver?.work_hours_end) return false
-    return currentTime > driver.work_hours_end
-  })
+  return data
+    .map((shift: any) => {
+      const driver = shift.driver as any
+      const shiftDateStr = new Date(shift.started_at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jerusalem' })
+      const isFromPreviousDay = shiftDateStr < todayStr
+
+      if (isFromPreviousDay) {
+        return { ...shift, overtimeType: 'previous_day' }
+      }
+
+      if (!driver?.work_hours_end) return null
+      const [endHour, endMin] = driver.work_hours_end.split(':').map(Number)
+      const endMinutes = endHour * 60 + endMin
+      if (currentMinutes > endMinutes) {
+        return { ...shift, overtimeType: 'today' }
+      }
+
+      return null
+    })
+    .filter(Boolean)
 }
 
 export async function getActiveShift(driverId: string) {

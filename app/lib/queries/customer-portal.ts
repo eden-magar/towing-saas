@@ -118,6 +118,7 @@ export async function getCustomerTowDetail(
       started_at,
       completed_at,
       notes,
+      visibility_overrides,
       driver:drivers (
         user:users (
           full_name,

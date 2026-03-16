@@ -118,6 +118,7 @@ export interface TowWithDetails {
   invoice_name: string | null
   start_from_base: boolean | null
   dropoff_to_storage: boolean | null
+  visibility_overrides: Record<string, boolean> | null
 
   // שדות מורחבים
   customer: {
@@ -646,6 +647,8 @@ interface UpdateTowInput {
   invoiceName?: string | null
   startFromBase?: boolean | null
   dropoffToStorage?: boolean | null
+  visibilityOverrides?: Record<string, boolean> | null
+
 }
 
 export async function updateTow(input: UpdateTowInput) {
@@ -662,6 +665,7 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
   if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase
   if (input.dropoffToStorage !== undefined) towUpdates.dropoff_to_storage = input.dropoffToStorage
+  if (input.visibilityOverrides !== undefined) towUpdates.visibility_overrides = input.visibilityOverrides
 
 
   if (Object.keys(towUpdates).length > 0) {
