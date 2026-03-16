@@ -55,21 +55,27 @@ const [transferAmount, setTransferAmount] = useState<number>(0)
   }
 
   const handleTransfer = async () => {
-    if (!driverId || !user || transferAmount <= 0) return
-    setTransferring(true)
-    try {
-      await createCashTransfer(driverId, transferAmount, user.id, transferNotes || undefined)
-      setShowTransferModal(false)
-      setTransferNotes('')
-      setTransferAmount(0)
-      await loadData()
-    } catch (error) {
-      console.error('Error creating transfer:', error)
-      alert('שגיאה בדיווח העברה')
-    } finally {
-      setTransferring(false)
-    }
+  if (!driverId || !user || transferAmount <= 0) return
+  
+  if (transferAmount > balance) {
+    alert(`סכום ההעברה (₪${transferAmount.toLocaleString()}) עולה על היתרה הנוכחית (₪${balance.toLocaleString()})`)
+    return
   }
+
+  setTransferring(true)
+  try {
+    await createCashTransfer(driverId, transferAmount, user.id, transferNotes || undefined)
+    setShowTransferModal(false)
+    setTransferNotes('')
+    setTransferAmount(0)
+    await loadData()
+  } catch (error) {
+    console.error('Error creating transfer:', error)
+    alert('שגיאה בדיווח העברה')
+  } finally {
+    setTransferring(false)
+  }
+}
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)

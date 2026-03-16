@@ -17,9 +17,10 @@ import {
   Clock, 
   Loader2,
   Filter,
-  X,
-  ChevronLeft
+  ChevronLeft,
+  BarChart2
 } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 interface DriverBalance {
   driverId: string
@@ -85,9 +86,24 @@ export default function CashManagementPage() {
 
   const handleApprove = async (tx: DriverCashTransaction) => {
     if (!user) return
+    if (!confirm(`לאשר העברה של ₪${Number(tx.amount).toLocaleString()}?`)) return
     setApproving(tx.id)
     try {
-      await approveCashTransfer(tx.driver_id, Number(tx.amount), user.id, `אישור העברה`)
+      const { data: existing } = await supabase
+        .from('driver_cash_transactions')
+        .select('id')
+        .eq('driver_id', tx.driver_id)
+        .eq('amount', tx.amount)
+        .eq('type', 'approval')
+        .gte('created_at', tx.created_at)
+        .maybeSingle()
+
+      if (existing) {
+        alert('העברה זו כבר אושרה')
+        return
+      }
+
+      await approveCashTransfer(tx.driver_id, Number(tx.amount), user.id, 'אישור העברה')
       await loadData()
       if (selectedDriver) {
         await loadDriverTransactions(selectedDriver.driverId)
@@ -117,224 +133,246 @@ export default function CashManagementPage() {
   }
 
   const getBalanceBadge = (balance: number) => {
-    if (balance === 0) return { text: '₪0', bg: 'bg-emerald-100', color: 'text-emerald-700' }
-    if (balance > 500) return { text: `₪${balance.toLocaleString()}`, bg: 'bg-red-100', color: 'text-red-700' }
-    return { text: `₪${balance.toLocaleString()}`, bg: 'bg-amber-100', color: 'text-amber-700' }
+    if (balance === 0) return { text: '₪0', bg: 'bg-emerald-50', color: 'text-emerald-700' }
+    if (balance > 500) return { text: `₪${balance.toLocaleString()}`, bg: 'bg-red-50', color: 'text-red-700' }
+    return { text: `₪${balance.toLocaleString()}`, bg: 'bg-amber-50', color: 'text-amber-700' }
   }
 
   const getTypeInfo = (type: string) => {
     switch (type) {
       case 'collection':
-        return { label: 'גבייה', icon: ArrowDownCircle, color: 'text-red-500', bg: 'bg-red-50' }
+        return { label: 'גבייה', icon: ArrowDownCircle, color: 'text-red-500' }
       case 'transfer':
-        return { label: 'העברה (ממתין)', icon: ArrowUpCircle, color: 'text-amber-500', bg: 'bg-amber-50' }
+        return { label: 'העברה (ממתין)', icon: ArrowUpCircle, color: 'text-amber-500' }
       case 'approval':
-        return { label: 'אושר', icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-50' }
+        return { label: 'אושר', icon: CheckCircle2, color: 'text-emerald-500' }
       default:
-        return { label: type, icon: Clock, color: 'text-gray-500', bg: 'bg-gray-50' }
+        return { label: type, icon: Clock, color: 'text-gray-500' }
     }
   }
 
-  const filteredDrivers = drivers.filter(d => 
-    d.driverName.includes(searchQuery)
-  )
-
+  const filteredDrivers = drivers.filter(d => d.driverName.includes(searchQuery))
   const totalCash = drivers.reduce((sum, d) => sum + d.balance, 0)
   const driversWithBalance = drivers.filter(d => d.balance > 0).length
   const pendingTransfers = transactions.filter(t => t.type === 'transfer').length
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-blue-500" size={32} />
-        <span className="mr-3 text-gray-500">טוען נתוני קופה...</span>
+      <div className="flex items-center justify-center h-64 gap-3">
+        <Loader2 className="animate-spin text-[#33d4ff]" size={28} />
+        <span className="text-gray-500">טוען נתוני קופה...</span>
       </div>
     )
   }
 
-  // תצוגת היסטוריה של נהג ספציפי
   if (selectedDriver) {
     return (
       <div>
-        <button
-          onClick={() => { setSelectedDriver(null); setDriverTransactions([]) }}
-          className="flex items-center gap-1 text-blue-600 mb-4 hover:underline"
-        >
-          <ChevronLeft size={18} />
-          חזרה לרשימה
-        </button>
-
+        {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">{selectedDriver.driverName}</h1>
-            <p className="text-gray-500">היסטוריית קופה</p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setSelectedDriver(null); setDriverTransactions([]) }}
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+            >
+              <ChevronLeft size={18} className="text-gray-600" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">{selectedDriver.driverName}</h1>
+              <p className="text-sm text-gray-500">היסטוריית קופה</p>
+            </div>
           </div>
-          <div className={`px-4 py-2 rounded-xl font-bold text-lg ${getBalanceBadge(selectedDriver.balance).bg} ${getBalanceBadge(selectedDriver.balance).color}`}>
+          <div className={`px-4 py-2 rounded-xl font-bold text-base ${getBalanceBadge(selectedDriver.balance).bg} ${getBalanceBadge(selectedDriver.balance).color}`}>
             יתרה: {getBalanceBadge(selectedDriver.balance).text}
           </div>
         </div>
 
-        {/* סינון תאריכים */}
-        <div className="bg-white rounded-xl p-4 mb-4 shadow-sm">
-          <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-gray-600 font-medium">
-            <Filter size={16} />
+        {/* Filters */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+          <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-gray-600 font-medium text-sm">
+            <Filter size={15} />
             סינון לפי תאריך
           </button>
           {showFilters && (
-            <div className="flex gap-3 mt-3 items-end">
+            <div className="flex gap-3 mt-3 items-end flex-wrap">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">מתאריך</label>
-                <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
+                <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">עד תאריך</label>
-                <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className="border rounded-lg px-3 py-2 text-sm" />
+                <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30" />
               </div>
-              <button onClick={handleFilterApply} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium">סנן</button>
-              <button onClick={() => { setFilterFrom(''); setFilterTo(''); handleFilterApply() }} className="text-gray-500 px-2 py-2 text-sm">נקה</button>
+              <button onClick={handleFilterApply} className="bg-[#33d4ff] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#21b8e6] transition-colors">סנן</button>
+              <button onClick={() => { setFilterFrom(''); setFilterTo(''); handleFilterApply() }} className="text-gray-400 px-2 py-2 text-sm hover:text-gray-600">נקה</button>
             </div>
           )}
         </div>
 
-        {/* טבלת עסקאות */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        {/* Transactions Table */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {loadingTransactions ? (
             <div className="flex items-center justify-center p-8">
-              <Loader2 className="animate-spin text-blue-500" size={24} />
+              <Loader2 className="animate-spin text-[#33d4ff]" size={24} />
             </div>
           ) : driverTransactions.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">אין עסקאות</div>
+            <div className="text-center py-12 text-gray-400">
+              <Wallet size={32} className="mx-auto mb-2 opacity-30" />
+              אין עסקאות
+            </div>
           ) : (
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סוג</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">גרירה</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סכום</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">הערות</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">אושר על ידי</th>
-                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">פעולה</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {driverTransactions.map((tx) => {
-                  const info = getTypeInfo(tx.type)
-                  const Icon = info.icon
-                  return (
-                    <tr key={tx.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Icon size={16} className={info.color} />
-                          <span className="text-sm">{info.label}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {(tx as any).order_number ? (
-                          <span className="text-blue-600 font-medium">#{(tx as any).order_number}{(tx as any).customer_order_number ? ` (${(tx as any).customer_order_number})` : ''}</span>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{(tx as any).customer_name || '—'}</td>
-                      <td className="px-4 py-3 font-bold">₪{Number(tx.amount).toLocaleString()}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{formatDate(tx.created_at)} {formatTime(tx.created_at)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">{tx.notes || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {(tx as any).approved_by_name
-                          ? <span className="text-emerald-600 font-medium">{(tx as any).approved_by_name}</span>
-                          : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {tx.type === 'transfer' && (
-                          <button
-                            onClick={() => handleApprove(tx)}
-                            disabled={approving === tx.id}
-                            className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1"
-                          >
-                            {approving === tx.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                            אשר
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">סוג</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">גרירה</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">לקוח</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">סכום</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">תאריך</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">הערות</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">אושר על ידי</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">פעולה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {driverTransactions.map((tx) => {
+                    const info = getTypeInfo(tx.type)
+                    const Icon = info.icon
+                    return (
+                      <tr key={tx.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <Icon size={15} className={info.color} />
+                            <span className="font-medium text-gray-700">{info.label}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {(tx as any).order_number
+                            ? <span className="text-[#33d4ff] font-medium">#{(tx as any).order_number}</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-600">{(tx as any).customer_name || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-5 py-3.5">
+                          <span className="font-bold text-gray-800">₪{Number(tx.amount).toLocaleString()}</span>
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-500 text-xs">{formatDate(tx.created_at)} {formatTime(tx.created_at)}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{tx.notes || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-5 py-3.5">
+                          {(tx as any).approved_by_name
+                            ? <span className="text-emerald-600 font-medium">{(tx as any).approved_by_name}</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {tx.type === 'transfer' && (
+                            <button
+                              onClick={() => handleApprove(tx)}
+                              disabled={approving === tx.id}
+                              className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-medium hover:bg-emerald-100 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                            >
+                              {approving === tx.id ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                              אשר
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
     )
   }
 
-  // תצוגה ראשית — רשימת נהגים
   return (
     <div>
+      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">קופות נהגים</h1>
-        <p className="text-gray-500">ניהול מזומנים שנגבו על ידי נהגים</p>
+        <h1 className="text-xl font-bold text-gray-800">קופות נהגים</h1>
+        <p className="text-sm text-gray-500 mt-1">ניהול מזומנים שנגבו על ידי נהגים</p>
       </div>
 
-      {/* סטטיסטיקות */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm text-gray-500">סה״כ מזומן בנהגים</p>
-          <p className="text-2xl font-bold text-gray-800">₪{totalCash.toLocaleString()}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#33d4ff]/10 flex items-center justify-center flex-shrink-0">
+            <Wallet size={18} className="text-[#33d4ff]" />
+          </div>
+          <div>
+            <p className="text-xl font-bold text-gray-800">₪{totalCash.toLocaleString()}</p>
+            <p className="text-xs text-gray-500">סה״כ מזומן</p>
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm text-gray-500">נהגים עם יתרה</p>
-          <p className="text-2xl font-bold text-amber-600">{driversWithBalance}</p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+            <BarChart2 size={18} className="text-amber-500" />
+          </div>
+          <div>
+            <p className="text-xl font-bold text-gray-800">{driversWithBalance}</p>
+            <p className="text-xs text-gray-500">נהגים עם יתרה</p>
+          </div>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <p className="text-sm text-gray-500">העברות ממתינות</p>
-          <p className="text-2xl font-bold text-blue-600">{pendingTransfers}</p>
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <Clock size={18} className="text-blue-500" />
+          </div>
+          <div>
+            <p className="text-xl font-bold text-gray-800">{pendingTransfers}</p>
+            <p className="text-xs text-gray-500">העברות ממתינות</p>
+          </div>
         </div>
       </div>
 
-      {/* חיפוש */}
-      <div className="bg-white rounded-xl shadow-sm mb-4">
-        <div className="p-4 border-b flex gap-3 items-center">
-          <div className="flex-1 relative">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      {/* Drivers table */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <div className="relative">
+            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="חפש נהג..."
-              className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full pr-9 pl-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30"
             />
           </div>
         </div>
-
-        {/* טבלת נהגים */}
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">נהג</th>
-              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">יתרת מזומן</th>
-              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">פעולה</th>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">נהג</th>
+              <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">יתרת מזומן</th>
+              <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">פעולה</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody>
             {filteredDrivers.map((driver) => {
               const badge = getBalanceBadge(driver.balance)
               return (
-                <tr key={driver.driverId} className="hover:bg-gray-50 cursor-pointer" onClick={() => handleSelectDriver(driver)}>
-                  <td className="px-4 py-3 font-medium text-gray-800">{driver.driverName}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-3 py-1 rounded-full text-sm font-bold ${badge.bg} ${badge.color}`}>
+                <tr key={driver.driverId} className="border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => handleSelectDriver(driver)}>
+                  <td className="px-5 py-3.5 font-medium text-gray-800">{driver.driverName}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`inline-flex px-3 py-1 rounded-xl text-xs font-bold ${badge.bg} ${badge.color}`}>
                       {badge.text}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <button className="text-blue-600 text-sm hover:underline">הצג היסטוריה</button>
+                  <td className="px-5 py-3.5">
+                    <span className="text-[#33d4ff] text-xs font-medium hover:underline">הצג היסטוריה ←</span>
                   </td>
                 </tr>
               )
             })}
             {filteredDrivers.length === 0 && (
               <tr>
-                <td colSpan={3} className="text-center py-8 text-gray-400">לא נמצאו נהגים</td>
+                <td colSpan={3} className="text-center py-12 text-gray-400">
+                  <Wallet size={24} className="mx-auto mb-2 opacity-30" />
+                  לא נמצאו נהגים
+                </td>
               </tr>
             )}
           </tbody>
