@@ -113,6 +113,7 @@ export default function DriverHoursTab({ companyId }: Props) {
               <th className="text-right p-4 font-medium text-gray-600">כניסה</th>
               <th className="text-right p-4 font-medium text-gray-600">יציאה</th>
               <th className="text-right p-4 font-medium text-gray-600">סה"כ</th>
+              <th className="text-right p-4 font-medium text-gray-600">מיקום התחלה</th>
               <th className="text-right p-4 font-medium text-gray-600">סטטוס</th>
             </tr>
           </thead>
@@ -130,6 +131,9 @@ export default function DriverHoursTab({ companyId }: Props) {
                   {shift.ended_at ? new Date(shift.ended_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '—'}
                 </td>
                 <td className="p-4 font-medium text-gray-800">{calcHours(shift.started_at, shift.ended_at) || '—'}</td>
+                <td className="p-4 text-gray-600 text-xs">
+                  {shift.start_address || (shift.start_lat ? `${shift.start_lat.toFixed(4)}, ${shift.start_lng.toFixed(4)}` : '—')}
+                </td>
                 <td className="p-4">
                   {shift.ended_at
                     ? <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-xs">הסתיימה</span>

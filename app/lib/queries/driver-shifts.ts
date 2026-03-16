@@ -115,3 +115,15 @@ export async function getDriverHoursReport(
   if (error) throw error
   return data || []
 }
+
+export async function getAddressFromCoords(lat: number, lng: number): Promise<string> {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  const res = await fetch(
+    `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=he`
+  )
+  const data = await res.json()
+  if (data.results && data.results.length > 0) {
+    return data.results[0].formatted_address
+  }
+  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+}

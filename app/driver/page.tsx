@@ -341,6 +341,14 @@ export default function DriverHomePage() {
                       })
                     }
                     const shift = await startShift(driverInfo.id, driverInfo.company_id, lat, lng)
+                    if (lat && lng) {
+                      const { getAddressFromCoords } = await import('@/app/lib/queries/driver-shifts')
+                      const address = await getAddressFromCoords(lat, lng)
+                      await supabase
+                        .from('driver_shifts')
+                        .update({ start_address: address })
+                        .eq('id', shift.id)
+                    }
                     setActiveShift(shift)
                     setShowStatusModal(false)
                   }}

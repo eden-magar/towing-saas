@@ -36,7 +36,7 @@ export function useLocationTracking(
     }
 
     sendLocation()
-    intervalRef.current = setInterval(sendLocation, 30000)
+    intervalRef.current = setInterval(sendLocation, 3600000)
 
     return () => {
       if (intervalRef.current) {
