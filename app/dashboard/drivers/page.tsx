@@ -6,10 +6,15 @@ import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
+import DriversMap from '../../components/DriversMap'
+
 
 export default function DriversPage() {
   const { companyId } = useAuth()
   
+  const [activeTab, setActiveTab] = useState<'list' | 'map'>('list')
+  const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
+
   // Data states
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [trucks, setTrucks] = useState<TowTruck[]>([])
@@ -81,6 +86,16 @@ export default function DriversPage() {
         .eq('is_active', true)
 
       setTrucks(trucksData || [])
+      const { getActiveDriversWithLocation } = await import('../../lib/queries/driver-shifts')
+      const activeDrivers = await getActiveDriversWithLocation(companyId)
+      setDriversWithLocation(activeDrivers.map((d: any) => ({
+        id: d.driver.id,
+        name: d.driver.user?.full_name || 'נהג',
+        status: d.driver.status,
+        last_lat: d.driver.last_lat,
+        last_lng: d.driver.last_lng,
+        last_seen_at: d.driver.last_seen_at,
+      })).filter((d: any) => d.last_lat && d.last_lng))
     } catch (err) {
       console.error('Error loading data:', err)
       setError('שגיאה בטעינת הנתונים')
@@ -344,6 +359,34 @@ export default function DriversPage() {
         </button>
       </div>
 
+      {/* טאבים */}
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={() => setActiveTab('list')}
+          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+            activeTab === 'list'
+              ? 'bg-[#33d4ff] text-white'
+              : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          רשימה
+        </button>
+        <button
+          onClick={() => setActiveTab('map')}
+          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+            activeTab === 'map'
+              ? 'bg-[#33d4ff] text-white'
+              : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          🗺️ מפה חיה
+        </button>
+      </div>
+      {activeTab === 'map' && (
+        <DriversMap drivers={driversWithLocation} />
+      )}
+
+      {activeTab === 'list' && <>
       {/* סטטיסטיקות */}
       <div className="grid grid-cols-4 gap-2 sm:gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
@@ -590,6 +633,8 @@ export default function DriversPage() {
           </div>
         )}
       </div>
+      </>}
+
 
       {/* Modal הוספה/עריכה */}
       {showModal && (
