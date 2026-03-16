@@ -16,19 +16,43 @@ export async function startShift(driverId: string, companyId: string, lat?: numb
   return data
 }
 
-export async function endShift(shiftId: string) {
+export async function endShift(shiftId: string, lat?: number, lng?: number) {
+  const updateData: any = { ended_at: new Date().toISOString() }
+  
+  if (lat && lng) {
+    updateData.end_lat = lat
+    updateData.end_lng = lng
+    try {
+      updateData.end_address = await getAddressFromCoords(lat, lng)
+    } catch {
+      updateData.end_address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+    }
+  }
+
   const { error } = await supabase
     .from('driver_shifts')
-    .update({ ended_at: new Date().toISOString() })
+    .update(updateData)
     .eq('id', shiftId)
   if (error) throw error
   return true
 }
 
-export async function endShiftManually(shiftId: string, endedAt: string) {
+export async function endShiftManually(shiftId: string, endedAt: string, lat?: number, lng?: number) {
+  const updateData: any = { ended_at: endedAt }
+
+  if (lat && lng) {
+    updateData.end_lat = lat
+    updateData.end_lng = lng
+    try {
+      updateData.end_address = await getAddressFromCoords(lat, lng)
+    } catch {
+      updateData.end_address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+    }
+  }
+
   const { error } = await supabase
     .from('driver_shifts')
-    .update({ ended_at: endedAt })
+    .update(updateData)
     .eq('id', shiftId)
   if (error) throw error
   return true
@@ -81,9 +105,16 @@ export async function insertLocation(
   lat: number,
   lng: number
 ) {
+  let address: string | null = null
+  try {
+    address = await getAddressFromCoords(lat, lng)
+  } catch {
+    address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+  }
+
   await supabase
     .from('driver_locations')
-    .insert({ driver_id: driverId, company_id: companyId, shift_id: shiftId, lat, lng })
+    .insert({ driver_id: driverId, company_id: companyId, shift_id: shiftId, lat, lng, address })
 
   await supabase
     .from('drivers')
@@ -137,6 +168,9 @@ export async function getDriverHoursReport(
       start_address,
       start_lat,
       start_lng,
+      end_address,
+      end_lat,
+      end_lng,
       driver:drivers!inner (
         id,
         user:users!user_id (full_name, phone)
@@ -153,7 +187,33 @@ export async function getDriverHoursReport(
 
   const { data, error } = await query
   if (error) throw error
-  return data || []
+
+  const shifts = data || []
+
+  // לכל משמרת — שולפים את הגרירה האחרונה של הנהג באותו יום
+  const shiftsWithLastTow = await Promise.all(shifts.map(async (shift: any) => {
+    const dayStart = new Date(shift.started_at)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(shift.started_at)
+    dayEnd.setHours(23, 59, 59, 999)
+
+    const { data: towData } = await supabase
+      .from('tows')
+      .select('id, status, updated_at, tow_points(address)')
+      .eq('driver_id', (shift.driver as any).id)
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString())
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    return {
+      ...shift,
+      last_tow: towData || null
+    }
+  }))
+
+  return shiftsWithLastTow
 }
 
 export async function getAddressFromCoords(lat: number, lng: number): Promise<string> {
@@ -166,4 +226,39 @@ export async function getAddressFromCoords(lat: number, lng: number): Promise<st
     return data.results[0].formatted_address
   }
   return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+}
+
+export async function getDriverHourlyLocations(
+  companyId: string,
+  startDate: string,
+  endDate: string,
+  driverId?: string
+) {
+  let query = supabase
+    .from('driver_locations')
+    .select(`
+      id,
+      lat,
+      lng,
+      timestamp,
+      address,
+      driver_id,
+      shift_id,
+      driver:drivers!inner (
+        id,
+        user:users!user_id (full_name, phone)
+      )
+    `)
+    .eq('company_id', companyId)
+    .gte('timestamp', startDate)
+    .lte('timestamp', endDate)
+    .order('timestamp', { ascending: false })
+
+  if (driverId) {
+    query = query.eq('driver_id', driverId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
 }

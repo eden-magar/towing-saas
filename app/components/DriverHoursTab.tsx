@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getDriverHoursReport } from '../lib/queries/driver-shifts'
+import { getDriverHoursReport, getDriverHourlyLocations } from '../lib/queries/driver-shifts'
 import { getDrivers } from '../lib/queries/drivers'
 
 interface Props {
@@ -10,8 +10,10 @@ interface Props {
 
 export default function DriverHoursTab({ companyId }: Props) {
   const [shifts, setShifts] = useState<any[]>([])
+  const [locations, setLocations] = useState<any[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeSubTab, setActiveSubTab] = useState<'shifts' | 'locations'>('shifts')
   const [selectedDriver, setSelectedDriver] = useState<string>('all')
   const [startDate, setStartDate] = useState(() => {
     const d = new Date()
@@ -26,25 +28,31 @@ export default function DriverHoursTab({ companyId }: Props) {
   }, [companyId, startDate, endDate, selectedDriver])
 
   useEffect(() => {
-  if (!companyId) return
-  const { supabase } = require('../lib/supabase')
-  const channel = supabase
-    .channel(`driver-shifts-${companyId}`)
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'driver_shifts',
-      filter: `company_id=eq.${companyId}`
-    }, () => loadData())
-    .subscribe()
-  return () => { supabase.removeChannel(channel) }
-}, [companyId])
+    if (!companyId) return
+    const { supabase } = require('../lib/supabase')
+    const channel = supabase
+      .channel(`driver-shifts-${companyId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'driver_shifts',
+        filter: `company_id=eq.${companyId}`
+      }, () => loadData())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [companyId])
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const [shiftsData, driversData] = await Promise.all([
+      const [shiftsData, locationsData, driversData] = await Promise.all([
         getDriverHoursReport(
+          companyId,
+          startDate + 'T00:00:00',
+          endDate + 'T23:59:59',
+          selectedDriver !== 'all' ? selectedDriver : undefined
+        ),
+        getDriverHourlyLocations(
           companyId,
           startDate + 'T00:00:00',
           endDate + 'T23:59:59',
@@ -53,6 +61,7 @@ export default function DriverHoursTab({ companyId }: Props) {
         getDrivers(companyId)
       ])
       setShifts(shiftsData)
+      setLocations(locationsData)
       setDrivers(driversData)
     } catch (err) {
       console.error(err)
@@ -102,63 +111,131 @@ export default function DriverHoursTab({ companyId }: Props) {
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-800">{shifts.length}</p>
-          <p className="text-sm text-gray-500">משמרות</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-800">{totalH}:{totalM.toString().padStart(2, '0')}</p>
-          <p className="text-sm text-gray-500">סה"כ שעות</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-800">{shifts.filter(s => !s.ended_at).length}</p>
-          <p className="text-sm text-gray-500">משמרות פעילות</p>
-        </div>
+      {/* Sub tabs */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setActiveSubTab('shifts')}
+          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+            activeSubTab === 'shifts' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          📋 דוח משמרות
+        </button>
+        <button
+          onClick={() => setActiveSubTab('locations')}
+          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+            activeSubTab === 'locations' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          📍 מיקומים שעתיים
+        </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="text-right p-4 font-medium text-gray-600">נהג</th>
-              <th className="text-right p-4 font-medium text-gray-600">תאריך</th>
-              <th className="text-right p-4 font-medium text-gray-600">כניסה</th>
-              <th className="text-right p-4 font-medium text-gray-600">יציאה</th>
-              <th className="text-right p-4 font-medium text-gray-600">סה"כ</th>
-              <th className="text-right p-4 font-medium text-gray-600">מיקום התחלה</th>
-              <th className="text-right p-4 font-medium text-gray-600">סטטוס</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="text-center p-8 text-gray-400">טוען...</td></tr>
-            ) : shifts.length === 0 ? (
-              <tr><td colSpan={6} className="text-center p-8 text-gray-400">אין נתונים</td></tr>
-            ) : shifts.map((shift: any) => (
-              <tr key={shift.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="p-4 font-medium text-gray-800">{shift.driver?.user?.full_name || '—'}</td>
-                <td className="p-4 text-gray-600">{new Date(shift.started_at).toLocaleDateString('he-IL')}</td>
-                <td className="p-4 text-gray-600">{new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td>
-                <td className="p-4 text-gray-600">
-                  {shift.ended_at ? new Date(shift.ended_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '—'}
-                </td>
-                <td className="p-4 font-medium text-gray-800">{calcHours(shift.started_at, shift.ended_at) || '—'}</td>
-                <td className="p-4 text-gray-600 text-xs">
-                  {shift.start_address || (shift.start_lat ? `${shift.start_lat.toFixed(4)}, ${shift.start_lng.toFixed(4)}` : '—')}
-                </td>
-                <td className="p-4">
-                  {shift.ended_at
-                    ? <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-xs">הסתיימה</span>
-                    : <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs">פעילה</span>}
-                </td>
+      {activeSubTab === 'shifts' && (
+        <>
+          {/* Summary */}
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{shifts.length}</p>
+              <p className="text-sm text-gray-500">משמרות</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{totalH}:{totalM.toString().padStart(2, '0')}</p>
+              <p className="text-sm text-gray-500">סה"כ שעות</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+              <p className="text-2xl font-bold text-gray-800">{shifts.filter(s => !s.ended_at).length}</p>
+              <p className="text-sm text-gray-500">משמרות פעילות</p>
+            </div>
+          </div>
+
+          {/* Shifts Table */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-right p-4 font-medium text-gray-600">נהג</th>
+                  <th className="text-right p-4 font-medium text-gray-600">תאריך</th>
+                  <th className="text-right p-4 font-medium text-gray-600">כניסה</th>
+                  <th className="text-right p-4 font-medium text-gray-600">יציאה</th>
+                  <th className="text-right p-4 font-medium text-gray-600">סה"כ</th>
+                  <th className="text-right p-4 font-medium text-gray-600">מיקום התחלה</th>
+                  <th className="text-right p-4 font-medium text-gray-600">מיקום סיום</th>
+                  <th className="text-right p-4 font-medium text-gray-600">גרירה אחרונה</th>
+                  <th className="text-right p-4 font-medium text-gray-600">סטטוס</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={9} className="text-center p-8 text-gray-400">טוען...</td></tr>
+                ) : shifts.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center p-8 text-gray-400">אין נתונים</td></tr>
+                ) : shifts.map((shift: any) => (
+                  <tr key={shift.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="p-4 font-medium text-gray-800">{shift.driver?.user?.full_name || '—'}</td>
+                    <td className="p-4 text-gray-600">{new Date(shift.started_at).toLocaleDateString('he-IL')}</td>
+                    <td className="p-4 text-gray-600">{new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="p-4 text-gray-600">
+                      {shift.ended_at ? new Date(shift.ended_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
+                    <td className="p-4 font-medium text-gray-800">{calcHours(shift.started_at, shift.ended_at) || '—'}</td>
+                    <td className="p-4 text-gray-600 text-xs">
+                      {shift.start_address || (shift.start_lat ? `${shift.start_lat.toFixed(4)}, ${shift.start_lng.toFixed(4)}` : '—')}
+                    </td>
+                    <td className="p-4 text-gray-600 text-xs">
+                      {shift.end_address || (shift.end_lat ? `${shift.end_lat.toFixed(4)}, ${shift.end_lng.toFixed(4)}` : '—')}
+                    </td>
+                    <td className="p-4 text-gray-600 text-xs">
+                      {shift.last_tow
+                        ? new Date(shift.last_tow.updated_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+                        : <span className="text-gray-400">טרם בוצעה גרירה</span>
+                      }
+                    </td>
+                    <td className="p-4">
+                      {shift.ended_at
+                        ? <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-lg text-xs">הסתיימה</span>
+                        : <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs">פעילה</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {activeSubTab === 'locations' && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-right p-4 font-medium text-gray-600">נהג</th>
+                <th className="text-right p-4 font-medium text-gray-600">תאריך</th>
+                <th className="text-right p-4 font-medium text-gray-600">שעה</th>
+                <th className="text-right p-4 font-medium text-gray-600">כתובת</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={4} className="text-center p-8 text-gray-400">טוען...</td></tr>
+              ) : locations.length === 0 ? (
+                <tr><td colSpan={4} className="text-center p-8 text-gray-400">אין נתונים</td></tr>
+              ) : locations.map((loc: any) => {
+                const d = new Date(loc.timestamp)
+                d.setMinutes(0, 0, 0)
+                return (
+                  <tr key={loc.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="p-4 font-medium text-gray-800">{loc.driver?.user?.full_name || '—'}</td>
+                    <td className="p-4 text-gray-600">{d.toLocaleDateString('he-IL')}</td>
+                    <td className="p-4 text-gray-600">{d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="p-4 text-gray-600 text-xs">{loc.address || (loc.lat ? `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}` : '—')}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
