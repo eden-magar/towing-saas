@@ -10,7 +10,11 @@ import {
   saveLocationSurcharges,
   saveServiceSurcharges,
   updateCustomerPricing,
-  saveFixedPriceItems
+  saveFixedPriceItems,
+  upsertCustomerPriceList,
+  getCustomerPriceList,
+  getCustomerSurcharges,
+  saveCustomerSurcharges,
 } from '../../lib/queries/price-lists'
 import { BasePriceTab } from './components/BasePriceTab'
 import { FixedPriceTab } from './components/FixedPriceTab'
@@ -38,12 +42,15 @@ interface TimeSurcharge {
   id: string
   name: string
   label: string
+  time_description?: string | null
   time_start: string
   time_end: string
   day_type: string
   surcharge_percent: number
+  sort_order?: number
   is_active: boolean
 }
+
 
 interface LocationSurcharge {
   id: string
@@ -82,6 +89,17 @@ interface CustomerPriceList {
   type: string
   discount_percent: number
   price_items: CustomerPriceItem[]
+  // מחירון מלא
+  price_list_id?: string | null
+  base_price_private?: number | null
+  base_price_motorcycle?: number | null
+  base_price_heavy?: number | null
+  base_price_machinery?: number | null
+  price_per_km?: number | null
+  minimum_price?: number | null
+  customer_time_surcharges?: TimeSurcharge[]
+  customer_location_surcharges?: LocationSurcharge[]
+  customer_service_surcharges?: ServiceSurcharge[]
 }
 
 // ==================== Component ====================
@@ -406,20 +424,91 @@ export default function PriceListsPage() {
   }
 
   // Customer pricing
-  const openCustomerModal = (customer: CustomerPriceList) => {
-    setEditingCustomer({ ...customer, price_items: [...customer.price_items] })
+  const openCustomerModal = async (customer: CustomerPriceList) => {
+  const base = { ...customer, price_items: [...customer.price_items] }
+  
+  // שליפת מחירון לקוח אם קיים
+  const existingPriceList = await getCustomerPriceList(customer.customer_company_id)
+    if (existingPriceList) {
+      const surcharges = await getCustomerSurcharges(existingPriceList.id)
+      base.price_list_id = existingPriceList.id
+      base.base_price_private = existingPriceList.base_price_private
+      base.base_price_motorcycle = existingPriceList.base_price_motorcycle
+      base.base_price_heavy = existingPriceList.base_price_heavy
+      base.base_price_machinery = existingPriceList.base_price_machinery
+      base.price_per_km = existingPriceList.price_per_km
+      base.minimum_price = existingPriceList.minimum_price
+      base.customer_time_surcharges = surcharges.timeSurcharges
+      base.customer_location_surcharges = surcharges.locationSurcharges
+      base.customer_service_surcharges = surcharges.serviceSurcharges
+    } else {
+      base.customer_time_surcharges = []
+      base.customer_location_surcharges = []
+      base.customer_service_surcharges = []
+    }
+
+    setEditingCustomer(base)
     setShowCustomerModal(true)
   }
 
   const saveCustomerPrices = async () => {
-    if (!editingCustomer) return
+    if (!editingCustomer || !companyId) return
 
     try {
+      // שמירת הנחה + price items (כמו קודם)
       await updateCustomerPricing(
         editingCustomer.customer_company_id,
         editingCustomer.discount_percent,
         editingCustomer.price_items.map(p => ({ label: p.label, price: p.price }))
       )
+
+      // שמירת מחירון מלא אם הוגדר
+      const hasCustomPricing = editingCustomer.base_price_private ||
+        editingCustomer.base_price_motorcycle ||
+        editingCustomer.base_price_heavy ||
+        editingCustomer.base_price_machinery ||
+        editingCustomer.price_per_km
+
+      if (hasCustomPricing) {
+        const priceListId = await upsertCustomerPriceList(
+          companyId,
+          editingCustomer.customer_company_id,
+          {
+            base_price_private: editingCustomer.base_price_private || undefined,
+            base_price_motorcycle: editingCustomer.base_price_motorcycle || undefined,
+            base_price_heavy: editingCustomer.base_price_heavy || undefined,
+            base_price_machinery: editingCustomer.base_price_machinery || undefined,
+            price_per_km: editingCustomer.price_per_km || undefined,
+            minimum_price: editingCustomer.minimum_price || undefined,
+          }
+        )
+
+        await saveCustomerSurcharges(priceListId, companyId, {
+          time: (editingCustomer.customer_time_surcharges || []).map(s => ({
+          name: s.name,
+          label: s.label,
+          time_description: s.time_description ?? null,
+          time_start: s.time_start ?? null,
+          time_end: s.time_end ?? null,
+          surcharge_percent: s.surcharge_percent,
+          day_type: s.day_type ?? 'weekday',
+          sort_order: s.sort_order ?? 0,
+          is_active: s.is_active,
+        })),
+          location: (editingCustomer.customer_location_surcharges || []).map(s => ({
+            label: s.label,
+            surcharge_percent: s.surcharge_percent,
+            is_active: s.is_active,
+          })),
+          service: (editingCustomer.customer_service_surcharges || []).map(s => ({
+            label: s.label,
+            price: s.price,
+            price_type: s.price_type,
+            unit_label: s.unit_label,
+            is_active: s.is_active,
+          })),
+        })
+      }
 
       setCustomerPriceLists(prev => prev.map(c =>
         c.id === editingCustomer.id ? editingCustomer : c
