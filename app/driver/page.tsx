@@ -332,13 +332,18 @@ export default function DriverHomePage() {
                       return
                     }
                     if (navigator.geolocation) {
-                      await new Promise<void>((resolve) => {
-                        navigator.geolocation.getCurrentPosition(
-                          (pos) => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve() },
-                          () => resolve(),
-                          { timeout: 5000 }
-                        )
-                      })
+                      try {
+                        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                          navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            timeout: 10000,
+                            enableHighAccuracy: true
+                          })
+                        })
+                        lat = pos.coords.latitude
+                        lng = pos.coords.longitude
+                      } catch (e) {
+                        console.warn('GPS not available:', e)
+                      }
                     }
                     const shift = await startShift(driverInfo.id, driverInfo.company_id, lat, lng)
                     if (lat && lng) {
