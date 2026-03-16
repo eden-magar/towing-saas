@@ -83,10 +83,6 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
         markersRef.current.push(marker)
         bounds.extend({ lat: driver.last_lat, lng: driver.last_lng })
       })
-
-      if (drivers.length > 0) {
-        mapInstanceRef.current.fitBounds(bounds)
-      }
     })
   }, [drivers])
 
