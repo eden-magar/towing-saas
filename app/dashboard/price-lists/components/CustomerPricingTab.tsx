@@ -1,6 +1,6 @@
 'use client'
 
-import { Building2, Edit2 } from 'lucide-react'
+import { Building2, Edit2, Tag, TrendingDown, ChevronLeft } from 'lucide-react'
 
 interface CustomerPriceItem {
   id: string
@@ -15,6 +15,12 @@ interface CustomerPriceList {
   type: string
   discount_percent: number
   price_items: CustomerPriceItem[]
+  base_price_private?: number | null
+  base_price_motorcycle?: number | null
+  base_price_heavy?: number | null
+  base_price_machinery?: number | null
+  price_per_km?: number | null
+  minimum_price?: number | null
 }
 
 interface CustomerPricingTabProps {
@@ -22,51 +28,59 @@ interface CustomerPricingTabProps {
   onEdit: (customer: CustomerPriceList) => void
 }
 
-export function CustomerPricingTab({
-  customers,
-  onEdit
-}: CustomerPricingTabProps) {
+export function CustomerPricingTab({ customers, onEdit }: CustomerPricingTabProps) {
+  const hasCustomPricing = (customer: CustomerPriceList) =>
+    customer.base_price_private || customer.base_price_heavy ||
+    customer.base_price_machinery || customer.price_per_km
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Building2 size={20} className="text-indigo-500" />
-        <div>
-          <h3 className="font-bold text-gray-800">מחירוני לקוחות</h3>
-          <p className="text-sm text-gray-500">הנחות ומחירים מותאמים ללקוחות עסקיים</p>
-        </div>
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-100">
+        <h3 className="font-semibold text-gray-800 text-sm">מחירוני לקוחות</h3>
+        <p className="text-xs text-gray-400 mt-0.5">מחירים ותנאים מותאמים ללקוחות עסקיים</p>
       </div>
 
       {customers.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Building2 size={40} className="mx-auto mb-2 text-gray-300" />
-          <p>אין לקוחות עסקיים</p>
-          <p className="text-sm">הוסף לקוחות בניהול לקוחות להגדרת מחירון מותאם</p>
+        <div className="text-center py-12 text-gray-400">
+          <Building2 size={32} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm">אין לקוחות עסקיים</p>
+          <p className="text-xs mt-1">הוסף לקוחות בניהול לקוחות להגדרת מחירון מותאם</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="divide-y divide-gray-50">
           {customers.map((customer) => (
-            <div 
-              key={customer.id} 
-              className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-[#33d4ff] transition-colors cursor-pointer"
+            <div
+              key={customer.id}
               onClick={() => onEdit(customer)}
+              className="flex items-center justify-between px-5 py-3.5 hover:bg-gray-50/50 cursor-pointer transition-colors group"
             >
-              <div className="min-w-0">
-                <h4 className="font-medium text-gray-800 truncate">{customer.name}</h4>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs px-2 py-0.5 bg-gray-200 rounded text-gray-600">{customer.type}</span>
-                  {customer.discount_percent > 0 && (
-                    <span className="text-xs text-emerald-600 font-medium">
-                      {customer.discount_percent}% הנחה
-                    </span>
-                  )}
-                  {customer.price_items.length > 0 && (
-                    <span className="text-xs text-blue-600">
-                      {customer.price_items.length} מחירים
-                    </span>
-                  )}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Building2 size={15} className="text-gray-500" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-800 text-sm">{customer.name}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-gray-400">{customer.type}</span>
+                    {customer.discount_percent > 0 && (
+                      <span className="flex items-center gap-0.5 text-xs text-emerald-600 font-medium">
+                        <TrendingDown size={11} />
+                        {customer.discount_percent}% הנחה
+                      </span>
+                    )}
+                    {customer.price_items.length > 0 && (
+                      <span className="flex items-center gap-0.5 text-xs text-blue-500">
+                        <Tag size={11} />
+                        {customer.price_items.length} מחירים קבועים
+                      </span>
+                    )}
+                    {hasCustomPricing(customer) && (
+                      <span className="text-xs text-purple-500 font-medium">מחירון מותאם</span>
+                    )}
+                  </div>
                 </div>
               </div>
-              <Edit2 size={16} className="text-gray-400 flex-shrink-0" />
+              <ChevronLeft size={16} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
             </div>
           ))}
         </div>

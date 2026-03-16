@@ -638,7 +638,7 @@ export default function PriceListsPage() {
       {/* Customer Edit Modal */}
       {showCustomerModal && editingCustomer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-[#33d4ff] text-white">
               <div>
                 <h2 className="font-bold">מחירון מותאם</h2>
@@ -652,10 +652,12 @@ export default function PriceListsPage() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+
+              {/* הנחה */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">אחוז הנחה</label>
-                <div className="relative">
+                <h3 className="font-semibold text-gray-800 mb-3">הנחה כללית</h3>
+                <div className="relative w-40">
                   <input
                     type="number"
                     value={editingCustomer.discount_percent}
@@ -666,8 +668,274 @@ export default function PriceListsPage() {
                 </div>
               </div>
 
+              {/* מחירי בסיס */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">מחירים מותאמים</label>
+                <h3 className="font-semibold text-gray-800 mb-3">מחירי בסיס לפי סוג רכב</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'base_price_private', label: 'רכב פרטי' },
+                    { key: 'base_price_motorcycle', label: 'דו גלגלי' },
+                    { key: 'base_price_heavy', label: 'רכב כבד' },
+                    { key: 'base_price_machinery', label: 'צמ"ה' },
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                      <div className="relative">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                        <input
+                          type="number"
+                          value={(editingCustomer as any)[key] || ''}
+                          onChange={(e) => setEditingCustomer({ ...editingCustomer, [key]: Number(e.target.value) || null })}
+                          placeholder="כמו מחירון כללי"
+                          className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">מחיר לק"מ</label>
+                    <div className="relative">
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                      <input
+                        type="number"
+                        value={editingCustomer.price_per_km || ''}
+                        onChange={(e) => setEditingCustomer({ ...editingCustomer, price_per_km: Number(e.target.value) || null })}
+                        placeholder="כמו מחירון כללי"
+                        className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">מחיר מינימום</label>
+                    <div className="relative">
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                      <input
+                        type="number"
+                        value={editingCustomer.minimum_price || ''}
+                        onChange={(e) => setEditingCustomer({ ...editingCustomer, minimum_price: Number(e.target.value) || null })}
+                        placeholder="כמו מחירון כללי"
+                        className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* תוספות זמן */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-800">תוספות זמן</h3>
+                  <button
+                    onClick={() => setEditingCustomer({
+                      ...editingCustomer,
+                      customer_time_surcharges: [...(editingCustomer.customer_time_surcharges || []), {
+                        id: `new_${Date.now()}`, name: '', label: '', time_start: '', time_end: '',
+                        day_type: 'weekday', surcharge_percent: 0, is_active: true, sort_order: 0
+                      }]
+                    })}
+                    className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
+                  >
+                    <Plus size={14} /> הוסף
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(editingCustomer.customer_time_surcharges || []).map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
+                      <input
+                        type="text"
+                        value={s.label}
+                        onChange={(e) => {
+                          const updated = [...(editingCustomer.customer_time_surcharges || [])]
+                          updated[i] = { ...updated[i], label: e.target.value, name: e.target.value }
+                          setEditingCustomer({ ...editingCustomer, customer_time_surcharges: updated })
+                        }}
+                        placeholder="שם"
+                        className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                      <select
+                        value={s.day_type}
+                        onChange={(e) => {
+                          const updated = [...(editingCustomer.customer_time_surcharges || [])]
+                          updated[i] = { ...updated[i], day_type: e.target.value }
+                          setEditingCustomer({ ...editingCustomer, customer_time_surcharges: updated })
+                        }}
+                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+                      >
+                        <option value="weekday">ימי חול</option>
+                        <option value="friday">שישי</option>
+                        <option value="saturday">שבת</option>
+                        <option value="holiday">חג</option>
+                      </select>
+                      <div className="relative w-20">
+                        <input
+                          type="number"
+                          value={s.surcharge_percent}
+                          onChange={(e) => {
+                            const updated = [...(editingCustomer.customer_time_surcharges || [])]
+                            updated[i] = { ...updated[i], surcharge_percent: Number(e.target.value) }
+                            setEditingCustomer({ ...editingCustomer, customer_time_surcharges: updated })
+                          }}
+                          className="w-full pl-5 pr-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+                        />
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
+                      </div>
+                      <button
+                        onClick={() => setEditingCustomer({
+                          ...editingCustomer,
+                          customer_time_surcharges: (editingCustomer.customer_time_surcharges || []).filter((_, idx) => idx !== i)
+                        })}
+                        className="p-1 text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* תוספות מיקום */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-800">תוספות מיקום</h3>
+                  <button
+                    onClick={() => setEditingCustomer({
+                      ...editingCustomer,
+                      customer_location_surcharges: [...(editingCustomer.customer_location_surcharges || []), {
+                        id: `new_${Date.now()}`, label: '', surcharge_percent: 0, is_active: true
+                      }]
+                    })}
+                    className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
+                  >
+                    <Plus size={14} /> הוסף
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(editingCustomer.customer_location_surcharges || []).map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
+                      <input
+                        type="text"
+                        value={s.label}
+                        onChange={(e) => {
+                          const updated = [...(editingCustomer.customer_location_surcharges || [])]
+                          updated[i] = { ...updated[i], label: e.target.value }
+                          setEditingCustomer({ ...editingCustomer, customer_location_surcharges: updated })
+                        }}
+                        placeholder="שם"
+                        className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                      <div className="relative w-20">
+                        <input
+                          type="number"
+                          value={s.surcharge_percent}
+                          onChange={(e) => {
+                            const updated = [...(editingCustomer.customer_location_surcharges || [])]
+                            updated[i] = { ...updated[i], surcharge_percent: Number(e.target.value) }
+                            setEditingCustomer({ ...editingCustomer, customer_location_surcharges: updated })
+                          }}
+                          className="w-full pl-5 pr-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+                        />
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
+                      </div>
+                      <button
+                        onClick={() => setEditingCustomer({
+                          ...editingCustomer,
+                          customer_location_surcharges: (editingCustomer.customer_location_surcharges || []).filter((_, idx) => idx !== i)
+                        })}
+                        className="p-1 text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* תוספות שירות */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-800">תוספות שירות</h3>
+                  <button
+                    onClick={() => setEditingCustomer({
+                      ...editingCustomer,
+                      customer_service_surcharges: [...(editingCustomer.customer_service_surcharges || []), {
+                        id: `new_${Date.now()}`, label: '', price: 0, price_type: 'fixed', unit_label: '', is_active: true
+                      }]
+                    })}
+                    className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
+                  >
+                    <Plus size={14} /> הוסף
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(editingCustomer.customer_service_surcharges || []).map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
+                      <input
+                        type="text"
+                        value={s.label}
+                        onChange={(e) => {
+                          const updated = [...(editingCustomer.customer_service_surcharges || [])]
+                          updated[i] = { ...updated[i], label: e.target.value }
+                          setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
+                        }}
+                        placeholder="שם"
+                        className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                      />
+                      <select
+                        value={s.price_type}
+                        onChange={(e) => {
+                          const updated = [...(editingCustomer.customer_service_surcharges || [])]
+                          updated[i] = { ...updated[i], price_type: e.target.value as any }
+                          setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
+                        }}
+                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+                      >
+                        <option value="fixed">קבוע</option>
+                        <option value="per_unit">ליחידה</option>
+                        <option value="manual">ידני</option>
+                      </select>
+                      <div className="relative w-24">
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                        <input
+                          type="number"
+                          value={s.price}
+                          onChange={(e) => {
+                            const updated = [...(editingCustomer.customer_service_surcharges || [])]
+                            updated[i] = { ...updated[i], price: Number(e.target.value) }
+                            setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
+                          }}
+                          className="w-full pr-7 pl-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={() => setEditingCustomer({
+                          ...editingCustomer,
+                          customer_service_surcharges: (editingCustomer.customer_service_surcharges || []).filter((_, idx) => idx !== i)
+                        })}
+                        className="p-1 text-gray-400 hover:text-red-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* מחירים מותאמים (price items) */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-gray-800">מחירים קבועים</h3>
+                  <button
+                    onClick={() => setEditingCustomer({
+                      ...editingCustomer,
+                      price_items: [...editingCustomer.price_items, { id: `new_${Date.now()}`, label: '', price: 0 }]
+                    })}
+                    className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
+                  >
+                    <Plus size={14} /> הוסף
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {editingCustomer.price_items.map((price) => (
                     <div key={price.id} className="flex items-center gap-2">
@@ -681,7 +949,7 @@ export default function PriceListsPage() {
                           )
                         })}
                         placeholder="קטגוריה"
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
                       <div className="relative w-24">
                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
@@ -694,7 +962,7 @@ export default function PriceListsPage() {
                               p.id === price.id ? { ...p, price: Number(e.target.value) } : p
                             )
                           })}
-                          className="w-full pr-7 pl-2 py-2 border border-gray-200 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                          className="w-full pr-7 pl-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                         />
                       </div>
                       <button
@@ -708,18 +976,9 @@ export default function PriceListsPage() {
                       </button>
                     </div>
                   ))}
-                  <button
-                    onClick={() => setEditingCustomer({
-                      ...editingCustomer,
-                      price_items: [...editingCustomer.price_items, { id: `new_${Date.now()}`, label: '', price: 0 }]
-                    })}
-                    className="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-[#33d4ff] hover:text-[#33d4ff] transition-colors flex items-center justify-center gap-1 text-sm"
-                  >
-                    <Plus size={16} />
-                    הוסף
-                  </button>
                 </div>
               </div>
+
             </div>
 
             <div className="flex gap-3 px-5 py-4 border-t bg-gray-50">
@@ -739,6 +998,8 @@ export default function PriceListsPage() {
           </div>
         </div>
       )}
+
+
     </div>
   )
 }
