@@ -214,9 +214,15 @@ export default function DriverHomePage() {
 
   // פתיחת מודל משימה
   const openTaskModal = (task: DriverTask) => {
-    setSelectedTask(task)
-    setShowNewTaskModal(true)
+  if (!activeShift) {
+    if (confirm('לא התחלת יום עבודה. האם להתחיל עכשיו?')) {
+      setShowStatusModal(true)
+    }
+    return
   }
+  setSelectedTask(task)
+  setShowNewTaskModal(true)
+}
 
   // קבלת משימה
   const handleAcceptTask = async () => {
@@ -267,6 +273,21 @@ export default function DriverHomePage() {
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
+      {/* באנר התחלת משמרת */}
+      {!activeShift && (
+        <div className="bg-amber-400 text-amber-900 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⚠️</span>
+            <span className="font-medium text-sm">לא התחלת יום עבודה</span>
+          </div>
+          <button
+            onClick={() => setShowStatusModal(true)}
+            className="bg-amber-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold"
+          >
+            התחל עכשיו
+          </button>
+        </div>
+      )}
       {/* Status Modal */}
       {showStatusModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
