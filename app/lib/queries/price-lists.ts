@@ -230,29 +230,20 @@ export async function getTimeSurcharges(companyId: string): Promise<TimeSurcharg
     .from('time_surcharges')
     .select('*')
     .eq('company_id', companyId)
+    .is('price_list_id', null)
     .order('sort_order', { ascending: true })
-
-  if (error) {
-    console.error('Error fetching time surcharges:', error)
-    throw error
-  }
-
+  if (error) throw error
   return data || []
 }
 
 export async function saveTimeSurcharges(companyId: string, surcharges: Omit<TimeSurcharge, 'id' | 'company_id'>[]) {
-  // מחיקת קיימים
-  await supabase.from('time_surcharges').delete().eq('company_id', companyId)
-
-  // הוספת חדשים
+  await supabase.from('time_surcharges').delete().eq('company_id', companyId).is('price_list_id', null)
   if (surcharges.length > 0) {
     const { error } = await supabase
       .from('time_surcharges')
-      .insert(surcharges.map(s => ({ ...s, company_id: companyId })))
-
+      .insert(surcharges.map(s => ({ ...s, company_id: companyId, price_list_id: null })))
     if (error) throw error
   }
-
   return true
 }
 
@@ -263,28 +254,19 @@ export async function getLocationSurcharges(companyId: string): Promise<Location
     .from('location_surcharges')
     .select('*')
     .eq('company_id', companyId)
-
-  if (error) {
-    console.error('Error fetching location surcharges:', error)
-    throw error
-  }
-
+    .is('price_list_id', null)
+  if (error) throw error
   return data || []
 }
 
 export async function saveLocationSurcharges(companyId: string, surcharges: Omit<LocationSurcharge, 'id' | 'company_id'>[]) {
-  // מחיקת קיימים
-  await supabase.from('location_surcharges').delete().eq('company_id', companyId)
-
-  // הוספת חדשים
+  await supabase.from('location_surcharges').delete().eq('company_id', companyId).is('price_list_id', null)
   if (surcharges.length > 0) {
     const { error } = await supabase
       .from('location_surcharges')
-      .insert(surcharges.map(s => ({ ...s, company_id: companyId })))
-
+      .insert(surcharges.map(s => ({ ...s, company_id: companyId, price_list_id: null })))
     if (error) throw error
   }
-
   return true
 }
 
@@ -295,28 +277,19 @@ export async function getServiceSurcharges(companyId: string): Promise<ServiceSu
     .from('service_surcharges')
     .select('*')
     .eq('company_id', companyId)
-
-  if (error) {
-    console.error('Error fetching service surcharges:', error)
-    throw error
-  }
-
+    .is('price_list_id', null)
+  if (error) throw error
   return data || []
 }
 
 export async function saveServiceSurcharges(companyId: string, surcharges: Omit<ServiceSurcharge, 'id' | 'company_id'>[]) {
-  // מחיקת קיימים
-  await supabase.from('service_surcharges').delete().eq('company_id', companyId)
-
-  // הוספת חדשים
+  await supabase.from('service_surcharges').delete().eq('company_id', companyId).is('price_list_id', null)
   if (surcharges.length > 0) {
     const { error } = await supabase
       .from('service_surcharges')
-      .insert(surcharges.map(s => ({ ...s, company_id: companyId })))
-
+      .insert(surcharges.map(s => ({ ...s, company_id: companyId, price_list_id: null })))
     if (error) throw error
   }
-
   return true
 }
 
@@ -624,4 +597,109 @@ export function calculateTimeSurchargePercent(
   if (activeSurcharges.length === 0) return 0
   
   return Math.max(...activeSurcharges.map(s => s.surcharge_percent))
+}
+
+// ==================== מחירון לקוח מלא ====================
+
+export async function getCustomerPriceList(customerCompanyId: string): Promise<BasePriceList | null> {
+  const { data, error } = await supabase
+    .from('price_lists')
+    .select('*')
+    .eq('customer_company_id', customerCompanyId)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (error) throw error
+  return data || null
+}
+
+export async function upsertCustomerPriceList(
+  companyId: string,
+  customerCompanyId: string,
+  data: {
+    base_price_private?: number
+    base_price_motorcycle?: number
+    base_price_heavy?: number
+    base_price_machinery?: number
+    price_per_km?: number
+    minimum_price?: number
+  }
+): Promise<string> {
+  const existing = await getCustomerPriceList(customerCompanyId)
+  if (existing) {
+    const { error } = await supabase
+      .from('price_lists')
+      .update(data)
+      .eq('id', existing.id)
+    if (error) throw error
+    return existing.id
+  } else {
+    const { data: newList, error } = await supabase
+      .from('price_lists')
+      .insert({
+        company_id: companyId,
+        customer_company_id: customerCompanyId,
+        name: 'מחירון לקוח',
+        is_active: true,
+        ...data
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return newList.id
+  }
+}
+
+export async function getCustomerSurcharges(priceListId: string) {
+  const [time, location, service] = await Promise.all([
+    supabase.from('time_surcharges').select('*').eq('price_list_id', priceListId).order('sort_order'),
+    supabase.from('location_surcharges').select('*').eq('price_list_id', priceListId),
+    supabase.from('service_surcharges').select('*').eq('price_list_id', priceListId),
+  ])
+  return {
+    timeSurcharges: time.data || [],
+    locationSurcharges: location.data || [],
+    serviceSurcharges: service.data || [],
+  }
+}
+
+export async function saveCustomerSurcharges(
+  priceListId: string,
+  companyId: string,
+  surcharges: {
+    time: Omit<TimeSurcharge, 'id' | 'company_id'>[]
+    location: Omit<LocationSurcharge, 'id' | 'company_id'>[]
+    service: Omit<ServiceSurcharge, 'id' | 'company_id'>[]
+  }
+) {
+  await supabase.from('time_surcharges').delete().eq('price_list_id', priceListId)
+  await supabase.from('location_surcharges').delete().eq('price_list_id', priceListId)
+  await supabase.from('service_surcharges').delete().eq('price_list_id', priceListId)
+
+  if (surcharges.time.length > 0) {
+    await supabase.from('time_surcharges').insert(
+      surcharges.time.map(s => ({ ...s, company_id: companyId, price_list_id: priceListId }))
+    )
+  }
+  if (surcharges.location.length > 0) {
+    await supabase.from('location_surcharges').insert(
+      surcharges.location.map(s => ({ ...s, company_id: companyId, price_list_id: priceListId }))
+    )
+  }
+  if (surcharges.service.length > 0) {
+    await supabase.from('service_surcharges').insert(
+      surcharges.service.map(s => ({ ...s, company_id: companyId, price_list_id: priceListId }))
+    )
+  }
+  return true
+}
+
+export async function deleteCustomerPriceList(customerCompanyId: string) {
+  const existing = await getCustomerPriceList(customerCompanyId)
+  if (!existing) return true
+  const { error } = await supabase
+    .from('price_lists')
+    .delete()
+    .eq('id', existing.id)
+  if (error) throw error
+  return true
 }
