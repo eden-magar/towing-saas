@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
+import { useLocationTracking } from '../hooks/useLocationTracking'
 import { useAuth } from '../lib/AuthContext'
 import { 
   getDriverByUserId, 
@@ -55,7 +56,16 @@ export default function DriverHomePage() {
   const [selectedTask, setSelectedTask] = useState<DriverTask | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  const [activeShift, setActiveShift] = useState<any>(null)
+
   const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
+
+  useLocationTracking(
+  driverInfo?.id || null,
+  driverInfo?.company_id || null,
+  activeShift?.id || null,
+  !!activeShift
+)
 
   // טעינת נתונים
   useEffect(() => {
@@ -98,6 +108,9 @@ export default function DriverHomePage() {
         return
       }
       setDriverInfo(driver)
+      const { getActiveShift } = await import('@/app/lib/queries/driver-shifts')
+      const shift = await getActiveShift(driver.id)
+      setActiveShift(shift)
 
       const driverTasks = await getDriverTasks(driver.id)
       setTasks(driverTasks)
@@ -291,6 +304,46 @@ export default function DriverHomePage() {
               </button>
               ))}
             </div>
+              <div className="border-t border-gray-200 mt-4 pt-4">
+              {activeShift ? (
+                <button
+                  onClick={async () => {
+                    const { endShift } = await import('@/app/lib/queries/driver-shifts')
+                    await endShift(activeShift.id)
+                    setActiveShift(null)
+                    setShowStatusModal(false)
+                  }}
+                  className="w-full p-4 rounded-xl bg-red-50 border-2 border-red-200 text-red-700 font-medium flex items-center justify-center gap-2"
+                >
+                  <span>🔴</span> סיימתי יום עבודה
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    if (!driverInfo) return
+                    const { startShift } = await import('@/app/lib/queries/driver-shifts')
+                    let lat: number | undefined
+                    let lng: number | undefined
+                    if (navigator.geolocation) {
+                      await new Promise<void>((resolve) => {
+                        navigator.geolocation.getCurrentPosition(
+                          (pos) => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve() },
+                          () => resolve(),
+                          { timeout: 5000 }
+                        )
+                      })
+                    }
+                    const shift = await startShift(driverInfo.id, driverInfo.company_id, lat, lng)
+                    setActiveShift(shift)
+                    setShowStatusModal(false)
+                  }}
+                  className="w-full p-4 rounded-xl bg-green-50 border-2 border-green-200 text-green-700 font-medium flex items-center justify-center gap-2"
+                >
+                  <span>🟢</span> התחלתי יום עבודה
+                </button>
+              )}
+            </div>
+
             <button 
               onClick={() => setShowStatusModal(false)}
               className="w-full mt-4 p-4 bg-gray-100 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300"
