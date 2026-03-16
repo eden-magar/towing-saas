@@ -25,6 +25,43 @@ export async function endShift(shiftId: string) {
   return true
 }
 
+export async function endShiftManually(shiftId: string, endedAt: string) {
+  const { error } = await supabase
+    .from('driver_shifts')
+    .update({ ended_at: endedAt })
+    .eq('id', shiftId)
+  if (error) throw error
+  return true
+}
+
+export async function getDriversOvertime(companyId: string) {
+  const { data, error } = await supabase
+    .from('driver_shifts')
+    .select(`
+      id,
+      started_at,
+      driver:drivers!inner (
+        id,
+        work_hours_end,
+        user:users!user_id (full_name, phone)
+      )
+    `)
+    .eq('company_id', companyId)
+    .is('ended_at', null)
+
+  if (error) throw error
+  if (!data) return []
+
+  const now = new Date()
+  const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0')
+
+  return data.filter((shift: any) => {
+    const driver = shift.driver as any
+    if (!driver?.work_hours_end) return false
+    return currentTime > driver.work_hours_end
+  })
+}
+
 export async function getActiveShift(driverId: string) {
   const { data } = await supabase
     .from('driver_shifts')

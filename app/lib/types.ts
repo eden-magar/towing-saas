@@ -65,7 +65,9 @@ export interface Driver {
   status: DriverStatus
   license_type: string | null    
   years_experience: number | null  
-  notes: string | null             
+  notes: string | null
+  work_hours_start: string | null
+  work_hours_end: string | null
   created_at: string
   updated_at: string
 }

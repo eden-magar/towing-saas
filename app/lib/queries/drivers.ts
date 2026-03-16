@@ -86,6 +86,8 @@ interface CreateDriverInput {
   licenseType: string
   licenseExpiry: string
   yearsExperience?: number
+  work_hours_start?: string | null
+  work_hours_end?: string | null
   notes?: string
   initialStatus: DriverStatus
   truckId?: string
@@ -110,6 +112,8 @@ export async function createDriver(input: CreateDriverInput) {
       licenseType: input.licenseType,
       licenseExpiry: input.licenseExpiry,
       yearsExperience: input.yearsExperience,
+      work_hours_start: input.work_hours_start,
+      work_hours_end: input.work_hours_end,
       notes: input.notes,
       initialStatus: input.initialStatus,
       truckId: input.truckId
@@ -139,6 +143,8 @@ interface UpdateDriverInput {
   licenseType?: string
   licenseExpiry?: string
   yearsExperience?: number
+  work_hours_start?: string | null
+  work_hours_end?: string | null
   notes?: string
   truckId?: string | null
 }
@@ -169,6 +175,8 @@ export async function updateDriver(input: UpdateDriverInput) {
       license_type: input.licenseType,
       license_expiry: input.licenseExpiry,
       years_experience: input.yearsExperience,
+      work_hours_start: input.work_hours_start,
+      work_hours_end: input.work_hours_end,
       notes: input.notes
     })
     .eq('id', input.driverId)

@@ -37,7 +37,7 @@ export default function DriversPage() {
   const [duplicateDriverName, setDuplicateDriverName] = useState('')
   const [error, setError] = useState('')
 
-  const [formData, setFormData] = useState({
+   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     phone: '',
@@ -53,6 +53,8 @@ export default function DriversPage() {
     initialStatus: 'available' as 'available' | 'unavailable',
     sendSms: true,
     sendEmail: false,
+    work_hours_start: '',
+    work_hours_end: '',
     notes: '',
   })
 
@@ -145,6 +147,8 @@ export default function DriversPage() {
       initialStatus: 'available',
       sendSms: true,
       sendEmail: false,
+      work_hours_start: '',
+      work_hours_end: '',
       notes: '',
     })
     setShowLicenseWarning(false)
@@ -177,6 +181,8 @@ export default function DriversPage() {
       initialStatus: driver.status === 'unavailable' ? 'unavailable' : 'available',
       sendSms: false,
       sendEmail: false,
+      work_hours_start: driver.work_hours_start || '',
+      work_hours_end: driver.work_hours_end || '',
       notes: driver.notes || '',
     })
     setShowModal(true)
@@ -234,6 +240,8 @@ export default function DriversPage() {
           licenseType: formData.licenseType || undefined,
           licenseExpiry: formData.licenseExpiry || undefined,
           yearsExperience: formData.yearsExperience,
+          work_hours_start: formData.work_hours_start || null,
+          work_hours_end: formData.work_hours_end || null,
           notes: formData.notes || undefined,
           truckId: formData.truckAssignment === 'existing' ? formData.selectedTruckId : null,
         })
@@ -260,23 +268,6 @@ export default function DriversPage() {
           setNewDriverPassword(result.tempPassword)
         }
       }
-      //   await createDriver({
-      //     companyId,
-      //     email: formData.email || `${formData.phone}@temp.com`,
-      //     phone: formData.phone,
-      //     fullName: `${formData.firstName} ${formData.lastName}`,
-      //     idNumber: formData.idNumber || undefined,
-      //     address: formData.address || undefined,
-      //     licenseNumber: formData.licenseNumber,
-      //     licenseType: formData.licenseType,
-      //     licenseExpiry: formData.licenseExpiry,
-      //     yearsExperience: formData.yearsExperience,
-      //     notes: formData.notes || undefined,
-      //     initialStatus: formData.initialStatus as DriverStatus,
-      //     truckId: formData.truckAssignment === 'existing' ? formData.selectedTruckId || undefined : undefined,
-      //   })
-      // }
-
       if (editingDriver) {
         await loadData()
       }
@@ -914,11 +905,41 @@ export default function DriversPage() {
                 </div>
               )}
 
-              {/* הערות */}
+              {/* שעות עבודה */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">
                     {editingDriver ? '4' : '5'}
+                  </span>
+                  שעות עבודה
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">שעת התחלה</label>
+                    <input
+                      type="time"
+                      value={formData.work_hours_start}
+                      onChange={(e) => setFormData({ ...formData, work_hours_start: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">שעת סיום</label>
+                    <input
+                      type="time"
+                      value={formData.work_hours_end}
+                      onChange={(e) => setFormData({ ...formData, work_hours_end: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* הערות */}
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">
+                    {editingDriver ? '5' : '6'}
                   </span>
                   הערות
                 </h3>

@@ -10,6 +10,8 @@ import Link from 'next/link'
 import { countPendingRejectionRequests, getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
 import { getAvailableDrivers } from '../lib/queries/drivers'
 import { supabase } from '../lib/supabase'
+import { getDriversOvertime, endShiftManually } from '../lib/queries/driver-shifts'
+
 
 // מיפוי סטטוסים לעברית וצבעים
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -50,23 +52,26 @@ export default function DashboardPage() {
   const [selectedNewDriver, setSelectedNewDriver] = useState<string>('')
   const [approvalAction, setApprovalAction] = useState<'reassign' | 'unassign'>('unassign')
   const [processingRequest, setProcessingRequest] = useState(false)
+  const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
 
   const loadData = async () => {
   if (!companyId) return
   
   try {
-    const [statsData, towsData, alertsData, rejectionsData, driversData] = await Promise.all([
+    const [statsData, towsData, alertsData, rejectionsData, driversData, overtimeData] = await Promise.all([
       getDashboardStats(companyId),
       getRecentTows(companyId, 5),
       getExpiryAlerts(companyId),
       getPendingRejectionRequests(companyId),
-      getAvailableDrivers(companyId)
+      getAvailableDrivers(companyId),
+      getDriversOvertime(companyId)
     ])
     setStats(statsData)
     setRecentTows(towsData)
     setAlerts(alertsData)
     setRejectionRequests(rejectionsData)
     setAvailableDrivers(driversData)
+    setOvertimeDrivers(overtimeData)
   } catch (error) {
     console.error('Error loading dashboard data:', error)
   } finally {
@@ -259,6 +264,59 @@ useEffect(() => {
         </div>
       )}
 
+      {/* נהגים שחרגו משעות עבודה */}
+      {overtimeDrivers.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden">
+          <div className="p-4 border-b border-orange-100 bg-orange-50 flex items-center gap-2">
+            <Clock size={20} className="text-orange-500" />
+            <h2 className="font-semibold text-orange-800">נהגים שחרגו משעות עבודה ({overtimeDrivers.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {overtimeDrivers.map((shift: any) => {
+              const driver = shift.driver as any
+              return (
+                <div key={shift.id} className="p-4">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="font-medium text-gray-800">{driver?.user?.full_name || 'נהג'}</p>
+                      <p className="text-sm text-gray-500">
+                        שעת סיום מתוכננת: <span className="font-medium text-orange-600">{driver?.work_hours_end?.slice(0, 5)}</span>
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        התחיל משמרת: {new Date(shift.started_at).toLocaleString('he-IL')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        type="time"
+                        id={`manual-end-${shift.id}`}
+                        defaultValue={driver?.work_hours_end?.slice(0, 5) || ''}
+                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                      />
+                      <button
+                        onClick={async () => {
+                          const input = document.getElementById(`manual-end-${shift.id}`) as HTMLInputElement
+                          if (!input?.value) return
+                          const today = new Date().toISOString().split('T')[0]
+                          const endedAt = new Date(`${today}T${input.value}:00`).toISOString()
+                          if (confirm(`לסיים משמרת של ${driver?.user?.full_name} בשעה ${input.value}?`)) {
+                            await endShiftManually(shift.id, endedAt)
+                            loadData()
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-200 transition-colors"
+                      >
+                        סיים משמרת
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      
       {/* בקשות דחייה ממתינות */}
       {rejectionRequests.length > 0 && (
         <div className="mb-6 bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">

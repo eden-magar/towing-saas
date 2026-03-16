@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
       licenseType,
       licenseExpiry,
       yearsExperience,
+      work_hours_start,
+      work_hours_end,
       notes,
       initialStatus,
       truckId
@@ -86,6 +88,8 @@ export async function POST(request: NextRequest) {
         license_type: licenseType,
         license_expiry: licenseExpiry,
         years_experience: yearsExperience || 0,
+        work_hours_start: work_hours_start || null,
+        work_hours_end: work_hours_end || null,
         notes: notes || null,
         status: initialStatus || 'available'
       })
