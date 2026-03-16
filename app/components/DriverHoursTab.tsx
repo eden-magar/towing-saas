@@ -25,6 +25,21 @@ export default function DriverHoursTab({ companyId }: Props) {
     loadData()
   }, [companyId, startDate, endDate, selectedDriver])
 
+  useEffect(() => {
+  if (!companyId) return
+  const { supabase } = require('../lib/supabase')
+  const channel = supabase
+    .channel(`driver-shifts-${companyId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'driver_shifts',
+      filter: `company_id=eq.${companyId}`
+    }, () => loadData())
+    .subscribe()
+  return () => { supabase.removeChannel(channel) }
+}, [companyId])
+
   const loadData = async () => {
     setLoading(true)
     try {
