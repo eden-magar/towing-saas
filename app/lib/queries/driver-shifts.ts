@@ -97,6 +97,9 @@ export async function getDriverHoursReport(
       started_at,
       ended_at,
       status,
+      start_address,
+      start_lat,
+      start_lng,
       driver:drivers!inner (
         id,
         user:users!user_id (full_name, phone)
