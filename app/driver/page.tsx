@@ -57,6 +57,7 @@ export default function DriverHomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   const [activeShift, setActiveShift] = useState<any>(null)
+  
 
   const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
 
