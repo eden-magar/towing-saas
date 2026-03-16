@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   Building2,
   User,
-  Star
+  Star,
+  Clock
 } from 'lucide-react'
 import Link from 'next/link'
 import {
@@ -501,7 +502,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Top Lists Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Top Drivers */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
@@ -582,6 +583,21 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+      {/* Driver Hours Report */}
+      <Link
+        href="/dashboard/reports/driver-hours"
+        className="bg-white rounded-xl border border-gray-200 p-5 hover:border-cyan-300 transition-colors block"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+            <Clock className="w-6 h-6 text-amber-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">שעות נהגים</h3>
+            <p className="text-sm text-gray-500">דוח משמרות ושעות עבודה</p>
+          </div>
+        </div>
+      </Link>
     </div>
   )
 }

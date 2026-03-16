@@ -83,3 +83,35 @@ export async function getActiveDriversWithLocation(companyId: string) {
     .is('ended_at', null)
   return data || []
 }
+
+export async function getDriverHoursReport(
+  companyId: string,
+  startDate: string,
+  endDate: string,
+  driverId?: string
+) {
+  let query = supabase
+    .from('driver_shifts')
+    .select(`
+      id,
+      started_at,
+      ended_at,
+      status,
+      driver:drivers!inner (
+        id,
+        user:users!user_id (full_name, phone)
+      )
+    `)
+    .eq('company_id', companyId)
+    .gte('started_at', startDate)
+    .lte('started_at', endDate)
+    .order('started_at', { ascending: false })
+
+  if (driverId) {
+    query = query.eq('driver_id', driverId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
