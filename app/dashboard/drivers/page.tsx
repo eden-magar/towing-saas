@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, Phone, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, XCircle, MoreHorizontal, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Phone, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, XCircle, MoreHorizontal, AlertTriangle, MapPin, BarChart2 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
@@ -342,60 +342,55 @@ export default function DriversPage() {
         </div>
       )}
 
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4 lg:mb-0">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-800">ניהול נהגים</h1>
-            <p className="text-gray-500 mt-1 text-sm hidden sm:block">צפייה וניהול נהגי החברה</p>
-          </div>
-          <button
-            onClick={openAddModal}
-            className="hidden lg:flex items-center justify-center gap-2 px-4 py-2.5 bg-[#33d4ff] hover:bg-[#21b8e6] text-white rounded-xl transition-colors"
-          >
-            <Plus size={20} />
-            הוסף נהג
-          </button>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">ניהול נהגים</h1>
+          <p className="text-gray-500 mt-1 text-sm hidden sm:block">צפייה וניהול נהגי החברה</p>
         </div>
         <button
           onClick={openAddModal}
-          className="lg:hidden flex items-center justify-center gap-2 px-4 py-2.5 bg-[#33d4ff] hover:bg-[#21b8e6] text-white rounded-xl transition-colors w-full"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#33d4ff] hover:bg-[#21b8e6] text-white rounded-xl transition-colors text-sm font-medium"
         >
-          <Plus size={20} />
+          <Plus size={18} />
           הוסף נהג
         </button>
       </div>
 
       {/* טאבים */}
-      <div className="flex gap-2 mt-4">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl mb-6 w-fit">
         <button
           onClick={() => setActiveTab('list')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
             activeTab === 'list'
-              ? 'bg-[#33d4ff] text-white'
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-white text-gray-800 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
           }`}
         >
+          <User size={15} />
           רשימה
         </button>
         <button
           onClick={() => setActiveTab('map')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
             activeTab === 'map'
-              ? 'bg-[#33d4ff] text-white'
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-white text-gray-800 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          🗺️ מפה חיה
+          <MapPin size={15} />
+          מפה חיה
         </button>
         <button
           onClick={() => setActiveTab('hours')}
-          className={`px-4 py-2 rounded-xl font-medium text-sm transition-colors ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all ${
             activeTab === 'hours'
-              ? 'bg-[#33d4ff] text-white'
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-white text-gray-800 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
           }`}
         >
-          📊 דוחות שעות
+          <BarChart2 size={15} />
+          דוחות שעות
         </button>
       </div>
       {activeTab === 'map' && (
