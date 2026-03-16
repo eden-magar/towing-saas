@@ -129,6 +129,17 @@ export async function getCompanyCashTransactions(
   companyId: string,
   filters?: { driverId?: string; fromDate?: string; toDate?: string }
 ): Promise<(DriverCashTransaction & { driver_name?: string })[]> {
+  // שליפת מזהי נהגי החברה
+  const { data: companyDrivers, error: driversError } = await supabase
+    .from('drivers')
+    .select('id')
+    .eq('company_id', companyId)
+
+  if (driversError) throw driversError
+  if (!companyDrivers || companyDrivers.length === 0) return []
+
+  const driverIds = companyDrivers.map((d: any) => d.id)
+
   let query = supabase
     .from('driver_cash_transactions')
     .select(`
@@ -140,8 +151,10 @@ export async function getCompanyCashTransactions(
       tow:tows!driver_cash_transactions_tow_id_fkey(
         order_number,
         customer:customers!tows_customer_id_fkey(name)
-      )
+      ),
+      approver:users!driver_cash_transactions_created_by_fkey(full_name)
     `)
+    .in('driver_id', driverIds)
     .order('created_at', { ascending: false })
 
   if (filters?.driverId) {
@@ -152,10 +165,9 @@ export async function getCompanyCashTransactions(
   }
   if (filters?.toDate) {
     query = query.lte('created_at', filters.toDate + 'T23:59:59')
-}
+  }
 
   const { data, error } = await query
-
   if (error) {
     console.error('Error fetching company cash transactions:', error)
     throw error
@@ -166,8 +178,10 @@ export async function getCompanyCashTransactions(
     driver_name: tx.driver?.user?.full_name || 'לא ידוע',
     order_number: tx.tow?.order_number || null,
     customer_name: tx.tow?.customer?.name || null,
+    approved_by_name: tx.type === 'approval' ? (tx.approver?.full_name || null) : null,
     driver: undefined,
-    tow: undefined
+    tow: undefined,
+    approver: undefined
   }))
 }
 

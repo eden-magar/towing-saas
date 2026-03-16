@@ -214,6 +214,7 @@ export default function CashManagementPage() {
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סכום</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">הערות</th>
+                  <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">אושר על ידי</th>
                   <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">פעולה</th>
                 </tr>
               </thead>
@@ -238,6 +239,11 @@ export default function CashManagementPage() {
                       <td className="px-4 py-3 font-bold">₪{Number(tx.amount).toLocaleString()}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{formatDate(tx.created_at)} {formatTime(tx.created_at)}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">{tx.notes || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {(tx as any).approved_by_name
+                          ? <span className="text-emerald-600 font-medium">{(tx as any).approved_by_name}</span>
+                          : '—'}
+                      </td>
                       <td className="px-4 py-3">
                         {tx.type === 'transfer' && (
                           <button
