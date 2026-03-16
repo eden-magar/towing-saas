@@ -324,6 +324,12 @@ export default function DriverHomePage() {
                     const { startShift } = await import('@/app/lib/queries/driver-shifts')
                     let lat: number | undefined
                     let lng: number | undefined
+                    // בקשת הרשאת מיקום מפורשת
+                    const permission = await navigator.permissions?.query({ name: 'geolocation' })
+                    if (permission?.state === 'denied') {
+                      alert('יש לאפשר גישה למיקום בהגדרות הדפדפן')
+                      return
+                    }
                     if (navigator.geolocation) {
                       await new Promise<void>((resolve) => {
                         navigator.geolocation.getCurrentPosition(
