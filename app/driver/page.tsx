@@ -309,11 +309,30 @@ export default function DriverHomePage() {
               {activeShift ? (
                 <button
                   onClick={async () => {
-                    const { endShift } = await import('@/app/lib/queries/driver-shifts')
-                    await endShift(activeShift.id)
-                    setActiveShift(null)
-                    setShowStatusModal(false)
-                  }}
+                  const { endShift } = await import('@/app/lib/queries/driver-shifts')
+                  let lat: number | undefined
+                  let lng: number | undefined
+                  const permission = await navigator.permissions?.query({ name: 'geolocation' })
+                  if (permission?.state === 'denied') {
+                    alert('יש לאפשר גישה למיקום בהגדרות הדפדפן כדי לשמור מיקום סיום')
+                  } else if (navigator.geolocation) {
+                    try {
+                      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                          timeout: 10000,
+                          enableHighAccuracy: true
+                        })
+                      })
+                      lat = pos.coords.latitude
+                      lng = pos.coords.longitude
+                    } catch (e) {
+                      console.warn('GPS not available:', e)
+                    }
+                  }
+                  await endShift(activeShift.id, lat, lng)
+                  setActiveShift(null)
+                  setShowStatusModal(false)
+                }}
                   className="w-full p-4 rounded-xl bg-red-50 border-2 border-red-200 text-red-700 font-medium flex items-center justify-center gap-2"
                 >
                   <span>🔴</span> סיימתי יום עבודה
