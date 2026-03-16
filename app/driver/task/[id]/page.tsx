@@ -48,6 +48,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const [rejecting, setRejecting] = useState(false)
   const [rejectionPending, setRejectionPending] = useState(false)
 
+  const [pendingRejectionRequestId, setPendingRejectionRequestId] = useState<string | null>(null)
+
+
   // טעינת המשימה
   useEffect(() => {
     loadTask()
@@ -64,7 +67,10 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
         if (driver) {
           const { getPendingRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
           const pending = await getPendingRejectionRequest(id, driver.id)
-          if (pending) setRejectionPending(true)
+          if (pending) {
+            setRejectionPending(true)
+            setPendingRejectionRequestId(pending.id)
+          }
         }
         
         // קביעת המצב הנוכחי
@@ -173,7 +179,8 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       alert('לא נמצא פרופיל נהג')
       return
     }
-    await rejectTask(task.id, driver.id, driver.company_id, rejectReason, rejectNote.trim() || undefined)
+    const requestId = await rejectTask(task.id, driver.id, driver.company_id, rejectReason, rejectNote.trim() || undefined)
+    setPendingRejectionRequestId(requestId)
     setRejecting(false)
     setShowRejectModal(false)
     setRejectionPending(true)
@@ -250,7 +257,26 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           <div className="text-5xl mb-4">⏳</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">בקשת הדחייה נשלחה</h2>
           <p className="text-gray-500 mb-6">ממתין לאישור המנהל</p>
-          <p className="text-sm text-gray-400">הגרירה תוסר מהתור שלך לאחר אישור המנהל</p>
+          <p className="text-sm text-gray-400 mb-6">הגרירה תוסר מהתור שלך לאחר אישור המנהל</p>
+          <button
+            onClick={async () => {
+              if (pendingRejectionRequestId) {
+                const { cancelRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
+                await cancelRejectionRequest(pendingRejectionRequestId)
+              }
+              setRejectionPending(false)
+              setPendingRejectionRequestId(null)
+            }}
+            className="w-full py-3 rounded-xl bg-red-100 text-red-700 font-medium mb-3"
+          >
+            ביטול דחייה — חזרה לגרירה
+          </button>
+          <button
+            onClick={() => router.push('/driver')}
+            className="w-full py-3 rounded-xl bg-gray-100 text-gray-600 font-medium"
+          >
+            חזרה לדף הבית
+          </button>
         </div>
       </div>
     )

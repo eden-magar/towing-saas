@@ -532,14 +532,14 @@ export async function rejectTask(
   note?: string
 ) {
   const { createRejectionRequest } = await import('./rejection-requests')
-  await createRejectionRequest(
+  const created = await createRejectionRequest(
     towId,
     driverId,
     companyId,
     'other',
     note ? `${reason} - ${note}` : reason
   )
-  return true
+  return created.id
 }
 
 // ==================== עדכון סטטוס גרירה ====================
