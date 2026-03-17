@@ -71,7 +71,7 @@ export function useTowForm(editTowId?: string) {
   const [activeTimeSurchargesList, setActiveTimeSurchargesList] = useState<TimeSurcharge[]>([])
   
   // Price selection
-  const [priceMode, setPriceMode] = useState<'recommended' | 'fixed' | 'customer' | 'custom'>('recommended')
+  const [priceMode, setPriceMode] = useState<'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'>('recommended')
   const [selectedPriceItem, setSelectedPriceItem] = useState<PriceItem | null>(null)
   const [customPrice, setCustomPrice] = useState<string>('')
   const [customPriceIncludesVat, setCustomPriceIncludesVat] = useState(true)

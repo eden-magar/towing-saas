@@ -41,7 +41,7 @@ interface PriceSummaryProps {
   selectedCustomerPricing: CustomerWithPricing | null
   
   // מצב מחיר
-  priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
+  priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   selectedPriceItem: PriceItem | null
   customPrice: string
   
@@ -102,20 +102,24 @@ export function PriceSummary({
     'heavy': 'base_price_heavy',
     'machinery': 'base_price_machinery'
   }
+
+  const activePriceList: any = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
+  ? selectedCustomerPricing.price_list
+  : basePriceList
   
-  const pricePerKm = basePriceList?.price_per_km || 12
+  const pricePerKm = activePriceList?.price_per_km || 12
   const distanceKm = distance?.distanceKm || 0
   
   // מחיר בסיס - שונה לפי סוג המסלול
   let basePrice = 0
   if (isCustomRoute) {
     // מסלול מותאם - מחיר בסיס לכל רכב (נניח פרטי)
-    const basePricePerVehicle = basePriceList?.base_price_private || 180
+    const basePricePerVehicle = activePriceList?.base_price_private || 180
     basePrice = basePricePerVehicle * customRouteVehicleCount
   } else {
     // גרירה רגילה
     const priceField = vehicleType ? vehicleTypeMap[vehicleType] : null
-    basePrice = priceField ? (basePriceList?.[priceField] || 0) : 0
+    basePrice = priceField ? (activePriceList?.[priceField] || 0) : 0
   }
   
   // מרחק
@@ -199,7 +203,7 @@ export function PriceSummary({
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="space-y-2 text-sm">
-        {priceMode === 'recommended' && (
+        {(priceMode === 'recommended' || priceMode === 'recommended_customer') && (
           <>
             {!hasDataForCalculation ? (
               <div className="text-center py-2 text-gray-400 text-sm">
@@ -301,7 +305,7 @@ export function PriceSummary({
         <div className="flex justify-between items-center">
           <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
           <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-            ₪{priceMode === 'recommended' ? (hasDataForCalculation ? total : 0) : finalPrice}
+            ₪{(priceMode === 'recommended' || priceMode === 'recommended_customer') ? (hasDataForCalculation ? total : 0) : finalPrice}
           </span>
         </div>
       </div>

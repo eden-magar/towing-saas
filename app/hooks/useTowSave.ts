@@ -48,7 +48,7 @@ interface UseTowSaveParams {
   routePoints: RoutePoint[]
   customRouteData: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }
   // Pricing
-  priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
+  priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
   basePriceList: any
   selectedCustomerPricing: CustomerWithPricing | null

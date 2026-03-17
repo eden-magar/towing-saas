@@ -354,7 +354,7 @@ interface CreateTowInput {
   scheduledAt?: string
   notes?: string
   finalPrice?: number
-  priceMode?: 'recommended' | 'fixed' | 'customer' | 'custom'
+  priceMode?: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles: {

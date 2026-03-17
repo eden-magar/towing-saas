@@ -25,14 +25,14 @@ interface UseTowPricingParams {
   serviceSurchargesData: ServiceSurcharge[]
   selectedCustomerPricing: CustomerWithPricing | null
   customRouteData: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }
-  priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
+  priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   selectedPriceItem: PriceItem | null
   customPrice: string
   // For effects
   selectedCustomerId: string | null
   customersWithPricing: CustomerWithPricing[]
   setSelectedCustomerPricing: (v: CustomerWithPricing | null) => void
-  setPriceMode: (mode: 'recommended' | 'fixed' | 'customer' | 'custom') => void
+  setPriceMode: (mode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom') => void
   setSelectedPriceItem: (item: PriceItem | null) => void
   setCustomPrice: (price: string) => void
   towDate: string
@@ -103,14 +103,17 @@ export function useTowPricing(params: UseTowPricingParams) {
   }, [towDate, towTime, timeSurchargesData, isHoliday])
 
   const calculateRecommendedPrice = () => {
+    const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
+      ? selectedCustomerPricing.price_list
+      : basePriceList
     // For custom routes
     if (towType === 'custom') {
       if (customRouteData.vehicles.length === 0 || customRouteData.totalDistanceKm === 0) {
         return 0
       }
       
-      const pricePerKm = basePriceList?.price_per_km || 12
-      const minimumPrice = basePriceList?.minimum_price || 250
+      const pricePerKm = activePriceList?.price_per_km || 12
+      const minimumPrice = activePriceList?.minimum_price || 250
       
       // Calculate base price for all vehicles
       let totalBasePrice = 0
@@ -122,7 +125,7 @@ export function useTowPricing(params: UseTowPricingParams) {
           'machinery': 'base_price_machinery'
         }
         const priceField = vehicleTypeMap[v.type] || 'base_price_private'
-        totalBasePrice += basePriceList?.[priceField] || 180
+        totalBasePrice += activePriceList?.[priceField] || 180
       })
       
       // Distance price
@@ -162,9 +165,9 @@ export function useTowPricing(params: UseTowPricingParams) {
     }
     
     const priceField = vehicleTypeMap[vehicleType]
-    const basePrice = basePriceList?.[priceField] || 0
-    const pricePerKm = basePriceList?.price_per_km || 0
-    const minimumPrice = basePriceList?.minimum_price || 0
+    const basePrice = activePriceList?.[priceField] || 0
+    const pricePerKm = activePriceList?.price_per_km || 0
+    const minimumPrice = activePriceList?.minimum_price || 0
     
     const pickupToDropoffKm = distance?.distanceKm || 0
     const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0

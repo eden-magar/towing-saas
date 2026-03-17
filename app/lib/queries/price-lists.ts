@@ -73,6 +73,7 @@ export interface CustomerWithPricing {
     customer_type: string
   }
   price_items: CustomerPriceItem[]
+  price_list: BasePriceList | null
 }
 
 // מעודכן לפי מאגרי משרד התחבורה + נקודת בסיס
@@ -335,11 +336,26 @@ export async function getCustomersWithPricing(companyId: string): Promise<Custom
     itemsByCustomer[item.customer_company_id].push(item)
   })
 
+  // שליפת מחירוני לקוח (price_lists) - מחירון מלא עם בסיס, מרחק וכו'
+  const { data: priceLists } = await supabase
+    .from('price_lists')
+    .select('*')
+    .in('customer_company_id', customerCompanyIds)
+    .eq('is_active', true)
+
+  const priceListByCustomer: Record<string, BasePriceList> = {}
+  priceLists?.forEach(pl => {
+    if (pl.customer_company_id) {
+      priceListByCustomer[pl.customer_company_id] = pl as BasePriceList
+    }
+  })
+
   return data.map(c => ({
     ...c,
     discount_percent: c.discount_percent || 0,
     customer: c.customer as any,
-    price_items: itemsByCustomer[c.id] || []
+    price_items: itemsByCustomer[c.id] || [],
+    price_list: priceListByCustomer[c.id] || null
   }))
 }
 

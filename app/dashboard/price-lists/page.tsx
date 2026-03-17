@@ -637,8 +637,8 @@ export default function PriceListsPage() {
 
       {/* Customer Edit Modal */}
       {showCustomerModal && editingCustomer && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-[#33d4ff] text-white">
               <div>
                 <h2 className="font-bold">מחירון מותאם</h2>
@@ -652,7 +652,7 @@ export default function PriceListsPage() {
               </button>
             </div>
 
-            <div className="p-5 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-5 space-y-6 overflow-y-auto flex-1">
 
               {/* הנחה */}
               <div>

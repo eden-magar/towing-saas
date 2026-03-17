@@ -58,7 +58,7 @@ export interface SaveTowInput {
   customRouteData?: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }
   
   // Pricing
-  priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
+  priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
   basePriceList: any
   selectedCustomerPricing: CustomerWithPricing | null
@@ -111,7 +111,7 @@ export interface PreparedTowData {
   scheduledAt?: string
   notes?: string
   finalPrice?: number
-  priceMode?: 'recommended' | 'fixed' | 'customer' | 'custom'
+  priceMode?: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles: {
@@ -425,6 +425,9 @@ function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['s
  * בניית פירוט מחיר לגרירה רגילה (single)
  */
 export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdown {
+   const activePriceList = (input.priceMode === 'recommended_customer' && input.selectedCustomerPricing?.price_list)
+    ? input.selectedCustomerPricing.price_list
+    : input.basePriceList
   const vehicleTypeMap: Record<string, string> = {
     'private': 'base_price_private',
     'motorcycle': 'base_price_motorcycle',
@@ -433,8 +436,8 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
   }
   
   const priceField = input.vehicleType ? vehicleTypeMap[input.vehicleType] : null
-  const basePrice = priceField ? (input.basePriceList?.[priceField] || 0) : 0
-  const pricePerKm = input.basePriceList?.price_per_km || 0
+  const basePrice = priceField ? (activePriceList?.[priceField] || 0) : 0
+  const pricePerKm = activePriceList?.price_per_km || 0
   
   const pickupToDropoffKm = input.distance?.distanceKm || 0
   const baseToPickupKm = (input.startFromBase && input.baseToPickupDistance?.distanceKm) || 0
@@ -523,9 +526,12 @@ export function buildCustomTowPriceBreakdown(
   input: SaveTowInput, 
   routePoints: RoutePoint[]
 ): PriceBreakdown & { vehicle_count: number; route_points: RoutePoint[] } {
+  const activePriceList = (input.priceMode === 'recommended_customer' && input.selectedCustomerPricing?.price_list)
+    ? input.selectedCustomerPricing.price_list
+    : input.basePriceList
   const vehicles = input.customRouteData?.vehicles || []
   const totalDistanceKm = input.customRouteData?.totalDistanceKm || 0
-  const pricePerKm = input.basePriceList?.price_per_km || 12
+  const pricePerKm = activePriceList?.price_per_km || 12
   
   // חישוב מחיר בסיס לכל הרכבים
   let totalBasePrice = 0
@@ -538,7 +544,7 @@ export function buildCustomTowPriceBreakdown(
   
   vehicles.forEach(v => {
     const priceField = vehicleTypeMap[v.type] || 'base_price_private'
-    totalBasePrice += input.basePriceList?.[priceField] || 180
+    totalBasePrice += activePriceList?.[priceField] || 180
   })
   
   const distancePrice = Math.round(totalDistanceKm * pricePerKm)

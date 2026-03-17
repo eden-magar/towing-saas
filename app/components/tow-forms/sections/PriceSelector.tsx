@@ -17,8 +17,8 @@ export interface DistanceResult {
 }
 
 interface PriceSelectorProps {
-  priceMode: 'recommended' | 'fixed' | 'customer' | 'custom'
-  setPriceMode: (mode: 'recommended' | 'fixed' | 'customer' | 'custom') => void
+  priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
+  setPriceMode: (mode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom') => void
   selectedPriceItem: PriceItem | null
   setSelectedPriceItem: (item: PriceItem | null) => void
   customPrice: string
@@ -92,6 +92,37 @@ export function PriceSelector({
               </div>
             </div>
             <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
+              ₪{recommendedPrice}
+            </span>
+          </div>
+        </button>
+      )}
+
+      {/* מחיר מומלץ לפי מחירון לקוח */}
+       {showRecommended && selectedCustomerPricing?.price_list && (
+        <button
+          onClick={() => { setPriceMode('recommended_customer'); setSelectedPriceItem(null); setCustomPrice('') }}
+          className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
+            priceMode === 'recommended_customer' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                priceMode === 'recommended_customer' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                🏷️
+              </div>
+              <div>
+                <p className={`font-medium ${priceMode === 'recommended_customer' ? 'text-purple-700' : 'text-gray-700'}`}>
+                  מחיר מומלץ — מחירון {selectedCustomerPricing.customer?.name}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {distance ? `${distance.distanceKm} ק״מ × ₪${selectedCustomerPricing.price_list?.price_per_km || basePriceList?.price_per_km || 12}` : 'חישוב לפי מחירון הלקוח'}
+                </p>
+              </div>
+            </div>
+            <span className={`text-xl font-bold ${priceMode === 'recommended_customer' ? 'text-purple-700' : 'text-gray-800'}`}>
               ₪{recommendedPrice}
             </span>
           </div>
