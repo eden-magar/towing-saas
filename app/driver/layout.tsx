@@ -112,7 +112,6 @@ export default function DriverLayout({
     { href: '/driver/tasks', label: 'משימות', icon: ClipboardList },
     { href: '/driver/cash', label: 'קופה', icon: Wallet },
     { href: '/driver/history', label: 'היסטוריה', icon: History },
-    { href: '/driver/stats', label: 'סטטיסטיקות', icon: PieChart },
     { href: '/driver/profile', label: 'פרופיל', icon: UserCircle },
   ]
 
