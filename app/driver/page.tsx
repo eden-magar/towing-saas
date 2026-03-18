@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { useLocationTracking } from '../hooks/useLocationTracking'
 import { useAuth } from '../lib/AuthContext'
+import { getDriverTasksForDriver } from '@/app/lib/queries/driver-tasks-admin'
+import { DriverTaskWithDetails } from '@/app/lib/types'
 import { 
   getDriverByUserId, 
   getDriverTasks, 
@@ -57,6 +59,8 @@ export default function DriverHomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   const [activeShift, setActiveShift] = useState<any>(null)
+
+  const [driverTasks, setDriverTasks] = useState<DriverTaskWithDetails[]>([])
   
 
   const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
@@ -109,6 +113,8 @@ export default function DriverHomePage() {
         return
       }
       setDriverInfo(driver)
+      const tasks = await getDriverTasksForDriver(driver.id)
+      setDriverTasks(tasks)
       const { getActiveShift } = await import('@/app/lib/queries/driver-shifts')
       const shift = await getActiveShift(driver.id)
       setActiveShift(shift)
@@ -648,6 +654,68 @@ export default function DriverHomePage() {
           </div>
         )}
       </div>
+
+      {/* משימות נהג */}
+      {driverTasks.length > 0 && (
+        <div className="px-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-800">המשימות שלי</h2>
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+              {driverTasks.length} פעילות
+            </span>
+          </div>
+          <div className="flex flex-col gap-3">
+            {driverTasks.map(task => {
+              const overdue = new Date(task.due_at) < new Date()
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => router.push(`/driver/task-item/${task.id}`)}
+                  className={`bg-white rounded-2xl p-4 border cursor-pointer active:scale-[0.98] transition-transform ${
+                    overdue ? 'border-red-200' : 'border-gray-100'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {task.task_type && (
+                        <span
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ background: task.task_type.color }}
+                        />
+                      )}
+                      <span className="font-medium text-gray-800 text-sm">
+                        {task.task_type?.name || 'משימה'}
+                      </span>
+                      {task.task_subtype && (
+                        <span className="text-gray-400 text-sm">· {task.task_subtype.name}</span>
+                      )}
+                    </div>
+                    <ChevronLeft className="text-gray-300 flex-shrink-0" size={18} />
+                  </div>
+
+                  <div className={`flex items-center gap-1.5 mt-2 text-xs ${overdue ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
+                    <Clock size={12} />
+                    {new Date(task.due_at).toLocaleString('he-IL', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    {overdue && ' ⚠ עבר הזמן'}
+                  </div>
+
+                  {task.location_address && (
+                    <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
+                      <MapPin size={12} />
+                      <span className="truncate">{task.location_address}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
         {/* New Task Modal */}
         {showNewTaskModal && selectedTask && driverInfo && (

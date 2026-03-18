@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -15,6 +14,7 @@ import {
   Bell,
   X,
   Loader2,
+  ClipboardList,
   Truck,
   ChevronDown
 } from 'lucide-react'
@@ -109,6 +109,7 @@ export default function DriverLayout({
 
   const navItems = [
     { href: '/driver', label: 'בית', icon: Home },
+    { href: '/driver/tasks', label: 'משימות', icon: ClipboardList },
     { href: '/driver/cash', label: 'קופה', icon: Wallet },
     { href: '/driver/history', label: 'היסטוריה', icon: History },
     { href: '/driver/stats', label: 'סטטיסטיקות', icon: PieChart },

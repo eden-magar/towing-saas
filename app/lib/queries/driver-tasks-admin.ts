@@ -143,3 +143,48 @@ export async function deleteDriverTask(taskId: string): Promise<void> {
     .eq('id', taskId)
   if (error) throw error
 }
+
+// ===== Driver Side =====
+
+export async function getDriverTasksForDriver(
+  driverId: string
+): Promise<DriverTaskWithDetails[]> {
+  const { data, error } = await supabase
+    .from('driver_tasks')
+    .select(`
+      *,
+      task_type:task_types(*),
+      task_subtype:task_subtypes(*),
+      driver:drivers(
+        id,
+        user:users(full_name)
+      ),
+      truck:tow_trucks(id, plate_number),
+      created_by_user:users!driver_tasks_created_by_fkey(full_name)
+    `)
+    .eq('driver_id', driverId)
+    .not('status', 'in', '("done","rejected")')
+    .order('due_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function updateDriverTaskStatus(
+  taskId: string,
+  status: string,
+  extra?: {
+    rejected_reason?: string
+    completion_note?: string
+    completed_at?: string
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from('driver_tasks')
+    .update({
+      status,
+      ...extra,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', taskId)
+  if (error) throw error
+}
