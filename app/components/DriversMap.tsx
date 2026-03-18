@@ -35,6 +35,7 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
           zoom: 12,
           mapTypeControl: false,
           streetViewControl: false,
+          gestureHandling: 'greedy',
         })
       }
 

@@ -1,604 +1,630 @@
-'use client'
+  'use client'
 
-import { useEffect, useState } from 'react'
-import { useAuth } from '../lib/AuthContext'
-import { getDashboardStats, getRecentTows, DashboardStats } from '../lib/queries/dashboard'
-import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
-import { TowWithDetails } from '../lib/queries/tows'
-import { Truck, Users, Clock, CheckCircle, Plus, ChevronLeft, RefreshCw, AlertTriangle, FileText, Shield, CreditCard } from 'lucide-react'
-import Link from 'next/link'
-import { countPendingRejectionRequests, getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
-import { getAvailableDrivers } from '../lib/queries/drivers'
-import { supabase } from '../lib/supabase'
-import { getDriversOvertime, endShiftManually } from '../lib/queries/driver-shifts'
+  import { useEffect, useState, useRef, useMemo } from 'react'
+  import { useRouter } from 'next/navigation'
+  import { useAuth } from '../lib/AuthContext'
+  import { getDashboardStats, DashboardStats } from '../lib/queries/dashboard'
+  import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
+  import { getTows, TowWithDetails } from '../lib/queries/tows'
+  import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
+  import { getAvailableDrivers } from '../lib/queries/drivers'
+  import { getDriversOvertime, endShiftManually, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
+  import { getDayTows } from '../lib/queries/calendar'
+  import { getDriverTasksForDriver } from '../lib/queries/driver-tasks-admin'
+  import { supabase } from '../lib/supabase'
+  import DriversMap from '../components/DriversMap'
+  import Link from 'next/link'
+  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Check } from 'lucide-react'
 
-
-// מיפוי סטטוסים לעברית וצבעים
-const statusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: 'ממתינה', color: 'bg-amber-100 text-amber-700' },
-  assigned: { label: 'שובצה', color: 'bg-blue-100 text-blue-700' },
-  in_progress: { label: 'בביצוע', color: 'bg-indigo-100 text-indigo-700' },
-  completed: { label: 'הושלמה', color: 'bg-emerald-100 text-emerald-700' },
-  cancelled: { label: 'בוטלה', color: 'bg-red-100 text-red-700' }
-}
-
-// מיפוי סוגי התראות
-const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link: string }> = {
-  truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
-  truck_insurance: { label: 'ביטוח גרר', icon: Shield, link: '/dashboard/trucks' },
-  driver_license: { label: 'רישיון נהיגה', icon: CreditCard, link: '/dashboard/drivers' },
-  tachograph: { label: 'כיול טכוגרף', icon: Clock, link: '/dashboard/trucks' },
-  engineer_report: { label: 'תסקיר מהנדס', icon: FileText, link: '/dashboard/trucks' },
-  winter_inspection: { label: 'בדיקת חורף', icon: Truck, link: '/dashboard/trucks' },
-}
-
-export default function DashboardPage() {
-  const { user, companyId, loading: authLoading } = useAuth()
-  console.log('Auth state:', { user, companyId, authLoading })
-  const [stats, setStats] = useState<DashboardStats>({
-    towsToday: 0,
-    pendingTows: 0,
-    completedToday: 0,
-    availableDrivers: 0
-  })
-  const [recentTows, setRecentTows] = useState<TowWithDetails[]>([])
-  const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
-  const [showApprovalModal, setShowApprovalModal] = useState(false)
-  const [selectedRequest, setSelectedRequest] = useState<any>(null)
-  const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
-  const [selectedNewDriver, setSelectedNewDriver] = useState<string>('')
-  const [approvalAction, setApprovalAction] = useState<'reassign' | 'unassign'>('unassign')
-  const [processingRequest, setProcessingRequest] = useState(false)
-  const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
-
-  const loadData = async () => {
-  if (!companyId) return
-  
-  try {
-    const [statsData, towsData, alertsData, rejectionsData, driversData, overtimeData] = await Promise.all([
-      getDashboardStats(companyId),
-      getRecentTows(companyId, 5),
-      getExpiryAlerts(companyId),
-      getPendingRejectionRequests(companyId),
-      getAvailableDrivers(companyId),
-      getDriversOvertime(companyId)
-    ])
-    setStats(statsData)
-    setRecentTows(towsData)
-    setAlerts(alertsData)
-    setRejectionRequests(rejectionsData)
-    setAvailableDrivers(driversData)
-    setOvertimeDrivers(overtimeData)
-  } catch (error) {
-    console.error('Error loading dashboard data:', error)
-  } finally {
-    setLoading(false)
-    setRefreshing(false)
+  const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link: string }> = {
+    truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
+    truck_insurance: { label: 'ביטוח גרר', icon: Shield, link: '/dashboard/trucks' },
+    driver_license: { label: 'רישיון נהיגה', icon: CreditCard, link: '/dashboard/drivers' },
+    tachograph: { label: 'כיול טכוגרף', icon: Clock, link: '/dashboard/trucks' },
+    engineer_report: { label: 'תסקיר מהנדס', icon: FileText, link: '/dashboard/trucks' },
+    winter_inspection: { label: 'בדיקת חורף', icon: Truck, link: '/dashboard/trucks' },
   }
-}
 
-  useEffect(() => {
-  if (!authLoading) {
-    if (companyId) {
-      loadData()
+  const TOW_STATUS_COLORS: Record<string, string> = {
+    pending: 'bg-amber-100 text-amber-700',
+    assigned: 'bg-blue-100 text-blue-700',
+    in_progress: 'bg-indigo-100 text-indigo-700',
+    completed: 'bg-emerald-100 text-emerald-700',
+    cancelled: 'bg-red-100 text-red-700',
+  }
+
+  const DRIVER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4']
+
+  export default function DashboardPage() {
+    const { user, companyId, loading: authLoading } = useAuth()
+    const router = useRouter()
+
+    const [stats, setStats] = useState<DashboardStats>({ towsToday: 0, pendingTows: 0, completedToday: 0, availableDrivers: 0 })
+    const [pendingTows, setPendingTows] = useState<TowWithDetails[]>([])
+    const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
+    const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
+    const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
+    const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
+    const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
+    const [calendarDate, setCalendarDate] = useState(new Date())
+    const [calendarTows, setCalendarTows] = useState<any[]>([])
+    const [todayTows, setTodayTows] = useState<any[]>([])
+    const [activeDrivers, setActiveDrivers] = useState<any[]>([])
+    const [activeTasks, setActiveTasks] = useState<number>(0)
+    const [inProgressTows, setInProgressTows] = useState<number>(0)
+    const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
+
+  const isAllSelected = selectedDrivers.length === 0
+
+  const toggleDriver = (driverId: string) => {
+    if (driverId === 'all') {
+      setSelectedDrivers([])
     } else {
-      setLoading(false)
+      setSelectedDrivers(prev =>
+        prev.includes(driverId) ? prev.filter(d => d !== driverId) : [...prev, driverId]
+      )
     }
   }
-}, [companyId, authLoading])
+    const [loading, setLoading] = useState(true)
 
-useEffect(() => {
-  if (!companyId) return
-  const channel = supabase
-    .channel(`rejection-requests-${companyId}`)
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'tow_rejection_requests',
-      filter: `company_id=eq.${companyId}`
-    }, () => loadData())
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'tow_rejection_requests',
-      filter: `company_id=eq.${companyId}`
-    }, () => loadData())
-    .on('postgres_changes', {
-      event: 'DELETE',
-      schema: 'public',
-      table: 'tow_rejection_requests',
-      filter: `company_id=eq.${companyId}`
-    }, () => loadData())
-    .subscribe()
-  return () => {
-    supabase.removeChannel(channel)
-  }
-}, [companyId])
+    // modal state
+    const [showApprovalModal, setShowApprovalModal] = useState(false)
+    const [selectedRequest, setSelectedRequest] = useState<any>(null)
+    const [selectedNewDriver, setSelectedNewDriver] = useState('')
+    const [approvalAction, setApprovalAction] = useState<'reassign' | 'unassign'>('unassign')
+    const [processingRequest, setProcessingRequest] = useState(false)
 
-  const handleRefresh = () => {
-    setRefreshing(true)
-    loadData()
-  }
+    const loadData = async () => {
+      if (!companyId) return
+      try {
+        const [
+          statsData, towsData, alertsData, rejectionsData,
+          driversData, overtimeData, activeDriversData,
+        ] = await Promise.all([
+          getDashboardStats(companyId),
+          getTows(companyId),
+          getExpiryAlerts(companyId),
+          getPendingRejectionRequests(companyId),
+          getAvailableDrivers(companyId),
+          getDriversOvertime(companyId),
+          getActiveDriversWithLocation(companyId),
+        ])
 
-  if (authLoading || loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex items-center gap-2 text-gray-500">
-          <RefreshCw className="animate-spin" size={20} />
-          <span>טוען...</span>
+        setStats(statsData)
+        setPendingTows(towsData.filter((t: TowWithDetails) => t.status === 'pending' && !t.driver_id))
+        setInProgressTows(towsData.filter((t: TowWithDetails) => t.status === 'in_progress').length)
+        setAlerts(alertsData)
+        setRejectionRequests(rejectionsData)
+        setAvailableDrivers(driversData)
+        setOvertimeDrivers(overtimeData)
+
+        const mappedDrivers = activeDriversData
+          .map((d: any) => ({
+            id: d.driver.id,
+            name: d.driver.user?.full_name || 'נהג',
+            status: d.driver.status,
+            last_lat: d.driver.last_lat,
+            last_lng: d.driver.last_lng,
+            last_seen_at: d.driver.last_seen_at,
+          }))
+          .filter((d: any) => d.last_lat && d.last_lng)
+        setDriversWithLocation(mappedDrivers)
+        setActiveDrivers(activeDriversData.map((d: any) => d.driver))
+        const todayData = await getDayTows(companyId, new Date())
+        setTodayTows(todayData || [])
+      } catch (err) {
+        console.error('Dashboard load error:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    const loadCalendar = async () => {
+      if (!companyId) return
+      try {
+        const dateStr = calendarDate.toISOString().split('T')[0]
+        const tows = await getDayTows(companyId, calendarDate)
+        setCalendarTows(tows || [])
+      } catch (err) {
+        console.error('Calendar load error:', err)
+      }
+    }
+
+    useEffect(() => {
+      if (!authLoading && companyId) {
+        loadData()
+      } else if (!authLoading) {
+        setLoading(false)
+      }
+    }, [companyId, authLoading])
+
+    useEffect(() => {
+      loadCalendar()
+    }, [companyId, calendarDate])
+
+    // Realtime — כל הטבלאות
+    useEffect(() => {
+      if (!companyId) return
+
+      const channel = supabase
+        .channel(`dashboard-realtime-${companyId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => { loadData(); loadCalendar() })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => loadData())
+        .subscribe()
+
+      return () => { supabase.removeChannel(channel) }
+    }, [companyId])
+
+    const prevDay = () => {
+      const d = new Date(calendarDate)
+      d.setDate(d.getDate() - 1)
+      setCalendarDate(d)
+    }
+
+    const nextDay = () => {
+      const d = new Date(calendarDate)
+      d.setDate(d.getDate() + 1)
+      setCalendarDate(d)
+    }
+
+    const isToday = calendarDate.toDateString() === new Date().toDateString()
+
+    const formatDayLabel = (date: Date) => {
+      return date.toLocaleDateString('he-IL', { weekday: 'short', day: '2-digit', month: '2-digit' })
+    }
+
+    const getDaysText = (daysLeft: number) => {
+      if (daysLeft < 0) return `פג לפני ${Math.abs(daysLeft)} ימים`
+      if (daysLeft === 0) return 'פג היום!'
+      if (daysLeft === 1) return 'פג מחר!'
+      return `עוד ${daysLeft} ימים`
+    }
+
+    // קיבוץ גרירות יומן לפי נהג
+    const allDriverIds = [...new Set(calendarTows.map((t: any) => t.driver_id).filter(Boolean))]
+
+  const filteredCalendarTows = useMemo(() => {
+    if (isAllSelected) return calendarTows
+    return calendarTows.filter((t: any) => t.driver_id && selectedDrivers.includes(t.driver_id))
+  }, [calendarTows, selectedDrivers, isAllSelected])
+
+  const driverIds = [...new Set(filteredCalendarTows.map((t: any) => t.driver_id).filter(Boolean))]
+    const HOURS = Array.from({ length: 14 }, (_, i) => i + 7) // 07:00–20:00
+
+    const getTowsForDriverHour = (driverId: string, hour: number) => {
+    return filteredCalendarTows.filter((t: any) => {
+        if (t.driver_id !== driverId) return false
+        const towHour = t.scheduled_at ? new Date(t.scheduled_at).getHours() : new Date(t.created_at).getHours()
+        return towHour === hour
+      })
+    }
+
+    const getDriverName = (driverId: string) => {
+      const d = activeDrivers.find((d: any) => d.id === driverId)
+      return d?.user?.full_name || 'נהג'
+    }
+
+    if (authLoading || loading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <RefreshCw className="animate-spin text-gray-400" size={24} />
         </div>
+      )
+    }
+
+    return (
+      <div className="flex flex-col gap-3 h-[calc(100vh-4rem)] p-4 overflow-hidden" dir="rtl">
+
+        <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
+
+        {/* קבוצה 1: גרירות */}
+        <div className="flex gap-2">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[80px]">
+            <div className="text-xl font-semibold text-gray-800">{stats.towsToday}</div>
+            <div className="text-xs text-gray-400">גרירות היום</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[80px]">
+            <div className="text-xl font-semibold text-emerald-600">{stats.completedToday}</div>
+            <div className="text-xs text-gray-400">הושלמו</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[80px]">
+            <div className="text-xl font-semibold text-indigo-500">{inProgressTows}</div>
+            <div className="text-xs text-gray-400">בביצוע</div>
+          </div>
+        </div>
+
+        <div className="w-px h-8 bg-gray-200" />
+
+        {/* קבוצה 2: נהגים */}
+        <div className="flex gap-2">
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[80px]">
+            <div className="text-xl font-semibold text-emerald-600">{stats.availableDrivers}</div>
+            <div className="text-xs text-gray-400">נהגים זמינים</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[80px]">
+            <div className="text-xl font-semibold text-red-500">{driversWithLocation.filter(d => d.status === 'busy').length}</div>
+            <div className="text-xs text-gray-400">עסוקים</div>
+          </div>
+        </div>
+
+        <div className="w-px h-8 bg-gray-200" />
+
+        {/* קבוצה 3: כספי */}
+        <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[100px]">
+          <div className="text-xl font-semibold text-gray-800">
+            ₪{todayTows.filter((t: any) => t.status === 'completed').reduce((s: number, t: any) => s + (t.final_price || 0), 0).toLocaleString()}
+          </div>
+          <div className="text-xs text-gray-400">הכנסות היום</div>
+        </div>
+
+        <div className="w-px h-8 bg-gray-200" />
+
+        {/* קבוצה 4: דחוף */}
+        <div className={`rounded-xl px-4 py-2 min-w-[90px] border ${
+          pendingTows.length > 0
+            ? 'bg-red-50 border-red-200'
+            : 'bg-white border-gray-200'
+        }`}>
+          <div className={`text-xl font-semibold ${pendingTows.length > 0 ? 'text-red-600' : 'text-gray-800'}`}>
+            {pendingTows.length}
+          </div>
+          <div className={`text-xs ${pendingTows.length > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+            ממתינות לשיבוץ
+          </div>
+        </div>
+
+        <Link
+          href="/dashboard/tows/new"
+          className="mr-auto flex items-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex-shrink-0"
+        >
+          <Plus size={16} />
+          גרירה חדשה
+        </Link>
+
+      </div>
+
+        {/* תוכן ראשי */}
+        <div className="grid grid-cols-2 gap-3 flex-1 min-h-0">
+
+          {/* ימין: מפה לגובה מלא */}
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-h-0">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                מפה חיה
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+                <span className="text-xs text-gray-400">זמן אמת</span>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              <DriversMap drivers={driversWithLocation} />
+            </div>
+            <div className="flex gap-3 px-3 py-1.5 border-t border-gray-100 flex-shrink-0">
+              {[
+                { color: '#1D9E75', label: 'זמין' },
+                { color: '#E24B4A', label: 'עסוק' },
+                { color: '#BA7517', label: 'הפסקה' },
+                { color: '#888', label: 'לא זמין' },
+              ].map(item => (
+                <div key={item.label} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                  <span className="text-xs text-gray-400">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* שמאל: יומן + 2×2 */}
+          <div className="flex flex-col gap-3 min-h-0">
+
+            {/* יומן */}
+            <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-0">
+              <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 flex-shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <button onClick={prevDay} className="w-5 h-5 flex items-center justify-center border border-gray-200 rounded text-gray-500 hover:bg-gray-50">
+                    <ChevronRight size={11} />
+                  </button>
+                  <button onClick={nextDay} className="w-5 h-5 flex items-center justify-center border border-gray-200 rounded text-gray-500 hover:bg-gray-50">
+                    <ChevronLeft size={11} />
+                  </button>
+                  <span className="text-xs font-medium text-gray-700">{formatDayLabel(calendarDate)}</span>
+                  {isToday && <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full">היום</span>}
+                </div>
+                {/* פילטר נהגים */}
+                {allDriverIds.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => toggleDriver('all')}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs border transition-colors ${
+                        isAllSelected ? 'border-[#33d4ff] bg-[#33d4ff]/10 text-[#33d4ff]' : 'border-gray-200 bg-gray-50 text-gray-500'
+                      }`}
+                    >
+                      הכל {isAllSelected && <Check size={9} />}
+                    </button>
+                    {allDriverIds.map((id, i) => {
+                      const color = DRIVER_COLORS[i % DRIVER_COLORS.length]
+                      const selected = selectedDrivers.includes(id as string)
+                      return (
+                        <button
+                          key={id as string}
+                          onClick={() => toggleDriver(id as string)}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs border-2 transition-all"
+                          style={{
+                            backgroundColor: selected ? color + '20' : '#f3f4f6',
+                            color: selected ? color : '#9ca3af',
+                            borderColor: selected ? color : 'transparent',
+                          }}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+                          {getDriverName(id as string).split(' ')[0]}
+                          {selected && <Check size={9} />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {driverIds.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-300 text-xs">אין גרירות ביום זה</div>
+                ) : (
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="sticky top-0 bg-gray-50 z-10">
+                        <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
+                        {driverIds.map((id, i) => (
+                          <th key={id as string} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ color: DRIVER_COLORS[i % DRIVER_COLORS.length] }}>
+                            {getDriverName(id as string).split(' ')[0]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HOURS.map(hour => (
+                        <tr key={hour} className="border-b border-gray-200">
+                          <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
+                          {driverIds.map(id => {
+                            const tows = getTowsForDriverHour(id as string, hour)
+                            return (
+                              <td key={id as string} className="px-0.5 py-0.5 border-l border-gray-200 min-h-6">
+                                {tows.length > 0 ? tows.map((t: any) => {
+                                const driverIdx = driverIds.indexOf(id)
+                                const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
+                                const isLight = ['#f59e0b', '#10b981', '#06b6d4'].includes(color)
+                                return (
+                                  <div
+                                    key={t.id}
+                                    onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                                    className="rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
+                                    style={{
+                                      background: color + '25',
+                                      color: color,
+                                      border: `1px solid ${color}40`,
+                                    }}
+                                    title={t.order_number || ''}
+                                  >
+                                    {t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                                  </div>
+                                )
+                              }) : (
+                                <button
+                                  onClick={() => router.push('/dashboard/tows/new')}
+                                  className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
+                                >
+                                  +
+                                </button>
+                              )}
+                               
+                               
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* 2×2 כרטיסים */}
+            <div className="grid grid-cols-2 gap-3 flex-shrink-0">
+
+              {/* ממתינות לשיבוץ */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                    ממתינות לשיבוץ
+                  </div>
+                  {pendingTows.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full">{pendingTows.length}</span>}
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                    {pendingTows.length === 0 ? (
+                      <div className="px-3 py-3 text-xs text-gray-300 text-center">אין ממתינות</div>
+                    ) : pendingTows.map(tow => (
+                    <div key={tow.id} className="px-3 py-1.5 flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-700 truncate">{tow.vehicles?.[0]?.plate_number || '—'}</div>
+                        <div className="text-xs text-gray-400 truncate">{tow.legs?.[0]?.from_address?.split(',')[0] || '—'} → {tow.legs?.[tow.legs.length - 1]?.to_address?.split(',')[0] || '—'}</div>
+                      </div>
+                      <span className="text-xs text-amber-600 flex-shrink-0">{Math.round((Date.now() - new Date(tow.created_at).getTime()) / 60000)} דק׳</span>
+                      <button onClick={() => router.push(`/dashboard/tows/${tow.id}`)} className="text-xs px-2 py-1 bg-gray-900 text-white rounded-lg flex-shrink-0 hover:bg-gray-700">שבץ</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* התראות תוקף */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                    התראות תוקף
+                  </div>
+                  {alerts.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full">{alerts.length}</span>}
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                  {alerts.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-300 text-center">אין התראות</div>
+                  ) : alerts.map(alert => {
+                    const config = alertTypeConfig[alert.type]
+                    const Icon = config?.icon || AlertTriangle
+                    return (
+                      <Link key={alert.id} href={config?.link || '/dashboard/trucks'} className="px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${alert.severity === 'expired' ? 'bg-red-100' : 'bg-amber-100'}`}>
+                          <Icon size={10} className={alert.severity === 'expired' ? 'text-red-600' : 'text-amber-600'} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700 truncate">{alert.entityName}</div>
+                          <div className="text-xs text-gray-400">{getDaysText(alert.daysLeft)}</div>
+                        </div>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${alert.severity === 'expired' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {alert.severity === 'expired' ? 'פג' : 'בקרוב'}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* בקשות דחייה */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
+                    בקשות דחייה
+                  </div>
+                  {rejectionRequests.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full">{rejectionRequests.length}</span>}
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                  {rejectionRequests.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות דחייה</div>
+                  ) : rejectionRequests.map(req => {
+                    const reasonInfo = REJECTION_REASONS.find(r => r.key === req.reason)
+                    return (
+                      <div key={req.id} className="px-3 py-1.5 flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
+                          <div className="text-xs text-gray-400 truncate">"{req.reason_note || reasonInfo?.label}"</div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
+                          <button onClick={async () => { if (confirm('לדחות הבקשה?')) { await denyRejectionRequest(req.id, user?.id || ''); loadData() } }} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* לא סיימו משמרת */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                    לא סיימו משמרת
+                  </div>
+                  {overtimeDrivers.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">{overtimeDrivers.length}</span>}
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                  {overtimeDrivers.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
+                  ) : overtimeDrivers.map((shift: any) => {
+                    const driver = shift.driver as any
+                    return (
+                      <div key={shift.id} className="px-3 py-1.5 flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700">{driver?.user?.full_name}</div>
+                          <div className="text-xs text-gray-400">החל {new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} · עד {driver?.work_hours_end?.slice(0, 5)}</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const endTime = driver?.work_hours_end?.slice(0, 5) || '00:00'
+                            const today = new Date().toISOString().split('T')[0]
+                            const endedAt = new Date(`${today}T${endTime}:00`).toISOString()
+                            if (confirm(`לסיים משמרת של ${driver?.user?.full_name}?`)) {
+                              await endShiftManually(shift.id, endedAt)
+                              loadData()
+                            }
+                          }}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 flex-shrink-0"
+                        >
+                          סיים
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        {/* מודל אישור דחייה */}
+        {showApprovalModal && selectedRequest && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+              <div className="p-5 border-b border-gray-100">
+                <h3 className="text-lg font-bold text-gray-800">אישור בקשת דחייה</h3>
+                <p className="text-sm text-gray-500 mt-1">מה לעשות עם המשימה?</p>
+              </div>
+              <div className="p-5 space-y-4">
+                <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                  <input type="radio" name="action" checked={approvalAction === 'reassign'} onChange={() => setApprovalAction('reassign')} className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <div className="font-medium text-gray-800">העבר לנהג אחר</div>
+                    <div className="text-sm text-gray-500">בחר נהג שיקבל את המשימה</div>
+                  </div>
+                </label>
+                {approvalAction === 'reassign' && (
+                  <select value={selectedNewDriver} onChange={e => setSelectedNewDriver(e.target.value)}
+                    className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">בחר נהג...</option>
+                    {availableDrivers.filter(d => d.id !== selectedRequest.driver_id).map(driver => (
+                      <option key={driver.id} value={driver.id}>{driver.user?.full_name}</option>
+                    ))}
+                  </select>
+                )}
+                <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                  <input type="radio" name="action" checked={approvalAction === 'unassign'} onChange={() => setApprovalAction('unassign')} className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <div className="font-medium text-gray-800">החזר לתור</div>
+                    <div className="text-sm text-gray-500">המשימה תחכה לשיבוץ חדש</div>
+                  </div>
+                </label>
+              </div>
+              <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
+                <button onClick={() => { setShowApprovalModal(false); setSelectedRequest(null); setSelectedNewDriver(''); setApprovalAction('unassign') }}
+                  disabled={processingRequest} className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium">
+                  ביטול
+                </button>
+                <button
+                  onClick={async () => {
+                    if (approvalAction === 'reassign' && !selectedNewDriver) return alert('יש לבחור נהג')
+                    setProcessingRequest(true)
+                    try {
+                      await approveRejectionRequest(selectedRequest.id, user?.id || '', approvalAction === 'reassign' ? selectedNewDriver : undefined)
+                      setShowApprovalModal(false); setSelectedRequest(null); setSelectedNewDriver(''); setApprovalAction('unassign')
+                      loadData()
+                    } catch { alert('שגיאה באישור הבקשה') }
+                    finally { setProcessingRequest(false) }
+                  }}
+                  disabled={processingRequest || (approvalAction === 'reassign' && !selectedNewDriver)}
+                  className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium disabled:opacity-50">
+                  {processingRequest ? 'מעבד...' : 'אשר'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
-
-  const statCards = [
-    { label: 'גרירות היום', value: stats.towsToday, icon: Truck, color: 'bg-[#33d4ff]' },
-    { label: 'ממתינות לשיבוץ', value: stats.pendingTows, icon: Clock, color: 'bg-amber-400' },
-    { label: 'הושלמו היום', value: stats.completedToday, icon: CheckCircle, color: 'bg-emerald-400' },
-    { label: 'נהגים זמינים', value: stats.availableDrivers, icon: Users, color: 'bg-violet-400' },
-  ]
-
-  // פונקציה לקבלת כתובות מהרגליים
-  const getRoute = (tow: TowWithDetails) => {
-    if (tow.legs && tow.legs.length > 0) {
-      const firstLeg = tow.legs.find(l => l.from_address)
-      const lastLeg = [...tow.legs].reverse().find(l => l.to_address)
-      
-      const from = firstLeg?.from_address?.split(',')[0] || '-'
-      const to = lastLeg?.to_address?.split(',')[0] || '-'
-      
-      return { from, to }
-    }
-    return { from: '-', to: '-' }
-  }
-
-  // פונקציה לקבלת מספר רכב ראשון
-  const getFirstVehicle = (tow: TowWithDetails) => {
-    if (tow.vehicles && tow.vehicles.length > 0) {
-      return tow.vehicles[0].plate_number
-    }
-    return '-'
-  }
-
-  // פונקציה לפורמט תאריך
-  const formatExpiryDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('he-IL')
-  }
-
-  // פונקציה לטקסט ימים
-  const getDaysText = (daysLeft: number) => {
-    if (daysLeft < 0) {
-      return `פג לפני ${Math.abs(daysLeft)} ימים`
-    } else if (daysLeft === 0) {
-      return 'פג היום!'
-    } else if (daysLeft === 1) {
-      return 'פג מחר!'
-    } else {
-      return `עוד ${daysLeft} ימים`
-    }
-  }
-
-  return (
-    <div>
-      {/* כותרת */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-800">דשבורד</h1>
-          <p className="text-gray-500 text-sm mt-1 truncate hidden lg:block">
-          ברוך הבא, {user?.full_name || user?.email}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
-            title="רענן נתונים"
-          >
-            <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-          <Link
-            href="/dashboard/tows/new"
-            className="hidden lg:flex items-center justify-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2.5 rounded-xl transition-colors flex-shrink-0"
-          >
-            <Plus size={20} />
-            <span>גרירה חדשה</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* התראות תוקף */}
-      {alerts.length > 0 && (
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-            <AlertTriangle size={20} className="text-amber-500" />
-            <h2 className="font-semibold text-gray-800">התראות תוקף ({alerts.length})</h2>
-          </div>
-          <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
-            {alerts.map((alert) => {
-              const config = alertTypeConfig[alert.type]
-              const Icon = config.icon
-              
-              return (
-                <Link
-                  key={alert.id}
-                  href={config.link}
-                  className="flex items-center gap-4 p-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    alert.severity === 'expired' ? 'bg-red-100' :
-                    alert.severity === 'critical' ? 'bg-orange-100' :
-                    'bg-amber-100'
-                  }`}>
-                    <Icon size={20} className={
-                      alert.severity === 'expired' ? 'text-red-600' :
-                      alert.severity === 'critical' ? 'text-orange-600' :
-                      'text-amber-600'
-                    } />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-800">{alert.entityName}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        alert.severity === 'expired' ? 'bg-red-100 text-red-700' :
-                        alert.severity === 'critical' ? 'bg-orange-100 text-orange-700' :
-                        'bg-amber-100 text-amber-700'
-                      }`}>
-                        {alert.severity === 'expired' ? 'פג תוקף' :
-                         alert.severity === 'critical' ? 'דחוף' : 
-                         'בקרוב'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      {config.label} • {formatExpiryDate(alert.expiryDate)} • {getDaysText(alert.daysLeft)}
-                    </p>
-                  </div>
-                  <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* נהגים שחרגו משעות עבודה */}
-      {overtimeDrivers.length > 0 && (
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden">
-          <div className="p-4 border-b border-orange-100 bg-orange-50 flex items-center gap-2">
-            <Clock size={20} className="text-orange-500" />
-            <h2 className="font-semibold text-orange-800">נהגים שחרגו משעות עבודה ({overtimeDrivers.length})</h2>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {overtimeDrivers.map((shift: any) => {
-              const driver = shift.driver as any
-              return (
-                <div key={shift.id} className="p-4">
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div>
-                      <p className="font-medium text-gray-800">{driver?.user?.full_name || 'נהג'}</p>
-                      <p className="text-sm text-gray-500">
-                        שעת סיום מתוכננת: <span className="font-medium text-orange-600">{driver?.work_hours_end?.slice(0, 5)}</span>
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        התחיל משמרת: {new Date(shift.started_at).toLocaleString('he-IL')}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <input
-                        type="time"
-                        id={`manual-end-${shift.id}`}
-                        defaultValue={driver?.work_hours_end?.slice(0, 5) || ''}
-                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                      />
-                      <button
-                        onClick={async () => {
-                          const input = document.getElementById(`manual-end-${shift.id}`) as HTMLInputElement
-                          if (!input?.value) return
-                          const today = new Date().toISOString().split('T')[0]
-                          const endedAt = new Date(`${today}T${input.value}:00`).toISOString()
-                          if (confirm(`לסיים משמרת של ${driver?.user?.full_name} בשעה ${input.value}?`)) {
-                            await endShiftManually(shift.id, endedAt)
-                            loadData()
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-200 transition-colors"
-                      >
-                        סיים משמרת
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-      
-      {/* בקשות דחייה ממתינות */}
-      {rejectionRequests.length > 0 && (
-        <div className="mb-6 bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
-          <div className="p-4 border-b border-red-100 bg-red-50 flex items-center gap-2">
-            <AlertTriangle size={20} className="text-red-500" />
-            <h2 className="font-semibold text-red-800">בקשות דחייה ממתינות ({rejectionRequests.length})</h2>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {rejectionRequests.map((request) => {
-              const reasonInfo = REJECTION_REASONS.find(r => r.key === request.reason)
-              return (
-                <div key={request.id} className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-gray-800">
-                          {request.driver?.user?.full_name || 'נהג'}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                          {reasonInfo?.icon} {reasonInfo?.label || request.reason}
-                        </span>
-                      </div>
-                      {request.reason_note && (
-                        <p className="text-sm text-gray-500 mb-2">{request.reason_note}</p>
-                      )}
-                      <p className="text-xs text-gray-400">
-                        {new Date(request.created_at).toLocaleString('he-IL')}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => {
-                          setSelectedRequest(request)
-                          setShowApprovalModal(true)
-                        }}
-                        className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-200 transition-colors"
-                      >
-                        אשר
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (confirm('לדחות את הבקשה? הנהג יצטרך לבצע את המשימה.')) {
-                            await denyRejectionRequest(request.id, user?.id || '')
-                            loadData()
-                          }
-                        }}
-                        className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
-                      >
-                        דחה
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* כרטיסי סטטיסטיקה */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        {statCards.map((stat, index) => {
-          const Icon = stat.icon
-          return (
-            <div key={index} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className={`${stat.color} p-2.5 sm:p-3 rounded-lg flex-shrink-0`}>
-                  <Icon size={20} className="text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-gray-500 text-xs sm:text-sm truncate">{stat.label}</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-gray-800">{stat.value}</p>
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* גרירות אחרונות */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 sm:p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-800">גרירות אחרונות</h2>
-          <Link href="/dashboard/tows" className="text-[#33d4ff] text-sm hover:underline">
-            הצג הכל
-          </Link>
-        </div>
-        
-        {recentTows.length === 0 ? (
-          <div className="p-6">
-            <p className="text-gray-400 text-center py-8">אין גרירות להצגה</p>
-          </div>
-        ) : (
-          <>
-            {/* תצוגת טבלה - דסקטופ */}
-            <div className="hidden sm:block">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">תאריך</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מס' הזמנה</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">רכב</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">לקוח</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">מסלול</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">נהג</th>
-                    <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">סטטוס</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {recentTows.map((tow) => {
-                    const route = getRoute(tow)
-                    const status = statusMap[tow.status] || { label: tow.status, color: 'bg-gray-100 text-gray-700' }
-                    
-                    return (
-                      <tr 
-                        key={tow.id} 
-                        className="hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => window.location.href = `/dashboard/tows/${tow.id}`}
-                      >
-                        <td className="px-4 py-3 text-gray-600 text-sm">
-                          {new Date(tow.created_at).toLocaleDateString('he-IL')}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-gray-500 text-sm">{tow.order_number || '-'}</td>
-                        <td className="px-4 py-3 font-mono text-gray-600">{getFirstVehicle(tow)}</td>
-                        <td className="px-4 py-3 text-gray-600">{tow.customer?.name || '-'}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 text-sm text-gray-600">
-                            <span className="truncate max-w-[100px]">{route.from}</span>
-                            <ChevronLeft size={14} className="flex-shrink-0" />
-                            <span className="truncate max-w-[100px]">{route.to}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {tow.driver?.user?.full_name || '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${status.color}`}>
-                            {status.label}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* תצוגת כרטיסים - מובייל */}
-            <div className="sm:hidden divide-y divide-gray-100">
-              {recentTows.map((tow) => {
-                const route = getRoute(tow)
-                const status = statusMap[tow.status] || { label: tow.status, color: 'bg-gray-100 text-gray-700' }
-                
-                return (
-                  <Link
-                    key={tow.id}
-                    href={`/dashboard/tows/${tow.id}`}
-                    className="flex items-center justify-between p-4 hover:bg-gray-50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-gray-800">{getFirstVehicle(tow)}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
-                          {status.label}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">{tow.customer?.name || 'ללא לקוח'}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{route.from} ← {route.to}</p>
-                    </div>
-                    <ChevronLeft size={20} className="text-gray-400 flex-shrink-0" />
-                  </Link>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* מודל אישור בקשת דחייה */}
-      {showApprovalModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-gray-100">
-              <h3 className="text-lg font-bold text-gray-800">אישור בקשת דחייה</h3>
-              <p className="text-sm text-gray-500 mt-1">מה לעשות עם המשימה?</p>
-            </div>
-            
-            <div className="p-5 space-y-4">
-              <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="action"
-                  checked={approvalAction === 'reassign'}
-                  onChange={() => setApprovalAction('reassign')}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <div>
-                  <div className="font-medium text-gray-800">העבר לנהג אחר</div>
-                  <div className="text-sm text-gray-500">בחר נהג שיקבל את המשימה</div>
-                </div>
-              </label>
-
-              {approvalAction === 'reassign' && (
-                <select
-                  value={selectedNewDriver}
-                  onChange={(e) => setSelectedNewDriver(e.target.value)}
-                  className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">בחר נהג...</option>
-                  {availableDrivers
-                    .filter(d => d.id !== selectedRequest.driver_id)
-                    .map(driver => (
-                      <option key={driver.id} value={driver.id}>
-                        {driver.user?.full_name || 'נהג'} {driver.status === 'available' ? '(זמין)' : ''}
-                      </option>
-                    ))
-                  }
-                </select>
-              )}
-
-              <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                <input
-                  type="radio"
-                  name="action"
-                  checked={approvalAction === 'unassign'}
-                  onChange={() => setApprovalAction('unassign')}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <div>
-                  <div className="font-medium text-gray-800">החזר לתור</div>
-                  <div className="text-sm text-gray-500">המשימה תחכה לשיבוץ חדש</div>
-                </div>
-              </label>
-            </div>
-
-            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowApprovalModal(false)
-                  setSelectedRequest(null)
-                  setSelectedNewDriver('')
-                  setApprovalAction('unassign')
-                }}
-                disabled={processingRequest}
-                className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={async () => {
-                  if (approvalAction === 'reassign' && !selectedNewDriver) {
-                    alert('יש לבחור נהג')
-                    return
-                  }
-                  setProcessingRequest(true)
-                  try {
-                    await approveRejectionRequest(
-                      selectedRequest.id,
-                      user?.id || '',
-                      approvalAction === 'reassign' ? selectedNewDriver : undefined
-                    )
-                    setShowApprovalModal(false)
-                    setSelectedRequest(null)
-                    setSelectedNewDriver('')
-                    setApprovalAction('unassign')
-                    loadData()
-                  } catch (err) {
-                    console.error('Error approving request:', err)
-                    alert('שגיאה באישור הבקשה')
-                  } finally {
-                    setProcessingRequest(false)
-                  }
-                }}
-                disabled={processingRequest || (approvalAction === 'reassign' && !selectedNewDriver)}
-                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium disabled:opacity-50"
-              >
-                {processingRequest ? 'מעבד...' : 'אשר'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
