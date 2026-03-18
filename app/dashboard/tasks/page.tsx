@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { loadGoogleMaps } from '@/app/lib/google-maps'
 import { useAuth } from '@/app/lib/AuthContext'
 import {
   getDriverTasks,
@@ -90,29 +91,32 @@ export default function TasksPage() {
   }, [fTypeId])
 
   useEffect(() => {
-    if (!panelOpen) return
-    const interval = setInterval(() => {
-      if (
-        typeof window !== 'undefined' &&
-        window.google &&
-        addressInputRef.current &&
-        !autocompleteRef.current
-      ) {
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(
-          addressInputRef.current,
-          { types: ['address'], componentRestrictions: { country: 'il' } }
-        )
-        autocompleteRef.current.addListener('place_changed', () => {
-          const place = autocompleteRef.current!.getPlace()
-          setFAddress(place.formatted_address || '')
-          setFLat(place.geometry?.location?.lat() ?? null)
-          setFLng(place.geometry?.location?.lng() ?? null)
-        })
-        clearInterval(interval)
-      }
-    }, 300)
-    return () => clearInterval(interval)
-  }, [panelOpen])
+  if (!panelOpen) return
+  autocompleteRef.current = null
+
+  const initAutocomplete = async () => {
+    await loadGoogleMaps()
+    if (!addressInputRef.current || !window.google?.maps?.places || autocompleteRef.current) return
+
+    const autocomplete = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+      componentRestrictions: { country: 'il' },
+      fields: ['formatted_address', 'geometry'],
+      types: ['establishment', 'geocode'],
+    })
+
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace()
+      if (!place.formatted_address) return
+      setFAddress(place.formatted_address)
+      setFLat(place.geometry?.location?.lat() ?? null)
+      setFLng(place.geometry?.location?.lng() ?? null)
+    })
+
+    autocompleteRef.current = autocomplete
+  }
+
+  initAutocomplete()
+}, [panelOpen])
 
   async function loadAll() {
     if (!companyId) return
