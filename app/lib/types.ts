@@ -581,3 +581,76 @@ export interface TowChangeLog {
     full_name: string
   }
 }
+
+// ===== Driver Tasks =====
+
+export type TaskStatus = 'pending' | 'accepted' | 'in_progress' | 'done' | 'rejected'
+
+export interface TaskType {
+  id: string
+  company_id: string
+  name: string
+  color: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface TaskSubtype {
+  id: string
+  company_id: string
+  task_type_id: string
+  name: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface DriverTask {
+  id: string
+  company_id: string
+  task_type_id: string | null
+  task_subtype_id: string | null
+  driver_id: string | null
+  truck_id: string | null
+  created_by: string
+  title: string | null
+  description: string | null
+  location_address: string | null
+  location_lat: number | null
+  location_lng: number | null
+  contact_name: string | null
+  contact_phone: string | null
+  due_at: string
+  status: TaskStatus
+  rejected_reason: string | null
+  completed_at: string | null
+  completion_note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DriverTaskWithDetails extends DriverTask {
+  task_type: TaskType | null
+  task_subtype: TaskSubtype | null
+  driver: {
+    id: string
+    user: {
+      full_name: string
+    }
+  } | null
+  truck: {
+    id: string
+    plate_number: string
+  } | null
+  created_by_user: {
+    full_name: string
+  } | null
+}
+
+export interface DriverTaskImage {
+  id: string
+  task_id: string
+  uploaded_by: string | null
+  file_url: string
+  notes: string | null
+  created_at: string
+}

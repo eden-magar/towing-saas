@@ -19,13 +19,14 @@ import {
   Plus,
   Calendar,
   Package,
-  Wallet
+  Wallet,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const menuItems = [
   { href: '/dashboard', label: 'דשבורד', icon: LayoutDashboard },
   { href: '/dashboard/tows', label: 'גרירות', icon: Truck },
+  { href: '/dashboard/tasks', label: 'משימות', icon: ClipboardList },
   { href: '/dashboard/calendar', label: 'יומן', icon: Calendar},
   { href: '/dashboard/drivers', label: 'נהגים', icon: UserCircle },
   { href: '/dashboard/trucks', label: 'גררים', icon: Car },
