@@ -42,6 +42,12 @@ interface UseTowPricingParams {
   setActiveTimeSurchargesList: (list: TimeSurcharge[]) => void
   isEditMode?: boolean
   customPriceIncludesVat?: boolean
+  setLocationSurchargesData?: (data: LocationSurcharge[]) => void
+  setServiceSurchargesData?: (data: ServiceSurcharge[]) => void
+  setSelectedLocationSurcharges?: (ids: string[]) => void
+  setSelectedServices?: (services: SelectedService[]) => void
+  companyLocationSurchargesData?: LocationSurcharge[]
+  companyServiceSurchargesData?: ServiceSurcharge[]
 }
 
 export function useTowPricing(params: UseTowPricingParams) {
@@ -75,6 +81,12 @@ export function useTowPricing(params: UseTowPricingParams) {
     setActiveTimeSurchargesList,
     isEditMode,
     customPriceIncludesVat = true,
+    setLocationSurchargesData,
+    setServiceSurchargesData,
+    setSelectedLocationSurcharges,
+    setSelectedServices,
+    companyLocationSurchargesData,
+    companyServiceSurchargesData,
   } = params
 
   // Customer pricing
@@ -91,6 +103,25 @@ export function useTowPricing(params: UseTowPricingParams) {
       setCustomPrice('')
     }
   }, [selectedCustomerId, customersWithPricing])
+
+  // החלפת תוספות כשמשתנה priceMode
+  useEffect(() => {
+    if (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list) {
+      const customerTime = selectedCustomerPricing.customer_time_surcharges || []
+      const activeCustomerTime = getActiveTimeSurcharges(customerTime, towTime, towDate, isHoliday)
+      setActiveTimeSurchargesList(activeCustomerTime)
+      if (setLocationSurchargesData) setLocationSurchargesData(selectedCustomerPricing.customer_location_surcharges || [])
+      if (setServiceSurchargesData) setServiceSurchargesData(selectedCustomerPricing.customer_service_surcharges || [])
+      if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
+      if (setSelectedServices) setSelectedServices([])
+    } else if (priceMode === 'recommended') {
+      setActiveTimeSurchargesList(getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday))
+      if (setLocationSurchargesData) setLocationSurchargesData(companyLocationSurchargesData || [])
+      if (setServiceSurchargesData) setServiceSurchargesData(companyServiceSurchargesData || [])
+      if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
+      if (setSelectedServices) setSelectedServices([])
+    }
+  }, [priceMode, selectedCustomerPricing])
 
   // Time surcharges calculation
   useEffect(() => {

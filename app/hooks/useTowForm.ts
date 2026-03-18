@@ -510,6 +510,12 @@ export function useTowForm(editTowId?: string) {
     setActiveTimeSurchargesList,
     isEditMode: !!editTowId,
     customPriceIncludesVat,
+    setLocationSurchargesData,
+    setServiceSurchargesData,
+    setSelectedLocationSurcharges,
+    setSelectedServices,
+    companyLocationSurchargesData: locationSurchargesData,
+    companyServiceSurchargesData: serviceSurchargesData,
   })
 
   // ==================== Handlers ====================

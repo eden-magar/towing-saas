@@ -74,6 +74,9 @@ export interface CustomerWithPricing {
   }
   price_items: CustomerPriceItem[]
   price_list: BasePriceList | null
+  customer_time_surcharges: TimeSurcharge[]
+  customer_location_surcharges: LocationSurcharge[]
+  customer_service_surcharges: ServiceSurcharge[]
 }
 
 // מעודכן לפי מאגרי משרד התחבורה + נקודת בסיס
@@ -350,12 +353,39 @@ export async function getCustomersWithPricing(companyId: string): Promise<Custom
     }
   })
 
+  // שליפת תוספות לקוח
+  const priceListIds = Object.values(priceListByCustomer).map(pl => pl.id)
+  const customerSurchargesMap: Record<string, {
+    time: TimeSurcharge[]
+    location: LocationSurcharge[]
+    service: ServiceSurcharge[]
+  }> = {}
+
+  if (priceListIds.length > 0) {
+    const [timeSurcharges, locationSurcharges, serviceSurcharges] = await Promise.all([
+      supabase.from('time_surcharges').select('*').in('price_list_id', priceListIds),
+      supabase.from('location_surcharges').select('*').in('price_list_id', priceListIds),
+      supabase.from('service_surcharges').select('*').in('price_list_id', priceListIds),
+    ])
+
+    Object.entries(priceListByCustomer).forEach(([customerCompanyId, pl]) => {
+      customerSurchargesMap[customerCompanyId] = {
+        time: (timeSurcharges.data || []).filter(s => s.price_list_id === pl.id),
+        location: (locationSurcharges.data || []).filter(s => s.price_list_id === pl.id),
+        service: (serviceSurcharges.data || []).filter(s => s.price_list_id === pl.id),
+      }
+    })
+  }
+
   return data.map(c => ({
     ...c,
     discount_percent: c.discount_percent || 0,
     customer: c.customer as any,
     price_items: itemsByCustomer[c.id] || [],
-    price_list: priceListByCustomer[c.id] || null
+    price_list: priceListByCustomer[c.id] || null,
+    customer_time_surcharges: customerSurchargesMap[c.id]?.time || [],
+    customer_location_surcharges: customerSurchargesMap[c.id]?.location || [],
+    customer_service_surcharges: customerSurchargesMap[c.id]?.service || [],
   }))
 }
 
