@@ -48,25 +48,40 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
       const bounds = new window.google.maps.LatLngBounds()
 
       drivers.forEach(driver => {
-        const marker = new window.google.maps.Marker({
-          position: { lat: driver.last_lat, lng: driver.last_lng },
-          map: mapInstanceRef.current,
-          title: driver.name,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: STATUS_COLORS[driver.status] || '#9ca3af',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 2,
-          },
-          label: {
-            text: driver.name.charAt(0),
-            color: '#ffffff',
-            fontWeight: 'bold',
-            fontSize: '12px',
-          }
-        })
+      const color = STATUS_COLORS[driver.status] || '#9ca3af'
+      const initial = driver.name.charAt(0)
+
+      const svgIcon = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
+        <filter id="shadow${driver.id}">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.35"/>
+        </filter>
+        <path d="M22 2 C11 2 3 10 3 20 C3 33 22 50 22 50 C22 50 41 33 41 20 C41 10 33 2 22 2 Z"
+          fill="${color}" filter="url(#shadow${driver.id})" stroke="white" stroke-width="2"/>
+        <circle cx="22" cy="19" r="13" fill="white" opacity="0.15"/>
+        <g transform="translate(9, 10) scale(0.5)">
+          <rect x="2" y="11" width="28" height="13" rx="2" fill="white"/>
+          <rect x="22" y="7" width="12" height="8" rx="1" fill="white"/>
+          <rect x="24" y="9" width="8" height="5" rx="1" fill="${color}"/>
+          <circle cx="7" cy="25" r="3" fill="${color}" stroke="white" stroke-width="1.5"/>
+          <circle cx="27" cy="25" r="3" fill="${color}" stroke="white" stroke-width="1.5"/>
+          <rect x="0" y="17" width="4" height="4" rx="0.5" fill="white"/>
+        </g>
+        <text x="22" y="38" text-anchor="middle" font-size="9" font-weight="bold"
+          font-family="Arial, sans-serif" fill="white" opacity="0.9">${driver.name.split(' ')[0]}</text>
+      </svg>
+      `
+
+      const marker = new window.google.maps.Marker({
+        position: { lat: driver.last_lat, lng: driver.last_lng },
+        map: mapInstanceRef.current,
+        title: driver.name,
+        icon: {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgIcon),
+          scaledSize: new window.google.maps.Size(40, 48),
+          anchor: new window.google.maps.Point(20, 46),
+        },
+      })
 
         const infoWindow = new window.google.maps.InfoWindow({
           content: `
