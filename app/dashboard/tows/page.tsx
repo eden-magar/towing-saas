@@ -41,6 +41,7 @@ export default function TowsPage() {
 
   const statuses = [
     { id: 'all', label: 'הכל' },
+    { id: 'quote', label: 'הצעות מחיר' },
     { id: 'pending', label: 'ממתינות' },
     { id: 'assigned', label: 'משויכות' },
     { id: 'in_progress', label: 'בביצוע' },
@@ -49,6 +50,7 @@ export default function TowsPage() {
   ]
 
   const statusConfig: Record<string, { label: string; class: string }> = {
+    quote: { label: 'הצעת מחיר', class: 'bg-amber-100 text-amber-700' },
     pending: { label: 'ממתינה', class: 'bg-amber-100 text-amber-700' },
     assigned: { label: 'משויכת', class: 'bg-blue-100 text-blue-700' },
     in_progress: { label: 'בביצוע', class: 'bg-purple-100 text-purple-700' },

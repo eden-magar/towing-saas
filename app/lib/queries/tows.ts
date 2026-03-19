@@ -61,7 +61,7 @@ export interface TowPoint {
   id: string
   tow_id: string
   point_order: number
-  point_type: 'pickup' | 'dropoff'
+  point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   address: string | null
   lat: number | null
   lng: number | null
@@ -100,8 +100,8 @@ export interface TowWithDetails {
   driver_id: string | null
   truck_id: string | null
   created_by: string | null
-  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle'
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
+  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
   scheduled_at: string | null
   notes: string | null
   recommended_price: number | null
@@ -332,7 +332,7 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
 // NEW: טייפ לנקודה מוכנה לשמירה
 export interface PreparedTowPoint {
   point_order: number
-  point_type: 'pickup' | 'dropoff'
+  point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   address: string | null
   lat: number | null
   lng: number | null
@@ -350,7 +350,7 @@ interface CreateTowInput {
   customerId?: string
   driverId?: string
   truckId?: string
-  towType: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle'
+  towType: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
   scheduledAt?: string
   notes?: string
   finalPrice?: number
@@ -553,7 +553,7 @@ export async function createTow(input: CreateTowInput) {
 
 export async function updateTowStatus(
   towId: string, 
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
 ) {
   const updates: Record<string, any> = { status }
   

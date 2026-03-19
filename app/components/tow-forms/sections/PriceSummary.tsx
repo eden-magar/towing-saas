@@ -3,6 +3,8 @@
 import { FileText } from 'lucide-react'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge, CustomerWithPricing } from '../../../lib/queries/price-lists'
 import { SelectedService } from '../shared'
+import { calculateTowPrice, extractBasePrices } from '../../../lib/utils/price-calculator'
+import { VehicleType } from '../../../lib/types'
 
 interface DistanceResult {
   distanceKm: number
@@ -53,6 +55,9 @@ interface PriceSummaryProps {
   // מסלול מותאם אישית
   towType?: string
   customRouteVehicleCount?: number
+  towDate?: string
+  towTime?: string
+  isHoliday?: boolean
 }
 
 export function PriceSummary({
@@ -77,7 +82,10 @@ export function PriceSummary({
   onSave,
   saving,
   towType,
-  customRouteVehicleCount = 0
+  customRouteVehicleCount = 0,
+  towDate = '',
+  towTime = '',
+  isHoliday = false
 }: PriceSummaryProps) {
   
   const isCustomRoute = towType === 'custom'
@@ -95,95 +103,91 @@ export function PriceSummary({
     )
   }
 
-  // חישוב מפורט
-  const vehicleTypeMap: Record<string, string> = {
-    'private': 'base_price_private',
-    'motorcycle': 'base_price_motorcycle',
-    'heavy': 'base_price_heavy',
-    'machinery': 'base_price_machinery'
+  const activePriceList: any = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
+    ? selectedCustomerPricing.price_list
+    : basePriceList
+
+  const hasDataForCalculation = isCustomRoute
+    ? (customRouteVehicleCount > 0 && (distance?.distanceKm ?? 0) > 0)
+    : hasVehicleType
+
+  let priceResult: ReturnType<typeof calculateTowPrice> | null = null
+  if ((priceMode === 'recommended' || priceMode === 'recommended_customer') && hasDataForCalculation) {
+    const baseToPickupKm = (!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm) || 0
+    const distanceKm = (distance?.distanceKm ?? 0) + baseToPickupKm
+    const basePrices = extractBasePrices(activePriceList)
+    let basePriceOverride: number | undefined
+    if (isCustomRoute) {
+      const basePerVehicle = basePrices.private
+      basePriceOverride = basePerVehicle * customRouteVehicleCount
+    }
+    const locationSurcharges = selectedLocationSurcharges
+      .map(id => locationSurchargesData.find(l => l.id === id))
+      .filter(Boolean)
+      .map(s => ({ percent: s!.surcharge_percent }))
+    const serviceSurcharges = selectedServices.map(selected => {
+      const s = serviceSurchargesData.find(x => x.id === selected.id)
+      if (!s) return { amount: 0 }
+      if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
+      if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
+      return { amount: s.price }
+    }).filter(x => x.amount > 0)
+
+    priceResult = calculateTowPrice({
+      priceList: {
+        base_prices: basePrices,
+        price_per_km: activePriceList?.price_per_km ?? 12,
+        minimum_price: activePriceList?.minimum_price ?? 250
+      },
+      vehicleType: (vehicleType as VehicleType) || 'private',
+      distanceKm,
+      basePriceOverride,
+      timeSurcharges: activeTimeSurcharges,
+      towDate,
+      towTime,
+      isHoliday,
+      activeTimeSurchargeIds: activeTimeSurcharges.map(s => s.id),
+      locationSurcharges,
+      serviceSurcharges,
+      priceMode: 'recommended',
+      discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      vatPercent: 0.18
+    })
   }
 
-  const activePriceList: any = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
-  ? selectedCustomerPricing.price_list
-  : basePriceList
-  
+  const basePrice = priceResult?.basePrice ?? 0
+  const distancePrice = priceResult?.distancePrice ?? 0
+  const subtotal = priceResult?.subtotal ?? 0
+  const beforeVat = priceResult?.beforeVat ?? 0
   const pricePerKm = activePriceList?.price_per_km || 12
-  const distanceKm = distance?.distanceKm || 0
-  
-  // מחיר בסיס - שונה לפי סוג המסלול
-  let basePrice = 0
-  if (isCustomRoute) {
-    // מסלול מותאם - מחיר בסיס לכל רכב (נניח פרטי)
-    const basePricePerVehicle = activePriceList?.base_price_private || 180
-    basePrice = basePricePerVehicle * customRouteVehicleCount
-  } else {
-    // גרירה רגילה
-    const priceField = vehicleType ? vehicleTypeMap[vehicleType] : null
-    basePrice = priceField ? (activePriceList?.[priceField] || 0) : 0
-  }
-  
-  // מרחק
-  const baseToPickupKm = (!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm) || 0
-  const totalDistanceKm = distanceKm + baseToPickupKm
-  const distancePrice = Math.round(totalDistanceKm * pricePerKm)
-  
-  const subtotal = basePrice + distancePrice
-  
-  // תוספות זמן (הגבוהה ביותר)
-  let timePercent = 0
-  let timeLabel = ''
-  if (activeTimeSurcharges.length > 0) {
-    const maxSurcharge = activeTimeSurcharges.reduce((max, s) => 
-      s.surcharge_percent > max.surcharge_percent ? s : max
-    , activeTimeSurcharges[0])
-    timePercent = maxSurcharge.surcharge_percent
-    timeLabel = maxSurcharge.label
-  }
-  const timeAmount = Math.round(subtotal * (timePercent / 100))
-  
-  // תוספות מיקום
-  let locationPercent = 0
+  const totalDistanceKm = (distance?.distanceKm ?? 0) + ((!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm) || 0)
+  const timePercent = priceResult?.maxTimeSurchargePercent ?? 0
+  const timeLabel = priceResult?.maxTimeSurchargeLabel ?? ''
+  const timeAmount = priceResult ? Math.round(priceResult.subtotal * (timePercent / 100)) : 0
   const activeLocationSurcharges = selectedLocationSurcharges
     .map(id => locationSurchargesData.find(l => l.id === id))
     .filter(Boolean) as LocationSurcharge[]
-  activeLocationSurcharges.forEach(s => { locationPercent += s.surcharge_percent })
-  const locationAmount = Math.round(subtotal * locationPercent / 100)
-  
-  // תוספות שירותים
-  let servicesTotal = 0
+  const locationAmount = priceResult?.locationSurchargeAmount ?? 0
   const activeServices: { label: string; amount: number }[] = []
   selectedServices.forEach(selected => {
     const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
     if (surcharge) {
       let amount = 0
       let label = surcharge.label
-      
-      if (surcharge.price_type === 'manual') {
-        amount = selected.manualPrice || 0
-      } else if (surcharge.price_type === 'per_unit') {
+      if (surcharge.price_type === 'manual') amount = selected.manualPrice || 0
+      else if (surcharge.price_type === 'per_unit') {
         const qty = selected.quantity || 1
         amount = surcharge.price * qty
         label = `${surcharge.label} (×${qty})`
-      } else {
-        amount = surcharge.price
-      }
-      
+      } else amount = surcharge.price
       if (amount > 0) {
-        servicesTotal += amount
         activeServices.push({ label, amount })
       }
     }
   })
-  
-  const beforeDiscount = subtotal + timeAmount + locationAmount + servicesTotal
-  
-  const discountAmount = selectedCustomerPricing?.discount_percent 
-    ? Math.round(beforeDiscount * selectedCustomerPricing.discount_percent / 100) 
-    : 0
-  
-  const beforeVat = beforeDiscount - discountAmount
-  const vatAmount = Math.round(beforeVat * 0.18)
-  const total = beforeVat + vatAmount
+  const discountAmount = priceResult?.discountAmount ?? 0
+  const vatAmount = priceResult?.vatAmount ?? 0
+  const total = priceResult?.total ?? 0
 
   const getVehicleTypeLabel = (type: string) => {
     switch (type) {
@@ -194,11 +198,6 @@ export function PriceSummary({
       default: return ''
     }
   }
-
-  // בדיקה אם יש מספיק נתונים להציג
-  const hasDataForCalculation = isCustomRoute 
-    ? (customRouteVehicleCount > 0 && distanceKm > 0)
-    : hasVehicleType
 
   return (
     <div className="space-y-3 sm:space-y-4">

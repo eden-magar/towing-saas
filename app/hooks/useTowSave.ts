@@ -131,7 +131,7 @@ export function useTowSave(params: UseTowSaveParams) {
 
   const handleSave = async () => {
   if (!companyId || !user) return
-  if (towType !== 'single' && towType !== 'custom') return
+  if (towType !== 'single' && towType !== 'custom' && towType !== 'exchange') return
   
   // Validation - truck type is required
   if (requiredTruckTypes.length === 0) {

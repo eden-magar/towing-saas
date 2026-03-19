@@ -489,7 +489,6 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                     locationSurchargesData={locationSurchargesData}
                     selectedServices={selectedServices}
                     serviceSurchargesData={serviceSurchargesData}
-            
                     selectedCustomerPricing={selectedCustomerPricing}
                     priceMode={priceMode}
                     selectedPriceItem={selectedPriceItem}
@@ -499,6 +498,9 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                     saving={saving}
                     towType={towType}
                     customRouteVehicleCount={customRouteData.vehicles.length}
+                    towDate={towDate}
+                    towTime={towTime}
+                    isHoliday={isHoliday}
                   />
                 </div>
               </div>

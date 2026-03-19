@@ -10,6 +10,7 @@ import {
 import { SelectedService } from '../components/tow-forms/shared'
 import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
+import { calculateTowPrice, extractBasePrices } from '../lib/utils/price-calculator'
 
 interface UseTowPricingParams {
   towType: TowType
@@ -137,128 +138,140 @@ export function useTowPricing(params: UseTowPricingParams) {
     const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
       ? selectedCustomerPricing.price_list
       : basePriceList
-    // For custom routes
+
     if (towType === 'custom') {
-      if (customRouteData.vehicles.length === 0 || customRouteData.totalDistanceKm === 0) {
-        return 0
-      }
-      
-      const pricePerKm = activePriceList?.price_per_km || 12
-      const minimumPrice = activePriceList?.minimum_price || 250
-      
-      // Calculate base price for all vehicles
+      if (customRouteData.vehicles.length === 0 || customRouteData.totalDistanceKm === 0) return 0
+      const basePrices = extractBasePrices(activePriceList)
       let totalBasePrice = 0
       customRouteData.vehicles.forEach(v => {
-        const vehicleTypeMap: Record<string, string> = {
-          'private': 'base_price_private',
-          'motorcycle': 'base_price_motorcycle',
-          'heavy': 'base_price_heavy',
-          'machinery': 'base_price_machinery'
-        }
-        const priceField = vehicleTypeMap[v.type] || 'base_price_private'
-        totalBasePrice += activePriceList?.[priceField] || 180
+        const vt = (v.type as VehicleType) || 'private'
+        totalBasePrice += basePrices[vt] ?? basePrices.private
       })
-      
-      // Distance price
-      const distancePrice = customRouteData.totalDistanceKm * pricePerKm
-      
-      let subtotal = totalBasePrice + distancePrice
-      
-      // Time surcharges
-      let timePercent = 0
-      if (activeTimeSurchargesList.length > 0) {
-        timePercent = Math.max(...activeTimeSurchargesList.map(s => s.surcharge_percent))
-      }
-      const timeAddition = subtotal * (timePercent / 100)
-      
-      // Customer discount
-      const beforeDiscount = subtotal + timeAddition
-      let afterDiscount = beforeDiscount
-      if (selectedCustomerPricing?.discount_percent) {
-        afterDiscount = beforeDiscount * (1 - selectedCustomerPricing.discount_percent / 100)
-      }
-      
-      // VAT
-      const vat = afterDiscount * 0.18
-      const total = afterDiscount + vat
-      
-      return Math.max(Math.round(total), minimumPrice)
+      const locSurcharges = selectedLocationSurcharges
+        .map(id => locationSurchargesData.find(l => l.id === id))
+        .filter(Boolean)
+        .map(s => ({ percent: s!.surcharge_percent }))
+      const svcSurcharges = selectedServices.map(selected => {
+        const s = serviceSurchargesData.find(x => x.id === selected.id)
+        if (!s) return { amount: 0 }
+        if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
+        if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
+        return { amount: s.price }
+      }).filter(x => x.amount > 0)
+
+      const result = calculateTowPrice({
+        priceList: {
+          base_prices: extractBasePrices(activePriceList),
+          price_per_km: activePriceList?.price_per_km ?? 12,
+          minimum_price: activePriceList?.minimum_price ?? 250
+        },
+        vehicleType: 'private',
+        distanceKm: customRouteData.totalDistanceKm,
+        basePriceOverride: totalBasePrice,
+        timeSurcharges: timeSurchargesData,
+        towDate: towDate || '',
+        towTime: towTime || '',
+        isHoliday: isHoliday ?? false,
+        activeTimeSurchargeIds: activeTimeSurchargesList.map(s => s.id),
+        locationSurcharges: locSurcharges,
+        serviceSurcharges: svcSurcharges,
+        priceMode: 'recommended',
+        discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+        vatPercent: 0.18
+      })
+      return result.total
     }
-    
-    // For single tow
+
     if (!vehicleType) return 0
-    
-    const vehicleTypeMap: Record<string, string> = {
-      'private': 'base_price_private',
-      'motorcycle': 'base_price_motorcycle',
-      'heavy': 'base_price_heavy',
-      'machinery': 'base_price_machinery'
-    }
-    
-    const priceField = vehicleTypeMap[vehicleType]
-    const basePrice = activePriceList?.[priceField] || 0
-    const pricePerKm = activePriceList?.price_per_km || 0
-    const minimumPrice = activePriceList?.minimum_price || 0
-    
     const pickupToDropoffKm = distance?.distanceKm || 0
     const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0
     const distanceKm = pickupToDropoffKm + baseToPickupKm
-    const distancePrice = distanceKm * pricePerKm
-    
-    let subtotal = basePrice + distancePrice
-    
-    let timePercent = 0
-    if (activeTimeSurchargesList.length > 0) {
-      timePercent = Math.max(...activeTimeSurchargesList.map(s => s.surcharge_percent))
-    }
-    const timeAddition = subtotal * (timePercent / 100)
-    
-    let locationPercent = 0
-    selectedLocationSurcharges.forEach(id => {
-      const surcharge = locationSurchargesData.find(l => l.id === id)
-      if (surcharge) locationPercent += surcharge.surcharge_percent
-    })
-    const locationAddition = subtotal * (locationPercent / 100)
-    
-    let servicesTotal = 0
-    selectedServices.forEach(selected => {
+
+    const locationSurcharges = selectedLocationSurcharges
+      .map(id => locationSurchargesData.find(l => l.id === id))
+      .filter(Boolean)
+      .map(s => ({ percent: s!.surcharge_percent }))
+
+    const serviceSurcharges = selectedServices.map(selected => {
       const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
-      if (surcharge) {
-        if (surcharge.price_type === 'manual') {
-          servicesTotal += selected.manualPrice || 0
-        } else if (surcharge.price_type === 'per_unit') {
-          servicesTotal += surcharge.price * (selected.quantity || 1)
-        } else {
-          servicesTotal += surcharge.price
-        }
-      }
+      if (!surcharge) return { amount: 0 }
+      if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0 }
+      if (surcharge.price_type === 'per_unit') return { amount: surcharge.price * (selected.quantity || 1) }
+      return { amount: surcharge.price }
+    }).filter(s => s.amount > 0)
+
+    const result = calculateTowPrice({
+      priceList: {
+        base_prices: extractBasePrices(activePriceList),
+        price_per_km: activePriceList?.price_per_km ?? 12,
+        minimum_price: activePriceList?.minimum_price ?? 250
+      },
+      vehicleType: vehicleType as VehicleType,
+      distanceKm,
+      timeSurcharges: timeSurchargesData,
+      towDate: towDate || '',
+      towTime: towTime || '',
+      isHoliday: isHoliday ?? false,
+      activeTimeSurchargeIds: activeTimeSurchargesList.map(s => s.id),
+      locationSurcharges,
+      serviceSurcharges,
+      priceMode: 'recommended',
+      discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      vatPercent: 0.18
     })
-    
-    const beforeDiscount = subtotal + timeAddition + locationAddition + servicesTotal
-    
-    let afterDiscount = beforeDiscount
-    if (selectedCustomerPricing?.discount_percent) {
-      afterDiscount = beforeDiscount * (1 - selectedCustomerPricing.discount_percent / 100)
-    }
-    
-    const vat = afterDiscount * 0.18
-    const total = afterDiscount + vat
-    
-    if (total > 0 && total < minimumPrice) return minimumPrice
-    return Math.round(total)
+    return result.total
   }
 
   const calculateFinalPrice = () => {
+    const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
+      ? selectedCustomerPricing.price_list
+      : basePriceList
+
     if (priceMode === 'custom' && customPrice) {
       const price = parseFloat(customPrice)
-      return customPriceIncludesVat ? price : Math.round(price * 1.18)
+      const result = calculateTowPrice({
+        priceList: {
+          base_prices: extractBasePrices(activePriceList),
+          price_per_km: 12,
+          minimum_price: 250
+        },
+        vehicleType: 'private',
+        distanceKm: 0,
+        timeSurcharges: [],
+        towDate: '',
+        towTime: '',
+        isHoliday: false,
+        locationSurcharges: [],
+        serviceSurcharges: [],
+        priceMode: 'custom',
+        customPrice: price,
+        customPriceIncludesVat: customPriceIncludesVat,
+        discountPercent: 0,
+        vatPercent: 0.18
+      })
+      return result.total
     }
     if ((priceMode === 'fixed' || priceMode === 'customer') && selectedPriceItem) {
-      let price = selectedPriceItem.price
-      if (priceMode === 'fixed' && selectedCustomerPricing?.discount_percent) {
-        price = price * (1 - selectedCustomerPricing.discount_percent / 100)
-      }
-      return Math.round(price)
+      const result = calculateTowPrice({
+        priceList: {
+          base_prices: extractBasePrices(activePriceList),
+          price_per_km: 12,
+          minimum_price: 250
+        },
+        vehicleType: 'private',
+        distanceKm: 0,
+        timeSurcharges: [],
+        towDate: '',
+        towTime: '',
+        isHoliday: false,
+        locationSurcharges: [],
+        serviceSurcharges: [],
+        priceMode: priceMode === 'fixed' ? 'fixed' : 'customer',
+        fixedPrice: selectedPriceItem.price,
+        discountPercent: (priceMode === 'fixed' && selectedCustomerPricing?.discount_percent) ? selectedCustomerPricing.discount_percent : 0,
+        vatPercent: 0.18
+      })
+      return result.total
     }
     return calculateRecommendedPrice()
   }
