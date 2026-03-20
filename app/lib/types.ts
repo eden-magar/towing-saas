@@ -539,6 +539,7 @@ export interface CustomerPortalTow {
 export interface CustomerPortalTowDetail extends CustomerPortalTow {
   notes: string | null
   visibility_overrides: Record<string, boolean> | null
+  final_price: number | null
   points: (CustomerPortalTow['points'][0] & {
     contact_name: string | null
     contact_phone: string | null
