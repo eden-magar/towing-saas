@@ -136,6 +136,7 @@ export default function TowDetailsPage() {
     in_progress: { label: 'בדרך ליעד', color: 'bg-blue-100 text-blue-700 border-blue-200' },
     completed: { label: 'הושלם', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
     cancelled: { label: 'בוטל', color: 'bg-gray-100 text-gray-500 border-gray-200' },
+    quote: { label: 'הצעת מחיר', color: 'bg-amber-100 text-amber-700 border-amber-200' },
   }
 
   const towTypeLabels: Record<string, string> = {
@@ -1012,6 +1013,12 @@ export default function TowDetailsPage() {
                             </div>
                             <div>
                               <p className="font-mono text-lg font-bold text-gray-800">{vehicle.plate_number}</p>
+                              {vehicle.is_working === true && (
+                                <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full mr-2">תקין</span>
+                              )}
+                              {vehicle.is_working === false && (
+                                <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full mr-2">תקול</span>
+                              )}
                               <p className="text-sm text-gray-500">
                                 {vehicle.manufacturer} {vehicle.model}{vehicle.year ? `, ${vehicle.year}` : ''}
                               </p>
@@ -1115,11 +1122,21 @@ export default function TowDetailsPage() {
                       {tow.points.map((point: any, idx: number) => (
                         <div 
                           key={point.id}
-                          className={`p-4 rounded-2xl ${point.point_type === 'pickup' ? 'bg-green-50' : 'bg-red-50'}`}
+                          className={`p-4 rounded-2xl ${
+                            point.point_type === 'pickup' ? 'bg-green-50' 
+                            : point.point_type === 'exchange' ? 'bg-purple-50'
+                            : point.point_type === 'stop' ? 'bg-gray-50'
+                            : 'bg-red-50'
+                          }`}
                         >
                           <div className="flex items-start gap-3">
                             <div className="flex flex-col items-center">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${point.point_type === 'pickup' ? 'bg-green-500' : 'bg-red-500'}`}>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                                point.point_type === 'pickup' ? 'bg-green-500'
+                                : point.point_type === 'exchange' ? 'bg-purple-500'
+                                : point.point_type === 'stop' ? 'bg-gray-400'
+                                : 'bg-red-500'
+                              }`}>
                                 {idx + 1}
                               </div>
                               {idx < (tow.points?.length || 0) - 1 && (
@@ -1127,8 +1144,16 @@ export default function TowDetailsPage() {
                               )}
                             </div>
                             <div className="flex-1">
-                              <div className={`text-sm font-medium ${point.point_type === 'pickup' ? 'text-green-700' : 'text-red-700'}`}>
-                                {point.point_type === 'pickup' ? 'איסוף' : 'פריקה'}
+                              <div className={`text-sm font-medium ${
+                                point.point_type === 'pickup' ? 'text-green-700'
+                                : point.point_type === 'exchange' ? 'text-purple-700'
+                                : point.point_type === 'stop' ? 'text-gray-600'
+                                : 'text-red-700'
+                              }`}>
+                                {point.point_type === 'pickup' ? 'איסוף' 
+                                  : point.point_type === 'exchange' ? 'נקודת החלפה'
+                                  : point.point_type === 'stop' ? 'עצירה'
+                                  : 'פריקה'}
                               </div>
                               <div className="text-gray-800 font-medium">{point.address || 'לא צוין'}</div>
                               
