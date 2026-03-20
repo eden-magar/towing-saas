@@ -42,7 +42,7 @@ export default function CustomerDashboard() {
 
     const load = async () => {
       const info = await getCustomerForUser(user.id)
-      if (!info) return
+      if (!info) { setLoading(false); return }
       setCustomerId(info.customerId)
 
       const [towsData, statsData] = await Promise.all([
