@@ -58,7 +58,7 @@ export default function Sidebar() {
           <Menu size={24} />
         </button>
         <h1 className="text-lg font-bold text-[#33d4ff]">מערכת גרירות</h1>
-        <Link href="/dashboard/tows/new" className="p-2 bg-[#33d4ff] text-white rounded-lg hover:bg-[#21b8e6]">
+        <Link href="/dashboard/tows/create" className="p-2 bg-[#33d4ff] text-white rounded-lg hover:bg-[#21b8e6]">
           <Plus size={20} />
         </Link>
       </div>

@@ -277,7 +277,7 @@
         </div>
 
         <Link
-          href="/dashboard/tows/new"
+          href="/dashboard/tows/create"
           className="mr-auto flex items-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex-shrink-0"
         >
           <Plus size={16} />
@@ -413,7 +413,7 @@
                                 )
                               }) : (
                                 <button
-                                  onClick={() => router.push('/dashboard/tows/new')}
+                                  onClick={() => router.push('/dashboard/tows/create')}
                                   className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
                                 >
                                   +

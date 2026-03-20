@@ -132,7 +132,7 @@ export default function TowsPage() {
           <p className="text-gray-500 mt-1 text-sm">ניהול כל הגרירות במערכת</p>
         </div>
         <Link
-          href="/dashboard/tows/new"
+          href="/dashboard/tows/create"
           className="hidden lg:flex items-center justify-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2.5 rounded-xl transition-colors"
         >
           <Plus size={20} />
@@ -142,7 +142,7 @@ export default function TowsPage() {
 
       {/* כפתור מובייל */}
       <Link
-        href="/dashboard/tows/new"
+        href="/dashboard/tows/create"
         className="lg:hidden flex items-center justify-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-3 rounded-xl transition-colors mb-6"
       >
         <Plus size={20} />
@@ -215,7 +215,7 @@ export default function TowsPage() {
             <h3 className="text-lg font-medium text-gray-800 mb-2">אין גרירות להצגה</h3>
             <p className="text-gray-500 mb-6">צרו את הגרירה הראשונה שלכם</p>
             <Link
-              href="/dashboard/tows/new"
+              href="/dashboard/tows/create"
               className="inline-flex items-center gap-2 bg-[#33d4ff] hover:bg-[#21b8e6] text-white px-4 py-2 rounded-lg transition-colors"
             >
               <Plus size={20} />

@@ -6,10 +6,11 @@ declare global {
     google: typeof google
   }
 }
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { ArrowRight, Check, Truck, X } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { CustomerSection, TowTypeSelector, PaymentSection, PriceSummary, PriceSelector } from '../../../components/tow-forms/sections'
 import { PinDropModal } from '../../../components/tow-forms/shared'
 import { SingleRoute, RouteBuilder, ExchangeRoute } from '../../../components/tow-forms/routes'
@@ -138,6 +139,11 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     copyFromCustomer,
     handleSave,
   } = useTowForm(editTowId)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search).toString()
+    router.replace(`/dashboard/tows/create${params ? '?' + params : ''}`)
+  }, [])
 
   // ==================== Render ====================
   

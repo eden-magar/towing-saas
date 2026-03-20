@@ -725,7 +725,7 @@ export default function TowDetailsPage() {
               ) : (
                 <>
                   <button 
-                    onClick={() => router.push(`/dashboard/tows/new?edit=${tow.id}`)}
+                    onClick={() => router.push(`/dashboard/tows/create?edit=${tow.id}`)}
                     className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm flex items-center gap-2"
                   >
                     <Edit2 size={18} />
