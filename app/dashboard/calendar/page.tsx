@@ -34,7 +34,8 @@ const statusLabels: Record<string, string> = {
   assigned: 'שובצה',
   in_progress: 'בביצוע',
   completed: 'הושלמה',
-  cancelled: 'בוטלה'
+  cancelled: 'בוטלה',
+  quote: 'הצעת מחיר',
 }
 
 function getCollisionLayout(towList: TowWithDetails[], TOW_DURATION = 1) {
@@ -801,7 +802,12 @@ const handleSkipPriceUpdate = () => {
                         borderRightColor: driverColor,
                       }}
                     >
-                      {!tow.driver_id && (
+                      {tow.status === 'quote' && (
+                        <div className="absolute top-0 left-0 bg-amber-400 text-white text-[8px] px-1 rounded-br font-bold">
+                          הצעה
+                        </div>
+                      )}
+                      {!tow.driver_id && tow.status !== 'quote' && (
                         <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
                           לשיבוץ
                         </div>
@@ -934,7 +940,12 @@ const handleSkipPriceUpdate = () => {
                             borderRightColor: driverColor,
                           }}
                         >
-                          {!tow.driver_id && (
+                          {tow.status === 'quote' && (
+                            <div className="absolute top-0 left-0 bg-amber-400 text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold">
+                              הצעה
+                            </div>
+                          )}
+                          {!tow.driver_id && tow.status !== 'quote' && (
                             <div className="absolute top-0 left-0 bg-white text-gray-600 text-[10px] px-1.5 py-0.5 rounded-br font-bold">
                               לשיבוץ
                             </div>
@@ -1062,7 +1073,8 @@ const handleSkipPriceUpdate = () => {
                 <div className="w-5 h-5 rounded-full" style={{ 
                   backgroundColor: selectedTow.status === 'completed' ? '#22c55e' : 
                     selectedTow.status === 'in_progress' ? '#3b82f6' : 
-                    selectedTow.status === 'pending' ? '#f59e0b' : '#6b7280'
+                    selectedTow.status === 'pending' ? '#f59e0b' :
+                    selectedTow.status === 'quote' ? '#f59e0b' : '#6b7280'
                 }}></div>
                 <div>
                   <p className="text-sm text-gray-500">סטטוס</p>
