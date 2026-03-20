@@ -143,6 +143,7 @@ export default function TowDetailsPage() {
     with_base: 'יציאה מבסיס',
     transfer: 'העברה',
     multi_vehicle: 'מרובת רכבים',
+    exchange: 'תקין ↔ תקול',
   }
 
   // טעינת נתונים

@@ -41,6 +41,7 @@
 
     const [stats, setStats] = useState<DashboardStats>({ towsToday: 0, pendingTows: 0, completedToday: 0, availableDrivers: 0 })
     const [pendingTows, setPendingTows] = useState<TowWithDetails[]>([])
+    const [quoteTows, setQuoteTows] = useState<TowWithDetails[]>([])
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
     const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
@@ -92,6 +93,7 @@
 
         setStats(statsData)
         setPendingTows(towsData.filter((t: TowWithDetails) => t.status === 'pending' && !t.driver_id))
+        setQuoteTows(towsData.filter((t: TowWithDetails) => t.status === 'quote'))
         setInProgressTows(towsData.filter((t: TowWithDetails) => t.status === 'in_progress').length)
         setAlerts(alertsData)
         setRejectionRequests(rejectionsData)
@@ -434,6 +436,32 @@
 
             {/* 2×2 כרטיסים */}
             <div className="grid grid-cols-2 gap-3 flex-shrink-0">
+
+              {/* הצעות מחיר ממתינות */}
+              {quoteTows.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-amber-800">
+                      הצעות מחיר ממתינות
+                    </span>
+                    <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {quoteTows.length}
+                    </span>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {quoteTows.map(t => (
+                      <div
+                        key={t.id}
+                        onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                        className="flex items-center justify-between p-2 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs"
+                      >
+                        <span className="font-medium">{t.order_number || t.id.slice(0, 8)}</span>
+                        <span className="text-amber-600">{t.customer?.name || 'לקוח'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ממתינות לשיבוץ */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
