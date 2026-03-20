@@ -272,6 +272,50 @@ export function useTowForm(editTowId?: string) {
     return () => clearTimeout(timeout)
   }, [startFromBase, pickupAddress.address, pickupAddress.lat, basePriceList?.base_lat, basePriceList?.base_lng])
 
+
+  // Calculate exchange total distance
+  useEffect(() => {
+    if (!workingVehicleAddress.address || !exchangeAddress.address || !defectiveDestinationAddress.address) {
+      setExchangeTotalDistance(null)
+      return
+    }
+    const calcExchangeDistance = async () => {
+      setExchangeDistanceLoading(true)
+      try {
+        // Build ordered waypoints
+        const waypoints: AddressData[] = [
+          workingVehicleAddress,
+          ...stopsBeforeExchange.map(s => s.address),
+          exchangeAddress,
+          ...stopsAfterExchange.map(s => s.address),
+          defectiveDestinationAddress,
+        ]
+        // Chain calculateDistance calls and sum results
+        let totalKm = 0
+        let totalMinutes = 0
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          const result = await calculateDistance(waypoints[i], waypoints[i + 1])
+          if (!result) { setExchangeTotalDistance(null); return }
+          totalKm += result.distanceKm
+          totalMinutes += result.durationMinutes
+        }
+        setExchangeTotalDistance({ distanceKm: totalKm, durationMinutes: totalMinutes })
+      } catch (err) {
+        console.error('Exchange distance calculation error:', err)
+        setExchangeTotalDistance(null)
+      } finally {
+        setExchangeDistanceLoading(false)
+      }
+    }
+    const timeout = setTimeout(calcExchangeDistance, 500)
+    return () => clearTimeout(timeout)
+  }, [
+    workingVehicleAddress.address, workingVehicleAddress.lat,
+    exchangeAddress.address, exchangeAddress.lat,
+    defectiveDestinationAddress.address, defectiveDestinationAddress.lat,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+  ])
   // Read URL params or set defaults to now
   useEffect(() => {
     const dateParam = searchParams.get('date')
