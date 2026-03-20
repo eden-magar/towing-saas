@@ -119,6 +119,7 @@ export interface TaskDetailFull {
   started_at: string | null
   completed_at: string | null
   created_at: string
+  dropoff_to_storage: boolean | null
   customer: {
     id: string
     name: string
@@ -384,6 +385,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
       started_at,
       completed_at,
       created_at,
+      dropoff_to_storage,
       customer:customers (
         id,
         name,
@@ -452,6 +454,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     started_at: tow.started_at,
     completed_at: tow.completed_at,
     created_at: tow.created_at,
+    dropoff_to_storage: tow.dropoff_to_storage,
     customer: tow.customer as any,
     truck: tow.truck as any,
     vehicles: vehicles || [],
