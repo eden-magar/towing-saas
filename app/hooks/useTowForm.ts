@@ -160,6 +160,7 @@ export function useTowForm(editTowId?: string) {
   const [workingVehicleContactPhone, setWorkingVehicleContactPhone] = useState('')
   
   const [exchangeAddress, setExchangeAddress] = useState<AddressData>({ address: '' })
+  const [workingVehicleDestinationAddress, setWorkingVehicleDestinationAddress] = useState<AddressData>({ address: '' })
   const [exchangeContactName, setExchangeContactName] = useState('')
   const [exchangeContactPhone, setExchangeContactPhone] = useState('')
   
@@ -756,6 +757,7 @@ export function useTowForm(editTowId?: string) {
     workingVehicleContact, setWorkingVehicleContact,
     workingVehicleContactPhone, setWorkingVehicleContactPhone,
     exchangeAddress, setExchangeAddress,
+    workingVehicleDestinationAddress, setWorkingVehicleDestinationAddress,
     exchangeContactName, setExchangeContactName,
     exchangeContactPhone, setExchangeContactPhone,
     defectiveVehiclePlate, setDefectiveVehiclePlate,
