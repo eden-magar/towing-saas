@@ -899,6 +899,7 @@ export async function deleteTow(towId: string) {
   }
   await supabase.from('tow_points').delete().eq('tow_id', towId)
   
+  await supabase.from('stored_vehicles').delete().eq('tow_id', towId)
   // מחיקת legs ו-vehicles
   await supabase.from('tow_legs').delete().eq('tow_id', towId)
   await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
