@@ -83,6 +83,23 @@ export interface SaveTowInput {
   invoiceName?: string
   dropoffToStorage?: boolean
   existingPriceBreakdown?: PriceBreakdown | null
+  // Exchange specific
+  workingVehiclePlate?: string
+  workingVehicleData?: any
+  workingVehicleType?: string
+  workingVehicleSourceAddress?: AddressData
+  workingVehicleDestinationAddress?: AddressData
+  workingVehicleContactName?: string
+  workingVehicleContactPhone?: string
+  defectiveVehiclePlate?: string
+  defectiveVehicleData?: any
+  exchangePointAddress?: AddressData
+  exchangeContactName?: string
+  exchangeContactPhone?: string
+  defectiveDestinationAddress?: AddressData
+  defectiveDestinationContactName?: string
+  defectiveDestinationContactPhone?: string
+  linkedTowId?: string
 }
 
 // ==================== NEW: TowPoint Types ====================
@@ -145,6 +162,23 @@ export interface PreparedTowData {
   invoiceName?: string
   startFromBase?: boolean
   dropoffToStorage?: boolean
+  // Exchange specific
+  workingVehiclePlate?: string
+  workingVehicleData?: any
+  workingVehicleType?: string
+  workingVehicleSourceAddress?: AddressData
+  workingVehicleDestinationAddress?: AddressData
+  workingVehicleContactName?: string
+  workingVehicleContactPhone?: string
+  defectiveVehiclePlate?: string
+  defectiveVehicleData?: any
+  exchangePointAddress?: AddressData
+  exchangeContactName?: string
+  exchangeContactPhone?: string
+  defectiveDestinationAddress?: AddressData
+  defectiveDestinationContactName?: string
+  defectiveDestinationContactPhone?: string
+  linkedTowId?: string
   // NEW: נקודות גרירה
   points: PreparedTowPoint[]
 }
@@ -713,56 +747,142 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירת החלפה (exchange)
   if (input.towType === 'exchange') {
-    const priceBreakdown = input.priceMode === 'custom'
-      ? (input.existingPriceBreakdown ?? null)
-      : buildSingleTowPriceBreakdown(input)
-    const vehicles: PreparedTowData['vehicles'] = [{
-      plateNumber: input.vehiclePlate || '',
-      vehicleType: mapVehicleType(input.vehicleType || ''),
-      manufacturer: input.vehicleData?.data?.manufacturer,
-      model: input.vehicleData?.data?.model,
-      year: input.vehicleData?.data?.year,
-      color: input.vehicleData?.data?.color,
-      isWorking: !(input.selectedDefects?.length),
-      towReason: input.selectedDefects?.join(', ') || undefined,
-      driveType: input.vehicleData?.data?.driveType,
-      fuelType: input.vehicleData?.data?.fuelType,
-      totalWeight: input.vehicleData?.data?.totalWeight,
-      gearType: input.vehicleData?.data?.gearType,
-      driveTechnology: input.vehicleData?.data?.driveTechnology
-    }]
-    const points = createSingleTowPoints(input)
-    const legs: PreparedTowData['legs'] = [{
-      legType: 'pickup',
-      fromAddress: input.pickupAddress?.address,
-      toAddress: input.dropoffAddress?.address,
-      fromLat: input.pickupAddress?.lat,
-      fromLng: input.pickupAddress?.lng,
-      toLat: input.dropoffAddress?.lat,
-      toLng: input.dropoffAddress?.lng
-    }]
-    return {
-      companyId: input.companyId,
-      createdBy: input.userId,
-      customerOrderNumber: input.customerOrderNumber,
-      customerId: input.customerId || undefined,
-      driverId: input.preSelectedDriverId || undefined,
-      towType: 'exchange',
-      requiredTruckTypes: input.requiredTruckTypes || [],
-      scheduledAt,
-      notes: input.notes || undefined,
-      finalPrice: input.finalPrice || undefined,
-      priceMode: input.priceMode,
-      priceBreakdown,
-      vehicles,
-      legs,
-      points,
-      paymentMethod: input.paymentMethod || undefined,
-      invoiceName: input.invoiceName || undefined,
-      startFromBase: input.startFromBase || false,
-      dropoffToStorage: input.dropoffToStorage || false
-    }
+  const priceBreakdown = input.priceMode === 'custom'
+    ? (input.existingPriceBreakdown ?? null)
+    : buildSingleTowPriceBreakdown(input)
+
+  const vehicles: PreparedTowData['vehicles'] = []
+
+  // רכב תקין
+  if (input.workingVehiclePlate) {
+    vehicles.push({
+      plateNumber: input.workingVehiclePlate,
+      vehicleType: mapVehicleType(input.workingVehicleType || ''),
+      manufacturer: input.workingVehicleData?.data?.manufacturer,
+      model: input.workingVehicleData?.data?.model,
+      year: input.workingVehicleData?.data?.year,
+      color: input.workingVehicleData?.data?.color,
+      isWorking: true,
+      driveType: input.workingVehicleData?.data?.driveType,
+      fuelType: input.workingVehicleData?.data?.fuelType,
+      totalWeight: input.workingVehicleData?.data?.totalWeight,
+      gearType: input.workingVehicleData?.data?.gearType,
+      driveTechnology: input.workingVehicleData?.data?.driveTechnology
+    })
   }
+
+  // רכב תקול
+  if (input.defectiveVehiclePlate) {
+    vehicles.push({
+      plateNumber: input.defectiveVehiclePlate,
+      vehicleType: mapVehicleType(input.vehicleType || ''),
+      manufacturer: input.defectiveVehicleData?.data?.manufacturer,
+      model: input.defectiveVehicleData?.data?.model,
+      year: input.defectiveVehicleData?.data?.year,
+      color: input.defectiveVehicleData?.data?.color,
+      isWorking: false,
+      towReason: input.selectedDefects?.join(', ') || undefined,
+      driveType: input.defectiveVehicleData?.data?.driveType,
+      fuelType: input.defectiveVehicleData?.data?.fuelType,
+      totalWeight: input.defectiveVehicleData?.data?.totalWeight,
+      gearType: input.defectiveVehicleData?.data?.gearType,
+      driveTechnology: input.defectiveVehicleData?.data?.driveTechnology
+    })
+  }
+
+  const workingIdx = vehicles.findIndex(v => v.isWorking)
+  const defectiveIdx = vehicles.findIndex(v => !v.isWorking)
+
+  const points: PreparedTowPoint[] = []
+
+  // נקודה 1 — איסוף התקין
+  if (input.workingVehicleSourceAddress?.address) {
+    points.push({
+      point_order: 0,
+      point_type: 'pickup',
+      address: input.workingVehicleSourceAddress.address,
+      lat: input.workingVehicleSourceAddress.lat || null,
+      lng: input.workingVehicleSourceAddress.lng || null,
+      contact_name: input.workingVehicleContactName || null,
+      contact_phone: input.workingVehicleContactPhone || null,
+      notes: null,
+      vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+    })
+  }
+
+  // נקודה 2 — נקודת החלפה
+  if (input.exchangePointAddress?.address) {
+    points.push({
+      point_order: 1,
+      point_type: 'exchange',
+      address: input.exchangePointAddress.address,
+      lat: input.exchangePointAddress.lat || null,
+      lng: input.exchangePointAddress.lng || null,
+      contact_name: input.exchangeContactName || null,
+      contact_phone: input.exchangeContactPhone || null,
+      notes: null,
+      vehicleIndices: [
+        ...(workingIdx >= 0 ? [workingIdx] : []),
+        ...(defectiveIdx >= 0 ? [defectiveIdx] : [])
+      ]
+    })
+  }
+
+  // נקודה 3 — יעד התקול
+  if (input.defectiveDestinationAddress?.address) {
+    points.push({
+      point_order: 2,
+      point_type: 'dropoff',
+      address: input.defectiveDestinationAddress.address,
+      lat: input.defectiveDestinationAddress.lat || null,
+      lng: input.defectiveDestinationAddress.lng || null,
+      contact_name: input.defectiveDestinationContactName || null,
+      contact_phone: input.defectiveDestinationContactPhone || null,
+      notes: null,
+      vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+    })
+  }
+
+  const legs: PreparedTowData['legs'] = [{
+    legType: 'pickup',
+    fromAddress: input.workingVehicleSourceAddress?.address,
+    toAddress: input.exchangePointAddress?.address,
+    fromLat: input.workingVehicleSourceAddress?.lat,
+    fromLng: input.workingVehicleSourceAddress?.lng,
+    toLat: input.exchangePointAddress?.lat,
+    toLng: input.exchangePointAddress?.lng
+  }, {
+    legType: 'delivery',
+    fromAddress: input.exchangePointAddress?.address,
+    toAddress: input.defectiveDestinationAddress?.address,
+    fromLat: input.exchangePointAddress?.lat,
+    fromLng: input.exchangePointAddress?.lng,
+    toLat: input.defectiveDestinationAddress?.lat,
+    toLng: input.defectiveDestinationAddress?.lng
+  }]
+
+  return {
+    companyId: input.companyId,
+    createdBy: input.userId,
+    customerOrderNumber: input.customerOrderNumber,
+    customerId: input.customerId || undefined,
+    driverId: input.preSelectedDriverId || undefined,
+    towType: 'exchange',
+    requiredTruckTypes: input.requiredTruckTypes || [],
+    scheduledAt,
+    notes: input.notes || undefined,
+    finalPrice: input.finalPrice || undefined,
+    priceMode: input.priceMode,
+    priceBreakdown,
+    vehicles,
+    legs,
+    points,
+    paymentMethod: input.paymentMethod || undefined,
+    invoiceName: input.invoiceName || undefined,
+    startFromBase: input.startFromBase || false,
+    dropoffToStorage: input.dropoffToStorage || false
+  }
+}
 
   // Fallback - לא אמור לקרות
   throw new Error('Invalid tow type or missing route points')

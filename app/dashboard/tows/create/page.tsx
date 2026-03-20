@@ -383,15 +383,12 @@ function CreateTowForm({
         })
         finalCustomerId = result.id
       }
-      const pickupAddr =
-        towType === 'exchange' ? exchangeAddress : pickupAddress
-      const dropoffAddr =
-        towType === 'exchange' ? defectiveDestinationAddress : dropoffAddress
-      const dist =
-        towType === 'exchange' ? exchangeTotalDistance : distance
-      const plate = towType === 'exchange' ? defectiveVehiclePlate : vehiclePlate
-      const vData = towType === 'exchange' ? defectiveVehicleData : vehicleData
-      const vType = towType === 'exchange' ? 'private' : vehicleType
+      const pickupAddr = pickupAddress
+      const dropoffAddr = dropoffAddress
+      const dist = distance
+      const plate = vehiclePlate
+      const vData = vehicleData
+      const vType = vehicleType
 
       const towData = prepareTowData({
         companyId,
@@ -434,6 +431,21 @@ function CreateTowForm({
         paymentMethod: paymentMethod || undefined,
         invoiceName: invoiceName || undefined,
         dropoffToStorage,
+        workingVehiclePlate: towType === 'exchange' ? workingVehiclePlate : undefined,
+        workingVehicleData: towType === 'exchange' ? workingVehicleData : undefined,
+        workingVehicleType: towType === 'exchange' ? workingVehicleType : undefined,
+        workingVehicleSourceAddress: towType === 'exchange' ? workingVehicleAddress : undefined,
+        workingVehicleDestinationAddress: towType === 'exchange' ? workingVehicleDestinationAddress : undefined,
+        workingVehicleContactName: towType === 'exchange' ? workingVehicleContact : undefined,
+        workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
+        defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
+        defectiveVehicleData: towType === 'exchange' ? defectiveVehicleData : undefined,
+        exchangePointAddress: towType === 'exchange' ? exchangeAddress : undefined,
+        exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
+        exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
+        defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
+        defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContact : undefined,
+        defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
       })
       const result = await createTow(towData)
       await updateTowStatus(result.id, 'quote')

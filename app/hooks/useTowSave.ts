@@ -67,6 +67,22 @@ interface UseTowSaveParams {
   invoiceName: string
   // Driver
   preSelectedDriverId: string | null
+  // Exchange specific
+  workingVehiclePlate?: string
+  workingVehicleData?: any
+  workingVehicleType?: string
+  workingVehicleSourceAddress?: AddressData
+  workingVehicleDestinationAddress?: AddressData
+  workingVehicleContactName?: string
+  workingVehicleContactPhone?: string
+  defectiveVehiclePlate?: string
+  defectiveVehicleData?: any
+  exchangePointAddress?: AddressData
+  exchangeContactName?: string
+  exchangeContactPhone?: string
+  defectiveDestinationAddress?: AddressData
+  defectiveDestinationContactName?: string
+  defectiveDestinationContactPhone?: string
   // Storage
   selectedStoredVehicleId: string | null
   // Post-save
@@ -124,6 +140,21 @@ export function useTowSave(params: UseTowSaveParams) {
     paymentMethod,
     invoiceName,
     preSelectedDriverId,
+    workingVehiclePlate,
+    workingVehicleData,
+    workingVehicleType,
+    workingVehicleSourceAddress,
+    workingVehicleDestinationAddress,
+    workingVehicleContactName,
+    workingVehicleContactPhone,
+    defectiveVehiclePlate,
+    defectiveVehicleData,
+    exchangePointAddress,
+    exchangeContactName,
+    exchangeContactPhone,
+    defectiveDestinationAddress,
+    defectiveDestinationContactName,
+    defectiveDestinationContactPhone,
     selectedStoredVehicleId,
     setSavedTowId,
     setShowAssignNowModal,
@@ -230,6 +261,21 @@ export function useTowSave(params: UseTowSaveParams) {
       paymentMethod: paymentMethod || undefined,
       invoiceName: invoiceName || undefined,
       dropoffToStorage,
+      workingVehiclePlate: towType === 'exchange' ? workingVehiclePlate : undefined,
+      workingVehicleData: towType === 'exchange' ? workingVehicleData : undefined,
+      workingVehicleType: towType === 'exchange' ? workingVehicleType : undefined,
+      workingVehicleSourceAddress: towType === 'exchange' ? workingVehicleSourceAddress : undefined,
+      workingVehicleDestinationAddress: towType === 'exchange' ? workingVehicleDestinationAddress : undefined,
+      workingVehicleContactName: towType === 'exchange' ? workingVehicleContactName : undefined,
+      workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
+      defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
+      defectiveVehicleData: towType === 'exchange' ? defectiveVehicleData : undefined,
+      exchangePointAddress: towType === 'exchange' ? exchangePointAddress : undefined,
+      exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
+      exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
+      defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
+      defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContactName : undefined,
+      defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
       existingPriceBreakdown: originalTow?.price_breakdown ?? null,
     })
 
