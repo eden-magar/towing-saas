@@ -49,7 +49,7 @@ export default function StepDelivery({
   // שליחה
   const handleSubmit = async () => {
     // בפריקה חובה שם מקבל
-    if (!isPickup && !recipientName.trim()) {
+    if (!isPickup && !isExchange && !isStop && !recipientName.trim()) {
       alert('יש להזין שם מקבל')
       return
     }
