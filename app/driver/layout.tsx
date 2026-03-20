@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../lib/queries/driver-tasks'
+import { DriverStatus } from '../lib/types'
 import { supabase } from '../lib/supabase'
 import { 
   Home,
@@ -93,7 +94,7 @@ export default function DriverLayout({
         .update({ status: newStatus })
         .eq('id', driverInfo.id)
       
-      setDriverInfo(prev => prev ? { ...prev, status: newStatus as 'available' | 'busy' | 'unavailable' } : null)
+      setDriverInfo(prev => prev ? { ...prev, status: newStatus as DriverStatus } : null)
       setShowStatusPicker(false)
     } catch (err) {
       console.error('Error updating status:', err)
@@ -120,6 +121,7 @@ export default function DriverLayout({
       case 'available': return 'bg-emerald-500'
       case 'busy': return 'bg-amber-500'
       case 'unavailable': return 'bg-gray-400'
+      case 'break': return 'bg-orange-400'
       default: return 'bg-gray-400'
     }
   }
@@ -140,6 +142,7 @@ export default function DriverLayout({
       case 'available': return 'זמין'
       case 'busy': return 'עסוק'
       case 'unavailable': return 'לא זמין'
+      case 'break': return 'בהפסקה'
       default: return 'לא ידוע'
     }
   }

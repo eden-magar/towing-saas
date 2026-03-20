@@ -2,7 +2,7 @@
 
 export type UserRole = 'super_admin' | 'company_admin' | 'dispatcher' | 'driver' | 'customer'
 
-export type DriverStatus = 'available' | 'on_way' | 'busy' | 'unavailable'
+export type DriverStatus = 'available' | 'on_way' | 'busy' | 'unavailable' | 'break'
 
 export type TruckType = 'carrier' | 'carrier_large' | 'crane_tow' | 'dolly' | 'flatbed' | 'heavy_equipment' | 'heavy_rescue' | 'wheel_lift_cradle'
 

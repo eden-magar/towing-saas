@@ -26,7 +26,7 @@ export default function DriversPage() {
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'busy' | 'unavailable'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'busy' | 'unavailable' | 'break'>('all')
   const [showModal, setShowModal] = useState(false)
   const [editingDriver, setEditingDriver] = useState<DriverWithDetails | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
@@ -63,6 +63,7 @@ export default function DriversPage() {
     on_way: { label: 'בדרך', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: Clock },
     busy: { label: 'בגרירה', color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500', icon: Clock },
     unavailable: { label: 'לא זמין', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400', icon: XCircle },
+    break: { label: 'בהפסקה', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400', icon: Clock },
   }
 
   // טעינת נתונים
@@ -300,6 +301,7 @@ export default function DriversPage() {
     available: drivers.filter(d => d.status === 'available').length,
     busy: drivers.filter(d => d.status === 'busy' || d.status === 'on_way').length,
     unavailable: drivers.filter(d => d.status === 'unavailable').length,
+    break: { label: 'בהפסקה', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400', icon: Clock },
   }
 
   // גררים פנויים (לא משויכים או משויכים לנהג הנוכחי)
@@ -449,7 +451,7 @@ export default function DriversPage() {
               />
             </div>
             <div className="flex gap-1.5 sm:gap-2">
-              {(['all', 'available', 'busy', 'unavailable'] as const).map((status) => (
+              {(['all', 'available', 'busy', 'unavailable', 'break'] as const).map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}

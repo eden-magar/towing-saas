@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { DriverStatus } from '../types'
 
 // ==================== טיפוסים ====================
 
@@ -71,7 +72,7 @@ export interface DriverTask {
 export interface DriverInfo {
   id: string
   company_id: string
-  status: 'available' | 'busy' | 'unavailable' | null
+  status: DriverStatus | null
   truck: {
     id: string
     plate_number: string
@@ -493,7 +494,7 @@ export async function getDriverStats(driverId: string) {
 
 export async function updateDriverStatus(
   driverId: string, 
-  status: 'available' | 'busy' | 'unavailable'
+  status: DriverStatus
 ) {
   const { error } = await supabase
     .from('drivers')
