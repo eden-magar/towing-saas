@@ -99,13 +99,17 @@ export default function StepCamera({
 
 
   const isPickup = point.point_type === 'pickup'
+  const isExchange = point.point_type === 'exchange'
   const minPhotosPerVehicle = 4
   const currentVehicle = vehicles[currentVehicleIndex]
   const currentVehicleKey = currentVehicle?.plate_number || `vehicle_${currentVehicleIndex}`
   const currentImages = imagesByVehicle[currentVehicleKey] || []
 
   // קביעת סוג התמונה
-  const getImageType = (): TowImageType => {
+  const getImageType = (vehicle?: DriverTaskVehicle): TowImageType => {
+    if (isExchange && vehicle) {
+      return vehicle.is_working ? 'before_dropoff' : 'before_pickup'
+    }
     return isPickup ? 'before_pickup' : 'before_dropoff'
   }
 
@@ -237,9 +241,9 @@ export default function StepCamera({
 
     setUploading(true)
     try {
-      const imageType = getImageType()
-      
       for (const [vehicleKey, imgs] of Object.entries(imagesByVehicle)) {
+        const vehicle = vehicles.find(v => v.plate_number === vehicleKey)
+        const imageType = getImageType(vehicle)
         for (const img of imgs) {
           const compressed = await compressImage(img.file)
           await uploadTowImage(
@@ -248,7 +252,7 @@ export default function StepCamera({
             imageType,
             compressed,
             point.id,
-            vehicles.find(v => v.plate_number === vehicleKey)?.id
+            vehicle?.id
           )
         }
       }

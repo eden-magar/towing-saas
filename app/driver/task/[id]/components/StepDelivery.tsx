@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 
 interface StepDeliveryProps {
-  pointType: 'pickup' | 'dropoff'
+  pointType: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   customer: { name: string; phone: string | null } | null
   onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
   isLastPoint: boolean
@@ -31,6 +31,8 @@ export default function StepDelivery({
   const [cashAmount, setCashAmount] = useState('')
 
   const isPickup = pointType === 'pickup'
+  const isExchange = pointType === 'exchange'
+  const isStop = pointType === 'stop'
 
   // העתקה מהלקוח
   const handleSameAsCustomer = (checked: boolean) => {
@@ -66,7 +68,7 @@ export default function StepDelivery({
   }
 
   // באיסוף תמיד אפשר להמשיך, בפריקה צריך שם
-  const canSubmit = isPickup || recipientName.trim().length > 0
+  const canSubmit = isPickup || isExchange || isStop || recipientName.trim().length > 0
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
@@ -75,7 +77,10 @@ export default function StepDelivery({
         <div className="flex items-center justify-center gap-2 mb-2">
           {isPickup ? <Package size={24} /> : <FileText size={24} />}
           <h1 className="text-2xl font-bold">
-            {isPickup ? 'סיום העמסה' : 'פרטי מסירה'}
+            {isPickup ? 'סיום העמסה' 
+              : isExchange ? 'אישור החלפה'
+              : isStop ? 'אישור עצירה'
+              : 'פרטי מסירה'}
           </h1>
         </div>
         <p className="text-white/80">
@@ -113,7 +118,7 @@ export default function StepDelivery({
         )}
 
         {/* פרטי מקבל - רק בפריקה */}
-        {!isPickup && (
+        {!isPickup && !isExchange && !isStop && (
           <>
             {/* שם מלא */}
             <div className="mb-4">

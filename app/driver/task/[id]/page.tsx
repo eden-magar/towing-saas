@@ -198,6 +198,8 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     if (pointStep === 'camera') return 'bg-purple-500'
     if (pointStep === 'delivery') return 'bg-emerald-500'
     if (currentPoint?.point_type === 'pickup') return 'bg-blue-500'
+    if (currentPoint?.point_type === 'exchange') return 'bg-purple-500'
+    if (currentPoint?.point_type === 'stop') return 'bg-gray-500'
     return 'bg-orange-500' // dropoff
   }
 

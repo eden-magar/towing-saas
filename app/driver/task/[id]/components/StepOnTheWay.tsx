@@ -35,9 +35,12 @@ export default function StepOnTheWay({
   const [showRoute, setShowRoute] = useState(false)
 
   const isPickup = point.point_type === 'pickup'
-
-  
-  const title = isPickup ? 'בדרך לאיסוף' : 'בדרך לפריקה'
+  const isExchange = point.point_type === 'exchange'
+  const isStop = point.point_type === 'stop'
+  const title = isPickup ? 'בדרך לאיסוף' 
+    : isExchange ? 'בדרך לנקודת החלפה'
+    : isStop ? 'בדרך לעצירה'
+    : 'בדרך לפריקה'
   const subtitle = point.address || 'כתובת לא צוינה'
 
   // פתיחת טלפון
@@ -168,8 +171,8 @@ export default function StepOnTheWay({
             className="w-full flex items-center justify-between"
           >
             <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${isPickup ? 'bg-emerald-500' : 'bg-orange-500'}`} />
-              <span className="text-sm text-gray-500">{isPickup ? 'איסוף' : 'פריקה'}</span>
+              <div className={`w-3 h-3 rounded-full ${isPickup ? 'bg-emerald-500' : isExchange ? 'bg-purple-500' : isStop ? 'bg-gray-400' : 'bg-orange-500'}`} />
+              <span className="text-sm text-gray-500">{isPickup ? 'איסוף' : isExchange ? 'החלפה' : isStop ? 'עצירה' : 'פריקה'}</span>
             </div>
             {showRoute ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
@@ -196,7 +199,7 @@ export default function StepOnTheWay({
             className={`flex-1 py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 ${
               isPickup 
                 ? 'bg-blue-500 text-white' 
-                : 'bg-orange-500 text-white'
+                : isExchange ? 'bg-purple-500 text-white' : isStop ? 'bg-gray-500 text-white' : 'bg-orange-500 text-white'
             }`}
           >
             {loading ? (

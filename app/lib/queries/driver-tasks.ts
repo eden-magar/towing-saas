@@ -31,7 +31,7 @@ export interface DriverTaskLeg {
 export interface DriverTaskPoint {
   id: string
   point_order: number
-  point_type: 'pickup' | 'dropoff'
+  point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   address: string | null
   lat: number | null
   lng: number | null
