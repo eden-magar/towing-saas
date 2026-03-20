@@ -371,6 +371,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             totalPoints={totalPoints}
             currentIndex={currentPointIndex}
             onArrived={handleArrived}
+            taskId={id}
           />
         )}
 

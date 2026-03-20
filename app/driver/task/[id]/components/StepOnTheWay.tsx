@@ -1,6 +1,7 @@
 'use client'
 
 import { openWaze } from '@/app/lib/utils/navigation'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { 
   MapPin, 
@@ -21,6 +22,7 @@ interface StepOnTheWayProps {
   totalPoints: number
   currentIndex: number
   onArrived: () => Promise<void>
+  taskId: string
 }
 
 export default function StepOnTheWay({
@@ -29,8 +31,10 @@ export default function StepOnTheWay({
   customer,
   totalPoints,
   currentIndex,
-  onArrived
+  onArrived,
+  taskId
 }: StepOnTheWayProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showRoute, setShowRoute] = useState(false)
 
@@ -213,7 +217,7 @@ export default function StepOnTheWay({
           </button>
           
           <button
-            onClick={() => point.address && openWaze(point.address)}
+            onClick={() => router.push(`/driver/navigation/${taskId}`)}
             className="py-4 px-6 bg-blue-100 text-blue-600 rounded-2xl font-bold flex items-center gap-2"
           >
             <Navigation size={20} />
