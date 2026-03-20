@@ -662,39 +662,27 @@ function CreateTowForm({
                     </div>
                   )}
                   {customerStoredVehicles.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-xs text-gray-500 mb-2">
-                        לחץ אם הגרירה קשורה לרכב מהאחסנה
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {customerStoredVehicles.map((v) => (
-                          <button
-                            key={v.id}
-                            type="button"
-                            onClick={() =>
-                              selectedStoredVehicleId === v.id
-                                ? handleClearStoredVehicle()
-                                : handleSelectStoredVehicle(v)
-                            }
-                            className={`px-3 py-1.5 rounded-lg text-sm border ${
-                              selectedStoredVehicleId === v.id
-                                ? 'border-blue-500 bg-blue-50'
-                                : 'border-gray-200'
-                            }`}
-                          >
-                            <span
-                              className={`w-2 h-2 rounded-full inline-block ml-1 ${
-                                v.vehicle_condition === 'operational'
-                                  ? 'bg-green-500'
-                                  : 'bg-red-500'
-                              }`}
-                            />
-                            {v.plate_number} — {v.vehicle_data?.model || ''}
-                          </button>
-                        ))}
-                      </div>
+                  <div className="mt-4">
+                    <p className="text-xs text-gray-500 mb-2">רכבים באחסנה</p>
+                    <div className="flex flex-wrap gap-2">
+                      {customerStoredVehicles.map((v) => (
+                        <div
+                          key={v.id}
+                          className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 flex items-center gap-1"
+                        >
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
+                          }`} />
+                          <span>{v.plate_number} — {v.vehicle_data?.model || ''}</span>
+                          <span className="text-xs text-gray-400 mr-1">
+                            {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  )}
+                    <p className="text-xs text-gray-400 mt-1">בחירת רכב תתאפשר לאחר בחירת סוג גרירה</p>
+                  </div>
+                )}
                 </>
               ) : (
                 <div className="space-y-3">
@@ -924,6 +912,11 @@ function CreateTowForm({
                       <button
                         type="button"
                         onClick={() => {
+                          if (startFromBase) {
+                            setStartFromBase(false)
+                            setPickupAddress({ address: '' })
+                            return
+                          }
                           if (!selectedCustomerId) {
                             alert('יש לבחור לקוח תחילה')
                             return
@@ -951,6 +944,11 @@ function CreateTowForm({
                       <button
                         type="button"
                         onClick={() => {
+                          if (dropoffToStorage) {
+                            setDropoffToStorage(false)
+                            setDropoffAddress({ address: '' })
+                            return
+                          }
                           setDropoffToStorage(true)
                           if (storageAddress)
                             setDropoffAddress({
