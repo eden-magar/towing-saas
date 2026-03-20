@@ -711,7 +711,7 @@ export function useTowForm(editTowId?: string) {
     selectedLocationSurcharges, setSelectedLocationSurcharges,
     selectedServices, setSelectedServices,
     isHoliday, setIsHoliday,
-    activeTimeSurchargesList,
+    activeTimeSurchargesList, setActiveTimeSurchargesList,
     // Price selection
     priceMode, setPriceMode,
     selectedPriceItem, setSelectedPriceItem,

@@ -95,6 +95,7 @@ export interface TowWithDetails {
   id: string
   order_number: string | null
   customer_order_number: string | null
+  linked_tow_id: string | null
   company_id: string
   customer_id: string | null
   driver_id: string | null
