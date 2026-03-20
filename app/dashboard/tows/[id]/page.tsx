@@ -31,7 +31,7 @@ import {
   Eye
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
-import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails } from '../../../lib/queries/tows'
+import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow } from '../../../lib/queries/tows'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
@@ -93,6 +93,11 @@ export default function TowDetailsPage() {
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
   const [assigning, setAssigning] = useState(false)
+  const [showLinkedTowModal, setShowLinkedTowModal] = useState(false)
+  const [creatingLinkedTow, setCreatingLinkedTow] = useState(false)
+  const [linkedTowDriverId, setLinkedTowDriverId] = useState<string | null>(null)
+  const [linkedTowTruckId, setLinkedTowTruckId] = useState<string | null>(null)
+  const [linkedTowScheduleDate, setLinkedTowScheduleDate] = useState<Date>(new Date())
 
   // Invoice state
   const [hasInvoice, setHasInvoice] = useState(false)
@@ -460,6 +465,29 @@ export default function TowDetailsPage() {
       alert('שגיאה בשיבוץ הנהג')
     } finally {
       setAssigning(false)
+    }
+  }
+
+  const handleCreateLinkedTow = async () => {
+    if (!linkedTowDriverId || !linkedTowTruckId || !tow || !companyId || !user) return
+    setCreatingLinkedTow(true)
+    try {
+      await createLinkedTow(tow.id, {
+        companyId,
+        createdBy: user.id,
+        driverId: linkedTowDriverId,
+        truckId: linkedTowTruckId,
+        scheduledAt: linkedTowScheduleDate.toISOString(),
+      })
+      await loadData()
+      setShowLinkedTowModal(false)
+      setLinkedTowDriverId(null)
+      setLinkedTowTruckId(null)
+    } catch (err) {
+      console.error(err)
+      alert('שגיאה ביצירת גרירה מקושרת')
+    } finally {
+      setCreatingLinkedTow(false)
     }
   }
 
@@ -918,6 +946,35 @@ export default function TowDetailsPage() {
                   )}
                 </div>
               </div>
+
+              {tow.tow_type === 'exchange' && !tow.linked_tow_id && (
+                <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-sm font-medium text-amber-800 mb-2">
+                    גרירת תקין ↔ תקול — נהג שני לרכב התקול
+                  </p>
+                  <p className="text-xs text-amber-600 mb-3">
+                    ניתן לשבץ נהג נוסף שיטפל בהובלת הרכב התקול ליעד
+                  </p>
+                  <button
+                    onClick={() => setShowLinkedTowModal(true)}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium"
+                  >
+                    הוסף נהג לרכב התקול
+                  </button>
+                </div>
+              )}
+
+              {tow.linked_tow_id && (
+                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                  <p className="text-sm font-medium text-purple-800 mb-1">גרירה מקושרת — רכב התקול</p>
+                  <button
+                    onClick={() => router.push(`/dashboard/tows/${tow.linked_tow_id}`)}
+                    className="text-sm text-purple-600 underline"
+                  >
+                    צפה בגרירה המקושרת ←
+                  </button>
+                </div>
+              )}
 
               {/* רכבים */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -2070,6 +2127,71 @@ export default function TowDetailsPage() {
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showLinkedTowModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+          <div className="bg-white w-full lg:max-w-2xl lg:rounded-2xl lg:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-purple-500 text-white flex-shrink-0">
+              <h2 className="font-bold text-lg">שיבוץ נהג לרכב התקול</h2>
+              <button onClick={() => setShowLinkedTowModal(false)} className="p-2 hover:bg-white/20 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            {!linkedTowDriverId ? (
+              <DriverSchedulePicker
+                companyId={companyId || ''}
+                requiredTruckTypes={(tow?.required_truck_types as string[]) || []}
+                selectedDate={linkedTowScheduleDate}
+                onDateChange={setLinkedTowScheduleDate}
+                onDriverSelect={(driverId) => setLinkedTowDriverId(driverId)}
+                onClose={() => setShowLinkedTowModal(false)}
+              />
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4">
+                <button
+                  onClick={() => { setLinkedTowDriverId(null); setLinkedTowTruckId(null) }}
+                  className="flex items-center gap-2 text-purple-500 text-sm font-medium mb-4"
+                >
+                  <ArrowRight size={18} />
+                  חזור לרשימת נהגים
+                </button>
+                <div className="space-y-2">
+                  {getDriverTrucks(linkedTowDriverId).map((truck) => (
+                    <button
+                      key={truck.id}
+                      onClick={() => setLinkedTowTruckId(truck.id)}
+                      className={`w-full p-4 rounded-xl border text-right ${
+                        linkedTowTruckId === truck.id
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      {truck.truck_type} — {truck.plate_number}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {linkedTowDriverId && (
+              <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+                <button
+                  onClick={() => setShowLinkedTowModal(false)}
+                  className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={handleCreateLinkedTow}
+                  disabled={!linkedTowTruckId || creatingLinkedTow}
+                  className="flex-1 py-3 bg-purple-500 text-white rounded-xl font-medium disabled:opacity-50"
+                >
+                  {creatingLinkedTow ? 'יוצר...' : 'צור גרירה מקושרת'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

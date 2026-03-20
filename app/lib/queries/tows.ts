@@ -386,6 +386,7 @@ interface CreateTowInput {
   invoiceName?: string
   startFromBase?: boolean
   dropoffToStorage?: boolean
+  linkedTowId?: string
 
 }
 
@@ -415,7 +416,8 @@ export async function createTow(input: CreateTowInput) {
       payment_method: input.paymentMethod || null,
       invoice_name: input.invoiceName || null,
       start_from_base: input.startFromBase || false,
-      dropoff_to_storage: input.dropoffToStorage || false
+      dropoff_to_storage: input.dropoffToStorage || false,
+      linked_tow_id: input.linkedTowId || null,
       
     })
 
@@ -595,6 +597,93 @@ export async function assignDriver(towId: string, driverId: string, truckId?: st
   }
 
   return true
+}
+
+export async function createLinkedTow(
+  originalTowId: string,
+  input: {
+    companyId: string
+    createdBy: string
+    driverId?: string
+    truckId?: string
+    scheduledAt?: string
+  }
+): Promise<{ id: string }> {
+  const originalTow = await getTowWithPoints(originalTowId)
+  if (!originalTow) throw new Error('Original tow not found')
+
+  const defectiveVehicle = originalTow.vehicles?.find(v => !(v as any).is_working)
+  const exchangePoint = originalTow.points?.find(p => p.point_type === 'exchange')
+  const dropoffPoint = originalTow.points?.find(p => p.point_type === 'dropoff')
+
+  const towId = crypto.randomUUID()
+  const status = input.driverId ? 'assigned' : 'pending'
+
+  const { error } = await supabase
+    .from('tows')
+    .insert({
+      id: towId,
+      company_id: input.companyId,
+      created_by: input.createdBy,
+      customer_id: originalTow.customer_id,
+      driver_id: input.driverId || null,
+      truck_id: input.truckId || null,
+      tow_type: 'exchange',
+      status,
+      scheduled_at: input.scheduledAt || originalTow.scheduled_at,
+      notes: originalTow.notes,
+      required_truck_types: originalTow.required_truck_types,
+      linked_tow_id: originalTowId,
+      final_price: null,
+      price_mode: 'recommended',
+    })
+
+  if (error) throw error
+
+  if (defectiveVehicle) {
+    await supabase.from('tow_vehicles').insert({
+      tow_id: towId,
+      plate_number: (defectiveVehicle as any).plate_number,
+      manufacturer: (defectiveVehicle as any).manufacturer,
+      model: (defectiveVehicle as any).model,
+      year: (defectiveVehicle as any).year,
+      vehicle_type: (defectiveVehicle as any).vehicle_type,
+      color: (defectiveVehicle as any).color,
+      is_working: false,
+      order_index: 0,
+    })
+  }
+
+  const points = []
+  if (exchangePoint) {
+    points.push({
+      tow_id: towId,
+      point_order: 0,
+      point_type: 'pickup',
+      address: exchangePoint.address,
+      lat: exchangePoint.lat,
+      lng: exchangePoint.lng,
+      status: 'pending',
+    })
+  }
+  if (dropoffPoint) {
+    points.push({
+      tow_id: towId,
+      point_order: 1,
+      point_type: 'dropoff',
+      address: dropoffPoint.address,
+      lat: dropoffPoint.lat,
+      lng: dropoffPoint.lng,
+      contact_name: dropoffPoint.contact_name,
+      contact_phone: dropoffPoint.contact_phone,
+      status: 'pending',
+    })
+  }
+  if (points.length > 0) {
+    await supabase.from('tow_points').insert(points)
+  }
+
+  return { id: towId }
 }
 
 // ==================== עדכון מחיר ====================
