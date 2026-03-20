@@ -24,6 +24,7 @@ interface StepCameraProps {
   vehicles: DriverTaskVehicle[]
   userId: string
   onComplete: () => Promise<void>
+  isAfterDelivery?: boolean
 }
 
 // פונקציית compression
@@ -79,7 +80,8 @@ export default function StepCamera({
   point,
   vehicles,
   userId,
-  onComplete
+  onComplete,
+  isAfterDelivery = false
 }: StepCameraProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -107,6 +109,12 @@ export default function StepCamera({
 
   // קביעת סוג התמונה
   const getImageType = (vehicle?: DriverTaskVehicle): TowImageType => {
+    if (isAfterDelivery) {
+      if (isExchange && vehicle) {
+        return vehicle.is_working ? 'after_dropoff' : 'after_pickup'
+      }
+      return isPickup ? 'after_pickup' : 'after_dropoff'
+    }
     if (isExchange && vehicle) {
       return vehicle.is_working ? 'before_dropoff' : 'before_pickup'
     }
@@ -431,7 +439,9 @@ export default function StepCamera({
       {!cameraActive && (
         <>
           <div className="px-5 pt-1 pb-2 text-white text-center">
-            <h1 className="text-lg font-bold">צלם את הרכבים</h1>
+            <h1 className="text-lg font-bold">
+              {isAfterDelivery ? 'צלם לאחר הפריקה' : 'צלם את הרכבים'}
+            </h1>
           </div>
 
           <div className="flex-1 bg-slate-900 rounded-t-3xl px-5 pt-6 pb-32">

@@ -23,7 +23,7 @@ import StepDelivery from './components/StepDelivery'
 import StepComplete from './components/StepComplete'
 
 // שלבים בכל נקודה
-type PointStep = 'on_the_way' | 'camera' | 'delivery'
+type PointStep = 'on_the_way' | 'camera' | 'delivery' | 'camera_after'
 
 // סיבות דחייה
 import { REJECTION_REASONS } from '@/app/lib/queries/rejection-requests'
@@ -50,6 +50,12 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   const [pendingRejectionRequestId, setPendingRejectionRequestId] = useState<string | null>(null)
 
+  const [pendingDeliveryData, setPendingDeliveryData] = useState<{
+    recipientName: string
+    recipientPhone: string
+    notes?: string
+    cashCollected?: number
+  } | null>(null)
 
   // טעינת המשימה
   useEffect(() => {
@@ -127,9 +133,21 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     setPointStep('delivery')
   }
 
+  const handleCameraAfterComplete = async () => {
+    if (!pendingDeliveryData) return
+    await completeCurrentPoint(
+      pendingDeliveryData.recipientName,
+      pendingDeliveryData.recipientPhone,
+      pendingDeliveryData.notes,
+      pendingDeliveryData.cashCollected
+    )
+    setPendingDeliveryData(null)
+  }
+
   // סיום פרטי מסירה/הערות
   const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => {
-    await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
+    setPendingDeliveryData({ recipientName, recipientPhone, notes, cashCollected })
+    setPointStep('camera_after')
   }
 
   // השלמת הנקודה הנוכחית
@@ -335,6 +353,17 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             vehicles={currentPointVehicles}
             userId={user?.id || ''}
             onComplete={handleCameraComplete}
+          />
+        )}
+
+        {pointStep === 'camera_after' && currentPoint && (
+          <StepCamera
+            towId={task.id}
+            point={currentPoint}
+            vehicles={currentPointVehicles}
+            userId={user?.id || ''}
+            onComplete={handleCameraAfterComplete}
+            isAfterDelivery={true}
           />
         )}
 
