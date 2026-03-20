@@ -426,7 +426,7 @@ async function recalculateInvoiceTotals(invoiceId: string): Promise<void> {
     .eq('invoice_id', invoiceId)
 
   const amount = items?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0
-  const vatAmount = amount * 0.17
+  const vatAmount = amount * 0.18
   const totalAmount = amount + vatAmount
 
   await supabase

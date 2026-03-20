@@ -43,6 +43,7 @@ interface UseTowPricingParams {
   setActiveTimeSurchargesList: (list: TimeSurcharge[]) => void
   isEditMode?: boolean
   customPriceIncludesVat?: boolean
+  vatPercent?: number
   setLocationSurchargesData?: (data: LocationSurcharge[]) => void
   setServiceSurchargesData?: (data: ServiceSurcharge[]) => void
   setSelectedLocationSurcharges?: (ids: string[]) => void
@@ -82,6 +83,7 @@ export function useTowPricing(params: UseTowPricingParams) {
     setActiveTimeSurchargesList,
     isEditMode,
     customPriceIncludesVat = true,
+    vatPercent = 0.18,
     setLocationSurchargesData,
     setServiceSurchargesData,
     setSelectedLocationSurcharges,
@@ -177,7 +179,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         serviceSurcharges: svcSurcharges,
         priceMode: 'recommended',
         discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
-        vatPercent: 0.18
+        vatPercent: vatPercent
       })
       return result.total
     }
@@ -217,7 +219,7 @@ export function useTowPricing(params: UseTowPricingParams) {
       serviceSurcharges,
       priceMode: 'recommended',
       discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
-      vatPercent: 0.18
+      vatPercent: vatPercent,
     })
     return result.total
   }
@@ -247,7 +249,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         customPrice: price,
         customPriceIncludesVat: customPriceIncludesVat,
         discountPercent: 0,
-        vatPercent: 0.18
+        vatPercent: vatPercent
       })
       return result.total
     }
@@ -269,7 +271,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         priceMode: priceMode === 'fixed' ? 'fixed' : 'customer',
         fixedPrice: selectedPriceItem.price,
         discountPercent: (priceMode === 'fixed' && selectedCustomerPricing?.discount_percent) ? selectedCustomerPricing.discount_percent : 0,
-        vatPercent: 0.18
+        vatPercent: vatPercent
       })
       return result.total
     }

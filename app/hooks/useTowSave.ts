@@ -50,6 +50,7 @@ interface UseTowSaveParams {
   // Pricing
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
+  vatPercent?: number
   basePriceList: any
   selectedCustomerPricing: CustomerWithPricing | null
   activeTimeSurchargesList: TimeSurcharge[]
@@ -125,6 +126,7 @@ export function useTowSave(params: UseTowSaveParams) {
     customRouteData,
     priceMode,
     finalPrice,
+    vatPercent,
     basePriceList,
     selectedCustomerPricing,
     activeTimeSurchargesList,
@@ -245,6 +247,7 @@ export function useTowSave(params: UseTowSaveParams) {
       // Pricing
       priceMode,
       finalPrice,
+      vatPercent,
       basePriceList,
       selectedCustomerPricing,
       activeTimeSurcharges: activeTimeSurchargesList,

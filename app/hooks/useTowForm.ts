@@ -4,6 +4,7 @@ import { useAuth } from '../lib/AuthContext'
 import { getTowWithPoints } from '../lib/queries/tows'
 import { getCustomers, CustomerWithDetails } from '../lib/queries/customers'
 import { getDrivers } from '../lib/queries/drivers'
+import { getCompanySettings } from '../lib/queries/settings'
 import { getTrucks } from '../lib/queries/trucks'
 import { 
   getBasePriceList, 
@@ -75,6 +76,7 @@ export function useTowForm(editTowId?: string) {
   const [selectedPriceItem, setSelectedPriceItem] = useState<PriceItem | null>(null)
   const [customPrice, setCustomPrice] = useState<string>('')
   const [customPriceIncludesVat, setCustomPriceIncludesVat] = useState(true)
+  const [vatPercent, setVatPercent] = useState<number>(0.18)
 
   const [customerOrderNumber, setCustomerOrderNumber] = useState('')
   
@@ -487,7 +489,7 @@ export function useTowForm(editTowId?: string) {
   const loadData = async () => {
     if (!companyId) return
     try {
-      const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData, timeSurchargesRes, locationSurchargesRes, serviceSurchargesRes] = await Promise.all([
+      const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData, timeSurchargesRes, locationSurchargesRes, serviceSurchargesRes, companySettingsData] = await Promise.all([
         getCustomers(companyId),
         getDrivers(companyId),
         getTrucks(companyId),
@@ -496,7 +498,8 @@ export function useTowForm(editTowId?: string) {
         getCustomersWithPricing(companyId),
         getTimeSurcharges(companyId),
         getLocationSurcharges(companyId),
-        getServiceSurcharges(companyId)
+        getServiceSurcharges(companyId),
+        getCompanySettings(companyId)
       ])
       setCustomers(customersData)
       setDrivers(driversData)
@@ -507,6 +510,9 @@ export function useTowForm(editTowId?: string) {
       setTimeSurchargesData(timeSurchargesRes)
       setLocationSurchargesData(locationSurchargesRes)
       setServiceSurchargesData(serviceSurchargesRes)
+      if (companySettingsData?.default_vat_percent) {
+        setVatPercent(companySettingsData.default_vat_percent / 100)
+      }
     } catch (err) {
       console.error('Error loading data:', err)
     }
@@ -561,6 +567,7 @@ export function useTowForm(editTowId?: string) {
     setSelectedServices,
     companyLocationSurchargesData: locationSurchargesData,
     companyServiceSurchargesData: serviceSurchargesData,
+    vatPercent,
   })
 
   // ==================== Handlers ====================
@@ -708,6 +715,7 @@ export function useTowForm(editTowId?: string) {
     customRouteData,
     priceMode,
     finalPrice,
+    vatPercent,
     basePriceList,
     selectedCustomerPricing,
     activeTimeSurchargesList,
@@ -858,6 +866,7 @@ export function useTowForm(editTowId?: string) {
     // Computed
     recommendedPrice,
     finalPrice,
+    vatPercent,
     // Handlers
     handleCustomerSelect,
     handleSelectWorkingVehicle,

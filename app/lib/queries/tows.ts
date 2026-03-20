@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { getCompanySettings } from './settings'
 import type { TowChangeLog } from '../types'
 
 // ==================== טיפוסים ====================
@@ -1025,7 +1026,9 @@ export async function recalculateTowPrice(
   const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
   const discountAmount = Math.round(beforeDiscount * breakdown.discount_percent / 100)
   const beforeVat = beforeDiscount - discountAmount
-  const vatAmount = Math.round(beforeVat * 0.18)
+  const companySettings = await getCompanySettings(companyId)
+  const vatRate = (companySettings?.default_vat_percent ?? 18) / 100
+  const vatAmount = Math.round(beforeVat * vatRate)
   const newTotal = beforeVat + vatAmount
 
   // שמירת רק התוספת הגבוהה ביותר ב-breakdown
