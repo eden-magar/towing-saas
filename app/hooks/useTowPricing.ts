@@ -50,6 +50,8 @@ interface UseTowPricingParams {
   setSelectedServices?: (services: SelectedService[]) => void
   companyLocationSurchargesData?: LocationSurcharge[]
   companyServiceSurchargesData?: ServiceSurcharge[]
+  hasManualTimeSurchargeOverride?: boolean
+  setHasManualTimeSurchargeOverride?: (v: boolean) => void
 }
 
 export function useTowPricing(params: UseTowPricingParams) {
@@ -90,6 +92,8 @@ export function useTowPricing(params: UseTowPricingParams) {
     setSelectedServices,
     companyLocationSurchargesData,
     companyServiceSurchargesData,
+    hasManualTimeSurchargeOverride = false,
+    setHasManualTimeSurchargeOverride,
   } = params
 
   // Customer pricing
@@ -113,12 +117,14 @@ export function useTowPricing(params: UseTowPricingParams) {
       const customerTime = selectedCustomerPricing.customer_time_surcharges || []
       const activeCustomerTime = getActiveTimeSurcharges(customerTime, towTime, towDate, isHoliday)
       setActiveTimeSurchargesList(activeCustomerTime)
+      if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
       if (setLocationSurchargesData) setLocationSurchargesData(selectedCustomerPricing.customer_location_surcharges || [])
       if (setServiceSurchargesData) setServiceSurchargesData(selectedCustomerPricing.customer_service_surcharges || [])
       if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
       if (setSelectedServices) setSelectedServices([])
     } else if (priceMode === 'recommended') {
       setActiveTimeSurchargesList(getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday))
+      if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
       if (setLocationSurchargesData) setLocationSurchargesData(companyLocationSurchargesData || [])
       if (setServiceSurchargesData) setServiceSurchargesData(companyServiceSurchargesData || [])
       if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
@@ -130,10 +136,12 @@ export function useTowPricing(params: UseTowPricingParams) {
   useEffect(() => {
     if (!towDate || !towTime || timeSurchargesData.length === 0) {
       setActiveTimeSurchargesList([])
+      if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
       return
     }
     const activeSurcharges = getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday)
     setActiveTimeSurchargesList(activeSurcharges)
+    if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
   }, [towDate, towTime, timeSurchargesData, isHoliday])
 
   const calculateRecommendedPrice = () => {
@@ -175,6 +183,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         towTime: towTime || '',
         isHoliday: isHoliday ?? false,
         activeTimeSurchargeIds: activeTimeSurchargesList.map(s => s.id),
+        hasManualTimeSurchargeOverride,
         locationSurcharges: locSurcharges,
         serviceSurcharges: svcSurcharges,
         priceMode: 'recommended',
@@ -215,6 +224,7 @@ export function useTowPricing(params: UseTowPricingParams) {
       towTime: towTime || '',
       isHoliday: isHoliday ?? false,
       activeTimeSurchargeIds: activeTimeSurchargesList.map(s => s.id),
+      hasManualTimeSurchargeOverride,
       locationSurcharges,
       serviceSurcharges,
       priceMode: 'recommended',

@@ -87,6 +87,8 @@ function CreateTowForm({
     setIsHoliday,
     activeTimeSurchargesList,
     setActiveTimeSurchargesList,
+    hasManualTimeSurchargeOverride,
+    setHasManualTimeSurchargeOverride,
     timeSurchargesData,
     priceMode,
     setPriceMode,
@@ -1053,6 +1055,7 @@ function CreateTowForm({
                       setIsHoliday={setIsHoliday}
                       activeTimeSurchargesList={activeTimeSurchargesList}
                       setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                      setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
                     />
                     <LocationSurchargesSection
                       locationSurchargesData={locationSurchargesData}
@@ -1361,6 +1364,7 @@ function CreateTowForm({
                       setIsHoliday={setIsHoliday}
                       activeTimeSurchargesList={activeTimeSurchargesList}
                       setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                      setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
                     />
                     <LocationSurchargesSection
                       locationSurchargesData={locationSurchargesData}
@@ -2064,6 +2068,7 @@ function TimeSurchargesSection({
   setIsHoliday,
   activeTimeSurchargesList,
   setActiveTimeSurchargesList,
+  setHasManualTimeSurchargeOverride,
 }: {
   timeSurchargesData: TimeSurcharge[]
   towDate: string
@@ -2072,6 +2077,7 @@ function TimeSurchargesSection({
   setIsHoliday: (v: boolean) => void
   activeTimeSurchargesList: TimeSurcharge[]
   setActiveTimeSurchargesList: (v: TimeSurcharge[]) => void
+  setHasManualTimeSurchargeOverride: (v: boolean) => void
 }) {
   const holidaySurcharge = timeSurchargesData.find(
     (s) => s.day_type === 'holiday' && s.is_active
@@ -2086,6 +2092,7 @@ function TimeSurchargesSection({
     } else {
       setActiveTimeSurchargesList([...activeTimeSurchargesList, s])
     }
+    setHasManualTimeSurchargeOverride(true)
   }
   const nonHolidaySurcharges = timeSurchargesData.filter(
     (s) => s.is_active && s.day_type !== 'holiday'

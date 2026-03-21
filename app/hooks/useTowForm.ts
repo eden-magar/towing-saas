@@ -70,6 +70,7 @@ export function useTowForm(editTowId?: string) {
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
   const [isHoliday, setIsHoliday] = useState(false)
   const [activeTimeSurchargesList, setActiveTimeSurchargesList] = useState<TimeSurcharge[]>([])
+  const [hasManualTimeSurchargeOverride, setHasManualTimeSurchargeOverride] = useState(false)
   
   // Price selection
   const [priceMode, setPriceMode] = useState<'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'>('recommended')
@@ -570,6 +571,8 @@ export function useTowForm(editTowId?: string) {
     companyLocationSurchargesData: locationSurchargesData,
     companyServiceSurchargesData: serviceSurchargesData,
     vatPercent,
+    hasManualTimeSurchargeOverride,
+    setHasManualTimeSurchargeOverride,
   })
 
   // ==================== Handlers ====================
@@ -782,6 +785,7 @@ export function useTowForm(editTowId?: string) {
     selectedServices, setSelectedServices,
     isHoliday, setIsHoliday,
     activeTimeSurchargesList, setActiveTimeSurchargesList,
+    hasManualTimeSurchargeOverride, setHasManualTimeSurchargeOverride,
     // Price selection
     priceMode, setPriceMode,
     selectedPriceItem, setSelectedPriceItem,

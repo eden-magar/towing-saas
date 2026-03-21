@@ -33,6 +33,7 @@ export interface TowPriceInput {
   towTime: string // HH:MM
   isHoliday: boolean
   activeTimeSurchargeIds?: string[] // IDs manually toggled by dispatcher (override)
+  hasManualTimeSurchargeOverride?: boolean
 
   locationSurcharges: { percent: number }[]
   serviceSurcharges: { amount: number }[]
@@ -168,8 +169,10 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
 
   // Time surcharge: max of active ones (or use override IDs)
   let activeTime: TimeSurcharge[] = []
-  if (input.activeTimeSurchargeIds && input.activeTimeSurchargeIds.length > 0) {
-    activeTime = input.timeSurcharges.filter(s => input.activeTimeSurchargeIds!.includes(s.id))
+  if (input.hasManualTimeSurchargeOverride) {
+    activeTime = input.activeTimeSurchargeIds
+      ? input.timeSurcharges.filter(s => input.activeTimeSurchargeIds!.includes(s.id))
+      : []
   } else {
     activeTime = getActiveTimeSurcharges(
       input.timeSurcharges,
