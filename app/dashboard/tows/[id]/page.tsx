@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { DriverSchedulePicker } from '../../../components/DriverSchedulePicker'
+import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { getServiceSurcharges, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
@@ -590,12 +590,14 @@ export default function TowDetailsPage() {
       </div>
 
       {!selectedDriverId ? (
-        <DriverSchedulePicker
+        <DriverCalendarPicker
           companyId={companyId || ''}
+          drivers={drivers}
           requiredTruckTypes={(tow?.required_truck_types as string[]) || []}
-          selectedDate={scheduleDate}
-          onDateChange={setScheduleDate}
-          onDriverSelect={(driverId) => setSelectedDriverId(driverId)}
+          onConfirm={(driverId, date, time) => {
+            setSelectedDriverId(driverId)
+            setScheduleDate(new Date(date + 'T' + time + ':00'))
+          }}
           onClose={closeDriverModal}
         />
       ) : (
@@ -2141,12 +2143,14 @@ export default function TowDetailsPage() {
               </button>
             </div>
             {!linkedTowDriverId ? (
-              <DriverSchedulePicker
+              <DriverCalendarPicker
                 companyId={companyId || ''}
+                drivers={drivers}
                 requiredTruckTypes={(tow?.required_truck_types as string[]) || []}
-                selectedDate={linkedTowScheduleDate}
-                onDateChange={setLinkedTowScheduleDate}
-                onDriverSelect={(driverId) => setLinkedTowDriverId(driverId)}
+                onConfirm={(driverId, date, time) => {
+                  setLinkedTowDriverId(driverId)
+                  setLinkedTowScheduleDate(new Date(date + 'T' + time + ':00'))
+                }}
                 onClose={() => setShowLinkedTowModal(false)}
               />
             ) : (
