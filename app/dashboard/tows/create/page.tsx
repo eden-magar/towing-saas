@@ -127,6 +127,12 @@ function CreateTowForm({
     truckTypeError,
     setTruckTypeError,
     truckTypeSectionRef,
+    manualManufacturer,
+    setManualManufacturer,
+    manualColor,
+    setManualColor,
+    manualWeight,
+    setManualWeight,
     customerStoredVehicles,
     selectedStoredVehicleId,
     setSelectedStoredVehicleId,
@@ -229,6 +235,7 @@ function CreateTowForm({
   const [workingLookupLoading, setWorkingLookupLoading] = useState(false)
   const [showDriverPicker, setShowDriverPicker] = useState(false)
   const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
+  const [vehicleNotFound, setVehicleNotFound] = useState(false)
 
 
   // URL params
@@ -295,9 +302,14 @@ function CreateTowForm({
       if (result.found && result.data) {
         setVehicleData(result)
         setVehicleType(result.source || 'private')
+        setVehicleNotFound(false)
       } else {
         setVehicleData(null)
         setVehicleType('')
+        setVehicleNotFound(true)
+        setManualManufacturer('')
+        setManualColor('')
+        setManualWeight('')
       }
     } catch {
       setVehicleData(null)
@@ -430,6 +442,9 @@ function CreateTowForm({
         defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
         defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContact : undefined,
         defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
+        manualManufacturer,
+        manualColor,
+        manualWeight,
       })
       const result = await createTow(towData)
       await updateTowStatus(result.id, 'quote')
@@ -811,7 +826,7 @@ function CreateTowForm({
                         <input
                           type="text"
                           value={vehiclePlate}
-                          onChange={(e) => { setVehiclePlate(e.target.value); setPlateStorageWarning(null) }}
+                          onChange={(e) => { setVehiclePlate(e.target.value); setPlateStorageWarning(null); setVehicleNotFound(false) }}
                           onBlur={async (e) => {
                             const val = e.target.value.trim()
                             if (val && val.replace(/[^0-9]/g, '').length >= 5) {
@@ -879,38 +894,90 @@ function CreateTowForm({
                         </div>
                       </div>
                     )}
+                    {vehicleNotFound && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                        <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
+                            <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value as any)}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                              <option value="">בחר סוג רכב</option>
+                              <option value="private">פרטי</option>
+                              <option value="suv">ג&apos;יפ / SUV</option>
+                              <option value="truck">משאית</option>
+                              <option value="heavy">צמ&quot;ה</option>
+                              <option value="motorcycle">אופנוע</option>
+                              <option value="bus">אוטובוס / מיניבוס</option>
+                              <option value="van">רכב מסחרי</option>
+                              <option value="other">אחר</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">יצרן</label>
+                            <input type="text" value={manualManufacturer}
+                              onChange={(e) => setManualManufacturer(e.target.value)}
+                              placeholder="למשל: טויוטה"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">צבע</label>
+                            <input type="text" value={manualColor}
+                              onChange={(e) => setManualColor(e.target.value)}
+                              placeholder="למשל: לבן"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">משקל (ק&quot;ג)</label>
+                            <input type="number" value={manualWeight}
+                              onChange={(e) => setManualWeight(e.target.value)}
+                              placeholder="אופציונלי"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
+                      <input type="text" value={vehicleCode}
+                        onChange={(e) => setVehicleCode(e.target.value)}
+                        placeholder="אופציונלי"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                    </div>
                     <div ref={truckTypeSectionRef}>
-                      {vehicleData === null ? (
+                      {vehicleData === null && !vehicleNotFound ? (
                         <p className="text-sm text-gray-400">
                           סוג הגרר יופיע לאחר בדיקת רישוי
                         </p>
                       ) : (
                         <>
                           <p className="text-sm font-medium text-gray-700 mb-2">
-                            סוג גרר נדרש
+                            סוג גרר נדרש *
                           </p>
-                          <div className="flex gap-2">
-                            {TRUCK_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => {
-                                  const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                  if (requiredTruckTypes.includes(opt.value)) {
-                                    setRequiredTruckTypes(current)
-                                  } else {
-                                    setRequiredTruckTypes([...current, opt.value])
-                                  }
-                                }}
-                                className={`px-4 py-2 rounded-xl text-sm ${
-                                  requiredTruckTypes.includes(opt.value)
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-100 text-gray-600'
-                                }`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                            <div className="flex gap-2">
+                              {TRUCK_OPTIONS.map((opt) => (
+                                <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const current = requiredTruckTypes.filter(t => t !== opt.value)
+                                    if (requiredTruckTypes.includes(opt.value)) {
+                                      setRequiredTruckTypes(current)
+                                    } else {
+                                      setRequiredTruckTypes([...current, opt.value])
+                                    }
+                                  }}
+                                  className={`px-4 py-2 rounded-xl text-sm ${
+                                    requiredTruckTypes.includes(opt.value)
+                                      ? 'bg-blue-500 text-white'
+                                      : 'bg-gray-100 text-gray-600'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </>
                       )}

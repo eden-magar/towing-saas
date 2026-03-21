@@ -49,6 +49,9 @@ export interface SaveTowInput {
   vehicleData?: any
   selectedDefects?: string[]
   requiredTruckTypes?: string[]
+  manualManufacturer?: string
+  manualColor?: string
+  manualWeight?: string
   pickupAddress?: AddressData
   dropoffAddress?: AddressData
   distance?: DistanceResult | null
@@ -654,15 +657,15 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     const vehicles: PreparedTowData['vehicles'] = [{
       plateNumber: input.vehiclePlate || '',
       vehicleType: mapVehicleType(input.vehicleType || ''),
-      manufacturer: input.vehicleData?.data?.manufacturer,
+      manufacturer: input.vehicleData?.data?.manufacturer || input.manualManufacturer,
       model: input.vehicleData?.data?.model,
       year: input.vehicleData?.data?.year,
-      color: input.vehicleData?.data?.color,
+      color: input.vehicleData?.data?.color || input.manualColor,
       isWorking: !(input.selectedDefects?.length),
       towReason: input.selectedDefects?.join(', ') || undefined,
       driveType: input.vehicleData?.data?.driveType,
       fuelType: input.vehicleData?.data?.fuelType,
-      totalWeight: input.vehicleData?.data?.totalWeight,
+      totalWeight: input.vehicleData?.data?.totalWeight || (input.manualWeight ? Number(input.manualWeight) : undefined),
       gearType: input.vehicleData?.data?.gearType,
       driveTechnology: input.vehicleData?.data?.driveTechnology
     }]

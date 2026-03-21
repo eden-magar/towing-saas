@@ -39,6 +39,9 @@ interface UseTowSaveParams {
   vehicleType: VehicleType | ''
   vehicleData: VehicleLookupResult | null
   selectedDefects: string[]
+  manualManufacturer?: string
+  manualColor?: string
+  manualWeight?: string
   // Route - single
   pickupAddress: AddressData
   dropoffAddress: AddressData
@@ -119,6 +122,9 @@ export function useTowSave(params: UseTowSaveParams) {
     vehicleType,
     vehicleData,
     selectedDefects,
+    manualManufacturer,
+    manualColor,
+    manualWeight,
     pickupAddress,
     dropoffAddress,
     distance,
@@ -238,6 +244,9 @@ export function useTowSave(params: UseTowSaveParams) {
       vehicleData,
       selectedDefects,
       requiredTruckTypes,
+      manualManufacturer,
+      manualColor,
+      manualWeight,
       pickupAddress,
       dropoffAddress,
       distance,
@@ -337,12 +346,17 @@ export function useTowSave(params: UseTowSaveParams) {
             gearType: vehicleData.data.gearType || undefined,
             driveType: vehicleData.data.driveType || undefined,
             totalWeight: vehicleData.data.totalWeight?.toString() || undefined,
-          } : undefined,
+          } : (manualManufacturer || manualColor || manualWeight ? {
+            manufacturer: manualManufacturer || undefined,
+            color: manualColor || undefined,
+            totalWeight: manualWeight || undefined,
+          } : undefined),
           location: undefined,
           towId: result.id,
           performedBy: user?.id,
           notes: 'נכנס מגרירה',
           vehicleCondition: storageVehicleCondition ?? (selectedDefects.length > 0 ? 'faulty' : 'operational'),
+          vehicleCode: vehicleCode || undefined,
         })
       }
 
@@ -350,7 +364,7 @@ export function useTowSave(params: UseTowSaveParams) {
       if (!preSelectedDriverId) {
         setShowAssignNowModal(true)
       } else {
-        router.push('/dashboard/calendar')
+        router.push('/dashboard')
       }
     }
     } catch (err) {

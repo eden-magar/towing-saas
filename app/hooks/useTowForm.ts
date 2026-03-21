@@ -142,6 +142,9 @@ export function useTowForm(editTowId?: string) {
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
   const [requiredTruckTypes, setRequiredTruckTypes] = useState<string[]>([])
+  const [manualManufacturer, setManualManufacturer] = useState('')
+  const [manualColor, setManualColor] = useState('')
+  const [manualWeight, setManualWeight] = useState('')
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
@@ -713,6 +716,9 @@ export function useTowForm(editTowId?: string) {
     vehicleType,
     vehicleData,
     selectedDefects,
+    manualManufacturer,
+    manualColor,
+    manualWeight,
     pickupAddress,
     dropoffAddress,
     distance,
@@ -817,6 +823,9 @@ export function useTowForm(editTowId?: string) {
     requiredTruckTypes, setRequiredTruckTypes,
     truckTypeError, setTruckTypeError,
     truckTypeSectionRef,
+    manualManufacturer, setManualManufacturer,
+    manualColor, setManualColor,
+    manualWeight, setManualWeight,
     // Storage
     customerStoredVehicles,
     selectedStoredVehicleId, setSelectedStoredVehicleId,
