@@ -785,42 +785,6 @@ function CreateTowForm({
               <div className="p-4 sm:p-5 space-y-6">
                 {towType === 'single' && (
                   <>
-                    <div ref={truckTypeSectionRef}>
-                      {vehicleData === null ? (
-                        <p className="text-sm text-gray-400">
-                          סוג הגרר יופיע לאחר בדיקת רישוי
-                        </p>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-gray-700 mb-2">
-                            סוג גרר נדרש
-                          </p>
-                          <div className="flex gap-2">
-                            {TRUCK_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => {
-                                  const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                  if (requiredTruckTypes.includes(opt.value)) {
-                                    setRequiredTruckTypes(current)
-                                  } else {
-                                    setRequiredTruckTypes([...current, opt.value])
-                                  }
-                                }}
-                                className={`px-4 py-2 rounded-xl text-sm ${
-                                  requiredTruckTypes.includes(opt.value)
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-100 text-gray-600'
-                                }`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         מספר רכב
@@ -894,6 +858,42 @@ function CreateTowForm({
                         </div>
                       </div>
                     )}
+                    <div ref={truckTypeSectionRef}>
+                      {vehicleData === null ? (
+                        <p className="text-sm text-gray-400">
+                          סוג הגרר יופיע לאחר בדיקת רישוי
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            סוג גרר נדרש
+                          </p>
+                          <div className="flex gap-2">
+                            {TRUCK_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => {
+                                  const current = requiredTruckTypes.filter(t => t !== opt.value)
+                                  if (requiredTruckTypes.includes(opt.value)) {
+                                    setRequiredTruckTypes(current)
+                                  } else {
+                                    setRequiredTruckTypes([...current, opt.value])
+                                  }
+                                }}
+                                className={`px-4 py-2 rounded-xl text-sm ${
+                                  requiredTruckTypes.includes(opt.value)
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-100 text-gray-600'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     {vehicleData?.data?.driveType?.includes?.('קדמית') && (
                       <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg">
                         מומלץ: רמסע (רכב עם הנעה קדמית)
