@@ -32,7 +32,7 @@ import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow, updateTowStatus } from '../../../lib/queries/tows'
-import { addVehicleToStorage, releaseVehicleFromStorage } from '../../../lib/queries/storage'
+import { addVehicleToStorage, releaseVehicleFromStorage, searchStoredVehicle } from '../../../lib/queries/storage'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import type { AddressData } from '../../../lib/google-maps'
 import type { SelectedService } from '../../../components/tow-forms/shared'
@@ -226,6 +226,7 @@ function CreateTowForm({
   const [defectiveLookupLoading, setDefectiveLookupLoading] = useState(false)
   const [workingLookupLoading, setWorkingLookupLoading] = useState(false)
   const [showDriverPicker, setShowDriverPicker] = useState(false)
+  const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
 
 
   // URL params
@@ -273,6 +274,21 @@ function CreateTowForm({
     if (vehiclePlate.replace(/[^0-9]/g, '').length < 5) return
     setDefectiveLookupLoading(true)
     try {
+      if (companyId) {
+        const stored = await searchStoredVehicle(companyId, vehiclePlate)
+        if (stored) {
+          const isSameCustomer = stored.customer_id === selectedCustomerId
+          if (isSameCustomer) {
+            setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
+          } else {
+            setPlateStorageWarning('הרכב שייך ללקוח אחר באחסנה ולא ניתן לשבצו לגרירה זו')
+          }
+          setVehicleData(null)
+          return
+        } else {
+          setPlateStorageWarning(null)
+        }
+      }
       const result = await lookupVehicle(vehiclePlate)
       if (result.found && result.data) {
         setVehicleData(result)
@@ -286,7 +302,7 @@ function CreateTowForm({
     } finally {
       setDefectiveLookupLoading(false)
     }
-  }, [vehiclePlate])
+  }, [vehiclePlate, companyId, selectedCustomerId])
 
   // Vehicle lookup for defective (exchange)
   const handleDefectiveLookup = useCallback(async () => {
@@ -793,7 +809,7 @@ function CreateTowForm({
                         <input
                           type="text"
                           value={vehiclePlate}
-                          onChange={(e) => setVehiclePlate(e.target.value)}
+                          onChange={(e) => { setVehiclePlate(e.target.value); setPlateStorageWarning(null) }}
                           onBlur={async (e) => {
                             const val = e.target.value.trim()
                             if (val && val.replace(/[^0-9]/g, '').length >= 5) {
@@ -819,6 +835,9 @@ function CreateTowForm({
                           )}
                         </button>
                       </div>
+                      {plateStorageWarning && (
+                        <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>
+                      )}
                     </div>
                     {vehicleData?.found && vehicleData.data && (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
