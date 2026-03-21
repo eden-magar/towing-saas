@@ -150,6 +150,7 @@ export function useTowForm(editTowId?: string) {
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
   const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
+  const [storageVehicleCondition, setStorageVehicleCondition] = useState<'operational' | 'faulty'>('operational')
   const [storageLoading, setStorageLoading] = useState(false)
 
   // Exchange specific state
@@ -696,6 +697,7 @@ export function useTowForm(editTowId?: string) {
     setTruckTypeError,
     truckTypeSectionRef,
     dropoffToStorage,
+    storageVehicleCondition,
     vehiclePlate,
     setSaving,
     setError,
@@ -819,6 +821,7 @@ export function useTowForm(editTowId?: string) {
     customerStoredVehicles,
     selectedStoredVehicleId, setSelectedStoredVehicleId,
     dropoffToStorage, setDropoffToStorage,
+    storageVehicleCondition, setStorageVehicleCondition,
     storageLoading,
     // Exchange
     workingVehicleSource, setWorkingVehicleSource,

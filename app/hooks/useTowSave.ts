@@ -20,6 +20,7 @@ interface UseTowSaveParams {
   setTruckTypeError: (v: boolean) => void
   truckTypeSectionRef: React.RefObject<HTMLDivElement>
   dropoffToStorage: boolean
+  storageVehicleCondition?: 'operational' | 'faulty'
   vehiclePlate: string
   // Save state
   setSaving: (v: boolean) => void
@@ -102,6 +103,7 @@ export function useTowSave(params: UseTowSaveParams) {
     setTruckTypeError,
     truckTypeSectionRef,
     dropoffToStorage,
+    storageVehicleCondition,
     vehiclePlate,
     setSaving,
     setError,
@@ -340,7 +342,7 @@ export function useTowSave(params: UseTowSaveParams) {
           towId: result.id,
           performedBy: user?.id,
           notes: 'נכנס מגרירה',
-          vehicleCondition: selectedDefects.length > 0 ? 'faulty' : 'operational',
+          vehicleCondition: storageVehicleCondition ?? (selectedDefects.length > 0 ? 'faulty' : 'operational'),
         })
       }
 

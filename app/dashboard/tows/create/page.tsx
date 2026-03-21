@@ -132,6 +132,8 @@ function CreateTowForm({
     setSelectedStoredVehicleId,
     dropoffToStorage,
     setDropoffToStorage,
+    storageVehicleCondition,
+    setStorageVehicleCondition,
     workingVehicleSource,
     setWorkingVehicleSource,
     selectedWorkingVehicleId,
@@ -976,6 +978,25 @@ function CreateTowForm({
                         הורדה לאחסנה
                       </button>
                     </div>
+                    {dropoffToStorage && (
+                      <div className="flex gap-2 mt-2 items-center">
+                        <span className="text-sm text-gray-600">מצב הרכב:</span>
+                        <button
+                          type="button"
+                          onClick={() => setStorageVehicleCondition('operational')}
+                          className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'operational' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                        >
+                          תקין
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStorageVehicleCondition('faulty')}
+                          className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'faulty' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                        >
+                          תקול
+                        </button>
+                      </div>
+                    )}
                     {startFromBase && customerStoredVehicles.length > 0 && (
                       <div className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
                         <p className="text-xs text-gray-500 mb-2">בחר רכב מהאחסנה:</p>
