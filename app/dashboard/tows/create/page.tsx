@@ -184,6 +184,9 @@ function CreateTowForm({
     setDropoffContactName,
     dropoffContactPhone,
     setDropoffContactPhone,
+    customerOrderNumber,
+    setCustomerOrderNumber,
+    orderNumber,
     notes,
     setNotes,
     invoiceName,
@@ -739,6 +742,26 @@ function CreateTowForm({
                 עכשיו
               </button>
             </div>
+            <div className="px-4 sm:px-5 pb-4 sm:pb-5 flex flex-wrap gap-4">
+              {editTowId && orderNumber && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">מספר הזמנה</label>
+                  <div className="px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-600 font-mono">
+                    #{orderNumber}
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">מספר הזמנה של הלקוח</label>
+                <input
+                  type="text"
+                  value={customerOrderNumber}
+                  onChange={(e) => setCustomerOrderNumber(e.target.value)}
+                  placeholder="אופציונלי"
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+            </div>
           </section>
 
           {/* Section 3 — סוג גרירה */}
@@ -814,9 +837,14 @@ function CreateTowForm({
                               <button
                                 key={opt.value}
                                 type="button"
-                                onClick={() =>
-                                  setRequiredTruckTypes([opt.value])
-                                }
+                                onClick={() => {
+                                  const current = requiredTruckTypes.filter(t => t !== opt.value)
+                                  if (requiredTruckTypes.includes(opt.value)) {
+                                    setRequiredTruckTypes(current)
+                                  } else {
+                                    setRequiredTruckTypes([...current, opt.value])
+                                  }
+                                }}
                                 className={`px-4 py-2 rounded-xl text-sm ${
                                   requiredTruckTypes.includes(opt.value)
                                     ? 'bg-blue-500 text-white'

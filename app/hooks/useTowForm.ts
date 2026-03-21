@@ -79,6 +79,7 @@ export function useTowForm(editTowId?: string) {
   const [vatPercent, setVatPercent] = useState<number>(0.18)
 
   const [customerOrderNumber, setCustomerOrderNumber] = useState('')
+  const [orderNumber, setOrderNumber] = useState<string | null>(null)
   
   // Customer info
   const [customerName, setCustomerName] = useState('')
@@ -385,6 +386,7 @@ export function useTowForm(editTowId?: string) {
         setCustomPrice(String(tow.final_price ?? 0))
         setPriceMode(tow.price_mode || 'custom')
         setCustomerOrderNumber(tow.customer_order_number || '')
+        setOrderNumber(tow.order_number || null)
         // Payment
         setPaymentMethod((tow as any).payment_method || 'cash')
         setInvoiceName((tow as any).invoice_name || '')
@@ -787,6 +789,7 @@ export function useTowForm(editTowId?: string) {
     customPriceIncludesVat, setCustomPriceIncludesVat,
     // Customer
     customerOrderNumber, setCustomerOrderNumber,
+    orderNumber,
     customerName, setCustomerName,
     customerPhone, setCustomerPhone,
     customerEmail, setCustomerEmail,
