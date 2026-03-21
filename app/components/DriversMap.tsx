@@ -103,7 +103,7 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
   }, [drivers])
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full">
       <div className="p-4 border-b border-gray-100 flex items-center justify-between">
         <h3 className="font-semibold text-gray-800">מפת נהגים חיה</h3>
         <div className="flex gap-3 text-xs">
@@ -112,7 +112,7 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-400 inline-block"/> לא זמין</span>
         </div>
       </div>
-      <div ref={mapRef} style={{ height: '500px', width: '100%' }} />
+      <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
     </div>
   )
 }

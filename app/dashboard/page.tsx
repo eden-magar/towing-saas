@@ -7,7 +7,7 @@
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
   import { getTows, TowWithDetails } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
-  import { getAvailableDrivers } from '../lib/queries/drivers'
+  import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, endShiftManually, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTows } from '../lib/queries/calendar'
   import { getDriverTasksForDriver } from '../lib/queries/driver-tasks-admin'
@@ -51,6 +51,7 @@
     const [calendarTows, setCalendarTows] = useState<any[]>([])
     const [todayTows, setTodayTows] = useState<any[]>([])
     const [activeDrivers, setActiveDrivers] = useState<any[]>([])
+    const [allDrivers, setAllDrivers] = useState<any[]>([])
     const [activeTasks, setActiveTasks] = useState<number>(0)
     const [inProgressTows, setInProgressTows] = useState<number>(0)
     const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
@@ -80,7 +81,7 @@
       try {
         const [
           statsData, towsData, alertsData, rejectionsData,
-          driversData, overtimeData, activeDriversData,
+          driversData, overtimeData, activeDriversData, allDriversData,
         ] = await Promise.all([
           getDashboardStats(companyId),
           getTows(companyId),
@@ -89,6 +90,7 @@
           getAvailableDrivers(companyId),
           getDriversOvertime(companyId),
           getActiveDriversWithLocation(companyId),
+          getDrivers(companyId),
         ])
 
         setStats(statsData)
@@ -112,6 +114,7 @@
           .filter((d: any) => d.last_lat && d.last_lng)
         setDriversWithLocation(mappedDrivers)
         setActiveDrivers(activeDriversData.map((d: any) => d.driver))
+        setAllDrivers(allDriversData)
         const todayData = await getDayTows(companyId, new Date())
         setTodayTows(todayData || [])
       } catch (err) {
@@ -186,15 +189,20 @@
     }
 
     // קיבוץ גרירות יומן לפי נהג
-    const allDriverIds = [...new Set(calendarTows.map((t: any) => t.driver_id).filter(Boolean))]
+    const allDriverIds = allDrivers.filter((d: any) => d.user?.is_active === true).map((d: any) => d.id)
 
   const filteredCalendarTows = useMemo(() => {
     if (isAllSelected) return calendarTows
     return calendarTows.filter((t: any) => t.driver_id && selectedDrivers.includes(t.driver_id))
   }, [calendarTows, selectedDrivers, isAllSelected])
 
-  const driverIds = [...new Set(filteredCalendarTows.map((t: any) => t.driver_id).filter(Boolean))]
-    const HOURS = Array.from({ length: 14 }, (_, i) => i + 7) // 07:00–20:00
+  const allActiveDriverIds = allDrivers
+    .filter((d: any) => d.user?.is_active === true)
+    .map((d: any) => d.id)
+  const driverIds = isAllSelected
+    ? allActiveDriverIds
+    : allActiveDriverIds.filter((id: string) => selectedDrivers.includes(id))
+    const HOURS = Array.from({ length: 24 }, (_, i) => i) // 00:00–23:00
 
     const getTowsForDriverHour = (driverId: string, hour: number) => {
     return filteredCalendarTows.filter((t: any) => {
@@ -206,6 +214,7 @@
 
     const getDriverName = (driverId: string) => {
       const d = activeDrivers.find((d: any) => d.id === driverId)
+        || allDrivers.find((d: any) => d.id === driverId)
       return d?.user?.full_name || 'נהג'
     }
 
@@ -371,16 +380,16 @@
                   </div>
                 )}
               </div>
-              <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="flex-1 overflow-auto min-h-0">
                 {driverIds.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-300 text-xs">אין גרירות ביום זה</div>
                 ) : (
-                  <table className="w-full text-xs border-collapse">
+                  <table className="w-full text-xs border-collapse" style={{ minWidth: `${driverIds.length * 120 + 60}px` }}>
                     <thead>
                       <tr className="sticky top-0 bg-gray-50 z-10">
                         <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
                         {driverIds.map((id, i) => (
-                          <th key={id as string} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ color: DRIVER_COLORS[i % DRIVER_COLORS.length] }}>
+                          <th key={id as string} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ color: DRIVER_COLORS[i % DRIVER_COLORS.length], width: `${100 / driverIds.length}%` }}>
                             {getDriverName(id as string).split(' ')[0]}
                           </th>
                         ))}
@@ -388,12 +397,12 @@
                     </thead>
                     <tbody>
                       {HOURS.map(hour => (
-                        <tr key={hour} className="border-b border-gray-200">
+                        <tr key={hour} className="border-b border-gray-200 h-10">
                           <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
                           {driverIds.map(id => {
                             const tows = getTowsForDriverHour(id as string, hour)
                             return (
-                              <td key={id as string} className="px-0.5 py-0.5 border-l border-gray-200 min-h-6">
+                              <td key={id as string} className="px-0.5 py-0.5 border-l border-gray-200 min-h-6" style={{ width: `${100 / driverIds.length}%` }}>
                                 {tows.length > 0 ? tows.map((t: any) => {
                                 const driverIdx = driverIds.indexOf(id)
                                 const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
