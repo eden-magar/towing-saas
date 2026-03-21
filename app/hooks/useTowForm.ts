@@ -534,7 +534,7 @@ export function useTowForm(editTowId?: string) {
   }, [fixedPriceItems, customersWithPricing, selectedCustomerPricing])
 
   // ==================== Price Calculations ====================
-  const { recommendedPrice, finalPrice } = useTowPricing({
+  const { recommendedPrice, finalPrice, priceResult } = useTowPricing({
     towType,
     vehicleType,
     distance,
@@ -873,6 +873,7 @@ export function useTowForm(editTowId?: string) {
     // Computed
     recommendedPrice,
     finalPrice,
+    priceResult,
     vatPercent,
     // Handlers
     handleCustomerSelect,

@@ -85,11 +85,10 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
 
   // Fixed / customer / custom modes
   if (input.priceMode === 'fixed' && input.fixedPrice != null) {
-    const beforeDiscount = input.fixedPrice
-    const discountAmount = beforeDiscount * (input.discountPercent / 100)
-    const finalPrice = beforeDiscount - discountAmount
-    const vatAmount = finalPrice * vatRate
-    const total = Math.max(finalPrice + vatAmount, input.priceList.minimum_price)
+    const discountAmount = input.fixedPrice * (input.discountPercent / 100)
+    const total = input.fixedPrice - discountAmount
+    const vatAmount = total - (total / (1 + vatRate))
+    const beforeVat = total - vatAmount
     return {
       basePrice: 0,
       distancePrice: 0,
@@ -99,14 +98,17 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
       locationSurchargePercent: 0,
       locationSurchargeAmount: 0,
       serviceSurchargeAmount: 0,
-      beforeVat: beforeDiscount,
+      beforeVat,
       vatAmount,
-      beforeDiscount: finalPrice + vatAmount,
+      beforeDiscount: total,
       discountAmount,
-      finalPrice: finalPrice + vatAmount,
-      minimumApplied: total > finalPrice + vatAmount,
+      finalPrice: total,
+      minimumApplied: false,
       total,
-      breakdown: [{ label: 'מחיר קבוע', amount: input.fixedPrice, type: 'base' }]
+      breakdown: [
+        { label: 'לפני מע״מ', amount: beforeVat, type: 'base' },
+        { label: `מע"מ ${Math.round(vatRate * 100)}%`, amount: vatAmount, type: 'vat' },
+      ]
     }
   }
 
@@ -137,8 +139,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
   if (input.priceMode === 'custom' && input.customPrice != null) {
     const price = input.customPrice
     const beforeVat = input.customPriceIncludesVat ? price / (1 + vatRate) : price
-    const vatAmount = beforeVat * vatRate
-    const total = input.customPriceIncludesVat ? price : beforeVat + vatAmount
+    const vatAmount = input.customPriceIncludesVat ? price - beforeVat : price * vatRate
+    const total = input.customPriceIncludesVat ? price : price + vatAmount
     return {
       basePrice: 0,
       distancePrice: 0,
@@ -155,7 +157,10 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
       finalPrice: total,
       minimumApplied: false,
       total,
-      breakdown: [{ label: 'מחיר ידני', amount: price, type: 'base' }]
+      breakdown: [
+        { label: 'לפני מע״מ', amount: beforeVat, type: 'base' },
+        { label: `מע"מ ${Math.round(vatRate * 100)}%`, amount: vatAmount, type: 'vat' },
+      ]
     }
   }
 

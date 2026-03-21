@@ -201,6 +201,7 @@ function CreateTowForm({
     setPinDropResult,
     recommendedPrice,
     finalPrice,
+    priceResult,
     handleCustomerSelect,
     handleSelectStoredVehicle,
     handleClearStoredVehicle,
@@ -1523,12 +1524,27 @@ function CreateTowForm({
                   </div>
                 )}
                 {(priceMode === 'recommended' ||
-                  priceMode === 'recommended_customer') && (
+                  priceMode === 'recommended_customer' ||
+                  priceMode === 'fixed' ||
+                  priceMode === 'custom') && (
                   <div className="text-sm space-y-1">
-                    <p>בסיס + מרחק + תוספות</p>
-                    <p>לפני מע״מ: ₪{Math.round(finalPrice / 1.18)}</p>
-                    <p>מע״מ 18%: ₪{Math.round((finalPrice / 1.18) * 0.18)}</p>
-                    <p className="font-bold">סה״כ: ₪{finalPrice}</p>
+                    {priceResult ? (
+                      <>
+                        {priceResult.breakdown
+                          .filter(item => item.amount !== 0)
+                          .map((item, idx) => (
+                            <p key={idx}>{item.label}: ₪{Math.round(item.amount)}</p>
+                          ))}
+                        <p className="font-bold">סה״כ: ₪{Math.round(priceResult.total)}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>בסיס + מרחק + תוספות</p>
+                        <p>לפני מע״מ: ₪{Math.round(finalPrice / 1.18)}</p>
+                        <p>מע״מ 18%: ₪{Math.round((finalPrice / 1.18) * 0.18)}</p>
+                        <p className="font-bold">סה״כ: ₪{finalPrice}</p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
