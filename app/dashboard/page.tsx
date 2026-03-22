@@ -218,6 +218,11 @@
       return d?.user?.full_name || 'נהג'
     }
 
+    const getCurrentTimePosition = () => {
+      const now = new Date()
+      return now.getHours() + now.getMinutes() / 60
+    }
+
     function formatWaitTime(createdAt: string): string {
       const minutes = Math.round((Date.now() - new Date(createdAt).getTime()) / 60000)
       if (minutes < 60) return `${minutes} דק׳`
@@ -397,61 +402,78 @@
                 {driverIds.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-300 text-xs">אין גרירות ביום זה</div>
                 ) : (
-                  <table className="w-full text-xs border-collapse" style={{ minWidth: `${driverIds.length * 120 + 60}px` }}>
-                    <thead>
-                      <tr className="sticky top-0 bg-gray-50 z-10">
-                        <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
-                        {driverIds.map((id, i) => (
-                          <th key={id as string} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ color: DRIVER_COLORS[i % DRIVER_COLORS.length], width: `${100 / driverIds.length}%` }}>
-                            {getDriverName(id as string).split(' ')[0]}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {HOURS.map(hour => (
-                        <tr key={hour} className="border-b border-gray-200 h-10">
-                          <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
-                          {driverIds.map(id => {
-                            const tows = getTowsForDriverHour(id as string, hour)
-                            return (
-                              <td key={id as string} className="px-0.5 py-0.5 border-l border-gray-200 min-h-6" style={{ width: `${100 / driverIds.length}%` }}>
-                                {tows.length > 0 ? tows.map((t: any) => {
-                                const driverIdx = driverIds.indexOf(id)
-                                const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
-                                const isLight = ['#f59e0b', '#10b981', '#06b6d4'].includes(color)
-                                return (
-                                  <div
-                                    key={t.id}
-                                    onClick={() => router.push(`/dashboard/tows/${t.id}`)}
-                                    className="rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
-                                    style={{
-                                      background: color + '25',
-                                      color: color,
-                                      border: `1px solid ${color}40`,
-                                    }}
-                                    title={t.order_number || ''}
-                                  >
-                                    {t.order_number?.slice(-4) || t.id.slice(0, 4)}
-                                  </div>
-                                )
-                              }) : (
-                                <button
-                                  onClick={() => router.push('/dashboard/tows/create')}
-                                  className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
-                                >
-                                  +
-                                </button>
-                              )}
-                               
-                               
-                              </td>
-                            )
-                          })}
+                    <table className="w-full text-xs border-collapse" style={{ minWidth: `${driverIds.length * 120 + 60}px` }}>
+                      <thead>
+                        <tr className="sticky top-0 bg-gray-50 z-10">
+                          <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
+                          {driverIds.map((id, i) => (
+                            <th key={id as string} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ color: DRIVER_COLORS[i % DRIVER_COLORS.length], width: `${100 / driverIds.length}%` }}>
+                              {getDriverName(id as string).split(' ')[0]}
+                            </th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody style={{ position: 'relative' }}>
+                        {HOURS.map(hour => (
+                          <tr key={hour} className="border-b border-gray-200" style={{ height: '40px' }}>
+                            <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
+                            {driverIds.map(id => {
+                              const tows = getTowsForDriverHour(id as string, hour)
+                              return (
+                                <td key={id as string} className="px-0.5 py-0.5 border-l border-gray-200 min-h-6" style={{ width: `${100 / driverIds.length}%` }}>
+                                  {tows.length > 0 ? tows.map((t: any) => {
+                                  const driverIdx = driverIds.indexOf(id)
+                                  const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
+                                  const isLight = ['#f59e0b', '#10b981', '#06b6d4'].includes(color)
+                                  return (
+                                    <div
+                                      key={t.id}
+                                      onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                                      className="rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
+                                      style={{
+                                        background: color + '25',
+                                        color: color,
+                                        border: `1px solid ${color}40`,
+                                      }}
+                                      title={t.order_number || ''}
+                                    >
+                                      {t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                                    </div>
+                                  )
+                                }) : (
+                                  <button
+                                    onClick={() => router.push('/dashboard/tows/create')}
+                                    className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
+                                  >
+                                    +
+                                  </button>
+                                )}
+                                 
+                                 
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                        {isToday && (
+                          <tr
+                            className="pointer-events-none"
+                            style={{
+                              position: 'absolute',
+                              top: `${getCurrentTimePosition() * 40}px`,
+                              left: 0,
+                              right: 0,
+                              height: '2px',
+                              backgroundColor: '#ef4444',
+                              opacity: 0.7,
+                              zIndex: 10,
+                            }}
+                          >
+                            <td colSpan={driverIds.length + 1} style={{ padding: 0, height: '2px', backgroundColor: '#ef4444' }} />
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                 )}
               </div>
             </div>

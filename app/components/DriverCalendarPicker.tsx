@@ -77,6 +77,13 @@ export function DriverCalendarPicker({
     onConfirm(pendingDriverId, dateStr, pickerTime)
   }
 
+  const getCurrentTimePosition = () => {
+    const now = new Date()
+    return now.getHours() + now.getMinutes() / 60
+  }
+
+  const isPickerToday = pickerDate.toDateString() === new Date().toDateString()
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -143,78 +150,95 @@ export function DriverCalendarPicker({
           {calendarLoading ? (
             <div className="text-center text-gray-400 py-8">טוען...</div>
           ) : (
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="sticky top-0 bg-gray-50 z-10">
-                  <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
-                  {visibleDrivers.map((d, i) => {
-                    const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
-                    return (
-                      <th key={d.id} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ width: `${100 / visibleDrivers.length}%`, color }}>
-                        {d.user?.full_name?.split(' ')[0] || 'נהג'}
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 24 }, (_, i) => i).map(hour => (
-                  <tr key={hour} className="border-b border-gray-200">
-                    <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
-                    {visibleDrivers.map((driver) => {
-                      const driverIdx = drivers.indexOf(driver)
-                      const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
-                      const cellTows = calendarTows.filter(t =>
-                        t.driver_id === driver.id &&
-                        new Date(t.scheduled_at ?? '').getHours() === hour
-                      )
-                      const isRelevant = requiredTruckTypes.length === 0 ||
-                        (driver as unknown as { trucks?: { truck_type: string }[] }).trucks?.some(
-                          (t: { truck_type: string }) => requiredTruckTypes.includes(t.truck_type)
-                        )
-                      const isSelected = pendingDriverId === driver.id &&
-                        pickerTime === `${hour.toString().padStart(2, '0')}:00`
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="sticky top-0 bg-gray-50 z-10">
+                    <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
+                    {visibleDrivers.map((d, i) => {
+                      const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
                       return (
-                        <td
-                          key={driver.id}
-                          className={`px-0.5 py-0.5 border-l border-gray-200 min-h-6 cursor-pointer transition-colors
-                            ${!isRelevant ? 'bg-gray-50' : ''}
-                            ${isSelected ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''}
-                          `}
-                          style={{ width: `${100 / visibleDrivers.length}%` }}
-                          onClick={() => {
-                            setPendingDriverId(driver.id)
-                            setPickerTime(`${hour.toString().padStart(2, '0')}:00`)
-                          }}
-                        >
-                          {cellTows.map(t => (
-                            <div
-                              key={t.id}
-                              className="rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium"
-                              style={{
-                                background: color + '25',
-                                color: color,
-                                border: `1px solid ${color}40`,
-                              }}
-                            >
-                              {t.order_number?.slice(-4) || t.id.slice(0, 4)}
-                            </div>
-                          ))}
-                          {cellTows.length === 0 && (
-                            <button
-                              type="button"
-                              className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
-                            >
-                              +
-                            </button>
-                          )}
-                        </td>
+                        <th key={d.id} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ width: `${100 / visibleDrivers.length}%`, color }}>
+                          {d.user?.full_name?.split(' ')[0] || 'נהג'}
+                        </th>
                       )
                     })}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody style={{ position: 'relative' }}>
+                  {Array.from({ length: 24 }, (_, i) => i).map(hour => (
+                    <tr key={hour} className="border-b border-gray-200" style={{ height: '40px' }}>
+                      <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
+                      {visibleDrivers.map((driver) => {
+                        const driverIdx = drivers.indexOf(driver)
+                        const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
+                        const cellTows = calendarTows.filter(t =>
+                          t.driver_id === driver.id &&
+                          new Date(t.scheduled_at ?? '').getHours() === hour
+                        )
+                        const isRelevant = requiredTruckTypes.length === 0 ||
+                          (driver as unknown as { trucks?: { truck_type: string }[] }).trucks?.some(
+                            (t: { truck_type: string }) => requiredTruckTypes.includes(t.truck_type)
+                          )
+                        const isSelected = pendingDriverId === driver.id &&
+                          pickerTime === `${hour.toString().padStart(2, '0')}:00`
+                        return (
+                          <td
+                            key={driver.id}
+                            className={`px-0.5 py-0.5 border-l border-gray-200 min-h-6 cursor-pointer transition-colors
+                              ${!isRelevant ? 'bg-gray-50' : ''}
+                              ${isSelected ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''}
+                            `}
+                            style={{ width: `${100 / visibleDrivers.length}%` }}
+                            onClick={() => {
+                              setPendingDriverId(driver.id)
+                              setPickerTime(`${hour.toString().padStart(2, '0')}:00`)
+                            }}
+                          >
+                            {cellTows.map(t => (
+                              <div
+                                key={t.id}
+                                className="rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium"
+                                style={{
+                                  background: color + '25',
+                                  color: color,
+                                  border: `1px solid ${color}40`,
+                                }}
+                              >
+                                {t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                              </div>
+                            ))}
+                            {cellTows.length === 0 && (
+                              <button
+                                type="button"
+                                className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
+                              >
+                                +
+                              </button>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                  {isPickerToday && (
+                    <tr
+                      className="pointer-events-none"
+                      style={{
+                        position: 'absolute',
+                        top: `${getCurrentTimePosition() * 40}px`,
+                        left: 0,
+                        right: 0,
+                        height: '2px',
+                        backgroundColor: '#ef4444',
+                        opacity: 0.7,
+                        zIndex: 10,
+                      }}
+                    >
+                      <td colSpan={visibleDrivers.length + 1} style={{ padding: 0, height: '2px', backgroundColor: '#ef4444' }} />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
           )}
         </div>
 
