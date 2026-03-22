@@ -361,6 +361,7 @@ interface CreateTowInput {
   requiredTruckTypes?: string[]
   vehicles: {
     plateNumber: string
+    vehicleCode?: string
     manufacturer?: string
     model?: string
     year?: number
@@ -454,6 +455,7 @@ export async function createTow(input: CreateTowInput) {
         total_weight: v.totalWeight || null,
         gear_type: v.gearType || null,
         drive_technology: v.driveTechnology || null,
+        vehicle_code: v.vehicleCode || null,
       })
 
     if (vehicleError) {
@@ -717,6 +719,7 @@ interface UpdateTowInput {
   vehicles?: {
     id?: string
     plateNumber: string
+    vehicleCode?: string
     manufacturer?: string
     model?: string
     year?: number
@@ -791,7 +794,8 @@ export async function updateTow(input: UpdateTowInput) {
           is_working: v.isWorking ?? true,
           tow_reason: v.towReason || null,
           notes: v.notes || null,
-          order_index: i
+          order_index: i,
+          vehicle_code: v.vehicleCode || null,
         })
 
       if (vehicleError) {

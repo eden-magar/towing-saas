@@ -35,7 +35,7 @@ interface UseTowSaveParams {
   towDate: string
   towTime: string
   // Vehicle
-  vehicleCode: string
+  vehicleCode?: string
   vehicleType: VehicleType | ''
   vehicleData: VehicleLookupResult | null
   selectedDefects: string[]

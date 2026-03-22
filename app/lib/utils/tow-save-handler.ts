@@ -152,6 +152,7 @@ export interface PreparedTowData {
     totalWeight?: number
     gearType?: string
     driveTechnology?: string
+    vehicleCode?: string
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -667,7 +668,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       fuelType: input.vehicleData?.data?.fuelType,
       totalWeight: input.vehicleData?.data?.totalWeight || (input.manualWeight ? Number(input.manualWeight) : undefined),
       gearType: input.vehicleData?.data?.gearType,
-      driveTechnology: input.vehicleData?.data?.driveTechnology
+      driveTechnology: input.vehicleData?.data?.driveTechnology,
+      vehicleCode: input.vehicleCode || undefined,
     }]
 
     const legs: PreparedTowData['legs'] = [{
