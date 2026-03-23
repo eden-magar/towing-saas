@@ -271,11 +271,12 @@ function CreateTowForm({
   }
 
   const handlePinDropConfirmWrapped = (data: AddressData) => {
-    if (pinDropModal.field === 'exchange') {
-      setExchangeAddress(data)
-    } else {
-      handlePinDropConfirm(data)
-    }
+    const field = pinDropModal.field
+    if (field === 'exchange') setExchangeAddress(data)
+    else if (field === 'workingVehicle') setWorkingVehicleAddress(data)
+    else if (field === 'workingDestination') setWorkingVehicleDestinationAddress(data)
+    else if (field === 'defectiveDestination') setDefectiveDestinationAddress(data)
+    else handlePinDropConfirm(data)
   }
 
   // Vehicle lookup for single
@@ -1931,13 +1932,13 @@ function CreateTowForm({
         onClose={() => setPinDropModal({ isOpen: false, field: null })}
         onConfirm={handlePinDropConfirmWrapped}
         initialAddress={
-          pinDropModal.field === 'pickup'
-            ? pickupAddress
-            : pinDropModal.field === 'dropoff'
-              ? dropoffAddress
-              : pinDropModal.field === 'exchange'
-                ? exchangeAddress
-                : undefined
+          pinDropModal.field === 'pickup' ? pickupAddress
+          : pinDropModal.field === 'dropoff' ? dropoffAddress
+          : pinDropModal.field === 'exchange' ? exchangeAddress
+          : pinDropModal.field === 'workingVehicle' ? workingVehicleAddress
+          : pinDropModal.field === 'workingDestination' ? workingVehicleDestinationAddress
+          : pinDropModal.field === 'defectiveDestination' ? defectiveDestinationAddress
+          : undefined
         }
         title={
           pinDropModal.field === 'pickup'

@@ -137,6 +137,15 @@ export interface TowWithDetails {
       phone: string | null
     }
   } | null
+  second_driver: {
+    id: string
+    user: {
+      full_name: string
+      phone: string | null
+    }
+  } | null
+  second_driver_id: string | null
+  second_driver_scheduled_at: string | null
   truck: {
     id: string
     plate_number: string
@@ -160,6 +169,13 @@ export async function getTows(companyId: string): Promise<TowWithDetails[]> {
         phone
       ),
       driver:drivers (
+        id,
+        user:users!drivers_user_id_fkey (
+          full_name,
+          phone
+        )
+      ),
+      second_driver:drivers!tows_second_driver_id_fkey (
         id,
         user:users!drivers_user_id_fkey (
           full_name,
@@ -235,6 +251,13 @@ export async function getTow(towId: string): Promise<TowWithDetails | null> {
         address
       ),
       driver:drivers (
+        id,
+        user:users!drivers_user_id_fkey (
+          full_name,
+          phone
+        )
+      ),
+      second_driver:drivers!tows_second_driver_id_fkey (
         id,
         user:users!drivers_user_id_fkey (
           full_name,
@@ -389,6 +412,8 @@ interface CreateTowInput {
   startFromBase?: boolean
   dropoffToStorage?: boolean
   linkedTowId?: string
+  secondDriverId?: string
+  secondDriverScheduledAt?: string
 
 }
 
@@ -420,6 +445,8 @@ export async function createTow(input: CreateTowInput) {
       start_from_base: input.startFromBase || false,
       dropoff_to_storage: input.dropoffToStorage || false,
       linked_tow_id: input.linkedTowId || null,
+      second_driver_id: input.secondDriverId || null,
+      second_driver_scheduled_at: input.secondDriverScheduledAt || null,
       
     })
 
@@ -742,6 +769,8 @@ interface UpdateTowInput {
   startFromBase?: boolean | null
   dropoffToStorage?: boolean | null
   visibilityOverrides?: Record<string, boolean> | null
+  secondDriverId?: string | null
+  secondDriverScheduledAt?: string | null
 
 }
 
@@ -760,6 +789,8 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase
   if (input.dropoffToStorage !== undefined) towUpdates.dropoff_to_storage = input.dropoffToStorage
   if (input.visibilityOverrides !== undefined) towUpdates.visibility_overrides = input.visibilityOverrides
+  if (input.secondDriverId !== undefined) towUpdates.second_driver_id = input.secondDriverId
+  if (input.secondDriverScheduledAt !== undefined) towUpdates.second_driver_scheduled_at = input.secondDriverScheduledAt
 
 
   if (Object.keys(towUpdates).length > 0) {

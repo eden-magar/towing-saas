@@ -72,6 +72,8 @@ interface UseTowSaveParams {
   invoiceName: string
   // Driver
   preSelectedDriverId: string | null
+  secondDriverId?: string | null
+  secondDriverScheduledAt?: string | null
   // Exchange specific
   workingVehiclePlate?: string
   workingVehicleData?: any
@@ -150,6 +152,8 @@ export function useTowSave(params: UseTowSaveParams) {
     paymentMethod,
     invoiceName,
     preSelectedDriverId,
+    secondDriverId,
+    secondDriverScheduledAt,
     workingVehiclePlate,
     workingVehicleData,
     workingVehicleType,
@@ -237,6 +241,8 @@ export function useTowSave(params: UseTowSaveParams) {
       towDate,
       towTime,
       preSelectedDriverId,
+      secondDriverId,
+      secondDriverScheduledAt,
       // Single tow
       vehiclePlate,
       vehicleCode,

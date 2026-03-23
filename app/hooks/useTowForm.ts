@@ -53,6 +53,8 @@ export function useTowForm(editTowId?: string) {
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [preSelectedDriverId, setPreSelectedDriverId] = useState<string | null>(null)
+  const [secondDriverId, setSecondDriverId] = useState<string | null>(null)
+  const [secondDriverScheduledAt, setSecondDriverScheduledAt] = useState<string | null>(null)
   
   // Price list
   const [basePriceList, setBasePriceList] = useState<any>(null)
@@ -744,6 +746,8 @@ export function useTowForm(editTowId?: string) {
     paymentMethod,
     invoiceName,
     preSelectedDriverId,
+    secondDriverId,
+    secondDriverScheduledAt,
     workingVehiclePlate,
     workingVehicleData,
     workingVehicleType,
@@ -780,6 +784,8 @@ export function useTowForm(editTowId?: string) {
     trucks,
     selectedCustomerId, setSelectedCustomerId,
     preSelectedDriverId, setPreSelectedDriverId,
+    secondDriverId, setSecondDriverId,
+    secondDriverScheduledAt, setSecondDriverScheduledAt,
     // Price list
     basePriceList,
     fixedPriceItems,

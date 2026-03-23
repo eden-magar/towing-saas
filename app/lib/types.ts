@@ -152,6 +152,8 @@ export interface Tow {
   company_id: string
   customer_id: string | null
   driver_id: string | null
+  second_driver_id: string | null
+  second_driver_scheduled_at: string | null
   truck_id: string | null
   created_by: string
   tow_type: TowType
