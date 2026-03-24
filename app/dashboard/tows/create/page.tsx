@@ -16,7 +16,6 @@ import {
   ArrowRight,
   Check,
   Truck,
-  X,
   MapPin,
   Plus,
   Minus,
@@ -26,7 +25,11 @@ import {
 } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
-import { PinDropModal, VehicleLookup, ServiceSurchargeSelector } from '../../../components/tow-forms/shared'
+import {
+  PinDropModal,
+  VehicleLookup,
+  ServiceSurchargeSelector,
+} from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
@@ -233,6 +236,8 @@ function CreateTowForm({
     orderNumber,
     notes,
     setNotes,
+    selectedDefects,
+    setSelectedDefects,
     invoiceName,
     setInvoiceName,
     paymentMethod,
@@ -270,7 +275,9 @@ function CreateTowForm({
   const [showDriverPicker, setShowDriverPicker] = useState(false)
   const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
   const [vehicleNotFound, setVehicleNotFound] = useState(false)
-
+  const [showTruckModal, setShowTruckModal] = useState(false)
+  const [showDefectsModal, setShowDefectsModal] = useState(false)
+  const [showStorageModal, setShowStorageModal] = useState(false)
 
   // URL params
   useEffect(() => {
@@ -579,6 +586,21 @@ function CreateTowForm({
     { value: 'carrier', label: 'מובילית' },
   ] as const
 
+  const DEFECT_OPTIONS = [
+    { value: 'תקר', label: 'תקר', icon: '🚗' },
+    { value: "פנצ'ר", label: "פנצ'ר", icon: '⚫' },
+    { value: 'אין חשמל', label: 'אין חשמל', icon: '🔋' },
+    { value: 'לא נדלק/לא מניע', label: 'לא נדלק/לא מניע', icon: '🔧' },
+    { value: 'נילת מים/שמן', label: 'נילת מים/שמן', icon: '💧' },
+    { value: 'גלגל עקום או שבור', label: 'גלגל עקום או שבור', icon: '⚙️' },
+    { value: 'אחר', label: 'אחר', icon: '✏️' },
+    { value: 'מניע/נדלק ונוסע', label: 'מניע/נדלק ונוסע', icon: '✓' },
+    { value: 'חניון תת קרקעי', label: 'חניון תת קרקעי', icon: '🏢' },
+    { value: 'תאונה', label: 'תאונה', icon: '🚨' },
+    { value: 'מוגבל מהירות', label: 'מוגבל מהירות', icon: '🚗' },
+    { value: 'גיר', label: 'גיר', icon: '⚙️' },
+  ] as const
+
   const lockedOpacity = quoteApproved ? 1 : 0.35
   const lockedPointer = quoteApproved ? 'auto' : 'none'
 
@@ -590,7 +612,7 @@ function CreateTowForm({
         </div>
       )}
 
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-white border-b border-gray-300 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center gap-3">
@@ -613,11 +635,11 @@ function CreateTowForm({
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-6 flex gap-6">
-        <div className="flex-1 min-w-0">
+      <div className="px-4 py-4 sm:py-6 flex flex-col items-center gap-6">
+        <div className="w-[680px] max-w-full">
           {/* Section 1 — לקוח */}
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
               <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                 לקוח
               </h2>
@@ -630,7 +652,7 @@ function CreateTowForm({
                   className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium ${
                     customerTab === 'existing'
                       ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-600'
+                      : 'bg-white text-gray-700 border border-gray-300 font-medium'
                   }`}
                 >
                   לקוח קיים
@@ -641,7 +663,7 @@ function CreateTowForm({
                   className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium ${
                     customerTab === 'casual'
                       ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-600'
+                      : 'bg-white text-gray-700 border border-gray-300 font-medium'
                   }`}
                 >
                   לקוח מזדמן
@@ -655,7 +677,7 @@ function CreateTowForm({
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
                     placeholder="חיפוש לפי שם, טלפון, ת.ז."
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-4"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm mb-4"
                   />
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {filteredCustomers.slice(0, 10).map((c) => (
@@ -672,7 +694,7 @@ function CreateTowForm({
                         className={`w-full p-3 rounded-xl border text-right ${
                           selectedCustomerId === c.id
                             ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:bg-gray-50'
+                            : 'border-gray-300 hover:bg-gray-50'
                         }`}
                       >
                         <div className="font-medium text-gray-800">{c.name}</div>
@@ -702,7 +724,7 @@ function CreateTowForm({
                       {customerStoredVehicles.map((v) => (
                         <div
                           key={v.id}
-                          className="px-3 py-1.5 rounded-lg text-sm border border-gray-200 flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 flex items-center gap-1"
                         >
                           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                             v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
@@ -725,14 +747,14 @@ function CreateTowForm({
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="שם הלקוח *"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                   />
                   <input
                     type="tel"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="טלפון"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                   />
                 </div>
               )}
@@ -740,8 +762,8 @@ function CreateTowForm({
           </section>
 
           {/* Section 2 — תזמון */}
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
               <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                 תזמון
               </h2>
@@ -753,7 +775,7 @@ function CreateTowForm({
                   type="date"
                   value={towDate}
                   onChange={(e) => setTowDate(e.target.value)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                 />
               </div>
               <div>
@@ -762,13 +784,13 @@ function CreateTowForm({
                   type="time"
                   value={towTime}
                   onChange={(e) => setTowTime(e.target.value)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleNowClick}
-                className="px-4 py-2.5 bg-cyan-50 border border-cyan-200 text-cyan-700 rounded-xl text-sm font-medium hover:bg-cyan-100"
+                className="px-4 py-2.5 bg-cyan-500 text-white rounded-xl text-sm font-medium hover:bg-cyan-600"
               >
                 עכשיו
               </button>
@@ -777,7 +799,7 @@ function CreateTowForm({
               {editTowId && orderNumber && (
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">מספר הזמנה</label>
-                  <div className="px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-600 font-mono">
+                  <div className="px-4 py-2.5 bg-gray-100 border border-gray-300 rounded-xl text-sm text-gray-600 font-mono">
                     #{orderNumber}
                   </div>
                 </div>
@@ -789,15 +811,15 @@ function CreateTowForm({
                   value={customerOrderNumber}
                   onChange={(e) => setCustomerOrderNumber(e.target.value)}
                   placeholder="אופציונלי"
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                 />
               </div>
             </div>
           </section>
 
           {/* Section 3 — סוג גרירה */}
-          <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
               <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                 סוג גרירה
               </h2>
@@ -809,7 +831,7 @@ function CreateTowForm({
                 className={`p-4 rounded-xl border-2 text-right transition-all ${
                   towType === 'single'
                     ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    : 'border-gray-300 hover:border-gray-300'
                 }`}
               >
                 <p className="font-medium text-gray-800">גרירה פשוטה</p>
@@ -821,7 +843,7 @@ function CreateTowForm({
                 className={`p-4 rounded-xl border-2 text-right transition-all ${
                   towType === 'exchange'
                     ? 'ring-2 ring-amber-500 border-amber-500 bg-amber-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    : 'border-gray-300 hover:border-gray-300'
                 }`}
               >
                 <p className="font-medium text-gray-800">תקין ↔ תקול</p>
@@ -833,7 +855,7 @@ function CreateTowForm({
                 className={`p-4 rounded-xl border-2 text-right transition-all ${
                   towType === 'custom'
                     ? 'ring-2 ring-purple-500 border-purple-500 bg-purple-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    : 'border-gray-300 hover:border-gray-300'
                 }`}
               >
                 <p className="font-medium text-gray-800">מסלול מותאם</p>
@@ -844,8 +866,8 @@ function CreateTowForm({
 
           {/* Section 4 — רכב ומסלול */}
           {towType && (
-            <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+            <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                 <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                   רכב ומסלול
                 </h2>
@@ -853,372 +875,574 @@ function CreateTowForm({
               <div className="p-4 sm:p-5 space-y-6">
                 {towType === 'single' && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        מספר רכב
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={vehiclePlate}
-                          onChange={(e) => { setVehiclePlate(e.target.value); setPlateStorageWarning(null); setVehicleNotFound(false) }}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim()
-                            if (val && val.replace(/[^0-9]/g, '').length >= 5) {
-                              handleVehicleLookup()
-                            }
-                          }}
-                          placeholder="1234567"
-                          className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono tracking-widest"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleVehicleLookup}
-                          disabled={
-                            vehiclePlate.replace(/[^0-9]/g, '').length < 5 ||
-                            defectiveLookupLoading
-                          }
-                          className="px-4 py-2.5 bg-cyan-500 text-white rounded-xl text-sm"
-                        >
-                          {defectiveLookupLoading ? (
-                            <Loader2 size={18} className="animate-spin" />
-                          ) : (
-                            'בדיקת רישוי'
-                          )}
-                        </button>
+                    {/* Block 1 — פרטי רכב */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">פרטי רכב</h3>
                       </div>
-                      {plateStorageWarning && (
-                        <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>
-                      )}
-                    </div>
-                    {vehicleData?.found && vehicleData.data && (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                        <div>
-                          <span className="text-gray-500">יצרן:</span>{' '}
-                          {vehicleData.data.manufacturer}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">דגם:</span>{' '}
-                          {vehicleData.data.model}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">שנה:</span>{' '}
-                          {vehicleData.data.year}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">צבע:</span>{' '}
-                          {vehicleData.data.color}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">סוג רכב:</span>{' '}
-                          {vehicleData.data.vehicleType || '-'}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">הנעה:</span>{' '}
-                          {vehicleData.data.driveType || '-'}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">גיר:</span>{' '}
-                          {vehicleData.data.gearType || '-'}
-                        </div>
-                        <div>
-                          <span className="text-gray-500">משקל:</span>{' '}
-                          {vehicleData.data.totalWeight
-                            ? `${vehicleData.data.totalWeight} ק״ג`
-                            : '-'}
-                        </div>
-                      </div>
-                    )}
-                    {vehicleNotFound && (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                        <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
+                      <div className="p-4 space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
-                            <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value as any)}
-                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
-                              <option value="">בחר סוג רכב</option>
-                              <option value="private">פרטי</option>
-                              <option value="suv">ג&apos;יפ / SUV</option>
-                              <option value="truck">משאית</option>
-                              <option value="heavy">צמ&quot;ה</option>
-                              <option value="motorcycle">אופנוע</option>
-                              <option value="bus">אוטובוס / מיניבוס</option>
-                              <option value="van">רכב מסחרי</option>
-                              <option value="other">אחר</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              מספר רכב
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={vehiclePlate}
+                                onChange={(e) => { setVehiclePlate(e.target.value); setPlateStorageWarning(null); setVehicleNotFound(false) }}
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim()
+                                  if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                    handleVehicleLookup()
+                                  }
+                                }}
+                                placeholder="1234567"
+                                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-mono tracking-widest"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleVehicleLookup}
+                                disabled={
+                                  vehiclePlate.replace(/[^0-9]/g, '').length < 5 ||
+                                  defectiveLookupLoading
+                                }
+                                className="px-4 py-2.5 bg-cyan-500 text-white rounded-xl text-sm font-medium hover:bg-cyan-600"
+                              >
+                                {defectiveLookupLoading ? (
+                                  <Loader2 size={18} className="animate-spin" />
+                                ) : (
+                                  'בדיקת רישוי'
+                                )}
+                              </button>
+                            </div>
+                            {plateStorageWarning && (
+                              <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>
+                            )}
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">יצרן</label>
-                            <input type="text" value={manualManufacturer}
-                              onChange={(e) => setManualManufacturer(e.target.value)}
-                              placeholder="למשל: טויוטה"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">צבע</label>
-                            <input type="text" value={manualColor}
-                              onChange={(e) => setManualColor(e.target.value)}
-                              placeholder="למשל: לבן"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">משקל (ק&quot;ג)</label>
-                            <input type="number" value={manualWeight}
-                              onChange={(e) => setManualWeight(e.target.value)}
+                            <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
+                            <input type="text" value={vehicleCode}
+                              onChange={(e) => setVehicleCode(e.target.value)}
                               placeholder="אופציונלי"
-                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          {selectedCustomerId && customerStoredVehicles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowStorageModal(true)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition-colors ${
+                                selectedStoredVehicleId
+                                  ? 'border-green-400 bg-green-50 text-green-700'
+                                  : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                              }`}
+                            >
+                              🏪 {selectedStoredVehicleId
+                                ? `מאחסנה: ${customerStoredVehicles.find((v) => v.id === selectedStoredVehicleId)?.plate_number}`
+                                : 'בחר מאחסנה'}
+                            </button>
+                          )}
+                        </div>
+                        {vehicleData?.found && vehicleData.data && (
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-2">
+                              <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+                              <span className="text-xs font-medium text-green-700">נמצא במאגר הרישוי</span>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs">
+                              <div>
+                                <span className="text-gray-400 block text-xs">יצרן</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.manufacturer}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">דגם</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.model}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">שנה</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.year}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">צבע</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.color}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">סוג רכב</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.vehicleType || '-'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">הנעה</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.driveType || '-'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">גיר</span>
+                                <span className="font-medium text-gray-800">{vehicleData.data.gearType || '-'}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-xs">משקל</span>
+                                <span className="font-medium text-gray-800">
+                                  {vehicleData.data.totalWeight
+                                    ? `${vehicleData.data.totalWeight} ק״ג`
+                                    : '-'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {vehicleNotFound && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                            <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
+                                <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value as any)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
+                                  <option value="">בחר סוג רכב</option>
+                                  <option value="private">פרטי</option>
+                                  <option value="suv">ג&apos;יפ / SUV</option>
+                                  <option value="truck">משאית</option>
+                                  <option value="heavy">צמ&quot;ה</option>
+                                  <option value="motorcycle">אופנוע</option>
+                                  <option value="bus">אוטובוס / מיניבוס</option>
+                                  <option value="van">רכב מסחרי</option>
+                                  <option value="other">אחר</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">יצרן</label>
+                                <input type="text" value={manualManufacturer}
+                                  onChange={(e) => setManualManufacturer(e.target.value)}
+                                  placeholder="למשל: טויוטה"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">צבע</label>
+                                <input type="text" value={manualColor}
+                                  onChange={(e) => setManualColor(e.target.value)}
+                                  placeholder="למשל: לבן"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">משקל (ק&quot;ג)</label>
+                                <input type="number" value={manualWeight}
+                                  onChange={(e) => setManualWeight(e.target.value)}
+                                  placeholder="אופציונלי"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Block 2 — תקלות וגרר */}
+                    <div ref={truckTypeSectionRef} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">תקלות וגרר</h3>
+                      </div>
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setShowDefectsModal(true)}
+                            className={`w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                              selectedDefects.length > 0
+                                ? 'border-red-400 bg-red-50 text-red-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
+                          </button>
+                          {vehicleData === null && !vehicleNotFound ? (
+                            <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-2 py-3 text-center text-sm text-gray-400">
+                              סוג הגרר יופיע לאחר בדיקת רישוי
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setShowTruckModal(true)}
+                              className={`w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                                requiredTruckTypes.length > 0
+                                  ? 'border-blue-400 bg-blue-50 text-blue-700'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                              }`}
+                            >
+                              🚛{' '}
+                              {requiredTruckTypes.length > 0
+                                ? requiredTruckTypes
+                                    .map((t) => TRUCK_OPTIONS.find((o) => o.value === t)?.label)
+                                    .filter(Boolean)
+                                    .join(', ')
+                                : 'סוג גרר נדרש'}
+                            </button>
+                          )}
+                        </div>
+                        {vehicleData?.data?.driveType?.includes?.('קדמית') && (
+                          <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg mt-3">
+                            מומלץ: רמסע (רכב עם הנעה קדמית)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Block 3 — כתובות ומסלול */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">כתובות ומסלול</h3>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 block">כתובת מוצא</label>
+                            <AddressInput
+                              value={pickupAddress}
+                              onChange={(d: AddressData) => setPickupAddress(d)}
+                              label="כתובת מוצא"
+                              hideLabel
+                              onPinDropClick={() => handlePinDropOpen('pickup')}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="text-sm font-medium text-gray-700">כתובת הורדה</label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (dropoffToStorage) {
+                                    setDropoffToStorage(false)
+                                    setDropoffAddress({ address: '' })
+                                    return
+                                  }
+                                  setDropoffToStorage(true)
+                                  if (storageAddress)
+                                    setDropoffAddress({
+                                      address: storageAddress,
+                                      lat: basePriceList?.base_lat,
+                                      lng: basePriceList?.base_lng,
+                                    })
+                                }}
+                                className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
+                                  dropoffToStorage
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-white text-gray-700 border border-gray-300 font-medium'
+                                }`}
+                              >
+                                הורדה לאחסנה
+                              </button>
+                            </div>
+                            <AddressInput
+                              value={dropoffAddress}
+                              onChange={(d: AddressData) => setDropoffAddress(d)}
+                              label="כתובת הורדה"
+                              hideLabel
+                              onPinDropClick={() => handlePinDropOpen('dropoff')}
+                            />
+                            {dropoffToStorage && (
+                              <div className="flex gap-2 mt-2 items-center flex-wrap">
+                                <span className="text-sm text-gray-600">מצב הרכב:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setStorageVehicleCondition('operational')}
+                                  className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'operational' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                                >
+                                  תקין
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setStorageVehicleCondition('faulty')}
+                                  className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'faulty' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                                >
+                                  תקול
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {distanceLoading ? (
+                          <p className="text-sm text-gray-500">מחשב מרחק...</p>
+                        ) : (
+                          <p className="text-sm font-medium">
+                            מרחק כולל: {totalDistanceKm.toFixed(1)} ק״מ
+                          </p>
+                        )}
+                        <div className="border-t border-gray-100 pt-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <LocationSurchargesSection
+                              locationSurchargesData={locationSurchargesData}
+                              selectedLocationSurcharges={selectedLocationSurcharges}
+                              setSelectedLocationSurcharges={
+                                setSelectedLocationSurcharges
+                              }
+                            />
+                            <ServiceSurchargeSelector
+                              services={serviceSurchargesData}
+                              selectedServices={selectedServices}
+                              onChange={setSelectedServices}
+                            />
                           </div>
                         </div>
                       </div>
-                    )}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
-                      <input type="text" value={vehicleCode}
-                        onChange={(e) => setVehicleCode(e.target.value)}
-                        placeholder="אופציונלי"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
                     </div>
-                    <div ref={truckTypeSectionRef}>
-                      {vehicleData === null && !vehicleNotFound ? (
-                        <p className="text-sm text-gray-400">
-                          סוג הגרר יופיע לאחר בדיקת רישוי
-                        </p>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-gray-700 mb-2">
-                            סוג גרר נדרש *
-                          </p>
-                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                            <div className="flex gap-2">
-                              {TRUCK_OPTIONS.map((opt) => (
-                                <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={() => {
-                                    const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                    if (requiredTruckTypes.includes(opt.value)) {
-                                      setRequiredTruckTypes(current)
-                                    } else {
-                                      setRequiredTruckTypes([...current, opt.value])
-                                    }
-                                  }}
-                                  className={`px-4 py-2 rounded-xl text-sm ${
-                                    requiredTruckTypes.includes(opt.value)
-                                      ? 'bg-blue-500 text-white'
-                                      : 'bg-gray-100 text-gray-600'
-                                  }`}
-                                >
-                                  {opt.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    {vehicleData?.data?.driveType?.includes?.('קדמית') && (
-                      <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg">
-                        מומלץ: רמסע (רכב עם הנעה קדמית)
-                      </p>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (startFromBase) {
-                            setStartFromBase(false)
-                            setPickupAddress({ address: '' })
-                            return
-                          }
-                          if (!selectedCustomerId) {
-                            alert('יש לבחור לקוח תחילה')
-                            return
-                          }
-                          if (customerStoredVehicles.length === 0) {
-                            alert('ללקוח זה אין רכבים באחסנה')
-                            return
-                          }
-                          setStartFromBase(true)
-                          if (storageAddress)
-                            setPickupAddress({
-                              address: storageAddress,
-                              lat: basePriceList?.base_lat,
-                              lng: basePriceList?.base_lng,
-                            })
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${
-                          startFromBase
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        איסוף מאחסנה
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (dropoffToStorage) {
-                            setDropoffToStorage(false)
-                            setDropoffAddress({ address: '' })
-                            return
-                          }
-                          setDropoffToStorage(true)
-                          if (storageAddress)
-                            setDropoffAddress({
-                              address: storageAddress,
-                              lat: basePriceList?.base_lat,
-                              lng: basePriceList?.base_lng,
-                            })
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-sm ${
-                          dropoffToStorage
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        הורדה לאחסנה
-                      </button>
-                    </div>
-                    {dropoffToStorage && (
-                      <div className="flex gap-2 mt-2 items-center">
-                        <span className="text-sm text-gray-600">מצב הרכב:</span>
-                        <button
-                          type="button"
-                          onClick={() => setStorageVehicleCondition('operational')}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'operational' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'}`}
-                        >
-                          תקין
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setStorageVehicleCondition('faulty')}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'faulty' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}
-                        >
-                          תקול
-                        </button>
+
+                    {/* Block 4 — תוספות זמן */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">תוספות זמן</h3>
                       </div>
-                    )}
-                    {startFromBase && customerStoredVehicles.length > 0 && (
-                      <div className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
-                        <p className="text-xs text-gray-500 mb-2">בחר רכב מהאחסנה:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {customerStoredVehicles.map((v) => (
+                      <div className="p-4">
+                        <TimeSurchargesSection
+                          timeSurchargesData={timeSurchargesData}
+                          towDate={towDate}
+                          towTime={towTime}
+                          isHoliday={isHoliday}
+                          setIsHoliday={setIsHoliday}
+                          activeTimeSurchargesList={activeTimeSurchargesList}
+                          setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                          setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
+                        />
+                      </div>
+                    </div>
+
+                    {showDefectsModal && (
+                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
                             <button
-                              key={v.id}
                               type="button"
-                              onClick={() =>
-                                selectedStoredVehicleId === v.id
-                                  ? handleClearStoredVehicle()
-                                  : handleSelectStoredVehicle(v)
-                              }
-                              className={`px-3 py-1.5 rounded-lg text-sm border ${
-                                selectedStoredVehicleId === v.id
-                                  ? 'border-blue-500 bg-blue-100 text-blue-700'
-                                  : 'border-gray-200 bg-white'
-                              }`}
+                              onClick={() => setShowDefectsModal(false)}
+                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
                             >
-                              <span className={`w-2 h-2 rounded-full inline-block ml-1 ${
-                                v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
-                              }`} />
-                              {v.plate_number} — {v.vehicle_data?.model || ''}
-                              <span className="mr-1 text-xs text-gray-400">
-                                {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
-                              </span>
+                              ✕
                             </button>
-                          ))}
+                          </div>
+                          <div className="p-4 grid grid-cols-3 gap-3">
+                            {DEFECT_OPTIONS.map((defect) => (
+                              <button
+                                key={defect.value}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDefects((prev) =>
+                                    prev.includes(defect.value)
+                                      ? prev.filter((d) => d !== defect.value)
+                                      : [...prev, defect.value]
+                                  )
+                                }}
+                                className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${
+                                  selectedDefects.includes(defect.value)
+                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                    : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <span className="text-2xl">{defect.icon}</span>
+                                <span className="text-xs font-medium text-center leading-tight">{defect.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="px-4 pb-4 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowDefectsModal(false)}
+                              className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                            >
+                              אישור
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowDefectsModal(false)}
+                              className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
+                            >
+                              ביטול
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
 
-                    <AddressInput
-                      value={pickupAddress}
-                      onChange={(d: AddressData) => setPickupAddress(d)}
-                      label="כתובת איסוף"
-                      onPinDropClick={() => handlePinDropOpen('pickup')}
-                    />
-                    <AddressInput
-                      value={dropoffAddress}
-                      onChange={(d: AddressData) => setDropoffAddress(d)}
-                      label="כתובת הורדה"
-                      onPinDropClick={() => handlePinDropOpen('dropoff')}
-                    />
-                    {distanceLoading ? (
-                      <p className="text-sm text-gray-500">מחשב מרחק...</p>
-                    ) : (
-                      <p className="text-sm font-medium">
-                        מרחק כולל: {totalDistanceKm.toFixed(1)} ק״מ
-                      </p>
+                    {showTruckModal && (vehicleData !== null || vehicleNotFound) && (
+                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-base">סוג גרר נדרש</h3>
+                            <button
+                              type="button"
+                              onClick={() => setShowTruckModal(false)}
+                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="p-4 grid grid-cols-3 gap-2">
+                            {TRUCK_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => {
+                                  const current = requiredTruckTypes.filter((t) => t !== opt.value)
+                                  if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
+                                  else setRequiredTruckTypes([...current, opt.value])
+                                }}
+                                className={`py-4 px-2 rounded-xl border-2 text-sm font-semibold transition-colors relative ${
+                                  requiredTruckTypes.includes(opt.value)
+                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                {opt.label}
+                                {requiredTruckTypes.includes(opt.value) && (
+                                  <span className="absolute top-1 left-1 text-blue-500 text-xs">✓</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="px-4 pb-4 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowTruckModal(false)}
+                              className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                            >
+                              אישור
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowTruckModal(false)}
+                              className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
+                            >
+                              ביטול
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     )}
-                    <TimeSurchargesSection
-                      timeSurchargesData={timeSurchargesData}
-                      towDate={towDate}
-                      towTime={towTime}
-                      isHoliday={isHoliday}
-                      setIsHoliday={setIsHoliday}
-                      activeTimeSurchargesList={activeTimeSurchargesList}
-                      setActiveTimeSurchargesList={setActiveTimeSurchargesList}
-                      setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
-                    />
-                    <LocationSurchargesSection
-                      locationSurchargesData={locationSurchargesData}
-                      selectedLocationSurcharges={selectedLocationSurcharges}
-                      setSelectedLocationSurcharges={
-                        setSelectedLocationSurcharges
-                      }
-                    />
-                    <ServiceSurchargeSelector
-                      services={serviceSurchargesData}
-                      selectedServices={selectedServices}
-                      onChange={setSelectedServices}
-                    />
+
+                    {showStorageModal && (
+                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-base">בחר רכב מאחסנה</h3>
+                            <button
+                              type="button"
+                              onClick={() => setShowStorageModal(false)}
+                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="p-4 flex flex-col gap-2">
+                            {customerStoredVehicles.map((v) => (
+                              <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => {
+                                  if (selectedStoredVehicleId === v.id) {
+                                    handleClearStoredVehicle()
+                                  } else {
+                                    handleSelectStoredVehicle(v)
+                                    if (storageAddress) {
+                                      setPickupAddress({
+                                        address: storageAddress,
+                                        lat: basePriceList?.base_lat,
+                                        lng: basePriceList?.base_lng,
+                                      })
+                                      setStartFromBase(true)
+                                    }
+                                  }
+                                  setShowStorageModal(false)
+                                }}
+                                className={`w-full px-4 py-3 rounded-xl border-2 text-sm font-medium text-right flex items-center justify-between transition-colors ${
+                                  selectedStoredVehicleId === v.id
+                                    ? 'border-green-500 bg-green-50 text-green-700'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`w-2.5 h-2.5 rounded-full ${
+                                      v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
+                                    }`}
+                                  />
+                                  <span>{v.plate_number}</span>
+                                  {v.vehicle_data?.model && (
+                                    <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>
+                                  )}
+                                </div>
+                                <span className="text-xs text-gray-400">
+                                  {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="px-4 pb-4">
+                            <button
+                              type="button"
+                              onClick={() => setShowStorageModal(false)}
+                              className="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
+                            >
+                              ביטול
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
                 {towType === 'exchange' && (
                   <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* ═══════════════ א — הרכב התקין ═══════════════ */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                    <div className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-4">
                       <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
                         <h3 className="font-bold text-blue-800 text-sm">א — הרכב התקין</h3>
                       </div>
                       <div className="p-4 space-y-4">
 
-                        {/* לוחית רישוי */}
+                        {/* מספר רכב + קוד רכב */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">מספר רכב תקין</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={workingVehiclePlate}
-                              onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
-                              onBlur={async (e) => {
-                                const val = e.target.value.trim()
-                                if (val && val.replace(/[^0-9]/g, '').length >= 5) {
-                                  const stored = companyId ? await searchStoredVehicle(companyId, val) : null
-                                  if (stored) {
-                                    setWorkingVehicleNotFound(false)
-                                    setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
-                                  } else {
-                                    setPlateStorageWarning(null)
-                                    const result = await lookupVehicle(val)
-                                    if (result.found && result.data) {
-                                      setWorkingVehicleData(result)
-                                      setWorkingVehicleType(result.source || 'private')
-                                      setWorkingVehicleNotFound(false)
-                                    } else {
-                                      setWorkingVehicleData(null)
-                                      setWorkingVehicleNotFound(true)
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={workingVehiclePlate}
+                                  onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
+                                  onBlur={async (e) => {
+                                    const val = e.target.value.trim()
+                                    if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                      const stored = companyId ? await searchStoredVehicle(companyId, val) : null
+                                      if (stored) {
+                                        setWorkingVehicleNotFound(false)
+                                        setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
+                                      } else {
+                                        setPlateStorageWarning(null)
+                                        const result = await lookupVehicle(val)
+                                        if (result.found && result.data) {
+                                          setWorkingVehicleData(result)
+                                          setWorkingVehicleType(result.source || 'private')
+                                          setWorkingVehicleNotFound(false)
+                                        } else {
+                                          setWorkingVehicleData(null)
+                                          setWorkingVehicleNotFound(true)
+                                        }
+                                      }
                                     }
-                                  }
-                                }
-                              }}
-                              placeholder="1234567"
-                              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
-                              dir="ltr"
-                            />
+                                  }}
+                                  placeholder="מספר רכב תקין"
+                                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
+                                  dir="ltr"
+                                />
+                              </div>
+                              {plateStorageWarning && <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>}
+                            </div>
+                            <div>
+                              <input type="text" value={workingVehicleCode}
+                                onChange={(e) => setWorkingVehicleCode(e.target.value)}
+                                placeholder="קוד רכב (אופציונלי)"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                            </div>
                           </div>
-                          {plateStorageWarning && <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>}
                         </div>
 
                         {/* נתוני רכב מהמאגר */}
@@ -1243,7 +1467,7 @@ function CreateTowForm({
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
                                 <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
                                   <option value="">בחר סוג רכב</option>
                                   <option value="private">פרטי</option>
                                   <option value="suv">ג'יפ / SUV</option>
@@ -1260,34 +1484,25 @@ function CreateTowForm({
                                 <input type="text" value={workingManualManufacturer}
                                   onChange={(e) => setWorkingManualManufacturer(e.target.value)}
                                   placeholder="למשל: טויוטה"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">צבע</label>
                                 <input type="text" value={workingManualColor}
                                   onChange={(e) => setWorkingManualColor(e.target.value)}
                                   placeholder="למשל: לבן"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
                                 <input type="number" value={workingManualWeight}
                                   onChange={(e) => setWorkingManualWeight(e.target.value)}
                                   placeholder="אופציונלי"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                             </div>
                           </div>
                         )}
-
-                        {/* קוד רכב */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
-                          <input type="text" value={workingVehicleCode}
-                            onChange={(e) => setWorkingVehicleCode(e.target.value)}
-                            placeholder="אופציונלי"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
-                        </div>
 
                         {/* סוג גרר */}
                         {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') && (
@@ -1301,7 +1516,7 @@ function CreateTowForm({
                                     if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
                                     else setRequiredTruckTypes([...current, opt.value])
                                   }}
-                                  className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                                  className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border-2 border-gray-200'}`}>
                                   {opt.label}
                                 </button>
                               ))}
@@ -1312,7 +1527,10 @@ function CreateTowForm({
                         {/* שירותים נוספים לתקין */}
                         {serviceSurchargesData.length > 0 && (
                           <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">שירותים נוספים — תקין</p>
+                            <p className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"></span>
+                              שירותים נוספים — תקין
+                            </p>
                             <ServiceSurchargeSelector
                               services={serviceSurchargesData}
                               selectedServices={workingSelectedServices}
@@ -1330,12 +1548,12 @@ function CreateTowForm({
                                 setWorkingVehicleSource('storage')
                                 if (storageAddress) setWorkingVehicleAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
                               }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'storage' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'storage' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
                               איסוף מאחסנה
                             </button>
                             <button type="button"
                               onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'address' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'address' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
                               מכתובת
                             </button>
                           </div>
@@ -1358,12 +1576,12 @@ function CreateTowForm({
                                 setWorkingVehicleDestinationIsStorage(true)
                                 if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
                               }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
                               לאחסנה
                             </button>
                             <button type="button"
                               onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${!workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              className={`px-3 py-1.5 rounded-lg text-sm ${!workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
                               לכתובת
                             </button>
                           </div>
@@ -1381,15 +1599,14 @@ function CreateTowForm({
                     </div>
 
                     {/* ═══════════════ ב — הרכב התקול ═══════════════ */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                    <div className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-4">
                       <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
                         <h3 className="font-bold text-orange-800 text-sm">ב — הרכב התקול</h3>
                       </div>
                       <div className="p-4 space-y-4">
 
-                        {/* לוחית רישוי */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">מספר רכב תקול</label>
+                        {/* מספר רכב + קוד רכב */}
+                        <div className="grid grid-cols-2 gap-2">
                           <input
                             type="text"
                             value={defectiveVehiclePlate}
@@ -1408,10 +1625,14 @@ function CreateTowForm({
                                 }
                               }
                             }}
-                            placeholder="1234567"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
+                            placeholder="מספר רכב תקול"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
                             dir="ltr"
                           />
+                          <input type="text" value={defectiveVehicleCode}
+                            onChange={(e) => setDefectiveVehicleCode(e.target.value)}
+                            placeholder="קוד רכב (אופציונלי)"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
 
                         {/* נתוני רכב מהמאגר */}
@@ -1436,7 +1657,7 @@ function CreateTowForm({
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
                                 <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value as VehicleType)}
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
                                   <option value="">בחר סוג רכב</option>
                                   <option value="private">פרטי</option>
                                   <option value="suv">ג'יפ / SUV</option>
@@ -1453,34 +1674,25 @@ function CreateTowForm({
                                 <input type="text" value={defectiveManualManufacturer}
                                   onChange={(e) => setDefectiveManualManufacturer(e.target.value)}
                                   placeholder="למשל: טויוטה"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">צבע</label>
                                 <input type="text" value={defectiveManualColor}
                                   onChange={(e) => setDefectiveManualColor(e.target.value)}
                                   placeholder="למשל: לבן"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
                                 <input type="number" value={defectiveManualWeight}
                                   onChange={(e) => setDefectiveManualWeight(e.target.value)}
                                   placeholder="אופציונלי"
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                             </div>
                           </div>
                         )}
-
-                        {/* קוד רכב */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
-                          <input type="text" value={defectiveVehicleCode}
-                            onChange={(e) => setDefectiveVehicleCode(e.target.value)}
-                            placeholder="אופציונלי"
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
-                        </div>
 
                         {/* פירוט התקלה */}
                         <div>
@@ -1490,18 +1702,23 @@ function CreateTowForm({
                             onChange={(e) => setDefectiveFaultDescription(e.target.value)}
                             rows={2}
                             placeholder="תאר את התקלה..."
-                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm resize-none"
                           />
                         </div>
 
                         {/* גרר נוסף לתקול */}
                         <div>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" checked={hasSecondTruck}
-                              onChange={(e) => setHasSecondTruck(e.target.checked)}
-                              className="w-4 h-4 rounded" />
-                            <span className="text-sm font-medium text-gray-700">הוסף גרר נוסף לרכב התקול</span>
-                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setHasSecondTruck(!hasSecondTruck)}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${
+                              hasSecondTruck
+                                ? 'bg-orange-500 text-white border-orange-500'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-orange-300'
+                            }`}
+                          >
+                            {hasSecondTruck ? '✓ גרר נוסף לתקול' : '+ הוסף גרר נוסף לתקול'}
+                          </button>
                           {hasSecondTruck && (
                             <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
                               <p className="text-sm font-medium text-gray-700 mb-2">סוג גרר לרכב התקול *</p>
@@ -1513,7 +1730,7 @@ function CreateTowForm({
                                       if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
                                       else setDefectiveTruckTypes([...current, opt.value])
                                     }}
-                                    className={`px-4 py-2 rounded-xl text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                                    className={`px-4 py-2 rounded-xl text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border-2 border-gray-200'}`}>
                                     {opt.label}
                                   </button>
                                 ))}
@@ -1525,7 +1742,10 @@ function CreateTowForm({
                         {/* שירותים נוספים לתקול */}
                         {serviceSurchargesData.length > 0 && (
                           <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">שירותים נוספים — תקול</p>
+                            <p className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block"></span>
+                              שירותים נוספים — תקול
+                            </p>
                             <ServiceSurchargeSelector
                               services={serviceSurchargesData}
                               selectedServices={defectiveSelectedServices}
@@ -1541,7 +1761,7 @@ function CreateTowForm({
                             {workingVehicleDestinationAddress.address && (
                               <button type="button"
                                 onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
-                                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-600">
+                                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">
                                 זהה ליעד התקין
                               </button>
                             )}
@@ -1563,12 +1783,12 @@ function CreateTowForm({
                                 setDefectiveDestination('storage')
                                 if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
                               }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'storage' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'storage' ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
                               לאחסנה
                             </button>
                             <button type="button"
                               onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'address' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'address' ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
                               לכתובת
                             </button>
                           </div>
@@ -1585,6 +1805,7 @@ function CreateTowForm({
                       </div>
                     </div>
 
+                    </div>
                   </>
                 )}
 
@@ -1616,8 +1837,8 @@ function CreateTowForm({
 
           {/* Section 5 — מחיר */}
           {towType && (
-            <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+            <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                 <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                   מחיר
                 </h2>
@@ -1700,7 +1921,7 @@ function CreateTowForm({
                           : null
                       )
                     }}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl"
                   >
                     <option value="">בחר פריט</option>
                     {fixedPriceItems.map((i) => (
@@ -1717,7 +1938,7 @@ function CreateTowForm({
                       value={customPrice}
                       onChange={(e) => setCustomPrice(e.target.value)}
                       placeholder="מחיר"
-                      className="px-4 py-2.5 border border-gray-200 rounded-xl w-32"
+                      className="px-4 py-2.5 border border-gray-300 rounded-xl w-32"
                     />
                     <label className="flex items-center gap-2">
                       <input
@@ -1836,8 +2057,8 @@ function CreateTowForm({
           >
             {/* Section 7 — גרר ונהג */}
             {towType && quoteApproved && (
-              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+              <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                   <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                     גרר ונהג
                   </h2>
@@ -1879,8 +2100,8 @@ function CreateTowForm({
 
             {/* Section 8 — אנשי קשר */}
             {towType && quoteApproved && (
-              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+              <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                   <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                     אנשי קשר
                   </h2>
@@ -1888,26 +2109,33 @@ function CreateTowForm({
                 <div className="p-4 sm:p-5 space-y-4">
                   {towType === 'exchange' ? (
                     <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* 1 — איש קשר במוצא תקין */}
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-medium">איש קשר במוצא — רכב תקין</label>
-                          <button type="button" onClick={() => copyFromCustomer('pickup')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                          <button type="button" onClick={() => copyFromCustomer('pickup')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
                         </div>
-                        <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
-                        <input type="tel" value={workingVehicleContactPhone} onChange={(e) => setWorkingVehicleContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <input type="tel" value={workingVehicleContactPhone} onChange={(e) => setWorkingVehicleContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                        </div>
                       </div>
 
                       {/* 2 — איש קשר ביעד תקין */}
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-medium">איש קשר ביעד — רכב תקין</label>
-                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
                         </div>
-                        <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
-                        <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                        </div>
+                      </div>
                       </div>
 
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* 3 — איש קשר במוצא תקול */}
                       <div>
                         <div className="flex justify-between items-center mb-2">
@@ -1916,52 +2144,60 @@ function CreateTowForm({
                             {exchangeContactName && (
                               <button type="button"
                                 onClick={() => { setDefectiveDestinationContact(exchangeContactName); setDefectiveDestinationContactPhone(exchangeContactPhone) }}
-                                className="text-xs text-blue-500">זהה ליעד תקין</button>
+                                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">זהה ליעד תקין</button>
                             )}
-                            <button type="button" onClick={() => copyFromCustomer('exchange_pickup')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                            <button type="button" onClick={() => copyFromCustomer('exchange_pickup')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
                           </div>
                         </div>
-                        <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
-                        <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                        </div>
                       </div>
 
                       {/* 4 — איש קשר ביעד תקול */}
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-medium">איש קשר ביעד — רכב תקול</label>
-                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
                         </div>
-                        <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
-                        <input type="tel" value={defectiveDestinationContactPhone} onChange={(e) => setDefectiveDestinationContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <input type="tel" value={defectiveDestinationContactPhone} onChange={(e) => setDefectiveDestinationContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                        </div>
+                      </div>
                       </div>
                     </>
                   ) : (
                     <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-medium">איש קשר במוצא</label>
                           <button
                             type="button"
                             onClick={() => copyFromCustomer('pickup')}
-                            className="text-xs text-cyan-600"
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                           >
                             כמו לקוח 👤
                           </button>
                         </div>
-                        <input
-                          type="text"
-                          value={pickupContactName}
-                          onChange={(e) => setPickupContactName(e.target.value)}
-                          placeholder="שם"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2"
-                        />
-                        <input
-                          type="tel"
-                          value={pickupContactPhone}
-                          onChange={(e) => setPickupContactPhone(e.target.value)}
-                          placeholder="טלפון"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={pickupContactName}
+                            onChange={(e) => setPickupContactName(e.target.value)}
+                            placeholder="שם"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                          />
+                          <input
+                            type="tel"
+                            value={pickupContactPhone}
+                            onChange={(e) => setPickupContactPhone(e.target.value)}
+                            placeholder="טלפון"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                          />
+                        </div>
                       </div>
                       <div>
                         <div className="flex justify-between items-center mb-2">
@@ -1971,25 +2207,28 @@ function CreateTowForm({
                           <button
                             type="button"
                             onClick={() => copyFromCustomer('dropoff')}
-                            className="text-xs text-cyan-600"
+                            className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                           >
                             כמו לקוח 👤
                           </button>
                         </div>
-                        <input
-                          type="text"
-                          value={dropoffContactName}
-                          onChange={(e) => setDropoffContactName(e.target.value)}
-                          placeholder="שם"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2"
-                        />
-                        <input
-                          type="tel"
-                          value={dropoffContactPhone}
-                          onChange={(e) => setDropoffContactPhone(e.target.value)}
-                          placeholder="טלפון"
-                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={dropoffContactName}
+                            onChange={(e) => setDropoffContactName(e.target.value)}
+                            placeholder="שם"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                          />
+                          <input
+                            type="tel"
+                            value={dropoffContactPhone}
+                            onChange={(e) => setDropoffContactPhone(e.target.value)}
+                            placeholder="טלפון"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                          />
+                        </div>
+                      </div>
                       </div>
                     </>
                   )}
@@ -1998,7 +2237,7 @@ function CreateTowForm({
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
                     placeholder="הערות"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                   />
                 </div>
               </section>
@@ -2006,8 +2245,8 @@ function CreateTowForm({
 
             {/* Section 9 — תשלום ושמירה */}
             {towType && quoteApproved && (
-              <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+              <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                   <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                     תשלום ושמירה
                   </h2>
@@ -2020,7 +2259,7 @@ function CreateTowForm({
                       className={`px-4 py-2 rounded-xl text-sm ${
                         paymentMethod === 'cash'
                           ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100'
+                          : 'bg-white text-gray-700 border border-gray-300 font-medium'
                       }`}
                     >
                       מזומן
@@ -2031,7 +2270,7 @@ function CreateTowForm({
                       className={`px-4 py-2 rounded-xl text-sm ${
                         paymentMethod === 'credit'
                           ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100'
+                          : 'bg-white text-gray-700 border border-gray-300 font-medium'
                       }`}
                     >
                       אשראי
@@ -2042,7 +2281,7 @@ function CreateTowForm({
                       className={`px-4 py-2 rounded-xl text-sm ${
                         paymentMethod === 'invoice'
                           ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100'
+                          : 'bg-white text-gray-700 border border-gray-300 font-medium'
                       }`}
                     >
                       חשבונית
@@ -2055,12 +2294,12 @@ function CreateTowForm({
                         value={invoiceName}
                         onChange={(e) => setInvoiceName(e.target.value)}
                         placeholder="שם לחשבונית"
-                        className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl"
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl"
                       />
                       <button
                         type="button"
                         onClick={() => setInvoiceName(customerName)}
-                        className="px-3 py-2 bg-cyan-50 text-cyan-700 rounded-xl text-sm"
+                        className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
                       >
                         כמו לקוח
                       </button>
@@ -2100,7 +2339,7 @@ function CreateTowForm({
         {/* Side panel */}
         {towType && (
           <aside className="hidden lg:block w-[200px] flex-shrink-0 sticky top-24 self-start">
-            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-300 p-4 shadow-sm">
               <p className="text-xs text-gray-500 mb-1">מחיר</p>
               <p className="text-xl font-bold">₪{finalPrice}</p>
               <p className="text-sm text-gray-600 mt-2">{customerName}</p>
@@ -2174,10 +2413,10 @@ function CreateTowForm({
               </p>
               <p className="text-gray-600">האם לשבץ נהג עכשיו?</p>
             </div>
-            <div className="flex gap-3 p-5 bg-gray-50 border-t border-gray-200">
+            <div className="flex gap-3 p-5 bg-gray-50 border-t border-gray-300">
               <button
                 onClick={() => router.push('/dashboard/tows')}
-                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
+                className="flex-1 py-3 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
               >
                 אחר כך
               </button>

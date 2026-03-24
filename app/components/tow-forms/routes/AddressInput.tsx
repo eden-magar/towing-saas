@@ -55,6 +55,8 @@ interface AddressInputProps {
   className?: string
   // Props from old interface
   label?: string
+  /** When true, render input + optional pin row without a visible label (use with external label). */
+  hideLabel?: boolean
   required?: boolean
   onPinDropClick?: () => void
   // External ref for focus control
@@ -72,6 +74,7 @@ export function AddressInput({
   readOnly = false,
   className = '',
   label,
+  hideLabel,
   required,
   onPinDropClick,
   inputRef: externalRef
@@ -173,7 +176,7 @@ export function AddressInput({
   }
 
   // Simple input without label (new style - used by RouteBuilder)
-  if (!label) {
+  if (!label && !hideLabel) {
     return (
       <input
         ref={inputRef}
@@ -192,10 +195,12 @@ export function AddressInput({
   // With label (old style - used by SingleRoute)
   return (
     <div className={className}>
-      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-        {label}
-        {required && <span className="text-red-500 mr-1">*</span>}
-      </label>
+      {!hideLabel && (
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+          {label}
+          {required && <span className="text-red-500 mr-1">*</span>}
+        </label>
+      )}
       <div className="flex gap-2">
         <input
           ref={inputRef}

@@ -5,6 +5,8 @@ interface DefectSelectorProps {
   selectedDefects: string[]
   onChange: (defects: string[]) => void
   label?: string
+  /** Chip grid + אחר field only (for embedding in a parent modal). */
+  variant?: 'default' | 'chipsOnly'
 }
 
 const DEFAULT_DEFECTS = [
@@ -22,7 +24,8 @@ const DEFAULT_DEFECTS = [
 export function DefectSelector({ 
   selectedDefects, 
   onChange, 
-  label = 'תקלה' 
+  label = 'תקלה',
+  variant = 'default',
 }: DefectSelectorProps) {
   
   const [otherText, setOtherText] = useState('')
@@ -68,6 +71,40 @@ export function DefectSelector({
   const isSelected = (defect: string) => {
     if (defect === 'אחר') return selectedDefects.some(d => d === 'אחר' || d.startsWith('אחר:'))
     return selectedDefects.includes(defect)
+  }
+
+  if (variant === 'chipsOnly') {
+    return (
+      <div>
+        <div className="flex flex-wrap gap-2">
+          {DEFAULT_DEFECTS.map((defect) => (
+            <button
+              key={defect}
+              type="button"
+              onClick={() => toggleDefect(defect)}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                isSelected(defect)
+                  ? 'bg-[#33d4ff] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {defect}
+            </button>
+          ))}
+        </div>
+        {isSelected('אחר') && (
+          <div className="mt-3">
+            <input
+              type="text"
+              value={otherText}
+              onChange={(e) => updateOtherText(e.target.value)}
+              placeholder="פרט את התקלה..."
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+            />
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (

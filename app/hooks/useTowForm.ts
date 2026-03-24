@@ -649,6 +649,8 @@ export function useTowForm(editTowId?: string) {
     setVehiclePlate('')
     setVehicleData(null)
     setVehicleType('')
+    setPickupAddress({ address: '' })
+    setStartFromBase(false)
   }
 
   const handlePinDropConfirm = (data: AddressData) => {
