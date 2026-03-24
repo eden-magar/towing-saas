@@ -168,7 +168,7 @@ export async function getTows(companyId: string): Promise<TowWithDetails[]> {
         name,
         phone
       ),
-      driver:drivers (
+      driver:drivers!tows_driver_id_fkey (
         id,
         user:users!drivers_user_id_fkey (
           full_name,
@@ -250,7 +250,7 @@ export async function getTow(towId: string): Promise<TowWithDetails | null> {
         email,
         address
       ),
-      driver:drivers (
+      driver:drivers!tows_driver_id_fkey (
         id,
         user:users!drivers_user_id_fkey (
           full_name,

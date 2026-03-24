@@ -189,6 +189,21 @@ export function useTowForm(editTowId?: string) {
   const [exchangeTotalDistance, setExchangeTotalDistance] = useState<DistanceResult | null>(null)
   const [exchangeDistanceLoading, setExchangeDistanceLoading] = useState(false)
 
+  const [hasSecondTruck, setHasSecondTruck] = useState(false)
+  const [defectiveTruckTypes, setDefectiveTruckTypes] = useState<string[]>([])
+  const [workingVehicleDestinationIsStorage, setWorkingVehicleDestinationIsStorage] = useState(false)
+  const [workingVehicleNotFound, setWorkingVehicleNotFound] = useState(false)
+  const [workingManualManufacturer, setWorkingManualManufacturer] = useState('')
+  const [workingManualColor, setWorkingManualColor] = useState('')
+  const [workingManualWeight, setWorkingManualWeight] = useState('')
+  const [defectiveVehicleNotFound, setDefectiveVehicleNotFound] = useState(false)
+  const [defectiveManualManufacturer, setDefectiveManualManufacturer] = useState('')
+  const [defectiveManualColor, setDefectiveManualColor] = useState('')
+  const [defectiveManualWeight, setDefectiveManualWeight] = useState('')
+  const [defectiveFaultDescription, setDefectiveFaultDescription] = useState('')
+  const [workingSelectedServices, setWorkingSelectedServices] = useState<SelectedService[]>([])
+  const [defectiveSelectedServices, setDefectiveSelectedServices] = useState<SelectedService[]>([])
+
   // Single tow - Addresses
   const [pickupAddress, setPickupAddress] = useState<AddressData>({ address: '' })
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
@@ -683,13 +698,16 @@ export function useTowForm(editTowId?: string) {
     }
   }
 
-  const copyFromCustomer = (target: 'pickup' | 'dropoff') => {
+  const copyFromCustomer = (target: 'pickup' | 'dropoff' | 'exchange_pickup') => {
     if (target === 'pickup') {
       setPickupContactName(customerName)
       setPickupContactPhone(customerPhone)
-    } else {
+    } else if (target === 'dropoff') {
       setDropoffContactName(customerName)
       setDropoffContactPhone(customerPhone)
+    } else if (target === 'exchange_pickup') {
+      setExchangeContactName(customerName)
+      setExchangeContactPhone(customerPhone)
     }
   }
 
@@ -864,6 +882,20 @@ export function useTowForm(editTowId?: string) {
     stopsAfterExchange, setStopsAfterExchange,
     exchangeTotalDistance, setExchangeTotalDistance,
     exchangeDistanceLoading, setExchangeDistanceLoading,
+    hasSecondTruck, setHasSecondTruck,
+    defectiveTruckTypes, setDefectiveTruckTypes,
+    workingVehicleDestinationIsStorage, setWorkingVehicleDestinationIsStorage,
+    workingVehicleNotFound, setWorkingVehicleNotFound,
+    workingManualManufacturer, setWorkingManualManufacturer,
+    workingManualColor, setWorkingManualColor,
+    workingManualWeight, setWorkingManualWeight,
+    defectiveVehicleNotFound, setDefectiveVehicleNotFound,
+    defectiveManualManufacturer, setDefectiveManualManufacturer,
+    defectiveManualColor, setDefectiveManualColor,
+    defectiveManualWeight, setDefectiveManualWeight,
+    defectiveFaultDescription, setDefectiveFaultDescription,
+    workingSelectedServices, setWorkingSelectedServices,
+    defectiveSelectedServices, setDefectiveSelectedServices,
     // Addresses
     pickupAddress, setPickupAddress,
     dropoffAddress, setDropoffAddress,

@@ -40,7 +40,7 @@ import type { RoutePoint } from '../../../components/tow-forms/routes/RouteBuild
 import { getActiveTimeSurcharges } from '../../../lib/queries/price-lists'
 import type { TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
-import type { VehicleLookupResult } from '../../../lib/types'
+import type { VehicleLookupResult, VehicleType } from '../../../lib/types'
 
 // ==================== Create Tow Form ====================
 
@@ -149,6 +149,20 @@ function CreateTowForm({
     setWorkingVehicleData,
     workingVehicleType,
     setWorkingVehicleType,
+    workingVehicleCode,
+    setWorkingVehicleCode,
+    workingVehicleNotFound,
+    setWorkingVehicleNotFound,
+    workingManualManufacturer,
+    setWorkingManualManufacturer,
+    workingManualColor,
+    setWorkingManualColor,
+    workingManualWeight,
+    setWorkingManualWeight,
+    workingVehicleDestinationIsStorage,
+    setWorkingVehicleDestinationIsStorage,
+    workingSelectedServices,
+    setWorkingSelectedServices,
     workingVehicleAddress,
     setWorkingVehicleAddress,
     exchangeAddress,
@@ -172,6 +186,26 @@ function CreateTowForm({
     setDefectiveVehiclePlate,
     defectiveVehicleData,
     setDefectiveVehicleData,
+    defectiveVehicleType,
+    setDefectiveVehicleType,
+    defectiveVehicleCode,
+    setDefectiveVehicleCode,
+    defectiveVehicleNotFound,
+    setDefectiveVehicleNotFound,
+    defectiveManualManufacturer,
+    setDefectiveManualManufacturer,
+    defectiveManualColor,
+    setDefectiveManualColor,
+    defectiveManualWeight,
+    setDefectiveManualWeight,
+    defectiveFaultDescription,
+    setDefectiveFaultDescription,
+    hasSecondTruck,
+    setHasSecondTruck,
+    defectiveTruckTypes,
+    setDefectiveTruckTypes,
+    defectiveSelectedServices,
+    setDefectiveSelectedServices,
     defectiveDestination,
     setDefectiveDestination,
     defectiveDestinationAddress,
@@ -1143,308 +1177,414 @@ function CreateTowForm({
 
                 {towType === 'exchange' && (
                   <>
-                    {/* א — הרכב התקין */}
-                    <div>
-                      <p className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                        <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">א</span>
-                        הרכב התקין — מאיפה אוספים?
-                      </p>
-                      <div className="flex gap-2 mb-3">
-                        <button type="button"
-                          onClick={() => setWorkingVehicleSource('storage')}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'storage' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
-                          מהאחסנה
-                        </button>
-                        <button type="button"
-                          onClick={() => setWorkingVehicleSource('address')}
-                          className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'address' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
-                          מכתובת
-                        </button>
+                    {/* ═══════════════ א — הרכב התקין ═══════════════ */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
+                        <h3 className="font-bold text-blue-800 text-sm">א — הרכב התקין</h3>
                       </div>
+                      <div className="p-4 space-y-4">
 
-                      {workingVehicleSource === 'storage' && (
-                        <>
-                          {!selectedCustomerId && (
-                            <p className="text-sm text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-2">יש לבחור לקוח תחילה</p>
-                          )}
-                          {selectedCustomerId && customerStoredVehicles.filter(v => v.vehicle_condition === 'operational').length === 0 && (
-                            <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-2">ללקוח זה אין רכבים תקינים באחסנה</p>
-                          )}
-                          <div className="flex flex-wrap gap-2 mb-3">
-                            {customerStoredVehicles.filter(v => v.vehicle_condition === 'operational').map((v) => (
-                              <button key={v.id} type="button"
-                                onClick={() => selectedWorkingVehicleId === v.id ? handleClearWorkingVehicle() : handleSelectWorkingVehicle(v)}
-                                className={`px-3 py-1.5 rounded-lg text-sm border ${selectedWorkingVehicleId === v.id ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200'}`}>
-                                <span className="w-2 h-2 rounded-full inline-block ml-1 bg-green-500" />
-                                {v.plate_number} — {v.vehicle_data?.model || ''}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {workingVehicleSource === 'address' && (
-                        <div className="mb-3">
-                          <AddressInput
-                            value={workingVehicleAddress}
-                            onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
-                            label="כתובת מוצא התקין"
-                            onPinDropClick={() => handlePinDropOpen('workingVehicle')}
-                          />
-                          <div className="flex gap-2 mt-2">
-                            <input type="text"
+                        {/* לוחית רישוי */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">מספר רכב תקין</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
                               value={workingVehiclePlate}
-                              onChange={(e) => setWorkingVehiclePlate(e.target.value)}
-                              onBlur={() => { if (workingVehiclePlate.replace(/[^0-9]/g, '').length >= 5) handleWorkingLookup() }}
-                              placeholder="מספר רכב תקין"
-                              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono" />
-                            <button type="button" onClick={handleWorkingLookup}
-                              disabled={workingVehiclePlate.replace(/[^0-9]/g, '').length < 5 || workingLookupLoading}
-                              className="px-4 py-2 bg-cyan-500 text-white rounded-xl text-sm disabled:opacity-50">
-                              בדיקה
+                              onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim()
+                                if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                  const stored = companyId ? await searchStoredVehicle(companyId, val) : null
+                                  if (stored) {
+                                    setWorkingVehicleNotFound(false)
+                                    setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
+                                  } else {
+                                    setPlateStorageWarning(null)
+                                    const result = await lookupVehicle(val)
+                                    if (result.found && result.data) {
+                                      setWorkingVehicleData(result)
+                                      setWorkingVehicleType(result.source || 'private')
+                                      setWorkingVehicleNotFound(false)
+                                    } else {
+                                      setWorkingVehicleData(null)
+                                      setWorkingVehicleNotFound(true)
+                                    }
+                                  }
+                                }
+                              }}
+                              placeholder="1234567"
+                              className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
+                              dir="ltr"
+                            />
+                          </div>
+                          {plateStorageWarning && <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>}
+                        </div>
+
+                        {/* נתוני רכב מהמאגר */}
+                        {workingVehicleData?.found && workingVehicleData.data && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-gray-50 rounded-xl text-xs">
+                            <div>יצרן: <strong>{workingVehicleData.data.manufacturer}</strong></div>
+                            <div>דגם: <strong>{workingVehicleData.data.model}</strong></div>
+                            <div>שנה: <strong>{workingVehicleData.data.year}</strong></div>
+                            <div>צבע: <strong>{workingVehicleData.data.color}</strong></div>
+                            <div>סוג: <strong>{workingVehicleData.data.vehicleType}</strong></div>
+                            <div>הנעה: <strong>{workingVehicleData.data.driveType}</strong></div>
+                            <div>גיר: <strong>{workingVehicleData.data.gearType}</strong></div>
+                            <div>משקל: <strong>{workingVehicleData.data.totalWeight} ק"ג</strong></div>
+                          </div>
+                        )}
+
+                        {/* שדות ידניים אם לא נמצא */}
+                        {workingVehicleNotFound && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                            <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
+                                <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                                  <option value="">בחר סוג רכב</option>
+                                  <option value="private">פרטי</option>
+                                  <option value="suv">ג'יפ / SUV</option>
+                                  <option value="truck">משאית</option>
+                                  <option value="heavy">צמ"ה</option>
+                                  <option value="motorcycle">אופנוע</option>
+                                  <option value="bus">אוטובוס</option>
+                                  <option value="van">רכב מסחרי</option>
+                                  <option value="other">אחר</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">יצרן</label>
+                                <input type="text" value={workingManualManufacturer}
+                                  onChange={(e) => setWorkingManualManufacturer(e.target.value)}
+                                  placeholder="למשל: טויוטה"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">צבע</label>
+                                <input type="text" value={workingManualColor}
+                                  onChange={(e) => setWorkingManualColor(e.target.value)}
+                                  placeholder="למשל: לבן"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
+                                <input type="number" value={workingManualWeight}
+                                  onChange={(e) => setWorkingManualWeight(e.target.value)}
+                                  placeholder="אופציונלי"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* קוד רכב */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
+                          <input type="text" value={workingVehicleCode}
+                            onChange={(e) => setWorkingVehicleCode(e.target.value)}
+                            placeholder="אופציונלי"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                        </div>
+
+                        {/* סוג גרר */}
+                        {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') && (
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                            <p className="text-sm font-medium text-gray-700 mb-2">סוג גרר נדרש *</p>
+                            <div className="flex gap-2 flex-wrap">
+                              {TRUCK_OPTIONS.map((opt) => (
+                                <button key={opt.value} type="button"
+                                  onClick={() => {
+                                    const current = requiredTruckTypes.filter(t => t !== opt.value)
+                                    if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
+                                    else setRequiredTruckTypes([...current, opt.value])
+                                  }}
+                                  className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* שירותים נוספים לתקין */}
+                        {serviceSurchargesData.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">שירותים נוספים — תקין</p>
+                            <ServiceSurchargeSelector
+                              services={serviceSurchargesData}
+                              selectedServices={workingSelectedServices}
+                              onChange={setWorkingSelectedServices}
+                            />
+                          </div>
+                        )}
+
+                        {/* מוצא תקין */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">מוצא הרכב התקין</label>
+                          <div className="flex gap-2 mb-2">
+                            <button type="button"
+                              onClick={() => {
+                                setWorkingVehicleSource('storage')
+                                if (storageAddress) setWorkingVehicleAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'storage' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              איסוף מאחסנה
+                            </button>
+                            <button type="button"
+                              onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
+                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'address' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              מכתובת
                             </button>
                           </div>
-                          {workingVehicleData?.found && (
-                            <div className="grid grid-cols-4 gap-2 p-3 bg-gray-50 rounded-xl mt-2 text-xs">
-                              <div><span className="text-gray-400 block">יצרן</span><span className="font-medium">{workingVehicleData.data?.manufacturer}</span></div>
-                              <div><span className="text-gray-400 block">דגם</span><span className="font-medium">{workingVehicleData.data?.model}</span></div>
-                              <div><span className="text-gray-400 block">שנה</span><span className="font-medium">{workingVehicleData.data?.year}</span></div>
-                              <div><span className="text-gray-400 block">צבע</span><span className="font-medium">{workingVehicleData.data?.color}</span></div>
-                              <div><span className="text-gray-400 block">סוג</span><span className="font-medium">{workingVehicleData.data?.vehicleType}</span></div>
-                              <div><span className="text-gray-400 block">הנעה</span><span className="font-medium">{workingVehicleData.data?.driveType}</span></div>
-                              <div><span className="text-gray-400 block">גיר</span><span className="font-medium">{workingVehicleData.data?.gearType}</span></div>
-                              <div><span className="text-gray-400 block">משקל</span><span className="font-medium">{workingVehicleData.data?.totalWeight} ק"ג</span></div>
+                          {workingVehicleSource === 'address' && (
+                            <AddressInput
+                              value={workingVehicleAddress}
+                              onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
+                              label=""
+                              onPinDropClick={() => handlePinDropOpen('workingVehicle')}
+                            />
+                          )}
+                        </div>
+
+                        {/* יעד תקין */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">יעד הרכב התקין</label>
+                          <div className="flex gap-2 mb-2">
+                            <button type="button"
+                              onClick={() => {
+                                setWorkingVehicleDestinationIsStorage(true)
+                                if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              לאחסנה
+                            </button>
+                            <button type="button"
+                              onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }}
+                              className={`px-3 py-1.5 rounded-lg text-sm ${!workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              לכתובת
+                            </button>
+                          </div>
+                          {!workingVehicleDestinationIsStorage && (
+                            <AddressInput
+                              value={workingVehicleDestinationAddress}
+                              onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
+                              label=""
+                              onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                            />
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* ═══════════════ ב — הרכב התקול ═══════════════ */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
+                        <h3 className="font-bold text-orange-800 text-sm">ב — הרכב התקול</h3>
+                      </div>
+                      <div className="p-4 space-y-4">
+
+                        {/* לוחית רישוי */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">מספר רכב תקול</label>
+                          <input
+                            type="text"
+                            value={defectiveVehiclePlate}
+                            onChange={(e) => { setDefectiveVehiclePlate(e.target.value); setDefectiveVehicleNotFound(false) }}
+                            onBlur={async (e) => {
+                              const val = e.target.value.trim()
+                              if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                const result = await lookupVehicle(val)
+                                if (result.found && result.data) {
+                                  setDefectiveVehicleData(result)
+                                  setDefectiveVehicleType(result.source || 'private')
+                                  setDefectiveVehicleNotFound(false)
+                                } else {
+                                  setDefectiveVehicleData(null)
+                                  setDefectiveVehicleNotFound(true)
+                                }
+                              }
+                            }}
+                            placeholder="1234567"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
+                            dir="ltr"
+                          />
+                        </div>
+
+                        {/* נתוני רכב מהמאגר */}
+                        {defectiveVehicleData?.found && defectiveVehicleData.data && (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-gray-50 rounded-xl text-xs">
+                            <div>יצרן: <strong>{defectiveVehicleData.data.manufacturer}</strong></div>
+                            <div>דגם: <strong>{defectiveVehicleData.data.model}</strong></div>
+                            <div>שנה: <strong>{defectiveVehicleData.data.year}</strong></div>
+                            <div>צבע: <strong>{defectiveVehicleData.data.color}</strong></div>
+                            <div>סוג: <strong>{defectiveVehicleData.data.vehicleType}</strong></div>
+                            <div>הנעה: <strong>{defectiveVehicleData.data.driveType}</strong></div>
+                            <div>גיר: <strong>{defectiveVehicleData.data.gearType}</strong></div>
+                            <div>משקל: <strong>{defectiveVehicleData.data.totalWeight} ק"ג</strong></div>
+                          </div>
+                        )}
+
+                        {/* שדות ידניים אם לא נמצא */}
+                        {defectiveVehicleNotFound && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                            <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
+                                <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value as VehicleType)}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                                  <option value="">בחר סוג רכב</option>
+                                  <option value="private">פרטי</option>
+                                  <option value="suv">ג'יפ / SUV</option>
+                                  <option value="truck">משאית</option>
+                                  <option value="heavy">צמ"ה</option>
+                                  <option value="motorcycle">אופנוע</option>
+                                  <option value="bus">אוטובוס</option>
+                                  <option value="van">רכב מסחרי</option>
+                                  <option value="other">אחר</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">יצרן</label>
+                                <input type="text" value={defectiveManualManufacturer}
+                                  onChange={(e) => setDefectiveManualManufacturer(e.target.value)}
+                                  placeholder="למשל: טויוטה"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">צבע</label>
+                                <input type="text" value={defectiveManualColor}
+                                  onChange={(e) => setDefectiveManualColor(e.target.value)}
+                                  placeholder="למשל: לבן"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
+                                <input type="number" value={defectiveManualWeight}
+                                  onChange={(e) => setDefectiveManualWeight(e.target.value)}
+                                  placeholder="אופציונלי"
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* קוד רכב */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">קוד רכב</label>
+                          <input type="text" value={defectiveVehicleCode}
+                            onChange={(e) => setDefectiveVehicleCode(e.target.value)}
+                            placeholder="אופציונלי"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                        </div>
+
+                        {/* פירוט התקלה */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">פירוט התקלה</label>
+                          <textarea
+                            value={defectiveFaultDescription}
+                            onChange={(e) => setDefectiveFaultDescription(e.target.value)}
+                            rows={2}
+                            placeholder="תאר את התקלה..."
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm resize-none"
+                          />
+                        </div>
+
+                        {/* גרר נוסף לתקול */}
+                        <div>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={hasSecondTruck}
+                              onChange={(e) => setHasSecondTruck(e.target.checked)}
+                              className="w-4 h-4 rounded" />
+                            <span className="text-sm font-medium text-gray-700">הוסף גרר נוסף לרכב התקול</span>
+                          </label>
+                          {hasSecondTruck && (
+                            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                              <p className="text-sm font-medium text-gray-700 mb-2">סוג גרר לרכב התקול *</p>
+                              <div className="flex gap-2 flex-wrap">
+                                {TRUCK_OPTIONS.map((opt) => (
+                                  <button key={opt.value} type="button"
+                                    onClick={() => {
+                                      const current = defectiveTruckTypes.filter(t => t !== opt.value)
+                                      if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
+                                      else setDefectiveTruckTypes([...current, opt.value])
+                                    }}
+                                    className={`px-4 py-2 rounded-xl text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-600 border border-gray-200'}`}>
+                                    {opt.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
-                      )}
 
-                      {/* סוג גרר לתקין — אחרי בדיקת רישוי */}
-                      {(workingVehicleData?.found || workingVehicleSource === 'storage') && (
-                        <div className="mb-3">
-                          <p className="text-sm font-medium text-gray-700 mb-2">סוג גרר לרכב התקין</p>
-                          <div className="flex gap-2">
-                            {TRUCK_OPTIONS.map((opt) => (
-                              <button key={opt.value} type="button"
-                                onClick={() => {
-                                  const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                  if (requiredTruckTypes.includes(opt.value)) {
-                                    setRequiredTruckTypes(current)
-                                  } else {
-                                    setRequiredTruckTypes([...current, opt.value])
-                                  }
-                                }}
-                                className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                                {opt.label}
-                              </button>
-                            ))}
+                        {/* שירותים נוספים לתקול */}
+                        {serviceSurchargesData.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-gray-700 mb-2">שירותים נוספים — תקול</p>
+                            <ServiceSurchargeSelector
+                              services={serviceSurchargesData}
+                              selectedServices={defectiveSelectedServices}
+                              onChange={setDefectiveSelectedServices}
+                            />
                           </div>
-                        </div>
-                      )}
-
-                      {/* יעד התקין */}
-                      <div className="mb-3">
-                        <AddressInput
-                          value={workingVehicleDestinationAddress}
-                          onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
-                          label="יעד התקין (נקודת ההחלפה)"
-                          onPinDropClick={() => handlePinDropOpen('workingDestination')}
-                        />
-                      </div>
-
-                      {/* איש קשר במוצא */}
-                      <div className="grid grid-cols-2 gap-2 mb-1">
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">איש קשר במוצא</label>
-                          <input type="text" value={workingVehicleContact}
-                            onChange={(e) => setWorkingVehicleContact(e.target.value)}
-                            placeholder="שם..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">טלפון</label>
-                          <input type="text" value={workingVehicleContactPhone}
-                            onChange={(e) => setWorkingVehicleContactPhone(e.target.value)}
-                            placeholder="05X-..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ב — הרכב התקול */}
-                    <div>
-                      <p className="font-medium text-gray-800 mb-3 flex items-center gap-2">
-                        <span className="bg-amber-100 text-amber-700 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">ב</span>
-                        הרכב התקול
-                      </p>
-
-                      <div className="flex gap-2 mb-2">
-                        <input type="text"
-                          value={defectiveVehiclePlate}
-                          onChange={(e) => setDefectiveVehiclePlate(e.target.value)}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim()
-                            if (val && val.replace(/[^0-9]/g, '').length >= 5) handleDefectiveLookup()
-                          }}
-                          placeholder="מספר רכב תקול"
-                          className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono" />
-                        <button type="button" onClick={handleDefectiveLookup}
-                          disabled={defectiveVehiclePlate.replace(/[^0-9]/g, '').length < 5 || defectiveLookupLoading}
-                          className="px-4 py-2 bg-cyan-500 text-white rounded-xl text-sm disabled:opacity-50">
-                          בדיקה
-                        </button>
-                      </div>
-
-                      {defectiveVehicleData?.found && (
-                        <div className="grid grid-cols-4 gap-2 p-3 bg-gray-50 rounded-xl mb-3 text-xs">
-                          <div><span className="text-gray-400 block">יצרן</span><span className="font-medium">{defectiveVehicleData.data?.manufacturer}</span></div>
-                          <div><span className="text-gray-400 block">דגם</span><span className="font-medium">{defectiveVehicleData.data?.model}</span></div>
-                          <div><span className="text-gray-400 block">שנה</span><span className="font-medium">{defectiveVehicleData.data?.year}</span></div>
-                          <div><span className="text-gray-400 block">צבע</span><span className="font-medium">{defectiveVehicleData.data?.color}</span></div>
-                          <div><span className="text-gray-400 block">סוג</span><span className="font-medium">{defectiveVehicleData.data?.vehicleType}</span></div>
-                          <div><span className="text-gray-400 block">הנעה</span><span className="font-medium">{defectiveVehicleData.data?.driveType}</span></div>
-                          <div><span className="text-gray-400 block">גיר</span><span className="font-medium">{defectiveVehicleData.data?.gearType}</span></div>
-                          <div><span className="text-gray-400 block">משקל</span><span className="font-medium">{defectiveVehicleData.data?.totalWeight} ק"ג</span></div>
-                        </div>
-                      )}
-
-                      {/* מיקום התקול */}
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs text-gray-500">מיקום הרכב התקול</label>
-                          {workingVehicleDestinationAddress.address && (
-                            <button type="button"
-                              onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
-                              className="text-xs text-blue-500 hover:text-blue-700">
-                              זהה ליעד התקין
-                            </button>
-                          )}
-                        </div>
-                        <AddressInput
-                          value={exchangeAddress}
-                          onChange={(d: AddressData) => setExchangeAddress(d)}
-                          label=""
-                          onPinDropClick={() => handlePinDropOpen('exchange')}
-                        />
-                      </div>
-
-                      {/* איש קשר בנקודת החלפה */}
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">איש קשר בנקודת החלפה</label>
-                          <input type="text" value={exchangeContactName}
-                            onChange={(e) => setExchangeContactName(e.target.value)}
-                            placeholder="שם..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">טלפון</label>
-                          <input type="text" value={exchangeContactPhone}
-                            onChange={(e) => setExchangeContactPhone(e.target.value)}
-                            placeholder="05X-..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                        </div>
-                      </div>
-
-                      {/* לאן הולך התקול */}
-                      <div className="mb-3">
-                        <p className="text-sm font-medium text-gray-700 mb-2">לאן הולך הרכב התקול?</p>
-                        <div className="flex gap-2 mb-2">
-                          <button type="button"
-                            onClick={() => {
-                              setDefectiveDestination('storage')
-                              if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
-                            }}
-                            className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'storage' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
-                            לאחסנה
-                          </button>
-                          <button type="button"
-                            onClick={() => setDefectiveDestination('address')}
-                            className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'address' ? 'bg-blue-500 text-white' : 'bg-gray-100'}`}>
-                            לכתובת
-                          </button>
-                        </div>
-                        {defectiveDestination === 'address' && (
-                          <AddressInput
-                            value={defectiveDestinationAddress}
-                            onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
-                            label="כתובת יעד"
-                            onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
-                          />
                         )}
-                      </div>
 
-                      {/* סוג גרר לתקול */}
-                      {defectiveVehicleData?.found && (
-                        <div className="mb-3" ref={truckTypeSectionRef}>
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium text-gray-700">סוג גרר לרכב התקול</p>
-                            {requiredTruckTypes.length > 0 && (
+                        {/* מוצא התקול */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">מוצא הרכב התקול</label>
+                          <div className="flex gap-2 mb-2">
+                            {workingVehicleDestinationAddress.address && (
                               <button type="button"
-                                onClick={() => setRequiredTruckTypes([...new Set([...requiredTruckTypes, requiredTruckTypes[0]])])}
-                                className="text-xs text-blue-500">
-                                זהה לתקין
+                                onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
+                                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-600">
+                                זהה ליעד התקין
                               </button>
                             )}
                           </div>
-                          <div className="flex gap-2">
-                            {TRUCK_OPTIONS.map((opt) => (
-                              <button key={opt.value} type="button"
-                                onClick={() => {
-                                  const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                  if (requiredTruckTypes.includes(opt.value)) {
-                                    setRequiredTruckTypes(current)
-                                  } else {
-                                    setRequiredTruckTypes([...current, opt.value])
-                                  }
-                                }}
-                                className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                                {opt.label}
-                              </button>
-                            ))}
+                          <AddressInput
+                            value={exchangeAddress}
+                            onChange={(d: AddressData) => setExchangeAddress(d)}
+                            label=""
+                            onPinDropClick={() => handlePinDropOpen('exchange')}
+                          />
+                        </div>
+
+                        {/* יעד התקול */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">יעד הרכב התקול</label>
+                          <div className="flex gap-2 mb-2">
+                            <button type="button"
+                              onClick={() => {
+                                setDefectiveDestination('storage')
+                                if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
+                              }}
+                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'storage' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              לאחסנה
+                            </button>
+                            <button type="button"
+                              onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }}
+                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'address' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                              לכתובת
+                            </button>
                           </div>
+                          {defectiveDestination === 'address' && (
+                            <AddressInput
+                              value={defectiveDestinationAddress}
+                              onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
+                              label=""
+                              onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
+                            />
+                          )}
                         </div>
-                      )}
 
-                      {/* איש קשר ביעד התקול */}
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">איש קשר ביעד התקול</label>
-                          <input type="text" value={defectiveDestinationContact}
-                            onChange={(e) => setDefectiveDestinationContact(e.target.value)}
-                            placeholder="שם..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">טלפון</label>
-                          <input type="text" value={defectiveDestinationContactPhone}
-                            onChange={(e) => setDefectiveDestinationContactPhone(e.target.value)}
-                            placeholder="05X-..." className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
-                        </div>
-                      </div>
-
-                      {/* נהג נוסף — אופציונלי */}
-                      <div className="border border-dashed border-gray-200 rounded-xl p-3">
-                        <p className="text-sm text-gray-500 mb-2">נהג נוסף לרכב התקול (אופציונלי)</p>
-                        <p className="text-xs text-gray-400">ניתן לשבץ נהג נוסף לאחר שמירת הגרירה</p>
                       </div>
                     </div>
 
-                    <TimeSurchargesSection
-                      timeSurchargesData={timeSurchargesData}
-                      towDate={towDate}
-                      towTime={towTime}
-                      isHoliday={isHoliday}
-                      setIsHoliday={setIsHoliday}
-                      activeTimeSurchargesList={activeTimeSurchargesList}
-                      setActiveTimeSurchargesList={setActiveTimeSurchargesList}
-                      setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
-                    />
-                    <LocationSurchargesSection
-                      locationSurchargesData={locationSurchargesData}
-                      selectedLocationSurcharges={selectedLocationSurcharges}
-                      setSelectedLocationSurcharges={setSelectedLocationSurcharges}
-                    />
-                    <ServiceSurchargeSelector
-                      services={serviceSurchargesData}
-                      selectedServices={selectedServices}
-                      onChange={setSelectedServices}
-                    />
                   </>
                 )}
 
@@ -1746,60 +1886,113 @@ function CreateTowForm({
                   </h2>
                 </div>
                 <div className="p-4 sm:p-5 space-y-4">
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-medium">איש קשר במוצא</label>
-                      <button
-                        type="button"
-                        onClick={() => copyFromCustomer('pickup')}
-                        className="text-xs text-cyan-600"
-                      >
-                        כמו לקוח 👤
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      value={pickupContactName}
-                      onChange={(e) => setPickupContactName(e.target.value)}
-                      placeholder="שם"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2"
-                    />
-                    <input
-                      type="tel"
-                      value={pickupContactPhone}
-                      onChange={(e) => setPickupContactPhone(e.target.value)}
-                      placeholder="טלפון"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                    />
-                  </div>
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-medium">
-                        איש קשר ביעד
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => copyFromCustomer('dropoff')}
-                        className="text-xs text-cyan-600"
-                      >
-                        כמו לקוח 👤
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      value={dropoffContactName}
-                      onChange={(e) => setDropoffContactName(e.target.value)}
-                      placeholder="שם"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2"
-                    />
-                    <input
-                      type="tel"
-                      value={dropoffContactPhone}
-                      onChange={(e) => setDropoffContactPhone(e.target.value)}
-                      placeholder="טלפון"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
-                    />
-                  </div>
+                  {towType === 'exchange' ? (
+                    <>
+                      {/* 1 — איש קשר במוצא תקין */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">איש קשר במוצא — רכב תקין</label>
+                          <button type="button" onClick={() => copyFromCustomer('pickup')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                        </div>
+                        <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
+                        <input type="tel" value={workingVehicleContactPhone} onChange={(e) => setWorkingVehicleContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                      </div>
+
+                      {/* 2 — איש קשר ביעד תקין */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">איש קשר ביעד — רכב תקין</label>
+                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                        </div>
+                        <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
+                        <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                      </div>
+
+                      {/* 3 — איש קשר במוצא תקול */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">איש קשר במוצא — רכב תקול</label>
+                          <div className="flex gap-2">
+                            {exchangeContactName && (
+                              <button type="button"
+                                onClick={() => { setDefectiveDestinationContact(exchangeContactName); setDefectiveDestinationContactPhone(exchangeContactPhone) }}
+                                className="text-xs text-blue-500">זהה ליעד תקין</button>
+                            )}
+                            <button type="button" onClick={() => copyFromCustomer('exchange_pickup')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                          </div>
+                        </div>
+                        <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
+                        <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                      </div>
+
+                      {/* 4 — איש קשר ביעד תקול */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">איש קשר ביעד — רכב תקול</label>
+                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="text-xs text-cyan-600">כמו לקוח 👤</button>
+                        </div>
+                        <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2" />
+                        <input type="tel" value={defectiveDestinationContactPhone} onChange={(e) => setDefectiveDestinationContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">איש קשר במוצא</label>
+                          <button
+                            type="button"
+                            onClick={() => copyFromCustomer('pickup')}
+                            className="text-xs text-cyan-600"
+                          >
+                            כמו לקוח 👤
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={pickupContactName}
+                          onChange={(e) => setPickupContactName(e.target.value)}
+                          placeholder="שם"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2"
+                        />
+                        <input
+                          type="tel"
+                          value={pickupContactPhone}
+                          onChange={(e) => setPickupContactPhone(e.target.value)}
+                          placeholder="טלפון"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-sm font-medium">
+                            איש קשר ביעד
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => copyFromCustomer('dropoff')}
+                            className="text-xs text-cyan-600"
+                          >
+                            כמו לקוח 👤
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={dropoffContactName}
+                          onChange={(e) => setDropoffContactName(e.target.value)}
+                          placeholder="שם"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm mb-2"
+                        />
+                        <input
+                          type="tel"
+                          value={dropoffContactPhone}
+                          onChange={(e) => setDropoffContactPhone(e.target.value)}
+                          placeholder="טלפון"
+                          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm"
+                        />
+                      </div>
+                    </>
+                  )}
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}

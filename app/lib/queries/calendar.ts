@@ -23,7 +23,7 @@ export async function getCalendarTows(
         name,
         phone
       ),
-      driver:drivers (
+      driver:drivers!tows_driver_id_fkey (
         id,
         user:users!drivers_user_id_fkey (
           full_name,
