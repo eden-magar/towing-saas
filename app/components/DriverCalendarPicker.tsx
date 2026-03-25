@@ -146,11 +146,11 @@ export function DriverCalendarPicker({
         </div>
 
         {/* גריד */}
-        <div className="overflow-auto flex-1 p-2">
-          {calendarLoading ? (
-            <div className="text-center text-gray-400 py-8">טוען...</div>
-          ) : (
-              <table className="w-full text-xs border-collapse">
+        <div className="overflow-auto flex-1 p-2 relative">
+          {calendarLoading && (
+            <span className="absolute top-2 right-2 z-20 text-xs text-gray-500">טוען...</span>
+          )}
+          <table className={`w-full text-xs border-collapse ${calendarLoading ? 'opacity-50' : ''}`}>
                 <thead>
                   <tr className="sticky top-0 bg-gray-50 z-10">
                     <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
@@ -239,7 +239,6 @@ export function DriverCalendarPicker({
                   )}
                 </tbody>
               </table>
-          )}
         </div>
 
         {/* שעה + אישור */}
