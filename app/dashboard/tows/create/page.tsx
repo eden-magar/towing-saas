@@ -603,7 +603,7 @@ function CreateTowForm({
   ] as const
 
   const openDefectsModal = () => {
-    const defectOptionValues = new Set(DEFECT_OPTIONS.map((o) => o.value))
+    const defectOptionValues = new Set<string>(DEFECT_OPTIONS.map((o) => o.value))
     const custom = selectedDefects.find((d) => !defectOptionValues.has(d))
     if (custom) {
       setOtherDefectText(custom)
