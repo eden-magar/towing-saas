@@ -1095,7 +1095,9 @@ function CreateTowForm({
                       <div className="p-4 space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700 block">כתובת מוצא</label>
+                            <div className="flex items-center">
+                              <label className="text-sm font-medium text-gray-700 block">כתובת מוצא</label>
+                            </div>
                             <AddressInput
                               value={pickupAddress}
                               onChange={(d: AddressData) => setPickupAddress(d)}
@@ -1105,33 +1107,7 @@ function CreateTowForm({
                             />
                           </div>
                           <div className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <label className="text-sm font-medium text-gray-700">כתובת הורדה</label>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (dropoffToStorage) {
-                                    setDropoffToStorage(false)
-                                    setDropoffAddress({ address: '' })
-                                    return
-                                  }
-                                  setDropoffToStorage(true)
-                                  if (storageAddress)
-                                    setDropoffAddress({
-                                      address: storageAddress,
-                                      lat: basePriceList?.base_lat,
-                                      lng: basePriceList?.base_lng,
-                                    })
-                                }}
-                                className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
-                                  dropoffToStorage
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-white text-gray-700 border border-gray-300 font-medium'
-                                }`}
-                              >
-                                הורדה לאחסנה
-                              </button>
-                            </div>
+                            <label className="text-sm font-medium text-gray-700">כתובת הורדה</label>
                             <AddressInput
                               value={dropoffAddress}
                               onChange={(d: AddressData) => setDropoffAddress(d)}
@@ -1139,6 +1115,30 @@ function CreateTowForm({
                               hideLabel
                               onPinDropClick={() => handlePinDropOpen('dropoff')}
                             />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (dropoffToStorage) {
+                                  setDropoffToStorage(false)
+                                  setDropoffAddress({ address: '' })
+                                  return
+                                }
+                                setDropoffToStorage(true)
+                                if (storageAddress)
+                                  setDropoffAddress({
+                                    address: storageAddress,
+                                    lat: basePriceList?.base_lat,
+                                    lng: basePriceList?.base_lng,
+                                  })
+                              }}
+                              className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
+                                dropoffToStorage
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-white text-gray-700 border border-gray-300 font-medium'
+                              }`}
+                            >
+                              הורדה לאחסנה
+                            </button>
                             {dropoffToStorage && (
                               <div className="flex gap-2 mt-2 items-center flex-wrap">
                                 <span className="text-sm text-gray-600">מצב הרכב:</span>
