@@ -278,6 +278,7 @@ function CreateTowForm({
   const [showTruckModal, setShowTruckModal] = useState(false)
   const [showDefectsModal, setShowDefectsModal] = useState(false)
   const [showStorageModal, setShowStorageModal] = useState(false)
+  const [otherDefectText, setOtherDefectText] = useState('')
 
   // URL params
   useEffect(() => {
@@ -587,19 +588,32 @@ function CreateTowForm({
   ] as const
 
   const DEFECT_OPTIONS = [
-    { value: 'תקר', label: 'תקר', icon: '🚗' },
-    { value: "פנצ'ר", label: "פנצ'ר", icon: '⚫' },
     { value: 'אין חשמל', label: 'אין חשמל', icon: '🔋' },
-    { value: 'לא נדלק/לא מניע', label: 'לא נדלק/לא מניע', icon: '🔧' },
-    { value: 'נילת מים/שמן', label: 'נילת מים/שמן', icon: '💧' },
-    { value: 'גלגל עקום או שבור', label: 'גלגל עקום או שבור', icon: '⚙️' },
-    { value: 'אחר', label: 'אחר', icon: '✏️' },
-    { value: 'מניע/נדלק ונוסע', label: 'מניע/נדלק ונוסע', icon: '✓' },
-    { value: 'חניון תת קרקעי', label: 'חניון תת קרקעי', icon: '🏢' },
-    { value: 'תאונה', label: 'תאונה', icon: '🚨' },
-    { value: 'מוגבל מהירות', label: 'מוגבל מהירות', icon: '🚗' },
     { value: 'גיר', label: 'גיר', icon: '⚙️' },
+    { value: 'גלגל עקום או שבור', label: 'גלגל עקום או שבור', icon: '⚙️' },
+    { value: 'חניון תת קרקעי', label: 'חניון תת קרקעי', icon: '🏢' },
+    { value: 'לא נדלק/לא מניע', label: 'לא נדלק/לא מניע', icon: '🔧' },
+    { value: 'מוגבל מהירות', label: 'מוגבל מהירות', icon: '🚗' },
+    { value: 'מניע/נדלק ונוסע', label: 'מניע/נדלק ונוסע', icon: '✓' },
+    { value: 'נילת מים/שמן', label: 'נילת מים/שמן', icon: '💧' },
+    { value: "פנצ'ר", label: "פנצ'ר", icon: '⚫' },
+    { value: 'תאונה', label: 'תאונה', icon: '🚨' },
+    { value: 'תקר', label: 'תקר', icon: '🚗' },
+    { value: 'אחר', label: 'אחר', icon: '✏️' },
   ] as const
+
+  const openDefectsModal = () => {
+    const defectOptionValues = new Set(DEFECT_OPTIONS.map((o) => o.value))
+    const custom = selectedDefects.find((d) => !defectOptionValues.has(d))
+    if (custom) {
+      setOtherDefectText(custom)
+      setSelectedDefects((prev) => {
+        const without = prev.filter((x) => x !== custom)
+        return without.includes('אחר') ? without : [...without, 'אחר']
+      })
+    }
+    setShowDefectsModal(true)
+  }
 
   const lockedOpacity = quoteApproved ? 1 : 0.35
   const lockedPointer = quoteApproved ? 'auto' : 'none'
@@ -1046,7 +1060,7 @@ function CreateTowForm({
                         <div className="grid grid-cols-2 gap-3">
                           <button
                             type="button"
-                            onClick={() => setShowDefectsModal(true)}
+                            onClick={openDefectsModal}
                             className={`w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
                               selectedDefects.length > 0
                                 ? 'border-red-400 bg-red-50 text-red-700'
@@ -1207,7 +1221,7 @@ function CreateTowForm({
 
                     {showDefectsModal && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-[320px]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-[480px]">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
                             <button
@@ -1241,10 +1255,30 @@ function CreateTowForm({
                               </button>
                             ))}
                           </div>
-                          <div className="px-4 pb-4 flex gap-2">
+                          {selectedDefects.includes('אחר') && (
+                            <div className="mt-3 px-1">
+                              <label className="block">תיאור התקלה:</label>
+                              <input
+                                type="text"
+                                value={otherDefectText}
+                                onChange={(e) => setOtherDefectText(e.target.value)}
+                                placeholder="תאר את התקלה..."
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          )}
+                          <div className="px-4 pb-4 pt-3 flex gap-2">
                             <button
                               type="button"
-                              onClick={() => setShowDefectsModal(false)}
+                              onClick={() => {
+                                setSelectedDefects((prev) => {
+                                  if (!prev.includes('אחר')) return prev
+                                  const trimmed = otherDefectText.trim()
+                                  if (!trimmed) return prev
+                                  return [...prev.filter((v) => v !== 'אחר'), trimmed]
+                                })
+                                setShowDefectsModal(false)
+                              }}
                               className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
                             >
                               אישור
