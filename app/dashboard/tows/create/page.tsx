@@ -1207,7 +1207,7 @@ function CreateTowForm({
 
                     {showDefectsModal && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                        <div className="bg-white rounded-2xl shadow-2xl w-[320px]">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
                             <button
@@ -1263,7 +1263,7 @@ function CreateTowForm({
 
                     {showTruckModal && (vehicleData !== null || vehicleNotFound) && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs">
+                        <div className="bg-white rounded-2xl shadow-2xl w-[320px]">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">סוג גרר נדרש</h3>
                             <button
