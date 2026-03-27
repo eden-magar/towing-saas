@@ -34,7 +34,7 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { createCustomer } from '../../../lib/queries/customers'
-import { createTow, updateTowStatus } from '../../../lib/queries/tows'
+import { createTow } from '../../../lib/queries/tows'
 import { addVehicleToStorage, releaseVehicleFromStorage, searchStoredVehicle } from '../../../lib/queries/storage'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import type { AddressData } from '../../../lib/google-maps'
@@ -489,8 +489,7 @@ function CreateTowForm({
         manualColor,
         manualWeight,
       })
-      const result = await createTow(towData)
-      await updateTowStatus(result.id, 'quote')
+      const result = await createTow({ ...towData, status: 'quote' as const })
       if (selectedStoredVehicleId && companyId) {
         await releaseVehicleFromStorage({
           storedVehicleId: selectedStoredVehicleId,

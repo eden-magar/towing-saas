@@ -140,6 +140,13 @@ export function useTowPricing(params: UseTowPricingParams) {
       return
     }
     const activeSurcharges = getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday)
+    console.log('DEBUG time effect:', {
+      towDate,
+      towTime,
+      isHoliday,
+      timeSurchargesCount: timeSurchargesData.length,
+      result: getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday)
+    })
     setActiveTimeSurchargesList(activeSurcharges)
     if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
   }, [towDate, towTime, timeSurchargesData, isHoliday])
@@ -202,6 +209,18 @@ export function useTowPricing(params: UseTowPricingParams) {
       .map(id => locationSurchargesData.find(l => l.id === id))
       .filter(Boolean)
       .map(s => ({ percent: s!.surcharge_percent }))
+
+    console.log('DEBUG location:', {
+      selectedLocationSurcharges,
+      locationSurchargesData: locationSurchargesData.map(l => ({ id: l.id, label: l.label, percent: l.surcharge_percent })),
+      result: locationSurcharges
+    })
+    console.log('DEBUG time:', {
+      towDate,
+      towTime,
+      timeSurchargesData: timeSurchargesData.length,
+      activeTimeSurchargesList
+    })
 
     const serviceSurcharges = selectedServices.map(selected => {
       const surcharge = serviceSurchargesData.find(s => s.id === selected.id)

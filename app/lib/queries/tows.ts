@@ -414,12 +414,14 @@ interface CreateTowInput {
   linkedTowId?: string
   secondDriverId?: string
   secondDriverScheduledAt?: string
+  status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
 
 }
 
 export async function createTow(input: CreateTowInput) {
   const towId = crypto.randomUUID()
-  const status = input.driverId ? 'assigned' : 'pending'
+  const status =
+    input.status ?? (input.driverId ? 'assigned' : 'pending')
 
   // יצירת הגרירה
   const { error: towError } = await supabase

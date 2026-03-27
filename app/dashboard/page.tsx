@@ -481,32 +481,6 @@
             {/* 2×2 כרטיסים */}
             <div className="grid grid-cols-2 gap-3 flex-shrink-0">
 
-              {/* הצעות מחיר ממתינות */}
-              {quoteTows.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-amber-800">
-                      הצעות מחיר ממתינות
-                    </span>
-                    <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {quoteTows.length}
-                    </span>
-                  </div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {quoteTows.map(t => (
-                      <div
-                        key={t.id}
-                        onClick={() => router.push(`/dashboard/tows/${t.id}`)}
-                        className="flex items-center justify-between p-2 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs"
-                      >
-                        <span className="font-medium">{t.order_number || t.id.slice(0, 8)}</span>
-                        <span className="text-amber-600">{t.customer?.name || 'לקוח'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* ממתינות לשיבוץ */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
@@ -531,6 +505,73 @@
                   ))}
                 </div>
               </div>
+
+              {/* לא סיימו משמרת */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
+                    לא סיימו משמרת
+                  </div>
+                  {overtimeDrivers.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">{overtimeDrivers.length}</span>}
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                  {overtimeDrivers.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
+                  ) : overtimeDrivers.map((shift: any) => {
+                    const driver = shift.driver as any
+                    return (
+                      <div key={shift.id} className="px-3 py-1.5 flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700">{driver?.user?.full_name}</div>
+                          <div className="text-xs text-gray-400">החל {new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} · עד {driver?.work_hours_end?.slice(0, 5)}</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const endTime = driver?.work_hours_end?.slice(0, 5) || '00:00'
+                            const today = new Date().toISOString().split('T')[0]
+                            const endedAt = new Date(`${today}T${endTime}:00`).toISOString()
+                            if (confirm(`לסיים משמרת של ${driver?.user?.full_name}?`)) {
+                              await endShiftManually(shift.id, endedAt)
+                              loadData()
+                            }
+                          }}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 flex-shrink-0"
+                        >
+                          סיים
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* הצעות מחיר ממתינות */}
+              {quoteTows.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-amber-800">
+                      הצעות מחיר ממתינות
+                    </span>
+                    <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      {quoteTows.length}
+                    </span>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {quoteTows.map(t => (
+                      <div
+                        key={t.id}
+                        onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                        className="flex items-center justify-between p-2 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs"
+                      >
+                        <span className="font-medium">{t.order_number || t.id.slice(0, 8)}</span>
+                        <span className="text-gray-500">{t.customer?.name || 'לקוח'}</span>
+                        <span className="text-amber-600 flex-shrink-0">{formatWaitTime(t.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* התראות תוקף */}
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -589,46 +630,6 @@
                           <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
                           <button onClick={async () => { if (confirm('לדחות הבקשה?')) { await denyRejectionRequest(req.id, user?.id || ''); loadData() } }} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* לא סיימו משמרת */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
-                    לא סיימו משמרת
-                  </div>
-                  {overtimeDrivers.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">{overtimeDrivers.length}</span>}
-                </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
-                  {overtimeDrivers.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
-                  ) : overtimeDrivers.map((shift: any) => {
-                    const driver = shift.driver as any
-                    return (
-                      <div key={shift.id} className="px-3 py-1.5 flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700">{driver?.user?.full_name}</div>
-                          <div className="text-xs text-gray-400">החל {new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} · עד {driver?.work_hours_end?.slice(0, 5)}</div>
-                        </div>
-                        <button
-                          onClick={async () => {
-                            const endTime = driver?.work_hours_end?.slice(0, 5) || '00:00'
-                            const today = new Date().toISOString().split('T')[0]
-                            const endedAt = new Date(`${today}T${endTime}:00`).toISOString()
-                            if (confirm(`לסיים משמרת של ${driver?.user?.full_name}?`)) {
-                              await endShiftManually(shift.id, endedAt)
-                              loadData()
-                            }
-                          }}
-                          className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 flex-shrink-0"
-                        >
-                          סיים
-                        </button>
                       </div>
                     )
                   })}
