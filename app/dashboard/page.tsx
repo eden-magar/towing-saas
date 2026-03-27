@@ -76,6 +76,14 @@
     const [approvalAction, setApprovalAction] = useState<'reassign' | 'unassign'>('unassign')
     const [processingRequest, setProcessingRequest] = useState(false)
 
+    const [showEndShiftModal, setShowEndShiftModal] = useState(false)
+    const [endShiftTarget, setEndShiftTarget] = useState<{ shiftId: string; driverName: string } | null>(null)
+    const [endShiftDate, setEndShiftDate] = useState(() => new Date().toISOString().split('T')[0])
+    const [endShiftTime, setEndShiftTime] = useState(() => {
+      const n = new Date()
+      return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`
+    })
+
     const searchWrapRef = useRef<HTMLDivElement>(null)
     const [towSearchInput, setTowSearchInput] = useState('')
     const [towSearchDebounced, setTowSearchDebounced] = useState('')
@@ -697,14 +705,15 @@
                           <div className="text-xs text-gray-400">החל {new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} · עד {driver?.work_hours_end?.slice(0, 5)}</div>
                         </div>
                         <button
-                          onClick={async () => {
-                            const endTime = driver?.work_hours_end?.slice(0, 5) || '00:00'
+                          onClick={() => {
                             const today = new Date().toISOString().split('T')[0]
-                            const endedAt = new Date(`${today}T${endTime}:00`).toISOString()
-                            if (confirm(`לסיים משמרת של ${driver?.user?.full_name}?`)) {
-                              await endShiftManually(shift.id, endedAt)
-                              loadData()
-                            }
+                            const now = new Date()
+                            const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+                            const timeFromDriver = driver?.work_hours_end?.slice(0, 5)
+                            setEndShiftTarget({ shiftId: shift.id, driverName: driver?.user?.full_name || 'נהג' })
+                            setEndShiftDate(today)
+                            setEndShiftTime(timeFromDriver || currentTime)
+                            setShowEndShiftModal(true)
                           }}
                           className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 flex-shrink-0"
                         >
@@ -807,6 +816,63 @@
                   disabled={processingRequest || (approvalAction === 'reassign' && !selectedNewDriver)}
                   className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium disabled:opacity-50">
                   {processingRequest ? 'מעבד...' : 'אשר'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* מודל סיום משמרת */}
+        {showEndShiftModal && endShiftTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white">
+              <div className="border-b border-gray-100 p-5">
+                <h3 className="text-lg font-bold text-gray-800">סיום משמרת — {endShiftTarget.driverName}</h3>
+              </div>
+              <div className="space-y-4 p-5">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">תאריך סיום</label>
+                  <input
+                    type="date"
+                    value={endShiftDate}
+                    onChange={e => setEndShiftDate(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 p-3 focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">שעת סיום</label>
+                  <input
+                    type="time"
+                    value={endShiftTime}
+                    onChange={e => setEndShiftTime(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 p-3 focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 border-t border-gray-100 bg-gray-50 p-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEndShiftModal(false)
+                    setEndShiftTarget(null)
+                  }}
+                  className="flex-1 rounded-xl border border-gray-200 bg-white py-3 font-medium text-gray-600"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    console.log('endShift:', endShiftTarget?.shiftId, endShiftDate, endShiftTime)
+                    const endedAt = new Date(`${endShiftDate}T${endShiftTime}:00`).toISOString()
+                    await endShiftManually(endShiftTarget.shiftId, endedAt)
+                    await loadData()
+                    setShowEndShiftModal(false)
+                    setEndShiftTarget(null)
+                  }}
+                  className="flex-1 rounded-xl bg-[#33d4ff] py-3 font-medium text-white hover:bg-[#21b8e6]"
+                >
+                  סיים משמרת
                 </button>
               </div>
             </div>
