@@ -1118,6 +1118,17 @@ function CreateTowForm({
                               hideLabel
                               onPinDropClick={() => handlePinDropOpen('pickup')}
                             />
+                            <button
+                              type="button"
+                              onClick={() => setStartFromBase(!startFromBase)}
+                              className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
+                                startFromBase
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-white text-gray-700 border border-gray-300 font-medium'
+                              }`}
+                            >
+                              יציאה מהחניון
+                            </button>
                           </div>
                           <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700">כתובת הורדה</label>

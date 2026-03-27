@@ -233,6 +233,12 @@ export function PriceSummary({
                     <span className="text-gray-700">₪{distancePrice}</span>
                   </div>
                 )}
+                {/* יציאה מהחניון */}
+                {!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm && (
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>מתוכם יציאה מהחניון ({baseToPickupDistance.distanceKm} ק״מ)</span>
+                  </div>
+                )}
                 
                 {/* תוספת זמן */}
                 {timeAmount > 0 && (
