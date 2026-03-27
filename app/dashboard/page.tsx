@@ -5,7 +5,7 @@
   import { useAuth } from '../lib/AuthContext'
   import { getDashboardStats, DashboardStats } from '../lib/queries/dashboard'
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
-  import { getTows, TowWithDetails } from '../lib/queries/tows'
+  import { getTows, TowWithDetails, searchTows } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, endShiftManually, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
@@ -14,7 +14,7 @@
   import { supabase } from '../lib/supabase'
   import DriversMap from '../components/DriversMap'
   import Link from 'next/link'
-  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Check } from 'lucide-react'
+  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Check, Search, Loader2 } from 'lucide-react'
 
   const alertTypeConfig: Record<string, { label: string; icon: typeof Truck; link: string }> = {
     truck_license: { label: 'רישיון רכב', icon: FileText, link: '/dashboard/trucks' },
@@ -75,6 +75,59 @@
     const [selectedNewDriver, setSelectedNewDriver] = useState('')
     const [approvalAction, setApprovalAction] = useState<'reassign' | 'unassign'>('unassign')
     const [processingRequest, setProcessingRequest] = useState(false)
+
+    const searchWrapRef = useRef<HTMLDivElement>(null)
+    const [towSearchInput, setTowSearchInput] = useState('')
+    const [towSearchDebounced, setTowSearchDebounced] = useState('')
+    const [towSearchResults, setTowSearchResults] = useState<TowWithDetails[]>([])
+    const [towSearchOpen, setTowSearchOpen] = useState(false)
+    const [isSearching, setIsSearching] = useState(false)
+
+    useEffect(() => {
+      const t = setTimeout(() => setTowSearchDebounced(towSearchInput), 300)
+      return () => clearTimeout(t)
+    }, [towSearchInput])
+
+    useEffect(() => {
+      if (!companyId || !towSearchDebounced.trim()) {
+        setTowSearchResults([])
+        setTowSearchOpen(false)
+        setIsSearching(false)
+        return
+      }
+      let cancelled = false
+      setTowSearchResults([])
+      setIsSearching(true)
+      searchTows(companyId, towSearchDebounced)
+        .then(r => {
+          if (!cancelled) {
+            setTowSearchResults(r)
+            setTowSearchOpen(true)
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTowSearchResults([])
+            setTowSearchOpen(false)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsSearching(false)
+        })
+      return () => {
+        cancelled = true
+      }
+    }, [towSearchDebounced, companyId])
+
+    useEffect(() => {
+      const onDoc = (e: MouseEvent) => {
+        if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+          setTowSearchOpen(false)
+        }
+      }
+      document.addEventListener('mousedown', onDoc)
+      return () => document.removeEventListener('mousedown', onDoc)
+    }, [])
 
     const loadData = async () => {
       if (!companyId) return
@@ -303,6 +356,62 @@
           <div className={`text-xs ${pendingTows.length > 0 ? 'text-red-400' : 'text-gray-400'}`}>
             ממתינות לשיבוץ
           </div>
+        </div>
+
+        <div ref={searchWrapRef} className="relative flex-shrink-0">
+          <div className="relative rounded-xl bg-white shadow-sm">
+            <Search className="pointer-events-none absolute right-3 top-1/2 size-[18px] -translate-y-1/2 text-gray-400" aria-hidden />
+            <input
+              type="search"
+              value={towSearchInput}
+              onChange={e => setTowSearchInput(e.target.value)}
+              onFocus={() => {
+                if (towSearchResults.length > 0 && towSearchDebounced.trim()) setTowSearchOpen(true)
+              }}
+              placeholder="חיפוש גרירה..."
+              className="w-72 rounded-xl border border-gray-300 bg-white py-2 pr-10 pl-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+            />
+          </div>
+          {towSearchOpen && towSearchDebounced.trim() && (
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-lg">
+              {isSearching ? (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500">
+                  <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+                  מחפש...
+                </div>
+              ) : towSearchResults.length === 0 && towSearchDebounced.trim() ? (
+                <div className="px-3 py-2 text-xs text-gray-500">לא נמצאו תוצאות</div>
+              ) : (
+                towSearchResults.map(t => {
+                  const v = t.vehicles?.[0]
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="flex w-full flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-gray-50 px-3 py-2 text-right text-xs last:border-0 hover:bg-gray-50"
+                      onMouseEnter={() => router.prefetch(`/dashboard/tows/${t.id}`)}
+                      onClick={() => {
+                        router.push(`/dashboard/tows/${t.id}`)
+                        setTowSearchOpen(false)
+                        setTowSearchInput('')
+                        setTowSearchDebounced('')
+                        setTowSearchResults([])
+                        setIsSearching(false)
+                      }}
+                    >
+                      <span className="font-bold text-gray-800">{t.order_number ?? '—'}</span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-700">{t.customer?.name ?? '—'}</span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-700">{v?.plate_number ?? '—'}</span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-600">{v?.vehicle_type ?? '—'}</span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          )}
         </div>
 
         <Link

@@ -236,6 +236,106 @@ export async function getTows(companyId: string): Promise<TowWithDetails[]> {
   }))
 }
 
+export async function searchTows(companyId: string, query: string): Promise<TowWithDetails[]> {
+  const q = query.trim()
+  if (!q) return []
+
+  const pattern = `%${q}%`
+
+  const [orderRes, customersRes, vehiclesRes] = await Promise.all([
+    supabase.from('tows').select('id').eq('company_id', companyId).ilike('order_number', pattern),
+    supabase.from('customers').select('id').ilike('name', pattern),
+    supabase.from('tow_vehicles').select('tow_id').ilike('plate_number', pattern),
+  ])
+
+  const ids = new Set<string>()
+  orderRes.data?.forEach((r: { id: string }) => ids.add(r.id))
+
+  const customerIds = customersRes.data?.map((c: { id: string }) => c.id) || []
+  if (customerIds.length > 0) {
+    const { data: towRows } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('customer_id', customerIds)
+    towRows?.forEach((r: { id: string }) => ids.add(r.id))
+  }
+
+  const vehicleTowIds = [...new Set(vehiclesRes.data?.map((v: { tow_id: string }) => v.tow_id) || [])]
+  if (vehicleTowIds.length > 0) {
+    const { data: towRows } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('id', vehicleTowIds)
+    towRows?.forEach((r: { id: string }) => ids.add(r.id))
+  }
+
+  if (ids.size === 0) return []
+
+  const idList = Array.from(ids)
+
+  const { data: tows, error } = await supabase
+    .from('tows')
+    .select(`
+      *,
+      customer:customers (
+        id,
+        name,
+        phone
+      ),
+      driver:drivers!tows_driver_id_fkey (
+        id,
+        user:users!drivers_user_id_fkey (
+          full_name,
+          phone
+        )
+      ),
+      second_driver:drivers!tows_second_driver_id_fkey (
+        id,
+        user:users!drivers_user_id_fkey (
+          full_name,
+          phone
+        )
+      ),
+      truck:tow_trucks (
+        id,
+        plate_number
+      ),
+      vehicles:tow_vehicles (
+        plate_number,
+        vehicle_type,
+        order_index
+      )
+    `)
+    .eq('company_id', companyId)
+    .in('id', idList)
+    .order('created_at', { ascending: false })
+    .limit(8)
+
+  if (error) {
+    console.error('Error searching tows:', error)
+    throw error
+  }
+
+  if (!tows || tows.length === 0) return []
+
+  return tows.map(tow => {
+    const raw = (tow as { vehicles?: { plate_number: string; vehicle_type: string | null; order_index: number | null }[] }).vehicles
+    const vehiclesSorted = [...(raw || [])].sort(
+      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+    )
+    return {
+      ...tow,
+      customer: tow.customer as any,
+      driver: tow.driver as any,
+      truck: tow.truck as any,
+      vehicles: vehiclesSorted as TowVehicle[],
+      legs: [],
+    }
+  })
+}
+
 // ==================== שליפת גרירה בודדת ====================
 
 export async function getTow(towId: string): Promise<TowWithDetails | null> {
