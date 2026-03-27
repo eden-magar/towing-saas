@@ -89,7 +89,7 @@ export function DriverCalendarPicker({
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
 
         {/* כותרת + ניווט תאריך */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-center gap-3 p-4 border-b">
           <button
             type="button"
             onClick={() => {
@@ -97,7 +97,7 @@ export function DriverCalendarPicker({
               d.setDate(d.getDate() - 1)
               setPickerDate(d)
             }}
-            className="p-2 hover:bg-gray-100 rounded-lg text-lg"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-xl font-bold text-gray-700 transition-colors"
           >→</button>
           <span className="font-medium text-sm">
             {pickerDate.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })}
@@ -109,7 +109,7 @@ export function DriverCalendarPicker({
               d.setDate(d.getDate() + 1)
               setPickerDate(d)
             }}
-            className="p-2 hover:bg-gray-100 rounded-lg text-lg"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-xl font-bold text-gray-700 transition-colors"
           >←</button>
         </div>
 
@@ -152,13 +152,15 @@ export function DriverCalendarPicker({
           )}
           <table className={`w-full text-xs border-collapse ${calendarLoading ? 'opacity-50' : ''}`}>
                 <thead>
-                  <tr className="sticky top-0 bg-gray-50 z-10">
-                    <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
+                  <tr className="sticky top-0 z-10">
+                    <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-200 border-l border-gray-200 w-8 bg-gray-50"></th>
                     {visibleDrivers.map((d, i) => {
                       const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
                       return (
-                        <th key={d.id} className="text-center px-1 py-1.5 font-medium border-b border-gray-100 border-l border-l-gray-100 text-xs" style={{ width: `${100 / visibleDrivers.length}%`, color }}>
-                          {d.user?.full_name?.split(' ')[0] || 'נהג'}
+                        <th key={d.id} className="text-center px-1 py-1.5 font-medium border-b border-gray-200 border-l border-gray-200 text-xs align-middle" style={{ width: `${100 / visibleDrivers.length}%` }}>
+                          <span className="inline-block rounded-lg px-2 py-1 font-medium" style={{ backgroundColor: `${color}26`, color }}>
+                            {d.user?.full_name?.split(' ')[0] || 'נהג'}
+                          </span>
                         </th>
                       )
                     })}
@@ -167,7 +169,7 @@ export function DriverCalendarPicker({
                 <tbody style={{ position: 'relative' }}>
                   {Array.from({ length: 24 }, (_, i) => i).map(hour => (
                     <tr key={hour} className="border-b border-gray-200" style={{ height: '40px' }}>
-                      <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
+                      <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium bg-gray-50">{hour}:00</td>
                       {visibleDrivers.map((driver) => {
                         const driverIdx = drivers.indexOf(driver)
                         const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
@@ -184,9 +186,10 @@ export function DriverCalendarPicker({
                         return (
                           <td
                             key={driver.id}
-                            className={`px-0.5 py-0.5 border-l border-gray-200 min-h-6 cursor-pointer transition-colors
-                              ${!isRelevant ? 'bg-gray-50' : ''}
+                            className={`px-0.5 py-0.5 border-l border-gray-200 min-h-6 cursor-pointer transition-colors hover:bg-blue-50/30
                               ${isSelected ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''}
+                              ${!isSelected && !isRelevant ? 'bg-gray-50' : ''}
+                              ${!isSelected && isRelevant ? 'bg-white' : ''}
                             `}
                             style={{ width: `${100 / visibleDrivers.length}%` }}
                             onClick={() => {
@@ -197,6 +200,7 @@ export function DriverCalendarPicker({
                             {cellTows.map(t => (
                               <div
                                 key={t.id}
+                                title={`${t.customer?.name || ''} ${t.order_number || ''}`.trim()}
                                 className="rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium"
                                 style={{
                                   background: color + '25',
@@ -204,13 +208,13 @@ export function DriverCalendarPicker({
                                   border: `1px solid ${color}40`,
                                 }}
                               >
-                                {t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                                {t.customer?.name || t.order_number?.slice(-4) || t.id.slice(0, 4)}
                               </div>
                             ))}
                             {cellTows.length === 0 && (
                               <button
                                 type="button"
-                                className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
+                                className="w-full h-5 border border-dashed border-gray-200 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
                               >
                                 +
                               </button>

@@ -435,9 +435,9 @@
                                         color: color,
                                         border: `1px solid ${color}40`,
                                       }}
-                                      title={t.order_number || ''}
+                                      title={`${t.customer?.name || ''} ${t.order_number || ''}`.trim()}
                                     >
-                                      {t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                                      {t.customer?.name || t.order_number?.slice(-4) || t.id.slice(0, 4)}
                                     </div>
                                   )
                                 }) : (
