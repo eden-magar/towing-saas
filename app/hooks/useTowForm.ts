@@ -250,14 +250,8 @@ export function useTowForm(editTowId?: string) {
     }
     const calc = async () => {
       setDistanceLoading(true)
-      console.log('Calculating distance:', {
-        pickup: pickupAddress,
-        dropoff: dropoffAddress
-      })
       try {
         const result = await calculateDistance(pickupAddress, dropoffAddress)
-        console.log('Distance result:', result)
-
         setDistance(result)
       } catch (err) {
         console.error('Distance calculation error:', err)
@@ -541,18 +535,6 @@ export function useTowForm(editTowId?: string) {
       console.error('Error loading data:', err)
     }
   }
-
-  // Debug: log loaded data
-  useEffect(() => {
-    console.log('Price data loaded:', {
-      fixedPriceItems,
-      customersWithPricing,
-      selectedCustomerPricing,
-      timeSurchargesData,
-      locationSurchargesData,
-      serviceSurchargesData
-    })
-  }, [fixedPriceItems, customersWithPricing, selectedCustomerPricing])
 
   // ==================== Price Calculations ====================
   const { recommendedPrice, finalPrice, priceResult } = useTowPricing({

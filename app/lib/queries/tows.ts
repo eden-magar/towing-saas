@@ -905,7 +905,6 @@ export async function updateTow(input: UpdateTowInput) {
 
 
   if (Object.keys(towUpdates).length > 0) {
-    console.log('updateTow DB payload:', { towId: input.towId, towUpdates })
     const { error: towError } = await supabase
       .from('tows')
       .update(towUpdates)

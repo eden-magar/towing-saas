@@ -300,7 +300,6 @@ export function useTowSave(params: UseTowSaveParams) {
     })
 
     if (editTowId) {
-    console.log('updateTow data:', { ...towData, towId: editTowId, finalPrice: towData.finalPrice, priceMode: towData.priceMode })
     
     // שמירת לוג שינויים
     if (originalTow && user) {

@@ -8,11 +8,6 @@ export async function getCalendarTows(
   startDate: Date,
   endDate: Date
 ): Promise<TowWithDetails[]> {
-  console.log('=== getCalendarTows DEBUG ===')
-  console.log('companyId:', companyId)
-  console.log('startDate:', startDate.toISOString())
-  console.log('endDate:', endDate.toISOString())
-
   // שאילתה פשוטה - מביאה את כל הגרירות של החברה
   const { data: allTows, error } = await supabase
     .from('tows')
@@ -44,22 +39,14 @@ export async function getCalendarTows(
     throw error
   }
 
-  console.log('All tows from DB:', allTows?.length || 0)
-  allTows?.forEach(t => {
-    console.log(`Tow ${t.id}: scheduled_at=${t.scheduled_at}, created_at=${t.created_at}`)
-  })
-
   if (!allTows || allTows.length === 0) return []
 
   // סינון בצד הקליינט
   const tows = allTows.filter(tow => {
     const towDate = new Date(tow.scheduled_at || tow.created_at)
     const inRange = towDate >= startDate && towDate <= endDate
-    console.log(`Tow ${tow.id}: towDate=${towDate.toISOString()}, inRange=${inRange}`)
     return inRange
   })
-
-  console.log('Filtered tows:', tows.length)
 
   if (tows.length === 0) return []
 

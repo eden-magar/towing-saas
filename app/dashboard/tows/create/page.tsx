@@ -520,7 +520,7 @@ function CreateTowForm({
           vehicleCondition: 'operational',
         })
       }
-      setQuoteSavedId(result.id)
+      router.push('/dashboard')
     } catch (err) {
       console.error(err)
       setError('שגיאה בשמירת ההצעה')
