@@ -587,11 +587,20 @@ export async function createTow(input: CreateTowInput) {
 // ==================== עדכון סטטוס גרירה ====================
 
 export async function updateTowStatus(
-  towId: string, 
-  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  towId: string,
+  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled',
+  cancellationReason?: string,
+  cancellationDetails?: string
 ) {
   const updates: Record<string, any> = { status }
-  
+
+  if (cancellationReason !== undefined) {
+    updates.cancellation_reason = cancellationReason
+  }
+  if (cancellationDetails !== undefined) {
+    updates.cancellation_details = cancellationDetails
+  }
+
   if (status === 'in_progress') {
     updates.started_at = new Date().toISOString()
   } else if (status === 'completed' || status === 'cancelled') {

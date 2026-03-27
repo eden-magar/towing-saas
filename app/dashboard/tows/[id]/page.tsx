@@ -89,7 +89,8 @@ export default function TowDetailsPage() {
   const [showRemoveDriverConfirm, setShowRemoveDriverConfirm] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [cancelStep, setCancelStep] = useState<'warning' | 'reason' | 'confirm'>('reason')
-  const [cancelReason, setCancelReason] = useState('')
+  const [selectedCancellationReason, setSelectedCancellationReason] = useState('')
+  const [cancellationDetails, setCancellationDetails] = useState('')
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
   const [assigning, setAssigning] = useState(false)
@@ -521,10 +522,16 @@ export default function TowDetailsPage() {
   const handleConfirmCancel = async () => {
     if (!tow) return
     try {
-      await updateTowStatus(tow.id, 'cancelled')
+      await updateTowStatus(
+        tow.id,
+        'cancelled',
+        selectedCancellationReason,
+        cancellationDetails.trim() || undefined
+      )
       await loadData()
       setShowCancelModal(false)
-      setCancelReason('')
+      setSelectedCancellationReason('')
+      setCancellationDetails('')
       setCancelStep('reason')
     } catch (err) {
       console.error('Error cancelling tow:', err)
@@ -533,7 +540,8 @@ export default function TowDetailsPage() {
 
   const closeCancelModal = () => {
     setShowCancelModal(false)
-    setCancelReason('')
+    setSelectedCancellationReason('')
+    setCancellationDetails('')
     setCancelStep('reason')
   }
 
@@ -1970,9 +1978,24 @@ export default function TowDetailsPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">סיבת ביטול *</label>
+                    <select
+                      value={selectedCancellationReason}
+                      onChange={(e) => setSelectedCancellationReason(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                    >
+                      <option value="">בחר סיבה...</option>
+                      <option value="לקוח סירב להצעה">לקוח סירב להצעה</option>
+                      <option value="לא קיבלתי תשובה">לא קיבלתי תשובה</option>
+                      <option value="ביטול על ידי הלקוח">ביטול על ידי הלקוח</option>
+                      <option value="סיבה אחרת">סיבה אחרת</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">פירוט נוסף (אופציונלי)</label>
                     <textarea
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
+                      value={cancellationDetails}
+                      onChange={(e) => setCancellationDetails(e.target.value)}
                       placeholder="נא לציין את סיבת הביטול..."
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -2000,7 +2023,7 @@ export default function TowDetailsPage() {
                   </button>
                   <button
                     onClick={() => setCancelStep('confirm')}
-                    disabled={!cancelReason.trim()}
+                    disabled={!selectedCancellationReason}
                     className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                   >
                     המשך
