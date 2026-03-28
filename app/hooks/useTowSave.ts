@@ -55,6 +55,8 @@ interface UseTowSaveParams {
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
   vatPercent?: number
+  manualAdjustmentPercent?: string
+  manualAdjustmentType?: 'discount' | 'markup'
   basePriceList: any
   selectedCustomerPricing: CustomerWithPricing | null
   activeTimeSurchargesList: TimeSurcharge[]
@@ -137,6 +139,8 @@ export function useTowSave(params: UseTowSaveParams) {
     priceMode,
     finalPrice,
     vatPercent,
+    manualAdjustmentPercent,
+    manualAdjustmentType,
     basePriceList,
     selectedCustomerPricing,
     activeTimeSurchargesList,
@@ -265,6 +269,10 @@ export function useTowSave(params: UseTowSaveParams) {
       priceMode,
       finalPrice,
       vatPercent,
+      manualAdjustmentPercent: (() => {
+        const adj = parseFloat(manualAdjustmentPercent ?? '') || 0
+        return manualAdjustmentType === 'discount' ? -adj : adj
+      })(),
       basePriceList,
       selectedCustomerPricing,
       activeTimeSurcharges: activeTimeSurchargesList,

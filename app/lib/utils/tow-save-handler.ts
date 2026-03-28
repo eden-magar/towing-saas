@@ -68,6 +68,7 @@ export interface SaveTowInput {
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
   vatPercent?: number
+  manualAdjustmentPercent?: number
   basePriceList: any
   selectedCustomerPricing: CustomerWithPricing | null
   
@@ -511,6 +512,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     serviceSurcharges,
     priceMode: 'recommended',
     discountPercent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    manualAdjustmentPercent: input.manualAdjustmentPercent ?? 0,
     vatPercent: input.vatPercent ?? 0.18,
   })
 

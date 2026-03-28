@@ -46,6 +46,7 @@ export interface TowPriceInput {
 
   // discount
   discountPercent: number
+  manualAdjustmentPercent?: number
 
   // vat
   vatPercent?: number // default 0.18
@@ -57,6 +58,7 @@ export interface PriceBreakdownItem {
   label: string
   amount: number
   type: 'base' | 'distance' | 'time' | 'location' | 'service' | 'discount' | 'vat'
+  bold?: boolean
 }
 
 export interface TowPriceResult {
@@ -201,21 +203,24 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
   const serviceAmount = input.serviceSurcharges.reduce((sum, s) => sum + s.amount, 0)
 
   // before_vat = subtotal × (1 + max time %) + location + services
-  const beforeVat = subtotal * (1 + maxTimePercent / 100) + locationAmount + serviceAmount
+  const preVatSubtotal = subtotal * (1 + maxTimePercent / 100) + locationAmount + serviceAmount
 
-  // VAT
-  const vatAmount = beforeVat * vatRate
-  const beforeDiscount = beforeVat + vatAmount
-
-  // Discount
+  const beforeDiscount = preVatSubtotal
   const discountAmount = beforeDiscount * (input.discountPercent / 100)
-  const finalPrice = beforeDiscount * (1 - input.discountPercent / 100)
 
-  // Minimum and round
-  const total = Math.max(Math.round(finalPrice), minimumPrice)
-  const minimumApplied = total > Math.round(finalPrice)
+  const beforeVat = beforeDiscount - discountAmount
+  const vatAmount = Math.round(beforeVat * vatRate)
+  const totalBeforeManual = beforeVat + vatAmount
+  const manualAdjBase = input.manualAdjustmentPercent ?? 0
+  const manualAdjAmountCalc = Math.round(Math.abs(totalBeforeManual * manualAdjBase / 100))
+  const total = totalBeforeManual + (manualAdjBase > 0 ? manualAdjAmountCalc : manualAdjBase < 0 ? -manualAdjAmountCalc : 0)
+  const totalBeforeVat = Math.round(total / (1 + vatRate))
+  const finalVatAmount = total - totalBeforeVat
 
-  // Breakdown for display
+  const finalPrice = total
+  const minimumApplied = Math.max(Math.round(total), minimumPrice) > Math.round(total)
+  const cappedTotal = Math.max(Math.round(total), minimumPrice)
+
   const breakdown: PriceBreakdownItem[] = [
     { label: 'מחיר בסיס', amount: basePrice, type: 'base' },
     { label: `מרחק (${input.distanceKm} ק״מ)`, amount: distancePrice, type: 'distance' }
@@ -248,7 +253,27 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
       type: 'discount'
     })
   }
+  // subtotal before VAT
+  breakdown.push({ label: 'סה״כ לפני מע״מ', amount: beforeVat, type: 'base' })
+  // VAT on original total
   breakdown.push({ label: `מע״מ (${Math.round(vatRate * 100)}%)`, amount: vatAmount, type: 'vat' })
+  // total before manual adjustment (bold marker — amount = totalBeforeManual)
+  breakdown.push({ label: 'סה״כ', amount: totalBeforeManual, type: 'base', bold: true })
+
+  // manual adjustment
+  const manualAdj = input.manualAdjustmentPercent ?? 0
+  const manualAdjAmount = Math.round(Math.abs(totalBeforeManual * manualAdj / 100))
+  if (manualAdj !== 0) {
+    breakdown.push({
+      label: manualAdj > 0 ? `תוספת (${manualAdj}%)` : `הנחה ידנית (${Math.abs(manualAdj)}%)`,
+      amount: manualAdj > 0 ? manualAdjAmount : -manualAdjAmount,
+      type: manualAdj > 0 ? 'service' : 'discount'
+    })
+    // breakdown after manual adj
+    breakdown.push({ label: 'לפני מע״מ', amount: totalBeforeVat, type: 'base' })
+    breakdown.push({ label: `מע״מ (${Math.round(vatRate * 100)}%)`, amount: finalVatAmount, type: 'vat' })
+    breakdown.push({ label: manualAdj > 0 ? 'סך הכל אחרי תוספת' : 'סך הכל אחרי הנחה', amount: total, type: 'base', bold: true })
+  }
 
   return {
     basePrice,
@@ -265,7 +290,7 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     discountAmount,
     finalPrice,
     minimumApplied,
-    total,
+    total: cappedTotal,
     breakdown
   }
 }

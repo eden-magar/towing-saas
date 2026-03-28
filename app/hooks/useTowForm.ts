@@ -80,6 +80,8 @@ export function useTowForm(editTowId?: string) {
   const [customPrice, setCustomPrice] = useState<string>('')
   const [customPriceIncludesVat, setCustomPriceIncludesVat] = useState(true)
   const [vatPercent, setVatPercent] = useState<number>(0.18)
+  const [manualAdjustmentPercent, setManualAdjustmentPercent] = useState<string>('')
+  const [manualAdjustmentType, setManualAdjustmentType] = useState<'discount' | 'markup'>('discount')
 
   const [customerOrderNumber, setCustomerOrderNumber] = useState('')
   const [orderNumber, setOrderNumber] = useState<string | null>(null)
@@ -574,6 +576,8 @@ export function useTowForm(editTowId?: string) {
     companyLocationSurchargesData: locationSurchargesData,
     companyServiceSurchargesData: serviceSurchargesData,
     vatPercent,
+    manualAdjustmentPercent,
+    manualAdjustmentType,
     hasManualTimeSurchargeOverride,
     setHasManualTimeSurchargeOverride,
   })
@@ -733,6 +737,8 @@ export function useTowForm(editTowId?: string) {
     priceMode,
     finalPrice,
     vatPercent,
+    manualAdjustmentPercent,
+    manualAdjustmentType,
     basePriceList,
     selectedCustomerPricing,
     activeTimeSurchargesList,
@@ -909,6 +915,8 @@ export function useTowForm(editTowId?: string) {
     finalPrice,
     priceResult,
     vatPercent,
+    manualAdjustmentPercent, setManualAdjustmentPercent,
+    manualAdjustmentType, setManualAdjustmentType,
     // Handlers
     handleCustomerSelect,
     handleSelectWorkingVehicle,

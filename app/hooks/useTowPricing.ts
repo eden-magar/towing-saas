@@ -52,6 +52,8 @@ interface UseTowPricingParams {
   companyServiceSurchargesData?: ServiceSurcharge[]
   hasManualTimeSurchargeOverride?: boolean
   setHasManualTimeSurchargeOverride?: (v: boolean) => void
+  manualAdjustmentPercent?: string
+  manualAdjustmentType?: 'discount' | 'markup'
 }
 
 export function useTowPricing(params: UseTowPricingParams) {
@@ -94,7 +96,12 @@ export function useTowPricing(params: UseTowPricingParams) {
     companyServiceSurchargesData,
     hasManualTimeSurchargeOverride = false,
     setHasManualTimeSurchargeOverride,
+    manualAdjustmentPercent = '',
+    manualAdjustmentType = 'discount',
   } = params
+
+  const adjPercent = parseFloat(manualAdjustmentPercent) || 0
+  const effectiveManualAdj = manualAdjustmentType === 'discount' ? -adjPercent : adjPercent
 
   // Customer pricing
   useEffect(() => {
@@ -188,6 +195,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         serviceSurcharges: svcSurcharges,
         priceMode: 'recommended',
         discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+        manualAdjustmentPercent: effectiveManualAdj,
         vatPercent: vatPercent
       })
       return result
@@ -235,6 +243,7 @@ export function useTowPricing(params: UseTowPricingParams) {
       serviceSurcharges,
       priceMode: 'recommended',
       discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      manualAdjustmentPercent: effectiveManualAdj,
       vatPercent: vatPercent,
     })
     return result

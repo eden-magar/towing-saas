@@ -249,6 +249,8 @@ function CreateTowForm({
     recommendedPrice,
     finalPrice,
     priceResult,
+    manualAdjustmentPercent, setManualAdjustmentPercent,
+    manualAdjustmentType, setManualAdjustmentType,
     handleCustomerSelect,
     handleSelectStoredVehicle,
     handleClearStoredVehicle,
@@ -2006,9 +2008,10 @@ function CreateTowForm({
                         {priceResult.breakdown
                           .filter(item => item.amount !== 0)
                           .map((item, idx) => (
-                            <p key={idx}>{item.label}: ₪{Math.round(item.amount)}</p>
+                            <p key={idx} className={item.bold ? 'font-bold text-base text-gray-900' : 'text-gray-500'}>
+                              {item.label}: ₪{Math.round(item.amount)}
+                            </p>
                           ))}
-                        <p className="font-bold">סה״כ: ₪{Math.round(priceResult.total)}</p>
                       </>
                     ) : (
                       <>
@@ -2018,6 +2021,41 @@ function CreateTowForm({
                         <p className="font-bold">סה״כ: ₪{finalPrice}</p>
                       </>
                     )}
+                    {/* הנחה / תוספת ידנית */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-200 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setManualAdjustmentType('discount')}
+                        className={`px-2.5 py-1 rounded-lg text-xs ${
+                          manualAdjustmentType === 'discount'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-white text-gray-700 border border-gray-300'
+                        }`}
+                      >
+                        הנחה
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setManualAdjustmentType('markup')}
+                        className={`px-2.5 py-1 rounded-lg text-xs ${
+                          manualAdjustmentType === 'markup'
+                            ? 'bg-green-500 text-white'
+                            : 'bg-white text-gray-700 border border-gray-300'
+                        }`}
+                      >
+                        תוספת
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={manualAdjustmentPercent}
+                        onChange={(e) => setManualAdjustmentPercent(e.target.value)}
+                        placeholder="%"
+                        className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
+                      />
+                      <span className="text-xs text-gray-500">אחוז</span>
+                    </div>
                   </div>
                 )}
               </div>
