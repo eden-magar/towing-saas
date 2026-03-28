@@ -492,6 +492,11 @@ export default function DriverHomePage() {
                     <div className="text-sm text-cyan-100">
                       משימה פעילה {currentTask.order_number && `#${currentTask.order_number}`}
                     </div>
+                    {currentTask.hasPendingRejection && (
+                      <div className="mt-1 px-2 py-0.5 bg-orange-400/80 text-white text-xs font-medium rounded-lg inline-block">
+                        ממתין לאישור בקשת דחייה
+                      </div>
+                    )}
                     <div className="font-bold">{getVehicleInfo(currentTask).name}</div>
                     {getVehicleInfo(currentTask).plate && (
                       <span className="bg-white/20 text-xs font-mono px-2 py-0.5 rounded">

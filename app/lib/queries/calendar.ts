@@ -35,7 +35,7 @@ export async function getCalendarTows(
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('Error fetching calendar tows:', error)
+    console.error('Error fetching calendar tows:', JSON.stringify(error), error)
     throw error
   }
 

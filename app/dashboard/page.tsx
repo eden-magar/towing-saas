@@ -669,7 +669,10 @@
                       <div key={req.id} className="px-3 py-1.5 flex items-center gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
-                          <div className="text-xs text-gray-400 truncate">"{req.reason_note || reasonInfo?.label}"</div>
+                          <Link href={`/dashboard/tows/${req.tow_id}`} className="text-xs text-blue-500 hover:underline truncate block">
+                            #{req.tow_id?.slice(0, 8)}
+                          </Link>
+                          <div className="text-xs text-gray-400 truncate">{reasonInfo?.label || req.reason_note}</div>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
                           <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
