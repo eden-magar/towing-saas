@@ -1024,7 +1024,7 @@ const handleSkipPriceUpdate = () => {
       {/* Tow Detail Modal */}
       {selectedTow && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white w-full sm:rounded-2xl sm:max-w-md sm:mx-4 overflow-hidden rounded-t-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white w-full sm:rounded-2xl sm:mx-4 overflow-hidden rounded-t-2xl max-h-[80vh] overflow-y-auto" style={{ maxWidth: '380px' }}>
             <div
               className="px-5 py-4 text-white flex items-center justify-between sticky top-0"
               style={{ backgroundColor: selectedTow.driver_id ? getDriverColor(selectedTow.driver_id) : '#6b7280' }}

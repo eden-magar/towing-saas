@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
-import { getServiceSurcharges, ServiceSurcharge } from '../../../lib/queries/price-lists'
+import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
+import { calculateTowPrice } from '../../../lib/utils/price-calculator'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
@@ -134,6 +135,13 @@ export default function TowDetailsPage() {
   const [changeLogs, setChangeLogs] = useState<any[]>([])
   const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
   const [processingRejection, setProcessingRejection] = useState(false)
+  const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
+  const [basePriceList, setBasePriceList] = useState<any>(null)
+  const [priceChangeModal, setPriceChangeModal] = useState<{
+    oldPrice: number
+    newPrice: number
+    newBreakdown: any[]
+  } | null>(null)
 
   const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'ממתין לשיבוץ', color: 'bg-orange-100 text-orange-700 border-orange-200' },
@@ -198,18 +206,22 @@ export default function TowDetailsPage() {
     if (!companyId) return
     setLoading(true)
     try {
-      const [towData, driversData, trucksData, customersData, serviceSurcharges] = await Promise.all([
+      const [towData, driversData, trucksData, customersData, serviceSurcharges, basePriceListData, timeSurchargesDataResult] = await Promise.all([
         getTowWithPoints(towId),
         getDrivers(companyId),
         getTrucks(companyId),
         getCustomers(companyId),
-        getServiceSurcharges(companyId)
+        getServiceSurcharges(companyId),
+        getBasePriceList(companyId),
+        getTimeSurcharges(companyId),
       ])
       setTow(towData)
       setDrivers(driversData)
       setTrucks(trucksData)
       setCustomers(customersData)
       setServiceSurchargesData(serviceSurcharges)
+      setBasePriceList(basePriceListData)
+      setTimeSurchargesData(timeSurchargesDataResult)
       
       // בדיקה אם יש חשבונית לגרירה
       if (towData) {
@@ -460,12 +472,71 @@ export default function TowDetailsPage() {
 
   const handleAssignDriver = async () => {
     if (!selectedDriverId || !selectedTruckId || !tow) return
-    
+
+    // חישוב מחיר חדש לפי שעה חדשה
+    if (tow.price_breakdown && basePriceList && timeSurchargesData.length > 0 && tow.price_mode === 'recommended') {
+      const newDate = scheduleDate.toISOString().split('T')[0]
+      const newTime = scheduleDate.toTimeString().slice(0, 5)
+      const activeSurcharges = getActiveTimeSurcharges(timeSurchargesData, newTime, newDate, false)
+      const locationSurcharges = (tow.price_breakdown.location_surcharges || []).map((s: any) => ({ percent: s.percent }))
+      const serviceSurcharges = (tow.price_breakdown.service_surcharges || []).map((s: any) => ({ amount: s.amount }))
+
+      const newResult = calculateTowPrice({
+        priceList: {
+          base_prices: {
+            private: basePriceList.base_price_private || 0,
+            motorcycle: basePriceList.base_price_motorcycle || 0,
+            heavy: basePriceList.base_price_heavy || 0,
+            machinery: basePriceList.base_price_machinery || 0,
+          },
+          price_per_km: basePriceList.price_per_km || 12,
+          minimum_price: basePriceList.minimum_price || 250,
+        },
+        vehicleType: (tow.price_breakdown.vehicle_type as any) || 'private',
+        distanceKm: tow.price_breakdown.distance_km || 0,
+        timeSurcharges: timeSurchargesData,
+        towDate: newDate,
+        towTime: newTime,
+        isHoliday: false,
+        activeTimeSurchargeIds: activeSurcharges.map(s => s.id),
+        hasManualTimeSurchargeOverride: true,
+        locationSurcharges,
+        serviceSurcharges,
+        priceMode: 'recommended',
+        discountPercent: tow.price_breakdown.discount_percent || 0,
+        vatPercent: 0.18,
+      })
+
+      const oldPrice = tow.price_breakdown.total
+      const newPrice = newResult.total
+
+      if (Math.abs(oldPrice - newPrice) > 1) {
+        setPriceChangeModal({
+          oldPrice,
+          newPrice,
+          newBreakdown: newResult.breakdown,
+        })
+        return
+      }
+    }
+
+    await doAssign()
+  }
+
+  const doAssign = async (useNewPrice?: boolean) => {
+    if (!selectedDriverId || !selectedTruckId || !tow) return
     setAssigning(true)
     try {
       await assignDriver(tow.id, selectedDriverId, selectedTruckId, scheduleDate?.toISOString())
-      await loadData()
+      if (useNewPrice && priceChangeModal) {
+        await updateTow({
+          towId: tow.id,
+          finalPrice: priceChangeModal.newPrice,
+        })
+      }
       closeDriverModal()
+      setPriceChangeModal(null)
+      router.push('/dashboard')
     } catch (err) {
       console.error('Error assigning driver:', err)
       alert('שגיאה בשיבוץ הנהג')
@@ -610,6 +681,8 @@ export default function TowDetailsPage() {
           onConfirm={(driverId, date, time) => {
             setSelectedDriverId(driverId)
             setScheduleDate(new Date(date + 'T' + time + ':00'))
+            const driverTrucks = getDriverTrucks(driverId)
+            if (driverTrucks.length > 0) setSelectedTruckId(driverTrucks[0].id)
           }}
           onClose={closeDriverModal}
         />
@@ -643,37 +716,15 @@ export default function TowDetailsPage() {
               </div>
             </div>
 
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">בחר גרר:</h3>
-              <div className="space-y-2">
-                {getDriverTrucks(selectedDriverId).map((truck) => (
-                  <button
-                    key={truck.id}
-                    onClick={() => setSelectedTruckId(truck.id)}
-                    className={`w-full p-4 rounded-xl border text-right transition-colors ${
-                      selectedTruckId === truck.id
-                        ? 'border-[#33d4ff] bg-[#33d4ff]/5'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        selectedTruckId === truck.id ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        <Truck size={20} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-800">{truckTypeLabels[truck.truck_type] || truck.truck_type}</p>
-                        <p className="text-sm text-gray-500 font-mono">{truck.plate_number}</p>
-                      </div>
-                      {selectedTruckId === truck.id && (
-                        <CheckCircle size={20} className="text-[#33d4ff]" />
-                      )}
-                    </div>
-                  </button>
-                ))}
+            {selectedTruckId && (
+              <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-600 flex items-center gap-2">
+                <Truck size={16} className="text-gray-400" />
+                {(() => {
+                  const truck = getDriverTrucks(selectedDriverId).find(t => t.id === selectedTruckId)
+                  return truck ? `${truckTypeLabels[truck.truck_type] || truck.truck_type} — ${truck.plate_number}` : ''
+                })()}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -2293,6 +2344,51 @@ export default function TowDetailsPage() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {priceChangeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ width: '420px', maxWidth: '95vw' }}>
+            <div className="px-5 py-4 bg-amber-500 text-white">
+              <h3 className="font-bold text-lg">המחיר השתנה</h3>
+              <p className="text-sm text-amber-100 mt-1">השעה החדשה משפיעה על המחיר</p>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                <span className="text-sm text-gray-500">מחיר ישן</span>
+                <span className="font-bold text-gray-400 line-through">₪{priceChangeModal.oldPrice}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl border border-amber-200">
+                <span className="text-sm text-amber-700">מחיר חדש</span>
+                <span className="font-bold text-amber-700 text-lg">₪{priceChangeModal.newPrice}</span>
+              </div>
+              <div className="text-sm space-y-1 text-gray-600">
+                {priceChangeModal.newBreakdown.filter(i => i.amount !== 0).map((item, idx) => (
+                  <div key={idx} className="flex justify-between">
+                    <span>{item.label}</span>
+                    <span>₪{Math.round(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => doAssign(false)}
+                disabled={assigning}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50"
+              >
+                שמור מחיר ישן
+              </button>
+              <button
+                onClick={() => doAssign(true)}
+                disabled={assigning}
+                className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600"
+              >
+                עדכן למחיר חדש
+              </button>
+            </div>
           </div>
         </div>
       )}
