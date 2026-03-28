@@ -722,13 +722,20 @@ export async function updateTowStatus(
 
 // ==================== שיוך נהג לגרירה ====================
 
-export async function assignDriver(towId: string, driverId: string, truckId?: string) {
+export async function assignDriver(towId: string, driverId: string, truckId?: string, scheduledAt?: string) {
+  const { data: existing } = await supabase
+    .from('tows')
+    .select('scheduled_at')
+    .eq('id', towId)
+    .single()
+
   const { error } = await supabase
     .from('tows')
     .update({
       driver_id: driverId,
       truck_id: truckId || null,
-      status: 'assigned'
+      status: 'assigned',
+      scheduled_at: scheduledAt || existing?.scheduled_at || new Date().toISOString()
     })
     .eq('id', towId)
 

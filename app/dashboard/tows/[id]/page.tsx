@@ -463,7 +463,7 @@ export default function TowDetailsPage() {
     
     setAssigning(true)
     try {
-      await assignDriver(tow.id, selectedDriverId, selectedTruckId)
+      await assignDriver(tow.id, selectedDriverId, selectedTruckId, scheduleDate?.toISOString())
       await loadData()
       closeDriverModal()
     } catch (err) {
