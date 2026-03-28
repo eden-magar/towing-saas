@@ -548,7 +548,7 @@ export async function rejectTask(
     towId,
     driverId,
     companyId,
-    reason,
+    reason as import('./rejection-requests').RejectionReason,
     note || undefined
   )
   return created.id
