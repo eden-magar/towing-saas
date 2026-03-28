@@ -54,6 +54,7 @@ export interface DriverTask {
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
   scheduled_at: string | null
   notes: string | null
+  hasPendingRejection?: boolean
   created_at: string
   customer: {
     id: string
@@ -209,6 +210,10 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
       truck:tow_trucks (
         id,
         plate_number
+      ),
+      tow_rejection_requests (
+        id,
+        status
       )
     `)
     .eq('driver_id', driverId)
@@ -271,6 +276,9 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     tow_type: tow.tow_type,
     scheduled_at: tow.scheduled_at,
     notes: tow.notes,
+    hasPendingRejection: Array.isArray((tow as any).tow_rejection_requests)
+      ? (tow as any).tow_rejection_requests.some((r: any) => r.status === 'pending')
+      : false,
     created_at: tow.created_at,
     customer: tow.customer as any,
     truck: tow.truck as any,

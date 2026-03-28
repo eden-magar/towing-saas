@@ -570,6 +570,11 @@ export default function DriverHomePage() {
                     isInProgress ? 'border-cyan-200' : 'border-gray-100'
                   }`}
                 >
+                  {task.hasPendingRejection && (
+                    <div className="mb-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-lg text-center">
+                      ממתין לאישור בקשת דחייה
+                    </div>
+                  )}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`rounded-xl px-3 py-2 font-bold ${
