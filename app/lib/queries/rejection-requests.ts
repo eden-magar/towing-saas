@@ -203,3 +203,34 @@ export async function getApprovedRejectionRequestsForDriver(driverId: string) {
     .gte('reviewed_at', since)
   return data || []
 }
+
+export async function getRejectionRequestsForTow(towId: string) {
+  const { data, error } = await supabase
+    .from('tow_rejection_requests')
+    .select('*')
+    .eq('tow_id', towId)
+    .order('created_at', { ascending: true })
+
+  if (error) return []
+  if (!data || data.length === 0) return []
+
+  const driverIds = data.map(r => r.driver_id).filter(Boolean)
+  const reviewerIds = data.map(r => r.reviewed_by).filter(Boolean)
+  const userIds = [...new Set([...driverIds, ...reviewerIds])]
+
+  const { data: drivers } = await supabase
+    .from('drivers')
+    .select('id, user_id')
+    .in('id', driverIds)
+
+  const { data: users } = await supabase
+    .from('users')
+    .select('id, full_name')
+    .in('id', userIds.length > 0 ? userIds : ['none'])
+
+  return data.map(r => ({
+    ...r,
+    driverName: users?.find(u => u.id === drivers?.find(d => d.id === r.driver_id)?.user_id)?.full_name || null,
+    reviewerName: users?.find(u => u.id === r.reviewed_by)?.full_name || null,
+  }))
+}

@@ -91,6 +91,12 @@ export default function DriverHomePage() {
         table: 'tows',
         filter: `driver_id=eq.${driverInfo.id}`
       }, () => loadData())
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tow_rejection_requests',
+        filter: `driver_id=eq.${driverInfo.id}`
+      }, () => loadData())
       .subscribe()
 
     return () => {

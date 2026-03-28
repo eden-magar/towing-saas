@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow } from '../../../lib/queries/tows'
+import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
@@ -131,6 +132,8 @@ export default function TowDetailsPage() {
   const [scheduleDate, setScheduleDate] = useState(new Date())
 
   const [changeLogs, setChangeLogs] = useState<any[]>([])
+  const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
+  const [processingRejection, setProcessingRejection] = useState(false)
 
   const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'ממתין לשיבוץ', color: 'bg-orange-100 text-orange-700 border-orange-200' },
@@ -215,6 +218,8 @@ export default function TowDetailsPage() {
       }
       const logs = await getTowChangeLogs(towId)
       setChangeLogs(logs)
+      const rejections = await getRejectionRequestsForTow(towId)
+      setRejectionRequests(rejections)
     } catch (err) {
       console.error('Error loading tow:', err)
       setError('שגיאה בטעינת הגרירה')
@@ -828,6 +833,55 @@ export default function TowDetailsPage() {
         {activeTab === 'details' && (
           <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
             <div className="flex-1 space-y-4 sm:space-y-6">
+              {/* בקשת דחייה פעילה */}
+              {rejectionRequests.some(r => r.status === 'pending') && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+                  <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-amber-200">
+                    <h2 className="font-bold text-amber-800">בקשת דחייה ממתינה לטיפול</h2>
+                  </div>
+                  <div className="p-4 sm:p-5 space-y-3">
+                    {rejectionRequests.filter(r => r.status === 'pending').map((req) => {
+                      const reasonInfo = REJECTION_REASONS.find(r => r.key === req.reason)
+                      return (
+                        <div key={req.id} className="space-y-2">
+                          <div className="text-sm font-medium text-amber-900">
+                            {req.driverName || 'נהג'} ביקש לדחות את הגרירה
+                          </div>
+                          <div className="text-sm text-amber-700">
+                            סיבה: {req.reason === 'other' ? (req.reason_note || 'אחר') : (reasonInfo?.label || req.reason)}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={async () => {
+                                setProcessingRejection(true)
+                                await approveRejectionRequest(req.id, user?.id || '')
+                                await loadData()
+                                setProcessingRejection(false)
+                              }}
+                              disabled={processingRejection}
+                              className="px-4 py-2 bg-green-500 text-white text-sm rounded-xl font-medium hover:bg-green-600 disabled:opacity-50"
+                            >
+                              אשר דחייה
+                            </button>
+                            <button
+                              onClick={async () => {
+                                setProcessingRejection(true)
+                                await denyRejectionRequest(req.id, user?.id || '')
+                                await loadData()
+                                setProcessingRejection(false)
+                              }}
+                              disabled={processingRejection}
+                              className="px-4 py-2 bg-red-500 text-white text-sm rounded-xl font-medium hover:bg-red-600 disabled:opacity-50"
+                            >
+                              דחה בקשה
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               {/* פרטי לקוח */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
@@ -1643,6 +1697,25 @@ export default function TowDetailsPage() {
                     events.push({ time: tow.completed_at, label: 'גרירה הושלמה', color: 'bg-emerald-600' })
                   }
                   
+                  rejectionRequests.forEach(req => {
+                    const reasonInfo = REJECTION_REASONS.find(r => r.key === req.reason)
+                    const reasonLabel = req.reason === 'other' ? (req.reason_note || 'אחר') : (reasonInfo?.label || req.reason)
+                    events.push({
+                      time: req.created_at,
+                      label: `${req.driverName || 'נהג'} ביקש דחייה — ${reasonLabel}`,
+                      color: 'bg-amber-400'
+                    })
+                    if (req.reviewed_at) {
+                      events.push({
+                        time: req.reviewed_at,
+                        label: req.status === 'approved'
+                          ? `בקשת הדחייה אושרה${req.reviewerName ? ` על ידי ${req.reviewerName}` : ''}`
+                          : `בקשת הדחייה נדחתה${req.reviewerName ? ` על ידי ${req.reviewerName}` : ''}`,
+                        color: req.status === 'approved' ? 'bg-green-500' : 'bg-red-400'
+                      })
+                    }
+                  })
+
                   events.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
 
                   return (
@@ -1694,6 +1767,7 @@ export default function TowDetailsPage() {
                 </div>
               </div>
             )}
+
           </div>
         )}
 
@@ -1932,7 +2006,7 @@ export default function TowDetailsPage() {
 
       {showCancelModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ width: '420px', maxWidth: '95vw' }}>
             {cancelStep === 'warning' && (
               <>
                 <div className="p-6 text-center">
