@@ -665,14 +665,23 @@
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות דחייה</div>
                   ) : rejectionRequests.map(req => {
                     const reasonInfo = REJECTION_REASONS.find(r => r.key === req.reason)
+                    console.log('rejection reason:', req.reason, 'found:', reasonInfo)
                     return (
-                      <div key={req.id} className="px-3 py-1.5 flex items-center gap-2">
+                      <div key={req.id} className="px-3 py-2 flex items-center gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
-                          <Link href={`/dashboard/tows/${req.tow_id}`} className="text-xs text-blue-500 hover:underline truncate block">
-                            #{req.tow_id?.slice(0, 8)}
+                          <div className="text-xs text-gray-400 truncate">
+                            {req.reason === 'other'
+                              ? (req.reason_note || 'אחר')
+                              : (REJECTION_REASONS.find(r => r.key === req.reason)?.label || req.reason_note || req.reason)}
+                          </div>
+                          <Link
+                            href={`/dashboard/tows/${req.tow_id}`}
+                            className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600"
+                          >
+                            {(req as any).tow?.customer?.name || 'פרטי גרירה'} ←
                           </Link>
-                          <div className="text-xs text-gray-400 truncate">{reasonInfo?.label || req.reason_note}</div>
+                          <span className="text-xs text-gray-300 mt-0.5 block">לחץ לטופס הגרירה</span>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
                           <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
@@ -770,7 +779,7 @@
         {/* מודל אישור דחייה */}
         {showApprovalModal && selectedRequest && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto">
               <div className="p-5 border-b border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800">אישור בקשת דחייה</h3>
                 <p className="text-sm text-gray-500 mt-1">מה לעשות עם המשימה?</p>

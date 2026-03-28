@@ -548,8 +548,8 @@ export async function rejectTask(
     towId,
     driverId,
     companyId,
-    'other',
-    note ? `${reason} - ${note}` : reason
+    reason,
+    note || undefined
   )
   return created.id
 }

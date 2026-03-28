@@ -92,12 +92,19 @@ export async function getPendingRejectionRequests(companyId: string) {
     .select('id, full_name, phone')
     .in('id', userIds)
 
+  const towIds = data.map(r => r.tow_id).filter(Boolean)
+  const { data: tows } = await supabase
+    .from('tows')
+    .select('id, order_number, customer:customers(id, name)')
+    .in('id', towIds)
+
   return data.map(request => ({
     ...request,
     driver: {
       id: request.driver_id,
       user: users?.find(u => u.id === drivers?.find(d => d.id === request.driver_id)?.user_id) || null
-    }
+    },
+    tow: tows?.find(t => t.id === request.tow_id) || null
   }))
 }
 // אישור בקשת דחייה
