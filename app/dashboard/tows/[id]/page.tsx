@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
-import { calculateTowPrice } from '../../../lib/utils/price-calculator'
+import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
@@ -141,6 +141,8 @@ export default function TowDetailsPage() {
     oldPrice: number
     newPrice: number
     newBreakdown: any[]
+    newResult: TowPriceResult
+    activeSurcharges: TimeSurcharge[]
   } | null>(null)
 
   const statusConfig: Record<string, { label: string; color: string }> = {
@@ -515,6 +517,8 @@ export default function TowDetailsPage() {
           oldPrice,
           newPrice,
           newBreakdown: newResult.breakdown,
+          newResult,
+          activeSurcharges,
         })
         return
       }
@@ -532,6 +536,24 @@ export default function TowDetailsPage() {
         await updateTow({
           towId: tow.id,
           finalPrice: priceChangeModal.newPrice,
+          recommendedPrice: priceChangeModal.newPrice,
+          priceBreakdown: tow.price_breakdown ? {
+            ...tow.price_breakdown,
+            base_price: priceChangeModal.newResult.basePrice,
+            distance_price: priceChangeModal.newResult.distancePrice,
+            subtotal: priceChangeModal.newResult.subtotal,
+            time_surcharges: priceChangeModal.activeSurcharges
+              .filter(s => s.surcharge_percent === priceChangeModal.newResult.maxTimeSurchargePercent)
+              .map(s => ({
+                id: s.id,
+                label: s.label,
+                percent: s.surcharge_percent,
+                amount: priceChangeModal.newResult.subtotal * (s.surcharge_percent / 100),
+              })),
+            vat_amount: priceChangeModal.newResult.vatAmount,
+            discount_amount: priceChangeModal.newResult.discountAmount,
+            total: priceChangeModal.newResult.total,
+          } : null,
         })
       }
       closeDriverModal()
