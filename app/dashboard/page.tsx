@@ -614,8 +614,8 @@
                     ) : pendingTows.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(tow => (
                     <div key={tow.id} className="px-3 py-1.5 flex items-center gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-700 truncate">{tow.vehicles?.[0]?.plate_number || '—'}</div>
-                        <div className="text-xs text-gray-400 truncate">{tow.legs?.[0]?.from_address?.split(',')[0] || '—'} → {tow.legs?.[tow.legs.length - 1]?.to_address?.split(',')[0] || '—'}</div>
+                        <div className="text-xs font-medium text-gray-700 truncate">{tow.customer?.name || '—'} · {tow.vehicles?.[0]?.plate_number || '—'}</div>
+                        <div className="text-xs text-gray-400 truncate">{tow.legs?.[0]?.from_address?.split(',')[0] || '—'} ← {tow.legs?.[tow.legs.length - 1]?.to_address?.split(',')[0] || '—'}</div>
                       </div>
                       <span className="text-xs text-amber-600 flex-shrink-0">{formatWaitTime(tow.created_at)}</span>
                       <button onClick={() => router.push(`/dashboard/tows/${tow.id}`)} className="text-xs px-2 py-1 bg-gray-900 text-white rounded-lg flex-shrink-0 hover:bg-gray-700">שבץ</button>

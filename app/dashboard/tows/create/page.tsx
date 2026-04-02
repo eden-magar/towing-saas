@@ -2497,7 +2497,7 @@ function CreateTowForm({
             </div>
             <div className="flex gap-3 p-5 bg-gray-50 border-t border-gray-300">
               <button
-                onClick={() => router.push('/dashboard/tows')}
+                onClick={() => router.push('/dashboard')}
                 className="flex-1 py-3 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
               >
                 אחר כך
