@@ -984,7 +984,11 @@ function CreateTowForm({
                                 </span>
                               )}
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs">
+                            <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl text-xs border ${
+                              customerStoredVehicles.find(v => v.id === selectedStoredVehicleId)?.vehicle_condition === 'faulty'
+                                ? 'bg-red-50 border-red-200'
+                                : 'bg-blue-50 border-blue-100'
+                            }`}>
                               <div>
                                 <span className="text-gray-400 block text-xs">יצרן</span>
                                 <span className="font-medium text-gray-800">{vehicleData.data.manufacturer}</span>
