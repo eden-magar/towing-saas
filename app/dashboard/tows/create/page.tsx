@@ -1365,7 +1365,7 @@ function CreateTowForm({
 
                     {showStorageModal && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">בחר רכב מאחסנה</h3>
                             <button
