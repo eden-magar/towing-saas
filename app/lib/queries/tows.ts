@@ -703,8 +703,10 @@ export async function updateTowStatus(
 
   if (status === 'in_progress') {
     updates.started_at = new Date().toISOString()
-  } else if (status === 'completed' || status === 'cancelled') {
+  } else if (status === 'completed') {
     updates.completed_at = new Date().toISOString()
+  } else if (status === 'cancelled') {
+    updates.cancelled_at = new Date().toISOString()
   }
 
   const { error } = await supabase
