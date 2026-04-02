@@ -606,8 +606,8 @@ export function useTowForm(editTowId?: string) {
     if (vehicle.vehicle_data) {
     const vehicleResult: VehicleLookupResult = {
       found: true,
-      source: 'private',
-      sourceLabel: 'רכב פרטי',
+      source: (vehicle.vehicle_data?.source as VehicleLookupResult['source']) || 'private',
+      sourceLabel: vehicle.vehicle_data?.sourceLabel || 'רכב פרטי',
       data: {
         plateNumber: vehicle.plate_number,
         manufacturer: vehicle.vehicle_data.manufacturer || null,

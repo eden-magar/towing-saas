@@ -208,7 +208,7 @@ export default function StoragePage() {
       if (result.found && result.data) {
         setFormData({
           ...formData,
-          vehicleData: result.data
+          vehicleData: result.found ? { ...result.data, source: result.source || undefined, sourceLabel: result.sourceLabel || undefined } : result.data
         })
       }
     } catch (err) {

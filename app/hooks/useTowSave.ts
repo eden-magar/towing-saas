@@ -359,6 +359,8 @@ export function useTowSave(params: UseTowSaveParams) {
             gearType: vehicleData.data.gearType || undefined,
             driveType: vehicleData.data.driveType || undefined,
             totalWeight: vehicleData.data.totalWeight?.toString() || undefined,
+            source: vehicleData.source || undefined,
+            sourceLabel: vehicleData.sourceLabel || undefined,
           } : (manualManufacturer || manualColor || manualWeight ? {
             manufacturer: manualManufacturer || undefined,
             color: manualColor || undefined,

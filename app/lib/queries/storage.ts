@@ -15,6 +15,8 @@ export interface StoredVehicle {
     gearType?: string
     driveType?: string
     totalWeight?: string
+    source?: string
+    sourceLabel?: string
   } | null
   current_status: 'stored' | 'released'
   location: string | null

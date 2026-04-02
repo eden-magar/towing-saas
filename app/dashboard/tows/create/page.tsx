@@ -514,6 +514,8 @@ function CreateTowForm({
                 gearType: vData.data.gearType || undefined,
                 driveType: vData.data.driveType || undefined,
                 totalWeight: vData.data.totalWeight?.toString(),
+                source: vData.source || undefined,
+                sourceLabel: vData.sourceLabel || undefined,
               }
             : undefined,
           towId: result.id,
@@ -945,19 +947,30 @@ function CreateTowForm({
                         </div>
                         <div className="flex justify-end">
                           {selectedCustomerId && customerStoredVehicles.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setShowStorageModal(true)}
-                              className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition-colors ${
-                                selectedStoredVehicleId
-                                  ? 'border-green-400 bg-green-50 text-green-700'
-                                  : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
-                              }`}
-                            >
-                              🏪 {selectedStoredVehicleId
-                                ? `מאחסנה: ${customerStoredVehicles.find((v) => v.id === selectedStoredVehicleId)?.plate_number}`
-                                : 'בחר מאחסנה'}
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setShowStorageModal(true)}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition-colors ${
+                                  selectedStoredVehicleId
+                                    ? 'border-green-400 bg-green-50 text-green-700'
+                                    : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                                }`}
+                              >
+                                🏪 {selectedStoredVehicleId
+                                  ? `מאחסנה: ${customerStoredVehicles.find((v) => v.id === selectedStoredVehicleId)?.plate_number}`
+                                  : 'בחר מאחסנה'}
+                              </button>
+                              {selectedStoredVehicleId && (
+                                <button
+                                  type="button"
+                                  onClick={handleClearStoredVehicle}
+                                  className="p-1 text-gray-400 hover:text-red-500 rounded"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                         {vehicleData?.found && vehicleData.data && (
@@ -965,6 +978,11 @@ function CreateTowForm({
                             <div className="flex items-center gap-1.5 mb-2">
                               <span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
                               <span className="text-xs font-medium text-green-700">נמצא במאגר הרישוי</span>
+                              {vehicleData.sourceLabel && (
+                                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
+                                  {vehicleData.sourceLabel}
+                                </span>
+                              )}
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs">
                               <div>

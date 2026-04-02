@@ -136,7 +136,7 @@ export function VehicleLookup({
               {vehicleData.data.manufacturer} {vehicleData.data.model}
             </span>
             {vehicleData.data.year && <span className="text-gray-600">{vehicleData.data.year}</span>}
-            <span className="hidden sm:inline px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
+            <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
               {vehicleData.sourceLabel}
             </span>
           </div>
