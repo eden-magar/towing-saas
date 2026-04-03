@@ -798,7 +798,7 @@ const handleSkipPriceUpdate = () => {
                         height: `${Math.max(height - 4, 20)}px`,
                         right: `${right + 0.3}%`,
                         width: `${slotWidth - 0.6}%`,
-                        backgroundColor: driverColor,
+                        backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
                         borderRightColor: driverColor,
                       }}
                     >
@@ -810,6 +810,11 @@ const handleSkipPriceUpdate = () => {
                       {!tow.driver_id && tow.status !== 'quote' && (
                         <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
                           לשיבוץ
+                        </div>
+                      )}
+                      {tow.status === 'completed' && (
+                        <div className="absolute top-1 left-1 bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                          ✓ בוצעה
                         </div>
                       )}
                       <div className="font-bold truncate text-[10px] sm:text-xs">
@@ -936,7 +941,7 @@ const handleSkipPriceUpdate = () => {
                             height: '56px',
                             right: `calc(${(collision.columnIndex / collision.totalColumns) * 100}% + 2px)`,
                             left: `calc(${((collision.totalColumns - collision.columnIndex - 1) / collision.totalColumns) * 100}% + 2px)`,
-                            backgroundColor: driverColor,
+                            backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
                             borderRightColor: driverColor,
                           }}
                         >
@@ -948,6 +953,11 @@ const handleSkipPriceUpdate = () => {
                           {!tow.driver_id && tow.status !== 'quote' && (
                             <div className="absolute top-0 left-0 bg-white text-gray-600 text-[10px] px-1.5 py-0.5 rounded-br font-bold">
                               לשיבוץ
+                            </div>
+                          )}
+                          {tow.status === 'completed' && (
+                            <div className="absolute top-1 left-1 bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                              ✓ בוצעה
                             </div>
                           )}
                           <div className="flex items-center justify-between">

@@ -199,14 +199,14 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           }
         }
         
+        await loadTask()
         setIsCompleted(true)
       } else {
         // עובר לנקודה הבאה
+        await loadTask()
         setCurrentPointIndex(nextIndex)
         setPointStep('on_the_way')
       }
-      
-      await loadTask()
     } catch (error) {
       console.error('Error completing point:', error)
       alert('שגיאה בהשלמת הנקודה')
