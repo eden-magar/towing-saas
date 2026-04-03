@@ -34,6 +34,20 @@ export async function endShift(shiftId: string, lat?: number, lng?: number) {
     .update(updateData)
     .eq('id', shiftId)
   if (error) throw error
+
+  // עדכון סטטוס נהג ל"לא זמין" בסיום משמרת
+  const { data: shiftData } = await supabase
+    .from('driver_shifts')
+    .select('driver_id')
+    .eq('id', shiftId)
+    .single()
+  if (shiftData?.driver_id) {
+    await supabase
+      .from('drivers')
+      .update({ status: 'unavailable' })
+      .eq('id', shiftData.driver_id)
+  }
+
   return true
 }
 

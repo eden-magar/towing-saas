@@ -310,7 +310,7 @@ export default function DriverHomePage() {
                 <button
                 key={status.id}
                 onClick={async () => {
-                  if (driverInfo?.id) {
+                  if (driverInfo?.id && (activeShift || status.id === 'unavailable')) {
                     try {
                       await supabase
                         .from('drivers')
@@ -324,7 +324,8 @@ export default function DriverHomePage() {
                   }
                   setShowStatusModal(false)
                 }}
-                className={`w-full p-4 rounded-xl flex items-center gap-3 transition-all ${
+                disabled={!activeShift && status.id !== 'unavailable'}
+                className={`w-full p-4 rounded-xl flex items-center gap-3 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   currentStatus.id === status.id 
                     ? 'bg-blue-100 border-2 border-blue-500' 
                     : 'bg-gray-50 border-2 border-transparent'
@@ -407,6 +408,8 @@ export default function DriverHomePage() {
                         .eq('id', shift.id)
                     }
                     setActiveShift(shift)
+                    await supabase.from('drivers').update({ status: 'available' }).eq('id', driverInfo.id)
+                    setDriverInfo(prev => prev ? { ...prev, status: 'available' } : prev)
                     setShowStatusModal(false)
                   }}
                   className="w-full p-4 rounded-xl bg-green-50 border-2 border-green-200 text-green-700 font-medium flex items-center justify-center gap-2"
