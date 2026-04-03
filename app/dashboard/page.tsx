@@ -547,15 +547,28 @@
                                     <div
                                       key={t.id}
                                       onClick={() => router.push(`/dashboard/tows/${t.id}`)}
-                                      className="rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
-                                      style={{
-                                        background: color + '25',
-                                        color: color,
-                                        border: `1px solid ${color}40`,
-                                      }}
+                                      className="relative rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
+                                      style={
+                                        t.status === 'completed'
+                                          ? {
+                                              background: '#16a34a',
+                                              color: '#fff',
+                                              border: '1px solid #15803d',
+                                            }
+                                          : {
+                                              background: color + '25',
+                                              color: color,
+                                              border: `1px solid ${color}40`,
+                                            }
+                                      }
                                       title={`${t.customer?.name || ''} ${t.order_number || ''}`.trim()}
                                     >
                                       {t.customer?.name || t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                                      {t.status === 'completed' && (
+                                        <div className="absolute top-1 left-1 bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                                          ✓ בוצעה
+                                        </div>
+                                      )}
                                     </div>
                                   )
                                 }) : (
