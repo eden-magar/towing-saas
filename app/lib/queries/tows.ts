@@ -1176,8 +1176,8 @@ export async function recalculateTowPrice(
   const timeAmount = newTimeSurcharges.reduce((max, s) => Math.max(max, s.amount), 0)
 
   // תוספות מיקום ושירותים נשארות כמו שהיו
-  const locationAmount = breakdown.location_surcharges.reduce((sum, s) => sum + s.amount, 0)
-  const servicesAmount = breakdown.service_surcharges.reduce((sum, s) => sum + s.amount, 0)
+  const locationAmount = (breakdown.location_surcharges ?? []).reduce((sum, s) => sum + s.amount, 0)
+  const servicesAmount = (breakdown.service_surcharges ?? []).reduce((sum, s) => sum + s.amount, 0)
 
   // חישוב סופי
   const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
