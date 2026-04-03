@@ -3,6 +3,11 @@
 import { useEffect, useRef } from 'react'
 import { loadGoogleMaps } from '../lib/google-maps'
 
+const DRIVER_COLORS = [
+  '#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444',
+  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'
+]
+
 interface DriverOnMap {
   id: string
   name: string
@@ -47,8 +52,8 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
 
       const bounds = new window.google.maps.LatLngBounds()
 
-      drivers.forEach(driver => {
-      const color = STATUS_COLORS[driver.status] || '#9ca3af'
+      drivers.forEach((driver, index) => {
+      const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
       const initial = driver.name.charAt(0)
 
       const svgIcon = `
@@ -72,8 +77,15 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
       </svg>
       `
 
+      const OFFSET = 0.0002
+      const sameSpot = drivers.slice(0, index).filter(
+        d => d.last_lat === driver.last_lat && d.last_lng === driver.last_lng
+      ).length
+      const lat = driver.last_lat + sameSpot * OFFSET
+      const lng = driver.last_lng + sameSpot * OFFSET
+
       const marker = new window.google.maps.Marker({
-        position: { lat: driver.last_lat, lng: driver.last_lng },
+        position: { lat, lng },
         map: mapInstanceRef.current,
         title: driver.name,
         icon: {

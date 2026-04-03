@@ -105,6 +105,7 @@ export interface TowWithDetails {
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
   status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
   scheduled_at: string | null
+  duration_minutes?: number
   notes: string | null
   recommended_price: number | null
   final_price: number | null

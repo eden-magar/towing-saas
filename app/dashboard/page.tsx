@@ -1,15 +1,15 @@
   'use client'
 
-  import { useEffect, useState, useRef, useMemo } from 'react'
+  import React, { useEffect, useState, useRef, useMemo } from 'react'
   import { useRouter } from 'next/navigation'
   import { useAuth } from '../lib/AuthContext'
   import { getDashboardStats, DashboardStats } from '../lib/queries/dashboard'
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
-  import { getTows, TowWithDetails, searchTows } from '../lib/queries/tows'
+  import { getTows, TowWithDetails, searchTows, recalculateTowPrice, updateTow } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, endShiftManually, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
-  import { getDayTows } from '../lib/queries/calendar'
+  import { getDayTows, updateTowSchedule } from '../lib/queries/calendar'
   import { getDriverTasksForDriver } from '../lib/queries/driver-tasks-admin'
   import { supabase } from '../lib/supabase'
   import DriversMap from '../components/DriversMap'
@@ -56,6 +56,18 @@
     const [activeTasks, setActiveTasks] = useState<number>(0)
     const [inProgressTows, setInProgressTows] = useState<number>(0)
     const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
+    const [draggedTow, setDraggedTow] = useState<any>(null)
+    const [showPriceUpdateModal, setShowPriceUpdateModal] = useState(false)
+    const [priceUpdateInfo, setPriceUpdateInfo] = useState<{
+      towId: string
+      oldPrice: number
+      newPrice: number | null
+      newBreakdown: any | null
+      customerName: string
+      priceMode: string
+    } | null>(null)
+    const [updatingPrice, setUpdatingPrice] = useState(false)
+    const [manualPrice, setManualPrice] = useState<string>('')
 
   const isAllSelected = selectedDrivers.length === 0
 
@@ -197,6 +209,95 @@
       }
     }
 
+    const loadCalendarTows = loadCalendar
+
+    const handleDragStart = (e: React.DragEvent, tow: any) => {
+      setDraggedTow(tow)
+      e.dataTransfer.effectAllowed = 'move'
+    }
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+    }
+
+    const handleDrop = async (e: React.DragEvent, driverId: string, hour: number) => {
+      e.preventDefault()
+      if (!draggedTow || !companyId) return
+      const newDate = new Date(calendarDate)
+      newDate.setHours(hour, 0, 0, 0)
+      try {
+        await updateTowSchedule(draggedTow.id, newDate, driverId)
+        await loadCalendarTows()
+        const priceMode = draggedTow.price_mode || 'recommended'
+        if (priceMode === 'recommended' && draggedTow.price_breakdown) {
+          const result = await recalculateTowPrice(draggedTow.id, newDate, companyId)
+          if (result && result.oldPrice !== result.newPrice) {
+            setPriceUpdateInfo({
+              towId: draggedTow.id,
+              oldPrice: result.oldPrice,
+              newPrice: result.newPrice,
+              newBreakdown: result.newBreakdown,
+              customerName: draggedTow.customer?.name || 'ללא לקוח',
+              priceMode
+            })
+            setManualPrice('')
+            setShowPriceUpdateModal(true)
+          }
+        } else if (priceMode !== 'recommended') {
+          setPriceUpdateInfo({
+            towId: draggedTow.id,
+            oldPrice: draggedTow.final_price || 0,
+            newPrice: null,
+            newBreakdown: null,
+            customerName: draggedTow.customer?.name || 'ללא לקוח',
+            priceMode
+          })
+          setManualPrice(String(draggedTow.final_price || ''))
+          setShowPriceUpdateModal(true)
+        }
+      } catch (err) {
+        console.error('Error moving tow:', err)
+      }
+      setDraggedTow(null)
+    }
+
+    const handleConfirmPriceUpdate = async () => {
+      if (!priceUpdateInfo) return
+      setUpdatingPrice(true)
+      try {
+        await updateTow({ towId: priceUpdateInfo.towId, finalPrice: priceUpdateInfo.newPrice, priceBreakdown: priceUpdateInfo.newBreakdown })
+        setShowPriceUpdateModal(false)
+        setPriceUpdateInfo(null)
+        await loadCalendarTows()
+      } catch (error) {
+        console.error('Error updating price:', error)
+      } finally {
+        setUpdatingPrice(false)
+      }
+    }
+
+    const handleManualPriceUpdate = async () => {
+      if (!priceUpdateInfo || !manualPrice) return
+      setUpdatingPrice(true)
+      try {
+        await updateTow({ towId: priceUpdateInfo.towId, finalPrice: parseFloat(manualPrice), priceBreakdown: null })
+        setShowPriceUpdateModal(false)
+        setPriceUpdateInfo(null)
+        setManualPrice('')
+        await loadCalendarTows()
+      } catch (error) {
+        console.error('Error updating manual price:', error)
+      } finally {
+        setUpdatingPrice(false)
+      }
+    }
+
+    const handleSkipPriceUpdate = () => {
+      setShowPriceUpdateModal(false)
+      setPriceUpdateInfo(null)
+    }
+
     useEffect(() => {
       if (!authLoading && companyId) {
         loadData()
@@ -220,6 +321,7 @@
         .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => loadData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => loadData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => loadData())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => loadData())
         .subscribe()
 
       return () => { supabase.removeChannel(channel) }
@@ -538,7 +640,13 @@
                             {driverIds.map(id => {
                               const tows = getTowsForDriverHour(id as string, hour)
                               return (
-                                <td key={id as string} className="px-0.5 py-0.5 border-l border-gray-200 min-h-6" style={{ width: `${100 / driverIds.length}%` }}>
+                                <td
+                                  key={id as string}
+                                  className="px-0.5 py-0.5 border-l border-gray-200 min-h-6"
+                                  style={{ width: `${100 / driverIds.length}%` }}
+                                  onDragOver={handleDragOver}
+                                  onDrop={(e) => handleDrop(e, id as string, hour)}
+                                >
                                   {tows.length > 0 ? tows.map((t: any) => {
                                   const driverIdx = driverIds.indexOf(id)
                                   const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
@@ -546,7 +654,9 @@
                                   return (
                                     <div
                                       key={t.id}
-                                      onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                                      draggable={true}
+                                      onDragStart={(e) => handleDragStart(e, t)}
+                                      onClick={() => !draggedTow && router.push(`/dashboard/tows/${t.id}`)}
                                       className="relative rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
                                       style={
                                         t.status === 'completed'
@@ -930,6 +1040,161 @@
                 >
                   דחה בקשה
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* מודל עדכון מחיר */}
+        {showPriceUpdateModal && priceUpdateInfo && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
+              <div className={`px-5 py-4 text-white ${priceUpdateInfo.priceMode === 'recommended' ? 'bg-amber-500' : 'bg-blue-500'}`}>
+                <h2 className="font-bold text-lg">
+                  {priceUpdateInfo.priceMode === 'recommended' ? 'עדכון מחיר' : 'שים לב'}
+                </h2>
+                <p className="text-white/80 text-sm">{priceUpdateInfo.customerName}</p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {priceUpdateInfo.priceMode === 'recommended' && priceUpdateInfo.newPrice !== null ? (
+                  <>
+                    {/* מחיר מומלץ - הצגת מחיר חדש מחושב */}
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-4">המחיר עודכן בעקבות שינוי הזמן:</p>
+
+                      <div className="flex items-center justify-center gap-4">
+                        <div className="text-center">
+                          <p className="text-sm text-gray-500">מחיר קודם</p>
+                          <p className="text-xl font-bold text-gray-400 line-through">₪{priceUpdateInfo.oldPrice}</p>
+                        </div>
+                        <div className="text-2xl text-gray-400">←</div>
+                        <div className="text-center">
+                          <p className="text-sm text-gray-500">מחיר חדש</p>
+                          <p className="text-2xl font-bold text-amber-600">₪{priceUpdateInfo.newPrice?.toFixed(2)}</p>
+                        </div>
+                      </div>
+
+                      {priceUpdateInfo.newBreakdown && (
+                        <div className="border border-gray-100 rounded-xl p-3 space-y-1.5 text-xs bg-gray-50 text-right">
+                          <div className="flex justify-between">
+                            <span className="font-medium text-gray-800">₪{priceUpdateInfo.newBreakdown.base_price}</span>
+                            <span className="text-gray-500">מחיר בסיס</span>
+                          </div>
+                          {priceUpdateInfo.newBreakdown.distance_km > 0 && (
+                            <div className="flex justify-between">
+                              <span className="font-medium text-gray-800">₪{priceUpdateInfo.newBreakdown.distance_price}</span>
+                              <span className="text-gray-500">מרחק ({priceUpdateInfo.newBreakdown.distance_km} ק״מ)</span>
+                            </div>
+                          )}
+                          {priceUpdateInfo.newBreakdown.time_surcharges?.filter((s: any) => s.amount > 0).map((s: any, idx: number) => (
+                            <div key={s.id || idx} className="flex justify-between text-amber-600">
+                              <span className="font-medium">₪{s.amount}</span>
+                              <span>{s.label} (+{s.percent}%)</span>
+                            </div>
+                          ))}
+                          {priceUpdateInfo.newBreakdown.location_surcharges?.map((s: any, idx: number) => (
+                            <div key={s.id || idx} className="flex justify-between text-blue-600">
+                              <span className="font-medium">₪{s.amount}</span>
+                              <span>{s.label} (+{s.percent}%)</span>
+                            </div>
+                          ))}
+                          {priceUpdateInfo.newBreakdown.service_surcharges?.map((s: any, idx: number) => (
+                            <div key={s.id || idx} className="flex justify-between text-purple-600">
+                              <span className="font-medium">₪{s.amount}</span>
+                              <span>{s.label}</span>
+                            </div>
+                          ))}
+                          {priceUpdateInfo.newBreakdown.discount_amount > 0 && (
+                            <div className="flex justify-between text-green-600">
+                              <span className="font-medium">-₪{priceUpdateInfo.newBreakdown.discount_amount}</span>
+                              <span>הנחה ({priceUpdateInfo.newBreakdown.discount_percent}%)</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-gray-500">
+                            <span className="font-medium">₪{priceUpdateInfo.newBreakdown.vat_amount}</span>
+                            <span>מע״מ (18%)</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {priceUpdateInfo.newPrice > priceUpdateInfo.oldPrice ? (
+                        <p className="text-sm text-amber-600 mt-3">
+                          +₪{(priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice).toFixed(2)} (תוספת זמן)
+                        </p>
+                      ) : (
+                        <p className="text-sm text-green-600 mt-3">
+                          -₪{(priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice).toFixed(2)} (ללא תוספת זמן)
+                        </p>
+                      )}
+                    </div>
+
+                    {/* אפשרות למחיר ידני */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <p className="text-sm text-gray-500 mb-2">או הזן מחיר ידני:</p>
+                      <div className="relative">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">₪</span>
+                        <input
+                          type="number"
+                          value={manualPrice}
+                          onChange={(e) => setManualPrice(e.target.value)}
+                          placeholder="מחיר ידני"
+                          className="w-full pr-8 pl-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* מחיר ידני/קבוע/לקוח - התראה */}
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-4">המועד השתנה. האם לעדכן את המחיר?</p>
+                      <p className="text-lg font-bold text-gray-800 mb-4">מחיר נוכחי: ₪{priceUpdateInfo.oldPrice}</p>
+
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 mb-2">הזן מחיר חדש:</p>
+                        <div className="relative">
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">₪</span>
+                          <input
+                            type="number"
+                            value={manualPrice}
+                            onChange={(e) => setManualPrice(e.target.value)}
+                            placeholder="מחיר חדש"
+                            className="w-full pr-8 pl-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={handleSkipPriceUpdate}
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+                >
+                  השאר ללא שינוי
+                </button>
+                {priceUpdateInfo.priceMode === 'recommended' && priceUpdateInfo.newPrice !== null && !manualPrice ? (
+                  <button
+                    onClick={handleConfirmPriceUpdate}
+                    disabled={updatingPrice}
+                    className="flex-1 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors font-medium disabled:bg-gray-300"
+                  >
+                    {updatingPrice ? 'מעדכן...' : `עדכן ל-₪${priceUpdateInfo.newPrice}`}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleManualPriceUpdate}
+                    disabled={updatingPrice || !manualPrice}
+                    className={`flex-1 py-3 text-white rounded-xl transition-colors font-medium disabled:bg-gray-300 ${
+                      priceUpdateInfo.priceMode === 'recommended' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-500 hover:bg-blue-600'
+                    }`}
+                  >
+                    {updatingPrice ? 'מעדכן...' : 'עדכן מחיר'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

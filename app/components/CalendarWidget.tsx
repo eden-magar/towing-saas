@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useAuth } from '../../lib/AuthContext'
-import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
-import { getDrivers } from '../../lib/queries/drivers'
-import { TowWithDetails } from '../../lib/queries/tows'
-import { DriverWithDetails } from '../../lib/types'
-import { recalculateTowPrice, updateTow } from '../../lib/queries/tows'
+import { getWeekTows, updateTowSchedule } from '../lib/queries/calendar'
+import { getDrivers } from '../lib/queries/drivers'
+import { TowWithDetails } from '../lib/queries/tows'
+import { DriverWithDetails } from '../lib/types'
+import { recalculateTowPrice, updateTow } from '../lib/queries/tows'
 import { 
   ChevronRight,
   ChevronLeft,
@@ -77,9 +76,17 @@ function getCollisionLayout(towList: TowWithDetails[], TOW_DURATION = 1) {
   return layout
 }
 
-export default function CalendarPage() {
-  const { companyId, loading: authLoading } = useAuth()
-  const [view, setView] = useState<'week' | 'day'>('week')
+export interface CalendarWidgetProps {
+  companyId: string
+  defaultView?: 'week' | 'day'
+  /** @default true */
+  showHeader?: boolean
+  /** @default true */
+  showNewTowButton?: boolean
+}
+
+export function CalendarWidget({ companyId, defaultView, showHeader, showNewTowButton }: CalendarWidgetProps) {
+  const [view, setView] = useState<'week' | 'day'>(defaultView || 'week')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
   
   // תאריך תחילת שבוע
@@ -125,12 +132,6 @@ export default function CalendarPage() {
 } | null>(null)
   const [updatingPrice, setUpdatingPrice] = useState(false)
   const [manualPrice, setManualPrice] = useState<string>('')
-  const [now, setNow] = useState(Date.now())
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60000)
-    return () => clearInterval(interval)
-  }, [])
 
   const hours = Array.from({ length: 24 }, (_, i) => i)
 
@@ -165,14 +166,12 @@ export default function CalendarPage() {
   }
 
   useEffect(() => {
-    if (!authLoading) {
-      if (companyId) {
-        loadData()
-      } else {
-        setLoading(false)
-      }
+    if (companyId) {
+      loadData()
+    } else {
+      setLoading(false)
     }
-  }, [companyId, authLoading, currentWeekStart])
+  }, [companyId, currentWeekStart])
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -542,7 +541,7 @@ const handleSkipPriceUpdate = () => {
     setView('day')
   }
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
         <div className="flex items-center gap-2 text-gray-500">
@@ -559,7 +558,9 @@ const handleSkipPriceUpdate = () => {
       <div className="flex flex-col gap-4 mb-4">
         {/* Top Row - Title and Navigation */}
         <div className="flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">יומן גרירות</h1>
+          {showHeader !== false && (
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">יומן גרירות</h1>
+          )}
           
           <div className="flex items-center gap-2">
             <button
@@ -571,13 +572,15 @@ const handleSkipPriceUpdate = () => {
               <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
             </button>
             
-            <Link
-              href="/dashboard/tows/new"
-              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
-            >
-              <Plus size={18} />
-              גרירה חדשה
-            </Link>
+            {showNewTowButton !== false && (
+              <Link
+                href="/dashboard/tows/new"
+                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
+              >
+                <Plus size={18} />
+                גרירה חדשה
+              </Link>
+            )}
           </div>
         </div>
 
@@ -654,13 +657,15 @@ const handleSkipPriceUpdate = () => {
         </div>
         
         {/* Mobile Add Button */}
-        <Link
-          href="/dashboard/tows/new"
-          className="sm:hidden flex items-center justify-center gap-2 px-4 py-3 bg-[#33d4ff] text-white rounded-xl font-medium w-full"
-        >
-          <Plus size={20} />
-          גרירה חדשה
-        </Link>
+        {showNewTowButton !== false && (
+          <Link
+            href="/dashboard/tows/new"
+            className="sm:hidden flex items-center justify-center gap-2 px-4 py-3 bg-[#33d4ff] text-white rounded-xl font-medium w-full"
+          >
+            <Plus size={20} />
+            גרירה חדשה
+          </Link>
+        )}
       </div>
 
       {/* Driver Filter */}
@@ -774,10 +779,7 @@ const handleSkipPriceUpdate = () => {
                   if (displayIndex === -1) return null
                   
                   const top = hour * 50
-                  const isLive = tow.status === 'in_progress' || tow.status === 'assigned'
-                  const scheduledMs = new Date(tow.scheduled_at || tow.created_at).getTime()
-                  const elapsedMinutes = isLive ? Math.max(60, (now - scheduledMs) / 60000) : 60
-                  const height = (elapsedMinutes / 60) * 50
+                  const height = 50
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
                   const collision = weekCollisionLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
@@ -947,12 +949,7 @@ const handleSkipPriceUpdate = () => {
                           } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                           style={{
                             top: `${top}px`,
-                            height: (() => {
-                              const isLive = tow.status === 'in_progress' || tow.status === 'assigned'
-                              const scheduledMs = new Date(tow.scheduled_at || tow.created_at).getTime()
-                              const elapsedMinutes = isLive ? Math.max(60, (now - scheduledMs) / 60000) : 60
-                              return `${(elapsedMinutes / 60) * 60}px`
-                            })(),
+                            height: '56px',
                             right: `calc(${(collision.columnIndex / collision.totalColumns) * 100}% + 2px)`,
                             left: `calc(${((collision.totalColumns - collision.columnIndex - 1) / collision.totalColumns) * 100}% + 2px)`,
                             backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
@@ -1272,63 +1269,20 @@ const handleSkipPriceUpdate = () => {
                         <p className="text-sm text-gray-500">מחיר קודם</p>
                         <p className="text-xl font-bold text-gray-400 line-through">₪{priceUpdateInfo.oldPrice}</p>
                       </div>
-                      <div className="text-2xl text-gray-400">←</div>
+                      <div className="text-2xl text-gray-400">→</div>
                       <div className="text-center">
                         <p className="text-sm text-gray-500">מחיר חדש</p>
-                        <p className="text-2xl font-bold text-amber-600">₪{priceUpdateInfo.newPrice?.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-amber-600">₪{priceUpdateInfo.newPrice}</p>
                       </div>
                     </div>
-
-                    {priceUpdateInfo.newBreakdown && (
-                      <div className="border border-gray-100 rounded-xl p-3 space-y-1.5 text-xs bg-gray-50 text-right">
-                        <div className="flex justify-between">
-                          <span className="font-medium text-gray-800">₪{priceUpdateInfo.newBreakdown.base_price}</span>
-                          <span className="text-gray-500">מחיר בסיס</span>
-                        </div>
-                        {priceUpdateInfo.newBreakdown.distance_km > 0 && (
-                          <div className="flex justify-between">
-                            <span className="font-medium text-gray-800">₪{priceUpdateInfo.newBreakdown.distance_price}</span>
-                            <span className="text-gray-500">מרחק ({priceUpdateInfo.newBreakdown.distance_km} ק״מ)</span>
-                          </div>
-                        )}
-                        {priceUpdateInfo.newBreakdown.time_surcharges?.filter((s: any) => s.amount > 0).map((s: any, idx: number) => (
-                          <div key={s.id || idx} className="flex justify-between text-amber-600">
-                            <span className="font-medium">₪{s.amount}</span>
-                            <span>{s.label} (+{s.percent}%)</span>
-                          </div>
-                        ))}
-                        {priceUpdateInfo.newBreakdown.location_surcharges?.map((s: any, idx: number) => (
-                          <div key={s.id || idx} className="flex justify-between text-blue-600">
-                            <span className="font-medium">₪{s.amount}</span>
-                            <span>{s.label} (+{s.percent}%)</span>
-                          </div>
-                        ))}
-                        {priceUpdateInfo.newBreakdown.service_surcharges?.map((s: any, idx: number) => (
-                          <div key={s.id || idx} className="flex justify-between text-purple-600">
-                            <span className="font-medium">₪{s.amount}</span>
-                            <span>{s.label}</span>
-                          </div>
-                        ))}
-                        {priceUpdateInfo.newBreakdown.discount_amount > 0 && (
-                          <div className="flex justify-between text-green-600">
-                            <span className="font-medium">-₪{priceUpdateInfo.newBreakdown.discount_amount}</span>
-                            <span>הנחה ({priceUpdateInfo.newBreakdown.discount_percent}%)</span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-gray-500">
-                          <span className="font-medium">₪{priceUpdateInfo.newBreakdown.vat_amount}</span>
-                          <span>מע״מ (18%)</span>
-                        </div>
-                      </div>
-                    )}
                     
                     {priceUpdateInfo.newPrice > priceUpdateInfo.oldPrice ? (
                       <p className="text-sm text-amber-600 mt-3">
-                        +₪{(priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice).toFixed(2)} (תוספת זמן)
+                        +₪{priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice} (תוספת זמן)
                       </p>
                     ) : (
                       <p className="text-sm text-green-600 mt-3">
-                        -₪{(priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice).toFixed(2)} (ללא תוספת זמן)
+                        -₪{priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice} (ללא תוספת זמן)
                       </p>
                     )}
                   </div>
