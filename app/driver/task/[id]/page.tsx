@@ -93,7 +93,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             if (currentPoint.status === 'pending') {
               setPointStep('on_the_way')
             } else if (currentPoint.status === 'arrived') {
-              if (currentPoint.point_type === 'dropoff' || currentPoint.point_type === 'stop') {
+              if (currentPoint.point_type === 'dropoff') {
+                setPointStep('camera_after')
+              } else if (currentPoint.point_type === 'stop') {
                 setPointStep('delivery')
               } else {
                 setPointStep('camera')
@@ -125,7 +127,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     
     try {
       await updatePointStatus(currentPoint.id, 'arrived')
-      if (currentPoint.point_type === 'dropoff' || currentPoint.point_type === 'stop') {
+      if (currentPoint.point_type === 'dropoff') {
+        setPointStep('camera_after')
+      } else if (currentPoint.point_type === 'stop') {
         setPointStep('delivery')
       } else {
         setPointStep('camera')
@@ -139,11 +143,18 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // סיום צילום - עובר לשלב סיום
   const handleCameraComplete = async () => {
-    setPointStep('delivery')
+    if (currentPoint?.point_type === 'pickup') {
+      await completeCurrentPoint()
+    } else {
+      setPointStep('delivery')
+    }
   }
 
   const handleCameraAfterComplete = async () => {
-    if (!pendingDeliveryData) return
+    if (!pendingDeliveryData) {
+      setPointStep('delivery')
+      return
+    }
     await completeCurrentPoint(
       pendingDeliveryData.recipientName,
       pendingDeliveryData.recipientPhone,
@@ -155,7 +166,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // סיום פרטי מסירה/הערות
   const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => {
-    if (currentPoint?.point_type === 'pickup' || currentPoint?.point_type === 'stop') {
+    if (currentPoint?.point_type === 'stop') {
+      await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
+    } else if (currentPoint?.point_type === 'dropoff') {
       await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
     } else {
       setPendingDeliveryData({ recipientName, recipientPhone, notes, cashCollected })
