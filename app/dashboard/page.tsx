@@ -44,6 +44,7 @@
     const [quoteTows, setQuoteTows] = useState<TowWithDetails[]>([])
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
+    const [denyConfirmRequest, setDenyConfirmRequest] = useState<typeof rejectionRequests[0] | null>(null)
     const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
     const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
     const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
@@ -664,8 +665,6 @@
                   {rejectionRequests.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות דחייה</div>
                   ) : rejectionRequests.map(req => {
-                    const reasonInfo = REJECTION_REASONS.find(r => r.key === req.reason)
-                    console.log('rejection reason:', req.reason, 'found:', reasonInfo)
                     return (
                       <div key={req.id} className="px-3 py-2 flex items-center gap-2">
                         <div className="flex-1 min-w-0">
@@ -685,7 +684,7 @@
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
                           <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
-                          <button onClick={async () => { if (confirm('לדחות הבקשה?')) { await denyRejectionRequest(req.id, user?.id || ''); loadData() } }} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
+                          <button onClick={() => setDenyConfirmRequest(req)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
                         </div>
                       </div>
                     )
@@ -885,6 +884,38 @@
                   className="flex-1 rounded-xl bg-[#33d4ff] py-3 font-medium text-white hover:bg-[#21b8e6]"
                 >
                   סיים משמרת
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {denyConfirmRequest && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-2">דחיית בקשה</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                האם לדחות את בקשת הדחייה של {denyConfirmRequest?.driver?.user?.full_name}?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDenyConfirmRequest(null)}
+                  className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!denyConfirmRequest) return
+                    await denyRejectionRequest(denyConfirmRequest.id, user?.id || '')
+                    setDenyConfirmRequest(null)
+                    loadData()
+                  }}
+                  className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700"
+                >
+                  דחה בקשה
                 </button>
               </div>
             </div>
