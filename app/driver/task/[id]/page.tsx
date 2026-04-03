@@ -93,7 +93,11 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             if (currentPoint.status === 'pending') {
               setPointStep('on_the_way')
             } else if (currentPoint.status === 'arrived') {
-              setPointStep('camera')
+              if (currentPoint.point_type === 'dropoff' || currentPoint.point_type === 'stop') {
+                setPointStep('delivery')
+              } else {
+                setPointStep('camera')
+              }
             }
           }
         }
@@ -121,7 +125,11 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     
     try {
       await updatePointStatus(currentPoint.id, 'arrived')
-      setPointStep('camera')
+      if (currentPoint.point_type === 'dropoff' || currentPoint.point_type === 'stop') {
+        setPointStep('delivery')
+      } else {
+        setPointStep('camera')
+      }
       await loadTask()
     } catch (error) {
       console.error('Error updating arrival:', error)
@@ -147,8 +155,12 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // סיום פרטי מסירה/הערות
   const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => {
-    setPendingDeliveryData({ recipientName, recipientPhone, notes, cashCollected })
-    setPointStep('camera_after')
+    if (currentPoint?.point_type === 'pickup' || currentPoint?.point_type === 'stop') {
+      await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
+    } else {
+      setPendingDeliveryData({ recipientName, recipientPhone, notes, cashCollected })
+      setPointStep('camera_after')
+    }
   }
 
   // השלמת הנקודה הנוכחית
