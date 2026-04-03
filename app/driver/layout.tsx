@@ -6,6 +6,8 @@ import { useAuth } from '../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../lib/queries/driver-tasks'
 import { DriverStatus } from '../lib/types'
 import { supabase } from '../lib/supabase'
+import { useLocationTracking } from '../hooks/useLocationTracking'
+import { getActiveShift } from '../lib/queries/driver-shifts'
 import { 
   Home,
   History,
@@ -42,6 +44,14 @@ export default function DriverLayout({
   const [showNotifications, setShowNotifications] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showStatusPicker, setShowStatusPicker] = useState(false)
+  const [activeShiftId, setActiveShiftId] = useState<string | null>(null)
+
+  useLocationTracking(
+    driverInfo?.id ?? null,
+    driverInfo?.company_id ?? null,
+    (activeShiftId ?? undefined) as string | null,
+    !!activeShiftId
+  )
 
   // בדיקה אם אנחנו בדף משימה
   const isTaskPage = pathname.includes('/driver/task/')
@@ -63,6 +73,10 @@ export default function DriverLayout({
     try {
       const driver = await getDriverByUserId(user.id)
       setDriverInfo(driver)
+      if (driver?.id) {
+        const shift = await getActiveShift(driver.id)
+        setActiveShiftId(shift?.id || null)
+      }
     } catch (err) {
       console.error('Error loading driver info:', err)
     } finally {
