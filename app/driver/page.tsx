@@ -59,6 +59,7 @@ export default function DriverHomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   const [activeShift, setActiveShift] = useState<any>(null)
+  const [shiftLoading, setShiftLoading] = useState(false)
 
   const [driverTasks, setDriverTasks] = useState<DriverTaskWithDetails[]>([])
   
@@ -342,7 +343,10 @@ export default function DriverHomePage() {
               <div className="border-t border-gray-200 mt-4 pt-4">
               {activeShift ? (
                 <button
+                  disabled={shiftLoading}
                   onClick={async () => {
+                  setShiftLoading(true)
+                  try {
                   const { endShift } = await import('@/app/lib/queries/driver-shifts')
                   let lat: number | undefined
                   let lng: number | undefined
@@ -366,14 +370,20 @@ export default function DriverHomePage() {
                   await endShift(activeShift.id, lat, lng)
                   setActiveShift(null)
                   setShowStatusModal(false)
+                  } finally {
+                    setShiftLoading(false)
+                  }
                 }}
-                  className="w-full p-4 rounded-xl bg-red-50 border-2 border-red-200 text-red-700 font-medium flex items-center justify-center gap-2"
+                  className="w-full p-4 rounded-xl bg-red-50 border-2 border-red-200 text-red-700 font-medium flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  <span>🔴</span> סיימתי יום עבודה
+                  <span>🔴</span> {shiftLoading ? 'מסיים...' : 'סיימתי יום עבודה'}
                 </button>
               ) : (
                 <button
+                  disabled={shiftLoading}
                   onClick={async () => {
+                    setShiftLoading(true)
+                    try {
                     if (!driverInfo) return
                     const { startShift } = await import('@/app/lib/queries/driver-shifts')
                     let lat: number | undefined
@@ -411,10 +421,13 @@ export default function DriverHomePage() {
                     await supabase.from('drivers').update({ status: 'available' }).eq('id', driverInfo.id)
                     setDriverInfo(prev => prev ? { ...prev, status: 'available' } : prev)
                     setShowStatusModal(false)
+                    } finally {
+                      setShiftLoading(false)
+                    }
                   }}
-                  className="w-full p-4 rounded-xl bg-green-50 border-2 border-green-200 text-green-700 font-medium flex items-center justify-center gap-2"
+                  className="w-full p-4 rounded-xl bg-green-50 border-2 border-green-200 text-green-700 font-medium flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  <span>🟢</span> התחלתי יום עבודה
+                  <span>🟢</span> {shiftLoading ? 'מתחיל...' : 'התחלתי יום עבודה'}
                 </button>
               )}
             </div>
