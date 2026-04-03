@@ -604,12 +604,17 @@ export default function DriverHomePage() {
                   )}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`rounded-xl px-3 py-2 font-bold ${
+                      <div className={`rounded-xl px-3 py-2 font-bold text-center ${
                         isInProgress 
                           ? 'bg-cyan-100 text-cyan-600' 
                           : 'bg-blue-100 text-blue-600'
                       }`}>
-                        {formatTime(task.scheduled_at || task.created_at)}
+                        <div>{formatTime(task.scheduled_at || task.created_at)}</div>
+                        <div className="text-xs font-normal opacity-70">
+                          {task.scheduled_at || task.created_at
+                            ? new Date(task.scheduled_at || task.created_at).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+                            : ''}
+                        </div>
                       </div>
                       <div>
                         <div>
