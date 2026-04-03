@@ -93,7 +93,7 @@ export default function DriverHomePage() {
         filter: `driver_id=eq.${driverInfo.id}`
       }, () => loadData())
       .on('postgres_changes', {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'tow_rejection_requests',
         filter: `driver_id=eq.${driverInfo.id}`
