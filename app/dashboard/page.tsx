@@ -727,13 +727,15 @@
                       {driverIds.map((id, driverIdx) => {
                         const liveTows = filteredCalendarTows.filter((t: any) =>
                           t.driver_id === id &&
-                          (t.status === 'in_progress' || t.status === 'assigned') &&
+                          (t.status === 'in_progress' || t.status === 'assigned' || t.status === 'completed') &&
                           t.scheduled_at
                         )
                         const driverWidth = 100 / driverIds.length
                         return liveTows.map((t: any) => {
                           const scheduledMs = new Date(t.scheduled_at).getTime()
-                          const elapsedMinutes = Math.max(60, (now - scheduledMs) / 60000)
+                          const isCompleted = t.status === 'completed' && t.completed_at
+                          const endMs = isCompleted ? new Date(t.completed_at).getTime() : now
+                          const elapsedMinutes = Math.max(60, (endMs - scheduledMs) / 60000)
                           const startHour = new Date(t.scheduled_at).getHours() + new Date(t.scheduled_at).getMinutes() / 60
                           const theadHeight = 33 // approximate thead height in px
                           const top = theadHeight + startHour * 40
@@ -748,7 +750,7 @@
                                 height: `${Math.max(height, 20)}px`,
                                 right: `calc(${driverIdx * driverWidth}% + 2px)`,
                                 width: `calc(${driverWidth}% - 4px)`,
-                                backgroundColor: t.status === 'in_progress' ? '#f97316' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length] + '99',
+                                backgroundColor: t.status === 'completed' ? '#16a34a' : t.status === 'in_progress' ? '#f97316' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length] + '99',
                                 border: `1px solid ${t.status === 'in_progress' ? '#ea580c' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]}`,
                                 zIndex: 5,
                               }}

@@ -791,8 +791,10 @@ const handleSkipPriceUpdate = () => {
                   
                   const top = hour * 50
                   const isLive = tow.status === 'in_progress' || tow.status === 'assigned'
+                  const isCompleted = tow.status === 'completed' && (tow as any).completed_at
                   const scheduledMs = new Date(tow.scheduled_at || tow.created_at).getTime()
-                  const elapsedMinutes = isLive ? Math.max(60, (now - scheduledMs) / 60000) : 60
+                  const endMs = isCompleted ? new Date((tow as any).completed_at).getTime() : now
+                  const elapsedMinutes = (isLive || isCompleted) ? Math.max(60, (endMs - scheduledMs) / 60000) : 60
                   const height = (elapsedMinutes / 60) * 50
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
@@ -965,8 +967,10 @@ const handleSkipPriceUpdate = () => {
                             top: `${top}px`,
                             height: (() => {
                               const isLive = tow.status === 'in_progress' || tow.status === 'assigned'
+                              const isCompleted = tow.status === 'completed' && (tow as any).completed_at
                               const scheduledMs = new Date(tow.scheduled_at || tow.created_at).getTime()
-                              const elapsedMinutes = isLive ? Math.max(60, (now - scheduledMs) / 60000) : 60
+                              const endMs = isCompleted ? new Date((tow as any).completed_at).getTime() : now
+                              const elapsedMinutes = (isLive || isCompleted) ? Math.max(60, (endMs - scheduledMs) / 60000) : 60
                               return `${(elapsedMinutes / 60) * 60}px`
                             })(),
                             right: `calc(${(collision.columnIndex / collision.totalColumns) * 100}% + 2px)`,
