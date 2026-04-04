@@ -114,6 +114,32 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
     })
   }, [drivers])
 
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google?.maps) return
+
+    markersRef.current.forEach(m => m.setMap(null))
+    markersRef.current = []
+
+    if (drivers.length === 0) return
+
+    drivers.forEach((driver, index) => {
+      const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
+      const OFFSET = 0.0002
+      const sameSpot = drivers.slice(0, index).filter(
+        d => d.last_lat === driver.last_lat && d.last_lng === driver.last_lng
+      ).length
+      const lat = driver.last_lat + sameSpot * OFFSET
+      const lng = driver.last_lng + sameSpot * OFFSET
+
+      const marker = new window.google.maps.Marker({
+        position: { lat, lng },
+        map: mapInstanceRef.current,
+        title: driver.name,
+      })
+      markersRef.current.push(marker)
+    })
+  }, [drivers])
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full">
       <div className="p-4 border-b border-gray-100 flex items-center justify-between">

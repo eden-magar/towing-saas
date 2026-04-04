@@ -396,7 +396,9 @@ export default function DriversPage() {
         </button>
       </div>
       {activeTab === 'map' && (
-        <DriversMap drivers={driversWithLocation} />
+        <div style={{ height: '600px' }}>
+          <DriversMap drivers={driversWithLocation} />
+        </div>
       )}
 
       {activeTab === 'hours' && (
