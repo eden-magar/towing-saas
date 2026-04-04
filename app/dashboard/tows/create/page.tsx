@@ -279,7 +279,9 @@ function CreateTowForm({
   const [vehicleNotFound, setVehicleNotFound] = useState(false)
   const [showTruckModal, setShowTruckModal] = useState(false)
   const [showDefectsModal, setShowDefectsModal] = useState(false)
+  const [showDefectsExchangeModal, setShowDefectsExchangeModal] = useState(false)
   const [showStorageModal, setShowStorageModal] = useState(false)
+  const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
 
   // URL params
@@ -1459,71 +1461,175 @@ function CreateTowForm({
 
                 {towType === 'exchange' && (
                   <>
+                    {showDefectsExchangeModal && (
+                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-[480px]">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
+                            <button
+                              type="button"
+                              onClick={() => setShowDefectsExchangeModal(false)}
+                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="p-4 grid grid-cols-3 gap-3">
+                            {DEFECT_OPTIONS.map((defect) => (
+                              <button
+                                key={defect.value}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedDefects((prev) =>
+                                    prev.includes(defect.value)
+                                      ? prev.filter((d) => d !== defect.value)
+                                      : [...prev, defect.value]
+                                  )
+                                }}
+                                className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${
+                                  selectedDefects.includes(defect.value)
+                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                                    : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-300'
+                                }`}
+                              >
+                                <span className="text-2xl">{defect.icon}</span>
+                                <span className="text-xs font-medium text-center leading-tight">{defect.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                          {selectedDefects.includes('אחר') && (
+                            <div className="mt-3 px-1">
+                              <label className="block">תיאור התקלה:</label>
+                              <input
+                                type="text"
+                                value={otherDefectText}
+                                onChange={(e) => setOtherDefectText(e.target.value)}
+                                placeholder="תאר את התקלה..."
+                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          )}
+                          <div className="px-4 pb-4 pt-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedDefects((prev) => {
+                                  if (!prev.includes('אחר')) return prev
+                                  const trimmed = otherDefectText.trim()
+                                  if (!trimmed) return prev
+                                  return [...prev.filter((v) => v !== 'אחר'), trimmed]
+                                })
+                                setShowDefectsExchangeModal(false)
+                              }}
+                              className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                            >
+                              אישור
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowDefectsExchangeModal(false)}
+                              className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
+                            >
+                              ביטול
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* ═══════════════ א — הרכב התקין ═══════════════ */}
-                    <div className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
-                        <h3 className="font-bold text-blue-800 text-sm">א — הרכב התקין</h3>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-none overflow-hidden mb-4">
+                      <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+                        <h3 className="font-bold text-blue-800 text-sm">רכב תקין</h3>
+                        {workingVehicleSource === 'storage' ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowWorkingStorageModal(true)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-blue-500 text-white border-blue-500"
+                            >
+                              🏪 מאחסנה: {workingVehiclePlate}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setWorkingVehicleSource('address')
+                                setWorkingVehiclePlate('')
+                                setWorkingVehicleData(null)
+                                setWorkingVehicleAddress({ address: '' })
+                              }}
+                              className="text-blue-300 hover:text-red-500 text-sm px-1"
+                            >✕</button>
+                          </div>
+                        ) : (
+                          selectedCustomerId && customerStoredVehicles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setShowWorkingStorageModal(true)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-white text-blue-600 border-blue-200 hover:border-blue-400"
+                            >
+                              🏪 מאחסנה
+                            </button>
+                          )
+                        )}
                       </div>
-                      <div className="p-4 space-y-4">
+                      <div className="p-4 space-y-3">
 
                         {/* מספר רכב + קוד רכב */}
                         <div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  value={workingVehiclePlate}
-                                  onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
-                                  onBlur={async (e) => {
-                                    const val = e.target.value.trim()
-                                    if (val && val.replace(/[^0-9]/g, '').length >= 5) {
-                                      const stored = companyId ? await searchStoredVehicle(companyId, val) : null
-                                      if (stored) {
-                                        setWorkingVehicleNotFound(false)
-                                        setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
-                                      } else {
-                                        setPlateStorageWarning(null)
-                                        const result = await lookupVehicle(val)
-                                        if (result.found && result.data) {
-                                          setWorkingVehicleData(result)
-                                          setWorkingVehicleType(result.source || 'private')
-                                          setWorkingVehicleNotFound(false)
-                                        } else {
-                                          setWorkingVehicleData(null)
-                                          setWorkingVehicleNotFound(true)
-                                        }
-                                      }
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={workingVehiclePlate}
+                              onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim()
+                                if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                  const stored = companyId ? await searchStoredVehicle(companyId, val) : null
+                                  if (stored) {
+                                    setWorkingVehicleNotFound(false)
+                                    setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
+                                  } else {
+                                    setPlateStorageWarning(null)
+                                    const result = await lookupVehicle(val)
+                                    if (result.found && result.data) {
+                                      setWorkingVehicleData(result)
+                                      setWorkingVehicleType(result.source || 'private')
+                                      setWorkingVehicleNotFound(false)
+                                    } else {
+                                      setWorkingVehicleData(null)
+                                      setWorkingVehicleNotFound(true)
                                     }
-                                  }}
-                                  placeholder="מספר רכב תקין"
-                                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
-                                  dir="ltr"
-                                />
-                              </div>
-                              {plateStorageWarning && <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>}
-                            </div>
-                            <div>
-                              <input type="text" value={workingVehicleCode}
-                                onChange={(e) => setWorkingVehicleCode(e.target.value)}
-                                placeholder="קוד רכב (אופציונלי)"
-                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                            </div>
+                                  }
+                                }
+                              }}
+                              placeholder="מספר רכב תקין"
+                              className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
+                              dir="ltr"
+                            />
+                            <input
+                              type="text"
+                              value={workingVehicleCode}
+                              onChange={(e) => setWorkingVehicleCode(e.target.value)}
+                              placeholder="קוד רכב"
+                              className="w-24 shrink-0 px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                            />
                           </div>
+                          {plateStorageWarning && <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>}
                         </div>
 
                         {/* נתוני רכב מהמאגר */}
                         {workingVehicleData?.found && workingVehicleData.data && (
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-gray-50 rounded-xl text-xs">
-                            <div>יצרן: <strong>{workingVehicleData.data.manufacturer}</strong></div>
-                            <div>דגם: <strong>{workingVehicleData.data.model}</strong></div>
-                            <div>שנה: <strong>{workingVehicleData.data.year}</strong></div>
-                            <div>צבע: <strong>{workingVehicleData.data.color}</strong></div>
-                            <div>סוג: <strong>{workingVehicleData.data.vehicleType}</strong></div>
-                            <div>הנעה: <strong>{workingVehicleData.data.driveType}</strong></div>
-                            <div>גיר: <strong>{workingVehicleData.data.gearType}</strong></div>
-                            <div>משקל: <strong>{workingVehicleData.data.totalWeight} ק"ג</strong></div>
+                          <div className="flex flex-wrap gap-1.5 p-2.5 bg-gray-50 rounded-xl">
+                            {workingVehicleData.data.manufacturer && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">יצרן: </span>{workingVehicleData.data.manufacturer}</span>}
+                            {workingVehicleData.data.model && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">דגם: </span>{workingVehicleData.data.model}</span>}
+                            {workingVehicleData.data.year && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">שנה: </span>{workingVehicleData.data.year}</span>}
+                            {workingVehicleData.data.color && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">צבע: </span>{workingVehicleData.data.color}</span>}
+                            {workingVehicleData.data.vehicleType && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">סוג: </span>{workingVehicleData.data.vehicleType}</span>}
+                            {workingVehicleData.data.driveType && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">הנעה: </span>{workingVehicleData.data.driveType}</span>}
+                            {workingVehicleData.data.gearType && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">גיר: </span>{workingVehicleData.data.gearType}</span>}
+                            {workingVehicleData.data.totalWeight && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">משקל: </span>{workingVehicleData.data.totalWeight} ק"ג</span>}
                           </div>
                         )}
 
@@ -1533,7 +1639,7 @@ function CreateTowForm({
                             <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
+                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">סוג רכב *</label>
                                 <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
                                   <option value="">בחר סוג רכב</option>
@@ -1548,21 +1654,21 @@ function CreateTowForm({
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 mb-1">יצרן</label>
+                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יצרן</label>
                                 <input type="text" value={workingManualManufacturer}
                                   onChange={(e) => setWorkingManualManufacturer(e.target.value)}
                                   placeholder="למשל: טויוטה"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 mb-1">צבע</label>
+                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">צבע</label>
                                 <input type="text" value={workingManualColor}
                                   onChange={(e) => setWorkingManualColor(e.target.value)}
                                   placeholder="למשל: לבן"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
+                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">משקל (ק"ג)</label>
                                 <input type="number" value={workingManualWeight}
                                   onChange={(e) => setWorkingManualWeight(e.target.value)}
                                   placeholder="אופציונלי"
@@ -1575,7 +1681,7 @@ function CreateTowForm({
                         {/* סוג גרר */}
                         {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') && (
                           <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                            <p className="text-sm font-medium text-gray-700 mb-2">סוג גרר נדרש *</p>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">סוג גרר נדרש *</p>
                             <div className="flex gap-2 flex-wrap">
                               {TRUCK_OPTIONS.map((opt) => (
                                 <button key={opt.value} type="button"
@@ -1595,8 +1701,8 @@ function CreateTowForm({
                         {/* שירותים נוספים לתקין */}
                         {serviceSurchargesData.length > 0 && (
                           <div>
-                            <p className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block"></span>
+                            <p className="text-xs font-medium text-gray-500 mb-1.5 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span>
                               שירותים נוספים — תקין
                             </p>
                             <ServiceSurchargeSelector
@@ -1609,27 +1715,22 @@ function CreateTowForm({
 
                         {/* מוצא תקין */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">מוצא הרכב התקין</label>
-                          <div className="flex gap-2 mb-2">
-                            <button type="button"
-                              onClick={() => {
-                                setWorkingVehicleSource('storage')
-                                if (storageAddress) setWorkingVehicleAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
-                              }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'storage' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
-                              איסוף מאחסנה
-                            </button>
-                            <button type="button"
-                              onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleSource === 'address' ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
-                              מכתובת
-                            </button>
-                          </div>
-                          {workingVehicleSource === 'address' && (
+                          <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקין</label>
+                          {workingVehicleSource === 'storage' ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+                              <span>🏪 {workingVehicleAddress?.address || storageAddress || 'כתובת האחסנה'}</span>
+                              <button
+                                type="button"
+                                onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
+                                className="mr-auto text-gray-400 hover:text-red-500"
+                              >✕</button>
+                            </div>
+                          ) : (
                             <AddressInput
                               value={workingVehicleAddress}
                               onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
                               label=""
+                              hideLabel
                               onPinDropClick={() => handlePinDropOpen('workingVehicle')}
                             />
                           )}
@@ -1637,29 +1738,27 @@ function CreateTowForm({
 
                         {/* יעד תקין */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">יעד הרכב התקין</label>
-                          <div className="flex gap-2 mb-2">
-                            <button type="button"
-                              onClick={() => {
-                                setWorkingVehicleDestinationIsStorage(true)
-                                if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
-                              }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
-                              לאחסנה
+                          <label className="block text-xs font-medium text-gray-500 mb-1">יעד הרכב התקין</label>
+                          <AddressInput
+                            value={workingVehicleDestinationAddress}
+                            onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
+                            label=""
+                            hideLabel
+                            onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                          />
+                          {!workingVehicleDestinationIsStorage ? (
+                            <button
+                              type="button"
+                              onClick={() => { setWorkingVehicleDestinationIsStorage(true); if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng }) }}
+                              className="mt-1.5 flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
+                            >
+                              <span>🏪</span> שמור באחסנה
                             </button>
-                            <button type="button"
-                              onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${!workingVehicleDestinationIsStorage ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
-                              לכתובת
-                            </button>
-                          </div>
-                          {!workingVehicleDestinationIsStorage && (
-                            <AddressInput
-                              value={workingVehicleDestinationAddress}
-                              onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
-                              label=""
-                              onPinDropClick={() => handlePinDropOpen('workingDestination')}
-                            />
+                          ) : (
+                            <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg w-fit">
+                              <span className="text-xs text-blue-600">🏪 לאחסנה</span>
+                              <button type="button" onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                            </div>
                           )}
                         </div>
 
@@ -1667,14 +1766,14 @@ function CreateTowForm({
                     </div>
 
                     {/* ═══════════════ ב — הרכב התקול ═══════════════ */}
-                    <div className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-4">
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-none overflow-hidden mb-4">
                       <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
-                        <h3 className="font-bold text-orange-800 text-sm">ב — הרכב התקול</h3>
+                        <h3 className="font-bold text-orange-800 text-sm">רכב תקול</h3>
                       </div>
-                      <div className="p-4 space-y-4">
+                      <div className="p-4 space-y-3">
 
                         {/* מספר רכב + קוד רכב */}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="flex gap-2">
                           <input
                             type="text"
                             value={defectiveVehiclePlate}
@@ -1694,26 +1793,26 @@ function CreateTowForm({
                               }
                             }}
                             placeholder="מספר רכב תקול"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
+                            className="flex-1 min-w-0 px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right"
                             dir="ltr"
                           />
                           <input type="text" value={defectiveVehicleCode}
                             onChange={(e) => setDefectiveVehicleCode(e.target.value)}
-                            placeholder="קוד רכב (אופציונלי)"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                            placeholder="קוד רכב"
+                            className="w-24 shrink-0 px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
 
                         {/* נתוני רכב מהמאגר */}
                         {defectiveVehicleData?.found && defectiveVehicleData.data && (
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-gray-50 rounded-xl text-xs">
-                            <div>יצרן: <strong>{defectiveVehicleData.data.manufacturer}</strong></div>
-                            <div>דגם: <strong>{defectiveVehicleData.data.model}</strong></div>
-                            <div>שנה: <strong>{defectiveVehicleData.data.year}</strong></div>
-                            <div>צבע: <strong>{defectiveVehicleData.data.color}</strong></div>
-                            <div>סוג: <strong>{defectiveVehicleData.data.vehicleType}</strong></div>
-                            <div>הנעה: <strong>{defectiveVehicleData.data.driveType}</strong></div>
-                            <div>גיר: <strong>{defectiveVehicleData.data.gearType}</strong></div>
-                            <div>משקל: <strong>{defectiveVehicleData.data.totalWeight} ק"ג</strong></div>
+                          <div className="flex flex-wrap gap-1.5 p-2.5 bg-gray-50 rounded-xl">
+                            {defectiveVehicleData.data.manufacturer && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">יצרן: </span>{defectiveVehicleData.data.manufacturer}</span>}
+                            {defectiveVehicleData.data.model && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">דגם: </span>{defectiveVehicleData.data.model}</span>}
+                            {defectiveVehicleData.data.year && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">שנה: </span>{defectiveVehicleData.data.year}</span>}
+                            {defectiveVehicleData.data.color && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">צבע: </span>{defectiveVehicleData.data.color}</span>}
+                            {defectiveVehicleData.data.vehicleType && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">סוג: </span>{defectiveVehicleData.data.vehicleType}</span>}
+                            {defectiveVehicleData.data.driveType && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">הנעה: </span>{defectiveVehicleData.data.driveType}</span>}
+                            {defectiveVehicleData.data.gearType && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">גיר: </span>{defectiveVehicleData.data.gearType}</span>}
+                            {defectiveVehicleData.data.totalWeight && <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700"><span className="text-gray-400">משקל: </span>{defectiveVehicleData.data.totalWeight} ק"ג</span>}
                           </div>
                         )}
 
@@ -1762,50 +1861,48 @@ function CreateTowForm({
                           </div>
                         )}
 
-                        {/* פירוט התקלה */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">פירוט התקלה</label>
-                          <textarea
-                            value={defectiveFaultDescription}
-                            onChange={(e) => setDefectiveFaultDescription(e.target.value)}
-                            rows={2}
-                            placeholder="תאר את התקלה..."
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm resize-none"
-                          />
-                        </div>
-
-                        {/* גרר נוסף לתקול */}
-                        <div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowDefectsExchangeModal(true)}
+                            className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                              selectedDefects.length > 0
+                                ? 'border-red-300 bg-red-50 text-red-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
+                          </button>
                           <button
                             type="button"
                             onClick={() => setHasSecondTruck(!hasSecondTruck)}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${
+                            className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
                               hasSecondTruck
-                                ? 'bg-orange-500 text-white border-orange-500'
-                                : 'bg-white text-gray-700 border-gray-300 hover:border-orange-300'
+                                ? 'border-orange-300 bg-orange-50 text-orange-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-orange-200'
                             }`}
                           >
-                            {hasSecondTruck ? '✓ גרר נוסף לתקול' : '+ הוסף גרר נוסף לתקול'}
+                            {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
                           </button>
-                          {hasSecondTruck && (
-                            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                              <p className="text-sm font-medium text-gray-700 mb-2">סוג גרר לרכב התקול *</p>
-                              <div className="flex gap-2 flex-wrap">
-                                {TRUCK_OPTIONS.map((opt) => (
-                                  <button key={opt.value} type="button"
-                                    onClick={() => {
-                                      const current = defectiveTruckTypes.filter(t => t !== opt.value)
-                                      if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
-                                      else setDefectiveTruckTypes([...current, opt.value])
-                                    }}
-                                    className={`px-4 py-2 rounded-xl text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border-2 border-gray-200'}`}>
-                                    {opt.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                         </div>
+                        {hasSecondTruck && (
+                          <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                            <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
+                            <div className="flex gap-2 flex-wrap">
+                              {TRUCK_OPTIONS.map((opt) => (
+                                <button key={opt.value} type="button"
+                                  onClick={() => {
+                                    const current = defectiveTruckTypes.filter(t => t !== opt.value)
+                                    if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
+                                    else setDefectiveTruckTypes([...current, opt.value])
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* שירותים נוספים לתקול */}
                         {serviceSurchargesData.length > 0 && (
@@ -1824,49 +1921,49 @@ function CreateTowForm({
 
                         {/* מוצא התקול */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">מוצא הרכב התקול</label>
-                          <div className="flex gap-2 mb-2">
-                            {workingVehicleDestinationAddress.address && (
-                              <button type="button"
-                                onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
-                                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">
-                                זהה ליעד התקין
-                              </button>
-                            )}
-                          </div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקול</label>
+                          {workingVehicleDestinationAddress.address && (
+                            <button type="button"
+                              onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
+                              className="mb-2 px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">
+                              זהה ליעד התקין
+                            </button>
+                          )}
                           <AddressInput
                             value={exchangeAddress}
                             onChange={(d: AddressData) => setExchangeAddress(d)}
                             label=""
+                            hideLabel
                             onPinDropClick={() => handlePinDropOpen('exchange')}
                           />
                         </div>
 
                         {/* יעד התקול */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">יעד הרכב התקול</label>
-                          <div className="flex gap-2 mb-2">
-                            <button type="button"
+                          <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יעד הרכב התקול</label>
+                          <AddressInput
+                            value={defectiveDestinationAddress}
+                            onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
+                            label=""
+                            hideLabel
+                            onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
+                          />
+                          {defectiveDestination !== 'storage' ? (
+                            <button
+                              type="button"
                               onClick={() => {
                                 setDefectiveDestination('storage')
                                 if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
                               }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'storage' ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
-                              לאחסנה
+                              className="mt-1.5 flex items-center gap-1 text-xs text-gray-400 hover:text-orange-500 transition-colors"
+                            >
+                              <span>🏪</span> שמור באחסנה
                             </button>
-                            <button type="button"
-                              onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }}
-                              className={`px-3 py-1.5 rounded-lg text-sm ${defectiveDestination === 'address' ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-300 font-medium'}`}>
-                              לכתובת
-                            </button>
-                          </div>
-                          {defectiveDestination === 'address' && (
-                            <AddressInput
-                              value={defectiveDestinationAddress}
-                              onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
-                              label=""
-                              onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
-                            />
+                          ) : (
+                            <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg w-fit">
+                              <span className="text-xs text-orange-600">🏪 לאחסנה</span>
+                              <button type="button" onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                            </div>
                           )}
                         </div>
 
@@ -2484,6 +2581,65 @@ function CreateTowForm({
               : 'בחר מיקום'
         }
       />
+
+      {showWorkingStorageModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-800 text-base">בחר רכב תקין מאחסנה</h3>
+              <button type="button" onClick={() => setShowWorkingStorageModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+            <div className="p-4 flex flex-col gap-2">
+              {customerStoredVehicles.filter(v => v.vehicle_condition === 'operational').map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => {
+                    setWorkingVehicleSource('storage')
+                    setWorkingVehiclePlate(v.plate_number)
+                    if (v.vehicle_data) {
+                      setWorkingVehicleData({
+                        found: true,
+                        source: (v.vehicle_data.source as VehicleLookupResult['source']) || 'private',
+                        sourceLabel: v.vehicle_data.sourceLabel || 'רכב פרטי',
+                        data: {
+                          plateNumber: v.plate_number,
+                          manufacturer: v.vehicle_data.manufacturer || null,
+                          model: v.vehicle_data.model || null,
+                          year: v.vehicle_data.year ? parseInt(v.vehicle_data.year) : null,
+                          color: v.vehicle_data.color || null,
+                          fuelType: null,
+                          totalWeight: v.vehicle_data.totalWeight ? parseInt(v.vehicle_data.totalWeight) : null,
+                          vehicleType: null,
+                          driveType: v.vehicle_data.driveType || null,
+                          driveTechnology: null,
+                          gearType: v.vehicle_data.gearType || null,
+                          machineryType: null,
+                          selfWeight: null,
+                          totalWeightTon: null
+                        }
+                      })
+                    }
+                    if (storageAddress) setWorkingVehicleAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
+                    setShowWorkingStorageModal(false)
+                  }}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:border-gray-300 text-sm font-medium text-right flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                    <span>{v.plate_number}</span>
+                    {v.vehicle_data?.model && <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>}
+                  </div>
+                  <span className="text-xs text-gray-400">תקין</span>
+                </button>
+              ))}
+            </div>
+            <div className="px-4 pb-4">
+              <button type="button" onClick={() => setShowWorkingStorageModal(false)} className="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm">ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
 
         {showDriverPicker && (
           <DriverCalendarPicker

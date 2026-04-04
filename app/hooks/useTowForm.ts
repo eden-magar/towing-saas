@@ -161,7 +161,7 @@ export function useTowForm(editTowId?: string) {
   const [storageLoading, setStorageLoading] = useState(false)
 
   // Exchange specific state
-  const [workingVehicleSource, setWorkingVehicleSource] = useState<'storage' | 'address'>('storage')
+  const [workingVehicleSource, setWorkingVehicleSource] = useState<'storage' | 'address'>('address')
   const [selectedWorkingVehicleId, setSelectedWorkingVehicleId] = useState<string | null>(null)
   const [workingVehiclePlate, setWorkingVehiclePlate] = useState('')
   const [workingVehicleData, setWorkingVehicleData] = useState<VehicleLookupResult | null>(null)
