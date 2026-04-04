@@ -68,6 +68,12 @@
     } | null>(null)
     const [updatingPrice, setUpdatingPrice] = useState(false)
     const [manualPrice, setManualPrice] = useState<string>('')
+    const [now, setNow] = useState(Date.now())
+
+    useEffect(() => {
+      const interval = setInterval(() => setNow(Date.now()), 60000)
+      return () => clearInterval(interval)
+    }, [])
 
   const isAllSelected = selectedDrivers.length === 0
 
@@ -628,6 +634,7 @@
                 {driverIds.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-300 text-xs">אין גרירות ביום זה</div>
                 ) : (
+                  <div className="relative">
                     <table className="w-full text-xs border-collapse" style={{ minWidth: `${driverIds.length * 120 + 60}px` }}>
                       <thead>
                         <tr className="sticky top-0 bg-gray-50 z-10">
@@ -666,16 +673,10 @@
                                       className="relative rounded px-1 py-0.5 mb-0.5 cursor-pointer truncate text-xs font-medium"
                                       style={
                                         t.status === 'completed'
-                                          ? {
-                                              background: '#16a34a',
-                                              color: '#fff',
-                                              border: '1px solid #15803d',
-                                            }
-                                          : {
-                                              background: color + '25',
-                                              color: color,
-                                              border: `1px solid ${color}40`,
-                                            }
+                                          ? { background: '#16a34a', color: '#fff', border: '1px solid #15803d' }
+                                          : t.status === 'in_progress'
+                                          ? { background: '#f97316', color: '#fff', border: '1px solid #ea580c' }
+                                          : { background: color + '25', color: color, border: `1px solid ${color}40` }
                                       }
                                       title={`${t.customer?.name || ''} ${t.order_number || ''}`.trim()}
                                     >
@@ -721,6 +722,43 @@
                         )}
                       </tbody>
                     </table>
+
+                    <div className="absolute inset-0 pointer-events-none" style={{ paddingRight: '32px' }}>
+                      {driverIds.map((id, driverIdx) => {
+                        const liveTows = filteredCalendarTows.filter((t: any) =>
+                          t.driver_id === id &&
+                          (t.status === 'in_progress' || t.status === 'assigned') &&
+                          t.scheduled_at
+                        )
+                        const driverWidth = 100 / driverIds.length
+                        return liveTows.map((t: any) => {
+                          const scheduledMs = new Date(t.scheduled_at).getTime()
+                          const elapsedMinutes = Math.max(60, (now - scheduledMs) / 60000)
+                          const startHour = new Date(t.scheduled_at).getHours() + new Date(t.scheduled_at).getMinutes() / 60
+                          const top = startHour * 40
+                          const height = (elapsedMinutes / 60) * 40
+                          return (
+                            <div
+                              key={t.id}
+                              onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                              className="absolute rounded px-1 py-0.5 text-xs font-medium text-white cursor-pointer pointer-events-auto"
+                              style={{
+                                top: `${top}px`,
+                                height: `${Math.max(height, 20)}px`,
+                                right: `calc(${driverIdx * driverWidth}% + 2px)`,
+                                width: `calc(${driverWidth}% - 4px)`,
+                                backgroundColor: t.status === 'in_progress' ? '#f97316' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length] + '99',
+                                border: `1px solid ${t.status === 'in_progress' ? '#ea580c' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]}`,
+                                zIndex: 5,
+                              }}
+                            >
+                              {t.customer?.name || t.order_number?.slice(-4) || t.id.slice(0, 4)}
+                            </div>
+                          )
+                        })
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
