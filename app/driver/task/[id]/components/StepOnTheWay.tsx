@@ -86,88 +86,38 @@ export default function StepOnTheWay({
       </div>
 
       {/* Content Card */}
-      <div className="flex-1 bg-gray-50 rounded-t-3xl px-5 pt-6 pb-24">
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {['קבלה', 'לאיסוף', 'צילום', 'ליעד', 'מסירה'].map((tab, idx) => (
-            <div 
-              key={tab}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
-                idx === (isPickup ? 1 : 3) 
-                  ? 'bg-white text-gray-800 shadow-sm' 
-                  : 'text-gray-400'
-              }`}
-            >
-              {tab}
-            </div>
-          ))}
-        </div>
-
-        {/* Vehicles Info - תמיכה בריבוי רכבים */}
+      <div className="flex-1 bg-gray-50 rounded-t-3xl px-5 pt-6 pb-4">
         {vehicles.length > 0 && (
-          <div className="space-y-3 mb-4">
-            <p className="text-sm text-gray-500 font-medium">
-              {vehicles.length > 1 ? `${vehicles.length} רכבים` : 'רכב'}
-            </p>
-            {vehicles.map((vehicle, idx) => (
-              <div key={vehicle.id || idx} className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
-                    <Car size={24} className="text-gray-500" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-bold text-gray-800">
-                      {vehicle.manufacturer} {vehicle.model}
-                    </p>
-                    <p className="text-gray-500 font-mono">{vehicle.plate_number}</p>
-                    {vehicle.color && (
-                      <p className="text-sm text-gray-400">{vehicle.color}</p>
-                    )}
-                  </div>
-                  {vehicles.length > 1 && (
-                    <div className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded-full">
-                      {idx + 1}
-                    </div>
-                  )}
-                </div>
-              </div>
+          <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center gap-2 flex-wrap">
+            <Car size={16} className="text-gray-400 shrink-0" />
+            {vehicles.map((v, idx) => (
+              <span key={v.id || idx} className="text-sm font-medium text-gray-700 font-mono">
+                {v.plate_number}{idx < vehicles.length - 1 ? ',' : ''}
+              </span>
             ))}
           </div>
         )}
 
-        {/* Contact */}
-        <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <p className="text-sm text-gray-500 mb-2">
-            {isPickup ? 'איש קשר באיסוף' : 'איש קשר'}
-          </p>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                <Phone size={18} className="text-emerald-600" />
-              </div>
-              <div>
-                <p className="font-medium text-gray-800">{contactName}</p>
-                <p className="text-sm text-gray-500">{contactPhone || 'אין מספר'}</p>
-              </div>
+        {(contactName || contactPhone) && (
+          <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center justify-between">
+            <div className="flex gap-2">
+              {contactPhone && (
+                <>
+                  <button onClick={() => openPhone(contactPhone)} className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center">
+                    <Phone size={16} className="text-white" />
+                  </button>
+                  <button onClick={() => openWhatsApp(contactPhone)} className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center">
+                    <MessageCircle size={16} className="text-white" />
+                  </button>
+                </>
+              )}
             </div>
-            {contactPhone && (
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => openPhone(contactPhone)}
-                  className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center"
-                >
-                  <Phone size={18} className="text-white" />
-                </button>
-                <button 
-                  onClick={() => openWhatsApp(contactPhone)}
-                  className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center"
-                >
-                  <MessageCircle size={18} className="text-white" />
-                </button>
-              </div>
-            )}
+            <div className="text-right">
+              <p className="font-medium text-gray-800 text-sm">{contactName}</p>
+              <p className="text-xs text-gray-500">{contactPhone || 'אין מספר'}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Route */}
         <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
@@ -201,13 +151,13 @@ export default function StepOnTheWay({
             onChange={(e) => setArrivalNotes(e.target.value)}
             placeholder="הערות לגבי הנקודה..."
             rows={2}
-            className="w-full p-3 border border-gray-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+            className="w-full p-2 border border-gray-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
           />
         </div>
       </div>
 
       {/* Bottom Actions - Fixed */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-32">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8">
         <div className="flex gap-3">
           <button
             onClick={handleArrived}
