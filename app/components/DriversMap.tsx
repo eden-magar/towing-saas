@@ -56,26 +56,24 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
       const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
       const initial = driver.name.charAt(0)
 
+      const statusColor = driver.status === 'available' ? '#22c55e'
+        : driver.status === 'busy' || driver.status === 'on_way' ? '#f97316'
+        : driver.status === 'break' ? '#f59e0b'
+        : '#9ca3af'
+
       const svgIcon = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
-        <filter id="shadow${driver.id}">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.35"/>
-        </filter>
-        <path d="M22 2 C11 2 3 10 3 20 C3 33 22 50 22 50 C22 50 41 33 41 20 C41 10 33 2 22 2 Z"
-          fill="${color}" filter="url(#shadow${driver.id})" stroke="white" stroke-width="2"/>
-        <circle cx="22" cy="19" r="13" fill="white" opacity="0.15"/>
-        <g transform="translate(9, 10) scale(0.5)">
-          <rect x="2" y="11" width="28" height="13" rx="2" fill="white"/>
-          <rect x="22" y="7" width="12" height="8" rx="1" fill="white"/>
-          <rect x="24" y="9" width="8" height="5" rx="1" fill="${color}"/>
-          <circle cx="7" cy="25" r="3" fill="${color}" stroke="white" stroke-width="1.5"/>
-          <circle cx="27" cy="25" r="3" fill="${color}" stroke="white" stroke-width="1.5"/>
-          <rect x="0" y="17" width="4" height="4" rx="0.5" fill="white"/>
-        </g>
-        <text x="22" y="38" text-anchor="middle" font-size="9" font-weight="bold"
-          font-family="Arial, sans-serif" fill="white" opacity="0.9">${driver.name.split(' ')[0]}</text>
-      </svg>
-      `
+<svg xmlns="http://www.w3.org/2000/svg" width="52" height="60" viewBox="0 0 52 60">
+  <filter id="shadow${driver.id}">
+    <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.35"/>
+  </filter>
+  <path d="M26 2 C13 2 4 11 4 22 C4 37 26 58 26 58 C26 58 48 37 48 22 C48 11 39 2 26 2 Z"
+    fill="${color}" filter="url(#shadow${driver.id})" stroke="white" stroke-width="2"/>
+  <text x="26" y="26" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="bold"
+    font-family="Arial, sans-serif" fill="white">${driver.name.split(' ')[0]}</text>
+  <circle cx="40" cy="8" r="8" fill="white" stroke="white" stroke-width="1"/>
+  <circle cx="40" cy="8" r="6" fill="${statusColor}"/>
+</svg>
+`
 
       const OFFSET = 0.0002
       const sameSpot = drivers.slice(0, index).filter(
@@ -111,32 +109,6 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
         markersRef.current.push(marker)
         bounds.extend({ lat: driver.last_lat, lng: driver.last_lng })
       })
-    })
-  }, [drivers])
-
-  useEffect(() => {
-    if (!mapInstanceRef.current || !window.google?.maps) return
-
-    markersRef.current.forEach(m => m.setMap(null))
-    markersRef.current = []
-
-    if (drivers.length === 0) return
-
-    drivers.forEach((driver, index) => {
-      const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
-      const OFFSET = 0.0002
-      const sameSpot = drivers.slice(0, index).filter(
-        d => d.last_lat === driver.last_lat && d.last_lng === driver.last_lng
-      ).length
-      const lat = driver.last_lat + sameSpot * OFFSET
-      const lng = driver.last_lng + sameSpot * OFFSET
-
-      const marker = new window.google.maps.Marker({
-        position: { lat, lng },
-        map: mapInstanceRef.current,
-        title: driver.name,
-      })
-      markersRef.current.push(marker)
     })
   }, [drivers])
 
