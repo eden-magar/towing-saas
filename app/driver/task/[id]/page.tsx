@@ -15,6 +15,7 @@ import {
 import { createCashCollection, updateTowCashPayment } from '@/app/lib/queries/driver-cash'
 import { addVehicleToStorage } from '@/app/lib/queries/storage'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
+import { supabase } from '@/app/lib/supabase'
 import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle } from 'lucide-react'
 
 // קומפוננטות השלבים
@@ -50,6 +51,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const [rejectionPending, setRejectionPending] = useState(false)
 
   const [pendingRejectionRequestId, setPendingRejectionRequestId] = useState<string | null>(null)
+  const [rejectionDenied, setRejectionDenied] = useState(false)
 
   const [pendingDeliveryData, setPendingDeliveryData] = useState<{
     recipientName: string
@@ -62,6 +64,24 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     loadTask()
   }, [id])
+
+  useEffect(() => {
+    if (!pendingRejectionRequestId) return
+    const channel = supabase
+      .channel(`rejection-${pendingRejectionRequestId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'tow_rejection_requests',
+        filter: `id=eq.${pendingRejectionRequestId}`
+      }, (payload) => {
+        if (payload.new.status === 'rejected') {
+          setRejectionDenied(true)
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [pendingRejectionRequestId])
 
   const loadTask = async () => {
     setLoading(true)
@@ -327,6 +347,11 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     return (
       <div dir="rtl" className="fixed inset-0 bg-orange-50 flex flex-col items-center justify-center p-6">
         <div className="bg-white rounded-2xl p-8 shadow-lg text-center max-w-sm w-full">
+          {rejectionDenied && (
+            <div className="bg-red-100 text-red-700 rounded-xl px-4 py-2 mb-4 font-medium text-sm">
+              ❌ המנהל דחה את בקשת הדחייה — יש להמשיך בגרירה
+            </div>
+          )}
           <div className="text-5xl mb-4">⏳</div>
           <h2 className="text-xl font-bold text-gray-800 mb-2">בקשת הדחייה נשלחה</h2>
           <p className="text-gray-500 mb-6">ממתין לאישור המנהל</p>
