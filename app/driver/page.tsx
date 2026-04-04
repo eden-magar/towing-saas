@@ -519,6 +519,11 @@ export default function DriverHomePage() {
                         ממתין לאישור בקשת דחייה
                       </div>
                     )}
+                    {currentTask.hasDeniedRejection && (
+                      <div className="mb-2 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-lg text-center">
+                        ❌ בקשת הדחייה נדחתה — יש להמשיך בגרירה
+                      </div>
+                    )}
                     <div className="font-bold">{getVehicleInfo(currentTask).name}</div>
                     {getVehicleInfo(currentTask).plate && (
                       <span className="bg-white/20 text-xs font-mono px-2 py-0.5 rounded">
@@ -600,6 +605,11 @@ export default function DriverHomePage() {
                   {task.hasPendingRejection && (
                     <div className="mb-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-lg text-center">
                       ממתין לאישור בקשת דחייה
+                    </div>
+                  )}
+                  {task.hasDeniedRejection && (
+                    <div className="mb-2 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-lg text-center">
+                      ❌ בקשת הדחייה נדחתה — יש להמשיך בגרירה
                     </div>
                   )}
                   <div className="flex items-start justify-between">

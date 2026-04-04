@@ -55,6 +55,7 @@ export interface DriverTask {
   scheduled_at: string | null
   notes: string | null
   hasPendingRejection?: boolean
+  hasDeniedRejection?: boolean
   created_at: string
   customer: {
     id: string
@@ -278,6 +279,9 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     notes: tow.notes,
     hasPendingRejection: Array.isArray((tow as any).tow_rejection_requests)
       ? (tow as any).tow_rejection_requests.some((r: any) => r.status === 'pending')
+      : false,
+    hasDeniedRejection: Array.isArray((tow as any).tow_rejection_requests)
+      ? (tow as any).tow_rejection_requests.some((r: any) => r.status === 'rejected')
       : false,
     created_at: tow.created_at,
     customer: tow.customer as any,
