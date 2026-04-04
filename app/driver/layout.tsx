@@ -76,6 +76,7 @@ export default function DriverLayout({
       if (driver?.id) {
         const shift = await getActiveShift(driver.id)
         setActiveShiftId(shift?.id || null)
+        console.log('[LocationTracking] activeShiftId set:', shift?.id)
       }
     } catch (err) {
       console.error('Error loading driver info:', err)
