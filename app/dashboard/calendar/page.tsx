@@ -7,6 +7,7 @@ import { getDrivers } from '../../lib/queries/drivers'
 import { TowWithDetails } from '../../lib/queries/tows'
 import { DriverWithDetails } from '../../lib/types'
 import { recalculateTowPrice, updateTow } from '../../lib/queries/tows'
+import { supabase } from '../../lib/supabase'
 import { 
   ChevronRight,
   ChevronLeft,
@@ -173,6 +174,15 @@ export default function CalendarPage() {
       }
     }
   }, [companyId, authLoading, currentWeekStart])
+
+  useEffect(() => {
+    if (!companyId) return
+    const channel = supabase
+      .channel(`calendar-realtime-${companyId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => loadData())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [companyId])
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -813,7 +823,7 @@ const handleSkipPriceUpdate = () => {
                         height: `${Math.max(height - 4, 20)}px`,
                         right: `${right + 0.3}%`,
                         width: `${slotWidth - 0.6}%`,
-                        backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
+                        backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : tow.status === 'in_progress' ? '#f97316' : driverColor,
                         borderRightColor: driverColor,
                       }}
                     >
@@ -961,7 +971,7 @@ const handleSkipPriceUpdate = () => {
                             })(),
                             right: `calc(${(collision.columnIndex / collision.totalColumns) * 100}% + 2px)`,
                             left: `calc(${((collision.totalColumns - collision.columnIndex - 1) / collision.totalColumns) * 100}% + 2px)`,
-                            backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
+                            backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : tow.status === 'in_progress' ? '#f97316' : driverColor,
                             borderRightColor: driverColor,
                           }}
                         >
