@@ -14,13 +14,15 @@ interface StepDeliveryProps {
   customer: { name: string; phone: string | null } | null
   onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
   isLastPoint: boolean
+  finalPrice?: number | null
 }
 
 export default function StepDelivery({
   pointType,
   customer,
   onComplete,
-  isLastPoint
+  isLastPoint,
+  finalPrice
 }: StepDeliveryProps) {
   const [recipientName, setRecipientName] = useState('')
   const [recipientPhone, setRecipientPhone] = useState('')
@@ -92,6 +94,12 @@ export default function StepDelivery({
       <div className="flex-1 bg-white rounded-t-3xl px-5 pt-6 pb-40">
         {isLastPoint && (
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            {finalPrice != null && (
+              <div className="flex items-center justify-between mb-3 pb-3 border-b border-amber-200">
+                <span className="text-amber-700 font-bold text-lg">₪{finalPrice}</span>
+                <span className="text-sm text-gray-600">מחיר הגרירה</span>
+              </div>
+            )}
             <label className="flex items-center justify-between cursor-pointer mb-3">
               <span className="font-medium text-gray-800">💰 התקבל מזומן?</span>
               <div

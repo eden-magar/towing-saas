@@ -142,11 +142,11 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const totalPoints = task?.points.length || 0
 
   // הגעתי לנקודה
-  const handleArrived = async () => {
+  const handleArrived = async (notes?: string) => {
     if (!currentPoint || !user) return
     
     try {
-      await updatePointStatus(currentPoint.id, 'arrived')
+      await updatePointStatus(currentPoint.id, 'arrived', undefined, undefined, notes)
       if (currentPoint.point_type === 'dropoff') {
         setPointStep('camera_after')
       } else if (currentPoint.point_type === 'stop') {
@@ -452,6 +452,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             customer={task.customer}
             onComplete={handleDeliveryComplete}
             isLastPoint={currentPointIndex + 1 >= totalPoints}
+            finalPrice={task.final_price}
           />
         )}
       </div>

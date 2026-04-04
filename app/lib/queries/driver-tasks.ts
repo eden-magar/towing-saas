@@ -671,6 +671,7 @@ export async function updatePointStatus(
   
   if (status === 'arrived') {
     updates.arrived_at = new Date().toISOString()
+    if (notes) updates.notes = notes
   } else if (status === 'completed') {
     updates.completed_at = new Date().toISOString()
     if (recipientName) updates.recipient_name = recipientName

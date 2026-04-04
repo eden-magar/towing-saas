@@ -21,7 +21,7 @@ interface StepOnTheWayProps {
   customer: { name: string; phone: string | null } | null
   totalPoints: number
   currentIndex: number
-  onArrived: () => Promise<void>
+  onArrived: (notes?: string) => Promise<void>
   taskId: string
 }
 
@@ -37,6 +37,7 @@ export default function StepOnTheWay({
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showRoute, setShowRoute] = useState(false)
+  const [arrivalNotes, setArrivalNotes] = useState('')
 
   const isPickup = point.point_type === 'pickup'
   const isExchange = point.point_type === 'exchange'
@@ -66,7 +67,7 @@ export default function StepOnTheWay({
   const handleArrived = async () => {
     setLoading(true)
     try {
-      await onArrived()
+      await onArrived(arrivalNotes.trim() || undefined)
     } finally {
       setLoading(false)
     }
@@ -191,6 +192,17 @@ export default function StepOnTheWay({
               )}
             </div>
           )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+          <label className="block text-sm text-gray-500 mb-2 text-right">הערות הגעה (אופציונלי)</label>
+          <textarea
+            value={arrivalNotes}
+            onChange={(e) => setArrivalNotes(e.target.value)}
+            placeholder="הערות לגבי הנקודה..."
+            rows={2}
+            className="w-full p-3 border border-gray-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+          />
         </div>
       </div>
 
