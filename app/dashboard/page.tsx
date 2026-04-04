@@ -232,7 +232,13 @@
         const priceMode = draggedTow.price_mode || 'recommended'
         if (priceMode === 'recommended' && draggedTow.price_breakdown) {
           const result = await recalculateTowPrice(draggedTow.id, newDate, companyId)
-          if (result && result.oldPrice !== result.newPrice) {
+          const oldSurchargeIds = (draggedTow.price_breakdown?.time_surcharges ?? [])
+            .map((s: any) => s.id).sort().join(',')
+          const newSurchargeIds = (result?.newBreakdown?.time_surcharges ?? [])
+            .map((s: any) => s.id).sort().join(',')
+          const timeSurchargesChanged = oldSurchargeIds !== newSurchargeIds
+
+          if (result && timeSurchargesChanged) {
             setPriceUpdateInfo({
               towId: draggedTow.id,
               oldPrice: result.oldPrice,
