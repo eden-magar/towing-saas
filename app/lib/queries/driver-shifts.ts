@@ -1,6 +1,15 @@
 import { supabase } from '../supabase'
 
 export async function startShift(driverId: string, companyId: string, lat?: number, lng?: number) {
+  const { data: existingShift } = await supabase
+    .from('driver_shifts')
+    .select('id')
+    .eq('driver_id', driverId)
+    .is('ended_at', null)
+    .maybeSingle()
+
+  if (existingShift) return existingShift
+
   const { data, error } = await supabase
     .from('driver_shifts')
     .insert({
