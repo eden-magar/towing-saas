@@ -735,7 +735,8 @@
                           const scheduledMs = new Date(t.scheduled_at).getTime()
                           const elapsedMinutes = Math.max(60, (now - scheduledMs) / 60000)
                           const startHour = new Date(t.scheduled_at).getHours() + new Date(t.scheduled_at).getMinutes() / 60
-                          const top = startHour * 40
+                          const theadHeight = 33 // approximate thead height in px
+                          const top = theadHeight + startHour * 40
                           const height = (elapsedMinutes / 60) * 40
                           return (
                             <div
