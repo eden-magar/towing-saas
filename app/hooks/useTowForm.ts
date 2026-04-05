@@ -541,15 +541,21 @@ export function useTowForm(editTowId?: string) {
   // ==================== Price Calculations ====================
   const { recommendedPrice, finalPrice, priceResult } = useTowPricing({
     towType,
-    vehicleType,
-    distance,
+    vehicleType: towType === 'exchange' ? (workingVehicleType || 'private') : vehicleType,
+    basePriceOverride: towType === 'exchange' && basePriceList && workingVehicleType && defectiveVehicleType
+      ? (basePriceList.base_prices?.[workingVehicleType as VehicleType] ?? 0) +
+        (basePriceList.base_prices?.[defectiveVehicleType as VehicleType] ?? 0)
+      : undefined,
+    distance: towType === 'exchange' ? exchangeTotalDistance : distance,
     startFromBase,
     baseToPickupDistance,
     basePriceList,
     activeTimeSurchargesList,
     selectedLocationSurcharges,
     locationSurchargesData,
-    selectedServices,
+    selectedServices: towType === 'exchange'
+      ? [...workingSelectedServices, ...defectiveSelectedServices]
+      : selectedServices,
     serviceSurchargesData,
     selectedCustomerPricing,
     customRouteData,

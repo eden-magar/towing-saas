@@ -15,6 +15,7 @@ import { calculateTowPrice, extractBasePrices, TowPriceResult } from '../lib/uti
 interface UseTowPricingParams {
   towType: TowType
   vehicleType: VehicleType | ''
+  basePriceOverride?: number
   distance: DistanceResult | null
   startFromBase: boolean
   baseToPickupDistance: DistanceResult | null
@@ -60,6 +61,7 @@ export function useTowPricing(params: UseTowPricingParams) {
   const {
     towType,
     vehicleType,
+    basePriceOverride,
     distance,
     startFromBase,
     baseToPickupDistance,
@@ -232,6 +234,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         minimum_price: activePriceList?.minimum_price ?? 250
       },
       vehicleType: vehicleType as VehicleType,
+      ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       distanceKm,
       timeSurcharges: timeSurchargesData,
       towDate: towDate || '',
