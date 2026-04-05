@@ -280,6 +280,8 @@ function CreateTowForm({
   const [showTruckModal, setShowTruckModal] = useState(false)
   const [showDefectsModal, setShowDefectsModal] = useState(false)
   const [showDefectsExchangeModal, setShowDefectsExchangeModal] = useState(false)
+  const [showWorkingServicesModal, setShowWorkingServicesModal] = useState(false)
+  const [showDefectiveServicesModal, setShowDefectiveServicesModal] = useState(false)
   const [showStorageModal, setShowStorageModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
@@ -1537,9 +1539,51 @@ function CreateTowForm({
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {showWorkingServicesModal && (
+                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקין</h3>
+                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                          </div>
+                          <div className="p-4">
+                            <ServiceSurchargeSelector
+                              services={serviceSurchargesData}
+                              selectedServices={workingSelectedServices}
+                              onChange={setWorkingSelectedServices}
+                            />
+                          </div>
+                          <div className="px-4 pb-4">
+                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="w-full py-2.5 bg-blue-500 text-white rounded-xl text-sm font-medium">אישור</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {showDefectiveServicesModal && (
+                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                            <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקול</h3>
+                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                          </div>
+                          <div className="p-4">
+                            <ServiceSurchargeSelector
+                              services={serviceSurchargesData}
+                              selectedServices={defectiveSelectedServices}
+                              onChange={setDefectiveSelectedServices}
+                            />
+                          </div>
+                          <div className="px-4 pb-4">
+                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className="w-full py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium">אישור</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
                     {/* ═══════════════ א — הרכב התקין ═══════════════ */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-none overflow-hidden mb-4">
+                    <div className="bg-white rounded-t-2xl border border-gray-200 border-b-0 shadow-none overflow-hidden">
                       <div className="px-4 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
                         <h3 className="font-bold text-blue-800 text-sm">רכב תקין</h3>
                         {workingVehicleSource === 'storage' ? (
@@ -1574,7 +1618,7 @@ function CreateTowForm({
                           )
                         )}
                       </div>
-                      <div className="p-4 space-y-3">
+                      <div className="p-4 flex flex-col gap-3">
 
                         {/* מספר רכב + קוד רכב */}
                         <div>
@@ -1698,20 +1742,23 @@ function CreateTowForm({
                           </div>
                         )}
 
-                        {/* שירותים נוספים לתקין */}
+                        <div className="min-h-[44px]" />
+
                         {serviceSurchargesData.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium text-gray-500 mb-1.5 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"></span>
-                              שירותים נוספים — תקין
-                            </p>
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={workingSelectedServices}
-                              onChange={setWorkingSelectedServices}
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowWorkingServicesModal(true)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors w-full justify-center ${
+                              workingSelectedServices.length > 0
+                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            ⚙️ {workingSelectedServices.length > 0 ? `שירותים (${workingSelectedServices.length})` : 'שירותים נוספים'}
+                          </button>
                         )}
+
+                        <div className="border-t border-gray-100" />
 
                         {/* מוצא תקין */}
                         <div>
@@ -1734,43 +1781,28 @@ function CreateTowForm({
                               onPinDropClick={() => handlePinDropOpen('workingVehicle')}
                             />
                           )}
-                        </div>
-
-                        {/* יעד תקין */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">יעד הרכב התקין</label>
-                          <AddressInput
-                            value={workingVehicleDestinationAddress}
-                            onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
-                            label=""
-                            hideLabel
-                            onPinDropClick={() => handlePinDropOpen('workingDestination')}
-                          />
-                          {!workingVehicleDestinationIsStorage ? (
-                            <button
-                              type="button"
-                              onClick={() => { setWorkingVehicleDestinationIsStorage(true); if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng }) }}
-                              className="mt-1.5 flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
-                            >
-                              <span>🏪</span> שמור באחסנה
-                            </button>
-                          ) : (
-                            <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg w-fit">
-                              <span className="text-xs text-blue-600">🏪 לאחסנה</span>
-                              <button type="button" onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setStartFromBase(!startFromBase)}
+                            className={`mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                              startFromBase
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                            }`}
+                          >
+                            יציאה מהחניון
+                          </button>
                         </div>
 
                       </div>
                     </div>
 
                     {/* ═══════════════ ב — הרכב התקול ═══════════════ */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-none overflow-hidden mb-4">
+                    <div className="bg-white rounded-t-2xl border border-gray-200 border-b-0 shadow-none overflow-hidden">
                       <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
                         <h3 className="font-bold text-orange-800 text-sm">רכב תקול</h3>
                       </div>
-                      <div className="p-4 space-y-3">
+                      <div className="p-4 flex flex-col gap-3">
 
                         {/* מספר רכב + קוד רכב */}
                         <div className="flex gap-2">
@@ -1904,31 +1936,25 @@ function CreateTowForm({
                           </div>
                         )}
 
-                        {/* שירותים נוספים לתקול */}
                         {serviceSurchargesData.length > 0 && (
-                          <div>
-                            <p className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block"></span>
-                              שירותים נוספים — תקול
-                            </p>
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={defectiveSelectedServices}
-                              onChange={setDefectiveSelectedServices}
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowDefectiveServicesModal(true)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors w-full justify-center ${
+                              defectiveSelectedServices.length > 0
+                                ? 'border-orange-300 bg-orange-50 text-orange-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            ⚙️ {defectiveSelectedServices.length > 0 ? `שירותים (${defectiveSelectedServices.length})` : 'שירותים נוספים'}
+                          </button>
                         )}
+
+                        <div className="border-t border-gray-100" />
 
                         {/* מוצא התקול */}
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקול</label>
-                          {workingVehicleDestinationAddress.address && (
-                            <button type="button"
-                              onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
-                              className="mb-2 px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">
-                              זהה ליעד התקין
-                            </button>
-                          )}
                           <AddressInput
                             value={exchangeAddress}
                             onChange={(d: AddressData) => setExchangeAddress(d)}
@@ -1936,8 +1962,57 @@ function CreateTowForm({
                             hideLabel
                             onPinDropClick={() => handlePinDropOpen('exchange')}
                           />
+                          <button
+                            type="button"
+                            onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
+                            disabled={!workingVehicleDestinationAddress?.address}
+                            className="mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            זהה ליעד התקין
+                          </button>
                         </div>
 
+                      </div>
+                    </div>
+
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch mb-4">
+                    <div className="bg-white rounded-b-2xl border border-gray-200 border-t-0 shadow-none overflow-hidden">
+                      <div className="p-4 flex flex-col gap-3">
+                        <div className="border-t border-gray-100 pt-3">
+                        {/* יעד תקין */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">יעד הרכב התקין</label>
+                          <AddressInput
+                            value={workingVehicleDestinationAddress}
+                            onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
+                            label=""
+                            hideLabel
+                            onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                          />
+                          {!workingVehicleDestinationIsStorage ? (
+                            <button
+                              type="button"
+                              onClick={() => { setWorkingVehicleDestinationIsStorage(true); if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng }) }}
+                              className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors w-fit"
+                            >
+                              <span>🏪</span> שמור באחסנה
+                            </button>
+                          ) : (
+                            <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg w-fit">
+                              <span className="text-xs text-blue-600">🏪 לאחסנה</span>
+                              <button type="button" onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                            </div>
+                          )}
+                        </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-b-2xl border border-gray-200 border-t-0 shadow-none overflow-hidden">
+                      <div className="p-4 flex flex-col gap-3">
+                        <div className="border-t border-gray-100 pt-3">
                         {/* יעד התקול */}
                         <div>
                           <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יעד הרכב התקול</label>
@@ -1955,7 +2030,7 @@ function CreateTowForm({
                                 setDefectiveDestination('storage')
                                 if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
                               }}
-                              className="mt-1.5 flex items-center gap-1 text-xs text-gray-400 hover:text-orange-500 transition-colors"
+                              className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:border-orange-300 hover:text-orange-600 transition-colors w-fit"
                             >
                               <span>🏪</span> שמור באחסנה
                             </button>
@@ -1966,10 +2041,37 @@ function CreateTowForm({
                             </div>
                           )}
                         </div>
-
+                        </div>
                       </div>
                     </div>
 
+                    </div>
+
+                    {/* תוספות זמן */}
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">תוספות זמן</h3>
+                      </div>
+                      <div className="p-4">
+                        <TimeSurchargesSection
+                          timeSurchargesData={timeSurchargesData}
+                          towDate={towDate}
+                          towTime={towTime}
+                          isHoliday={isHoliday}
+                          setIsHoliday={setIsHoliday}
+                          activeTimeSurchargesList={activeTimeSurchargesList}
+                          setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                          setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-3 mt-2">
+                      <LocationSurchargesSection
+                        locationSurchargesData={locationSurchargesData}
+                        selectedLocationSurcharges={selectedLocationSurcharges}
+                        setSelectedLocationSurcharges={setSelectedLocationSurcharges}
+                      />
                     </div>
                   </>
                 )}
