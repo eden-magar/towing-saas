@@ -129,6 +129,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     // Computed
     recommendedPrice,
     finalPrice,
+    vatPercent,
     // Handlers
     handleCustomerSelect,
     handleSelectWorkingVehicle,
@@ -401,7 +402,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                     customPrice={customPrice}
                     setCustomPrice={setCustomPrice}
                     recommendedPrice={recommendedPrice}
-                    distance={distance}
+                    distance={towType === 'custom' ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 } : distance}
                     basePriceList={basePriceList}
                     fixedPriceItems={fixedPriceItems}
                     selectedCustomerPricing={selectedCustomerPricing}
@@ -507,6 +508,8 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                     towDate={towDate}
                     towTime={towTime}
                     isHoliday={isHoliday}
+                    vatPercent={vatPercent}
+                    customRouteData={customRouteData}
                   />
                 </div>
               </div>

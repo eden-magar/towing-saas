@@ -3,15 +3,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { 
   MapPin, Plus, ChevronDown, ChevronUp, GripVertical, Trash2, Home,
-  ArrowDown, ArrowUp, User, Copy, Check, Package
+  ArrowDown, ArrowUp, User, Check, Package, Loader2, X
 } from 'lucide-react'
 import { getStoredVehicles, StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import { getServiceSurcharges, type ServiceSurcharge } from '../../../lib/queries/price-lists'
+import { calculateDistance } from '../../../lib/google-maps'
 
 // Import extracted components
 import { AddressInput, loadGoogleMaps, AddressData } from './AddressInput'
 import { VehicleCard, VehicleOnTruck, createEmptyVehicle } from './VehicleCard'
-import { StorageVehicleSelector, StorageNotification } from './StorageVehicleSelector'
-import { TowTruckTypeSelector } from '../shared'
+import { StorageNotification } from './StorageVehicleSelector'
+import { TowTruckTypeSelector, ServiceSurchargeSelector, type SelectedService } from '../shared'
 
 
 // ==================== Types ====================
@@ -32,6 +34,7 @@ export interface RoutePoint {
   vehiclesToPickup: VehicleOnTruck[]
   vehiclesToDropoff: string[]
   dropToStorage?: boolean
+  services?: SelectedService[]
 }
 
 export interface RouteBuilderProps {
@@ -44,7 +47,11 @@ export interface RouteBuilderProps {
   baseLng?: number
   onPointsChange?: (points: RoutePoint[]) => void
   onPinDropClick?: (pointId: string) => void
-  onRouteDataChange?: (data: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }) => void
+  onRouteDataChange?: (data: {
+    totalDistanceKm: number
+    vehicles: { type: string; isWorking: boolean }[]
+    services: SelectedService[]
+  }) => void
   pinDropResult?: { pointId: string; data: { address: string; lat?: number; lng?: number; placeId?: string } } | null
   onPinDropHandled?: () => void
   
@@ -67,8 +74,13 @@ export function createEmptyPoint(type: RoutePoint['type'] = 'stop'): RoutePoint 
     contactPhone: '',
     notes: '',
     vehiclesToPickup: [],
-    vehiclesToDropoff: []
+    vehiclesToDropoff: [],
+    services: []
   }
+}
+
+function serviceLabel(servicesCatalog: ServiceSurcharge[], id: string): string {
+  return servicesCatalog.find((x) => x.id === id)?.label ?? id
 }
 
 // ==================== Main Component ====================
@@ -97,65 +109,83 @@ export function RouteBuilder({
   const [storedVehicles, setStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
   const [storedVehiclesLoading, setStoredVehiclesLoading] = useState(false)
   const [totalDistance, setTotalDistance] = useState(0)
+  const [distanceLoading, setDistanceLoading] = useState(false)
   const newPointAddressRef = useRef<HTMLInputElement>(null!)
   const [newlyAddedPointId, setNewlyAddedPointId] = useState<string | null>(null)
+  const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
+  const [servicesModalPointId, setServicesModalPointId] = useState<string | null>(null)
+  /** Per point: true = תקין, false = תקול when adding from storage (default true if unset) */
+  const [storagePickupIsWorking, setStoragePickupIsWorking] = useState<Record<string, boolean>>({})
 
-  // Calculate total distance between all points
+  // Total driving distance (Google Distance Matrix), sequential legs between valid points
   useEffect(() => {
-    const calculateTotalDistance = async () => {
+    let cancelled = false
+
+    const run = async () => {
       if (points.length < 2) {
         setTotalDistance(0)
+        setDistanceLoading(false)
         return
       }
 
-      // Filter points with valid addresses
-      const validPoints = points.filter(p => p.address && p.addressData?.lat && p.addressData?.lng)
+      const validPoints = points.filter((p) => p.address && p.addressData?.lat && p.addressData?.lng)
       if (validPoints.length < 2) {
         setTotalDistance(0)
+        setDistanceLoading(false)
         return
       }
 
-      let total = 0
-      
-      // Calculate distance between consecutive points using Haversine formula
+      setDistanceLoading(true)
+      await loadGoogleMaps()
+      if (cancelled) return
+
+      let totalKm = 0
       for (let i = 0; i < validPoints.length - 1; i++) {
-        const from = validPoints[i]
-        const to = validPoints[i + 1]
-        
-        if (from.addressData?.lat && from.addressData?.lng && to.addressData?.lat && to.addressData?.lng) {
-          const R = 6371 // Earth's radius in km
-          const dLat = (to.addressData.lat - from.addressData.lat) * Math.PI / 180
-          const dLon = (to.addressData.lng - from.addressData.lng) * Math.PI / 180
-          const a = 
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(from.addressData.lat * Math.PI / 180) * Math.cos(to.addressData.lat * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2)
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-          const distance = R * c
-          total += distance
+        const from = {
+          address: validPoints[i].address,
+          lat: validPoints[i].addressData?.lat,
+          lng: validPoints[i].addressData?.lng,
         }
+        const to = {
+          address: validPoints[i + 1].address,
+          lat: validPoints[i + 1].addressData?.lat,
+          lng: validPoints[i + 1].addressData?.lng,
+        }
+        const leg = await calculateDistance(from, to)
+        if (cancelled) return
+        if (leg) totalKm += leg.distanceKm
       }
-      
-      setTotalDistance(Math.round(total * 10) / 10)
+
+      if (!cancelled) {
+        setTotalDistance(Math.round(totalKm * 10) / 10)
+        setDistanceLoading(false)
+      }
     }
 
-    calculateTotalDistance()
+    run()
+
+    return () => {
+      cancelled = true
+      setDistanceLoading(false)
+    }
   }, [points])
 
   // Notify parent of route data changes
   useEffect(() => {
-    const vehicles = points.flatMap(p => 
-      p.vehiclesToPickup.map(v => ({
-        type: 'private',
+    const vehicles = points.flatMap((p) =>
+      p.vehiclesToPickup.map((v) => ({
+        type: v.vehicleType ?? 'private',
         isWorking: v.isWorking
       }))
     )
-    
+    const services = points.flatMap((p) => p.services ?? [])
+
     onRouteDataChange?.({
       totalDistanceKm: totalDistance,
-      vehicles
+      vehicles,
+      services
     })
-  }, [totalDistance, points, onRouteDataChange])  
+  }, [totalDistance, points, onRouteDataChange])
 
   // Handle pin drop result from parent
   useEffect(() => {
@@ -185,6 +215,16 @@ export function RouteBuilder({
   useEffect(() => {
     loadGoogleMaps()
   }, [])
+
+  useEffect(() => {
+    if (!companyId) {
+      setServiceSurchargesData([])
+      return
+    }
+    getServiceSurcharges(companyId)
+      .then(setServiceSurchargesData)
+      .catch(() => setServiceSurchargesData([]))
+  }, [companyId])
 
   // Load stored vehicles when customer changes
   useEffect(() => {
@@ -240,18 +280,11 @@ export function RouteBuilder({
   }
 
   const updatePoints = (newPoints: RoutePoint[]) => {
-    console.log('updatePoints:', newPoints.map((p: RoutePoint) => ({ id: p.id, address: p.address })))
     setPoints(newPoints)
-    onPointsChange?.(newPoints)
   }
 
   const updatePointFunctional = (id: string, updates: Partial<RoutePoint>) => {
-    setPoints(currentPoints => {
-      const newPoints = currentPoints.map(p => p.id === id ? { ...p, ...updates } : p)
-      console.log('updatePointFunctional:', newPoints.map((p: RoutePoint) => ({ id: p.id, address: p.address })))
-      onPointsChange?.(newPoints)
-      return newPoints
-    })
+    setPoints((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)))
   }
 
   const addPoint = () => {
@@ -262,11 +295,19 @@ export function RouteBuilder({
   }
 
   const removePoint = (id: string) => {
-    updatePoints(points.filter(p => p.id !== id))
+    const deletedPoint = points.find((p) => p.id === id)
+    if (!deletedPoint) return
+    const removedVehicleIds = new Set(deletedPoint.vehiclesToPickup.map((v) => v.id))
+    const filtered = points
+      .filter((p) => p.id !== id)
+      .map((p) => ({
+        ...p,
+        vehiclesToDropoff: p.vehiclesToDropoff.filter((did) => !removedVehicleIds.has(did)),
+      }))
+    updatePoints(filtered)
   }
 
   const updatePoint = (id: string, updates: Partial<RoutePoint>) => {
-    console.log('updatePoint:', { id, updates })
     updatePointFunctional(id, updates)
   }
 
@@ -281,10 +322,11 @@ export function RouteBuilder({
   }
 
   const addVehicleFromStorage = (pointId: string, storedVehicle: StoredVehicleWithCustomer) => {
+    const isWorking = storagePickupIsWorking[pointId] !== false
     const newVehicle: VehicleOnTruck = {
       id: `vehicle_${Date.now()}`,
       plateNumber: storedVehicle.plate_number,
-      isWorking: true,
+      isWorking,
       vehicleCode: '',
       isLoading: false,
       isFound: true,
@@ -347,7 +389,8 @@ export function RouteBuilder({
         contactPhone: '',
         notes: '',
         vehiclesToPickup: [],
-        vehiclesToDropoff: []
+        vehiclesToDropoff: [],
+        services: []
       }
       updatePoints([basePoint, ...points])
     }
@@ -357,17 +400,17 @@ export function RouteBuilder({
   // Get point summary for collapsed view
   const getPointSummary = (point: RoutePoint, index: number) => {
     if (point.type === 'base') {
-      return { typeLabel: '🏠 בסיס', vehicles: '', icon: '🏠', color: 'blue' }
+      return { typeLabel: 'בסיס', vehicles: '', icon: '🏠', color: 'blue' }
     }
-    
+
     if (point.isStopOnly) {
-      return { typeLabel: '📍 עצירה', vehicles: point.notes || '', icon: '📍', color: 'amber' }
+      return { typeLabel: 'עצירה', vehicles: point.notes || '', icon: '✋', color: 'amber' }
     }
-    
+
     const pickupCount = point.vehiclesToPickup.length
     const dropoffCount = point.vehiclesToDropoff.length
     const pickupPlates = point.vehiclesToPickup.map(v => v.plateNumber || '---').join(', ')
-    
+
     const dropoffPlates = point.vehiclesToDropoff.map(id => {
       for (let i = 0; i < index; i++) {
         const v = points[i].vehiclesToPickup.find(v => v.id === id)
@@ -375,38 +418,42 @@ export function RouteBuilder({
       }
       return '---'
     }).join(', ')
-    
+
     let typeLabel = ''
     let icon = ''
     let vehicles = ''
     let color = 'gray'
-    
+
     if (pickupCount > 0 && dropoffCount > 0) {
-      typeLabel = '🔄 העלאה + הורדה'
+      typeLabel = 'איסוף + הורדה'
       icon = '🔄'
       vehicles = `⬆️ ${pickupPlates} | ⬇️ ${dropoffPlates}`
       color = 'purple'
     } else if (pickupCount > 0) {
-      typeLabel = '⬆️ איסוף'
-      icon = '⬆️'
+      typeLabel = 'איסוף'
+      icon = '🚗'
       vehicles = pickupPlates
       color = 'green'
     } else if (dropoffCount > 0) {
-      typeLabel = point.dropToStorage ? '📦 הורדה לאחסנה' : '⬇️ הורדה'
-      icon = point.dropToStorage ? '📦' : '⬇️'
+      typeLabel = point.dropToStorage ? 'הורדה לאחסנה' : 'הורדה'
+      icon = '📍'
       vehicles = dropoffPlates
       color = point.dropToStorage ? 'indigo' : 'orange'
     } else {
-      typeLabel = '📍 נקודה'
+      typeLabel = 'נקודה'
       icon = '📍'
       color = 'gray'
     }
-    
+
     return { typeLabel, vehicles, icon, color }
   }
 
+  const servicesModalPoint = servicesModalPointId
+    ? points.find((p) => p.id === servicesModalPointId)
+    : null
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" dir="rtl">
       {/* Storage notification */}
       <StorageNotification count={storedVehicles.length} />
       
@@ -430,6 +477,13 @@ export function RouteBuilder({
           const isBase = point.type === 'base'
           const vehiclesOnTruck = getVehiclesOnTruck(index - 1)
           const summary = getPointSummary(point, index)
+          const addrTrim = point.address?.trim() ?? ''
+          const headerTitle = addrTrim
+            ? addrTrim.length > 30
+              ? `${addrTrim.slice(0, 30)}…`
+              : addrTrim
+            : summary.typeLabel
+          const headerSubtitle = addrTrim ? summary.typeLabel : point.address || 'לא הוגדרה כתובת'
           
           return (
             <div key={point.id} className="relative">
@@ -439,107 +493,130 @@ export function RouteBuilder({
               )}
               
               {/* Point card */}
-              <div className={`border-2 rounded-xl overflow-hidden transition-all ${
-                isExpanded ? 'border-[#33d4ff] shadow-md' : 'border-gray-200'
-              } ${
-                isBase ? 'bg-blue-50' : 
-                point.isStopOnly ? 'bg-amber-50' : 
-                point.dropToStorage ? 'bg-indigo-50' :
-                'bg-white'
-              }`}>
-                
+              <div
+                className={`rounded-xl border overflow-hidden transition-all bg-white border-gray-200 shadow-sm ${
+                  isExpanded ? 'ring-2 ring-[#33d4ff]/35 shadow-md' : ''
+                }`}
+              >
                 {/* Header */}
                 <div
                   className={`flex items-center gap-3 p-3 cursor-pointer ${
-                    isExpanded ? 'border-b border-gray-200' : ''
+                    isExpanded ? 'border-b border-gray-100' : ''
                   }`}
                   onClick={() => setExpandedPoint(isExpanded ? null : point.id)}
                 >
-                  {!isBase && (
-                    <GripVertical size={18} className="text-gray-400" />
-                  )}
-                  
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                    isBase ? 'bg-blue-500 text-white' : 
-                    summary.color === 'green' ? 'bg-green-100 text-green-600' :
-                    summary.color === 'orange' ? 'bg-orange-100 text-orange-600' :
-                    summary.color === 'purple' ? 'bg-purple-100 text-purple-600' :
-                    summary.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' :
-                    summary.color === 'amber' ? 'bg-amber-100 text-amber-600' :
-                    'bg-gray-100 text-gray-600'
-                  }`}>
-                    {isBase ? <Home size={18} /> : summary.icon}
+                  {!isBase && <GripVertical size={18} className="shrink-0 text-gray-400" />}
+
+                  <div
+                    className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-lg ${
+                      isBase
+                        ? 'bg-blue-500 text-white'
+                        : summary.color === 'green'
+                          ? 'bg-green-100 text-green-700'
+                          : summary.color === 'orange'
+                            ? 'bg-orange-100 text-orange-700'
+                            : summary.color === 'purple'
+                              ? 'bg-purple-100 text-purple-700'
+                              : summary.color === 'indigo'
+                                ? 'bg-indigo-100 text-indigo-700'
+                                : summary.color === 'amber'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {isBase ? <Home size={18} /> : <span aria-hidden>{summary.icon}</span>}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-800 text-sm">{summary.typeLabel}</span>
+                      <span className="font-medium text-gray-800 text-sm">{headerTitle}</span>
                       {summary.vehicles && (
                         <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full truncate max-w-[200px]">
                           {summary.vehicles}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500 truncate">
-                      {point.address || 'לא הוגדרה כתובת'}
-                    </p>
+                    <p className="text-sm text-gray-500 truncate">{headerSubtitle}</p>
+                    {!isBase && (
+                      <div className="flex items-center gap-2 flex-wrap mt-1">
+                        {!point.isStopOnly &&
+                          point.vehiclesToPickup.length + point.vehiclesToDropoff.length > 0 && (
+                            <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                              🚗 {point.vehiclesToPickup.length + point.vehiclesToDropoff.length}
+                            </span>
+                          )}
+                        {!point.isStopOnly && (point.services?.length ?? 0) > 0 && (
+                          <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+                            ⚙️ {point.services?.length}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center gap-2">
+
+                  <div className="flex items-center gap-2 shrink-0">
                     {!isBase && (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); removePoint(point.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removePoint(point.id)
+                        }}
                         className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <Trash2 size={16} />
                       </button>
                     )}
-                    {isExpanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                    {isExpanded ? (
+                      <ChevronUp size={18} className="text-gray-400" />
+                    ) : (
+                      <ChevronDown size={18} className="text-gray-400" />
+                    )}
                   </div>
                 </div>
-                
+
                 {/* Expanded content */}
                 {isExpanded && (
-                  <div className="p-4 space-y-4">
-                    {/* Point type selector - not for base */}
-                    {!isBase && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">סוג נקודה</label>
-                        <div className="flex gap-2">
+                  <div className="divide-y divide-gray-100">
+                    {/* 1 — סוג נקודה + כתובת (שורה אחת) */}
+                    <div className="flex items-center gap-2 p-3">
+                      {!isBase && (
+                        <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0 divide-x divide-gray-200">
                           <button
                             type="button"
-                            onClick={() => updatePoint(point.id, { isStopOnly: false, dropToStorage: false })}
-                            className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium border-2 transition-all ${
-                              !point.isStopOnly && !point.dropToStorage
-                                ? 'border-[#33d4ff] bg-cyan-50 text-cyan-700' 
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            onClick={() =>
+                              updatePoint(point.id, { isStopOnly: false, dropToStorage: false })
+                            }
+                            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                              !point.isStopOnly
+                                ? 'bg-[#33d4ff] text-white'
+                                : 'bg-white text-gray-500 hover:bg-gray-50'
                             }`}
                           >
-                            🚗 איסוף / הורדת רכבים
+                            איסוף / הורדה
                           </button>
                           <button
                             type="button"
-                            onClick={() => updatePoint(point.id, { isStopOnly: true, vehiclesToPickup: [], vehiclesToDropoff: [], dropToStorage: false })}
-                            className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium border-2 transition-all ${
-                              point.isStopOnly 
-                                ? 'border-amber-500 bg-amber-50 text-amber-700' 
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            onClick={() =>
+                              updatePoint(point.id, {
+                                isStopOnly: true,
+                                vehiclesToPickup: [],
+                                vehiclesToDropoff: [],
+                                dropToStorage: false,
+                                services: []
+                              })
+                            }
+                            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                              point.isStopOnly
+                                ? 'bg-gray-600 text-white'
+                                : 'bg-white text-gray-500 hover:bg-gray-50'
                             }`}
                           >
-                            📍 עצירה בלבד
+                            עצירה בלבד
                           </button>
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Address */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                        <MapPin size={14} className="inline ml-1 text-gray-400" />
-                        כתובת
-                      </label>
-                      <div className="flex gap-2">
+                      )}
+                      <div className="flex-1 flex items-center gap-2 min-w-0">
                         <AddressInput
                           value={point.address}
                           onChange={(address: string) => updatePoint(point.id, { address })}
@@ -550,213 +627,378 @@ export function RouteBuilder({
                         <button
                           type="button"
                           onClick={() => onPinDropClick?.(point.id)}
-                          className="px-3 py-2.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+                          className="shrink-0 px-3 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50"
                         >
                           <MapPin size={16} className="text-red-500" />
                         </button>
                       </div>
                     </div>
-                    
-                    {/* Contact - not for base */}
+
+                    {/* 2 — איש קשר */}
                     {!isBase && (
-                      <div className="border border-gray-200 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-                            <User size={14} className="text-gray-400" />
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-gray-500 flex items-center gap-1">
+                            <User className="w-3.5 h-3.5" />
                             איש קשר
-                          </label>
-                          <div className="flex gap-2">
-                            {customerName && (
-                              <button
-                                type="button"
-                                onClick={() => updatePoint(point.id, { contactName: customerName, contactPhone: customerPhone })}
-                                className="px-2 py-1 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 flex items-center gap-1"
-                              >
-                                <Copy size={12} />
-                                מלקוח
-                              </button>
-                            )}
+                          </span>
+                          {customerName && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updatePoint(point.id, { contactName: customerName, contactPhone: customerPhone })
+                              }
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              מלקוח
+                            </button>
+                          )}
+                        </div>
+                        {((index > 0 && points[index - 1]?.contactName) ||
+                          (point.vehiclesToPickup.some((v) => !v.isWorking) &&
+                            points.slice(0, index).some(
+                              (p) => p.vehiclesToPickup.some((v) => v.isWorking) && p.contactName
+                            ))) && (
+                          <div className="flex gap-2 mb-2 flex-wrap">
                             {index > 0 && points[index - 1]?.contactName && (
                               <button
                                 type="button"
-                                onClick={() => updatePoint(point.id, { 
-                                  contactName: points[index - 1].contactName,
-                                  contactPhone: points[index - 1].contactPhone
-                                })}
-                                className="px-2 py-1 text-xs border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center gap-1"
+                                onClick={() =>
+                                  updatePoint(point.id, {
+                                    contactName: points[index - 1].contactName,
+                                    contactPhone: points[index - 1].contactPhone
+                                  })
+                                }
+                                className="text-xs text-gray-500 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
                               >
-                                <Copy size={12} />
                                 מנקודה קודמת
                               </button>
                             )}
-                            {point.vehiclesToPickup.some(v => !v.isWorking) && (() => {
-                              const workingPoint = points.slice(0, index).find(p => 
-                                p.vehiclesToPickup.some(v => v.isWorking) && p.contactName
-                              )
-                              return workingPoint ? (
-                                <button
-                                  type="button"
-                                  onClick={() => updatePoint(point.id, { 
-                                    contactName: workingPoint.contactName,
-                                    contactPhone: workingPoint.contactPhone
-                                  })}
-                                  className="px-2 py-1 text-xs border border-green-300 text-green-600 rounded-lg hover:bg-green-50 flex items-center gap-1"
-                                >
-                                  <Copy size={12} />
-                                  כמו בתקין
-                                </button>
-                              ) : null
-                            })()}
+                            {point.vehiclesToPickup.some((v) => !v.isWorking) &&
+                              (() => {
+                                const workingPoint = points.slice(0, index).find(
+                                  (p) => p.vehiclesToPickup.some((v) => v.isWorking) && p.contactName
+                                )
+                                return workingPoint ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updatePoint(point.id, {
+                                        contactName: workingPoint.contactName,
+                                        contactPhone: workingPoint.contactPhone
+                                      })
+                                    }
+                                    className="text-xs text-gray-500 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50"
+                                  >
+                                    כמו בתקין
+                                  </button>
+                                ) : null
+                              })()}
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-xs text-gray-500 mb-1">שם</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">שם</label>
                             <input
                               type="text"
                               value={point.contactName}
                               onChange={(e) => updatePoint(point.id, { contactName: e.target.value })}
                               placeholder="שם איש קשר"
-                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-500 mb-1">טלפון</label>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">טלפון</label>
                             <input
                               type="tel"
                               value={point.contactPhone}
                               onChange={(e) => updatePoint(point.id, { contactPhone: e.target.value })}
                               placeholder="050-0000000"
-                              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                             />
                           </div>
                         </div>
                       </div>
                     )}
-                    
-                    {/* Vehicles to dropoff */}
-                    {!isBase && !point.isStopOnly && vehiclesOnTruck.length > 0 && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          <ArrowDown size={14} className="inline ml-1 text-orange-500" />
-                          רכבים להורדה
-                        </label>
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {vehiclesOnTruck.map(v => (
+
+                    {/* 3 — רכבים: שני טורים */}
+                    {!isBase && !point.isStopOnly && (
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-3 items-stretch">
+                          {/* ימין — לאיסוף */}
+                          <div className="rounded-xl border border-gray-200 p-3 flex flex-col gap-2 min-h-0">
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-gray-700">
+                              <span className="text-sm font-medium flex items-center gap-1.5">
+                                <ArrowUp size={14} className="text-gray-600 shrink-0" />
+                                רכבים לאיסוף
+                              </span>
+                              <div className="flex gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => addVehicleToPickup(point.id, true)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.preventDefault()
+                                  }}
+                                  tabIndex={-1}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium bg-green-500 text-white hover:bg-green-600"
+                                >
+                                  <Plus size={14} />
+                                  תקין
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => addVehicleToPickup(point.id, false)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.preventDefault()
+                                  }}
+                                  tabIndex={-1}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium bg-orange-500 text-white hover:bg-orange-600"
+                                >
+                                  <Plus size={14} />
+                                  תקול
+                                </button>
+                              </div>
+                            </div>
+                            {storedVehicles.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-medium text-purple-700 mb-0 flex items-center gap-2">
+                                    <Package size={16} />
+                                    בחר רכב מאחסנה:
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setStoragePickupIsWorking((prev) => ({
+                                        ...prev,
+                                        [point.id]: true
+                                      }))
+                                    }
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                      storagePickupIsWorking[point.id] !== false
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    תקין
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setStoragePickupIsWorking((prev) => ({
+                                        ...prev,
+                                        [point.id]: false
+                                      }))
+                                    }
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                      storagePickupIsWorking[point.id] === false
+                                        ? 'bg-orange-500 text-white'
+                                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    תקול
+                                  </button>
+                                </div>
+                                {storedVehiclesLoading ? (
+                                  <div className="flex items-center gap-2 text-gray-500 text-sm py-2">
+                                    <Loader2 size={16} className="animate-spin" />
+                                    טוען רכבים מאחסנה...
+                                  </div>
+                                ) : (
+                                  (() => {
+                                    const selectedIds = getSelectedStorageIds()
+                                    const availableVehicles = storedVehicles.filter(
+                                      (v) => !selectedIds.includes(v.id)
+                                    )
+                                    if (availableVehicles.length === 0) return null
+                                    const pendingOk = storagePickupIsWorking[point.id] !== false
+                                    return (
+                                      <div className="border border-purple-200 rounded-lg p-3 bg-purple-50">
+                                        <div className="flex flex-wrap gap-2">
+                                          {availableVehicles.map((sv) => (
+                                            <button
+                                              key={sv.id}
+                                              type="button"
+                                              onClick={() => addVehicleFromStorage(point.id, sv)}
+                                              className="px-3 py-2 border border-purple-300 rounded-lg bg-white hover:bg-purple-100 transition-colors text-sm flex items-center gap-2 flex-wrap"
+                                            >
+                                              <Package size={14} className="text-purple-500 shrink-0" />
+                                              <span className="font-medium">{sv.plate_number}</span>
+                                              <span
+                                                className={
+                                                  pendingOk
+                                                    ? 'bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-md'
+                                                    : 'bg-orange-100 text-orange-700 text-xs px-1.5 py-0.5 rounded-md'
+                                                }
+                                              >
+                                                {pendingOk ? 'תקין' : 'תקול'}
+                                              </span>
+                                              {sv.vehicle_data && (
+                                                <span className="text-xs text-gray-500">
+                                                  {sv.vehicle_data.manufacturer} {sv.vehicle_data.model}
+                                                </span>
+                                              )}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )
+                                  })()
+                                )}
+                              </div>
+                            )}
+                            <div className="flex flex-col gap-2 flex-1 min-h-0">
+                              {point.vehiclesToPickup.map((vehicle) => (
+                                <div key={vehicle.id} className="space-y-1">
+                                  {vehicle.fromStorage && (
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={
+                                          vehicle.isWorking
+                                            ? 'bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-md'
+                                            : 'bg-orange-100 text-orange-700 text-xs px-1.5 py-0.5 rounded-md'
+                                        }
+                                      >
+                                        {vehicle.isWorking ? 'תקין' : 'תקול'}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <VehicleCard
+                                    vehicle={vehicle}
+                                    onChange={(updatedVehicle) => updateVehicle(point.id, vehicle.id, updatedVehicle)}
+                                    onRemove={() => removeVehicle(point.id, vehicle.id)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* שמאל — להורדה */}
+                          <div className="rounded-xl border border-gray-200 p-3 flex flex-col gap-2 min-h-0">
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-gray-700">
+                              <span className="text-sm font-medium flex items-center gap-1.5">
+                                <ArrowDown size={14} className="text-gray-600 shrink-0" />
+                                רכבים להורדה
+                              </span>
+                              {!point.isStopOnly &&
+                                point.vehiclesToDropoff.length > 0 &&
+                                baseAddress && (
+                                  <label className="inline-flex items-center gap-1.5 shrink-0 cursor-pointer rounded-lg border border-indigo-200 bg-white px-2 py-1 text-indigo-800">
+                                    <input
+                                      type="checkbox"
+                                      checked={point.dropToStorage || false}
+                                      onChange={(e) => {
+                                        updatePoint(point.id, {
+                                          dropToStorage: e.target.checked,
+                                          address: e.target.checked ? baseAddress : point.address,
+                                          addressData:
+                                            e.target.checked && baseLat
+                                              ? { lat: baseLat, lng: baseLng }
+                                              : point.addressData,
+                                        })
+                                      }}
+                                      className="w-3.5 h-3.5 rounded border-indigo-300 text-indigo-500 focus:ring-indigo-500"
+                                    />
+                                    <Package size={12} className="shrink-0" />
+                                    <span className="text-xs font-medium whitespace-nowrap">הורדה לאחסנה</span>
+                                  </label>
+                                )}
+                            </div>
+                            {vehiclesOnTruck.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {vehiclesOnTruck.map((v) => {
+                                  const selected = point.vehiclesToDropoff.includes(v.id)
+                                  return (
+                                    <div key={v.id} className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          updatePoint(point.id, {
+                                            vehiclesToDropoff: selected
+                                              ? point.vehiclesToDropoff.filter((id) => id !== v.id)
+                                              : [...point.vehiclesToDropoff, v.id]
+                                          })
+                                        }}
+                                        className="px-3 py-2 rounded-xl text-sm font-medium border transition-all flex items-center gap-2 bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200/80"
+                                      >
+                                        <span className={`w-2 h-2 rounded-full shrink-0 ${v.isWorking ? 'bg-green-400' : 'bg-red-400'}`} />
+                                        {v.plateNumber || 'רכב חדש'}
+                                        {selected && <Check size={14} className="shrink-0" />}
+                                      </button>
+                                      {selected && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            updatePoint(point.id, {
+                                              vehiclesToDropoff: point.vehiclesToDropoff.filter((id) => id !== v.id)
+                                            })
+                                          }}
+                                          className="shrink-0 p-1 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                                          aria-label="הסר מהורדה"
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-400">אין רכבים להורדה</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4 — שירותים + הערות */}
+                    {!isBase && (
+                      <div className="grid grid-cols-2 gap-3 p-4">
+                        {!point.isStopOnly && serviceSurchargesData.length > 0 && (
+                          <div className="flex flex-col gap-2 min-w-0">
+                            <span className="text-sm font-medium text-gray-500">שירותים נוספים</span>
                             <button
-                              key={v.id}
                               type="button"
-                              onClick={() => {
-                                const isSelected = point.vehiclesToDropoff.includes(v.id)
-                                updatePoint(point.id, {
-                                  vehiclesToDropoff: isSelected
-                                    ? point.vehiclesToDropoff.filter(id => id !== v.id)
-                                    : [...point.vehiclesToDropoff, v.id]
-                                })
-                              }}
-                              className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all flex items-center gap-2 ${
-                                point.vehiclesToDropoff.includes(v.id)
-                                  ? 'bg-orange-500 text-white border-orange-500'
-                                  : 'bg-white text-gray-700 border-gray-300 hover:border-orange-300'
+                              onClick={() => setServicesModalPointId(point.id)}
+                              className={`w-fit flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                                (point.services?.length ?? 0) > 0
+                                  ? 'border-cyan-300 bg-cyan-50 text-cyan-800'
+                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                               }`}
                             >
-                              <span className={`w-2 h-2 rounded-full ${v.isWorking ? 'bg-green-400' : 'bg-red-400'}`} />
-                              {v.plateNumber || 'רכב חדש'}
-                              {point.vehiclesToDropoff.includes(v.id) && <Check size={14} />}
+                              ⚙️{' '}
+                              {(point.services?.length ?? 0) > 0
+                                ? `שירותים (${point.services?.length})`
+                                : 'שירותים נוספים'}
                             </button>
-                          ))}
-                        </div>
-                        
-                        {/* Drop to storage option */}
-                        {point.vehiclesToDropoff.length > 0 && baseAddress && (
-                          <label className="flex items-center gap-2 cursor-pointer text-sm text-indigo-600 bg-indigo-50 p-2 rounded-lg border border-indigo-200">
-                            <input
-                              type="checkbox"
-                              checked={point.dropToStorage || false}
-                              onChange={(e) => {
-                                updatePoint(point.id, { 
-                                  dropToStorage: e.target.checked,
-                                  address: e.target.checked ? baseAddress : point.address,
-                                  addressData: e.target.checked && baseLat ? { lat: baseLat, lng: baseLng } : point.addressData
-                                })
-                              }}
-                              className="w-4 h-4 rounded border-indigo-300 text-indigo-500 focus:ring-indigo-500"
-                            />
-                            <Package size={14} />
-                            הורדה לאחסנה (בסיס)
-                          </label>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Vehicles to pickup */}
-                    {!isBase && !point.isStopOnly && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          <ArrowUp size={14} className="inline ml-1 text-green-500" />
-                          רכבים לאיסוף
-                        </label>
-                        
-                        {/* Storage vehicle selector */}
-                        {storedVehicles.length > 0 && (
-                          <div className="mb-3">
-                            <StorageVehicleSelector
-                              storedVehicles={storedVehicles}
-                              onSelect={(sv) => addVehicleFromStorage(point.id, sv)}
-                              loading={storedVehiclesLoading}
-                              selectedIds={getSelectedStorageIds()}
-                            />
+                            {(point.services?.length ?? 0) > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {point.services!.map((s) => (
+                                  <span
+                                    key={s.id}
+                                    className="inline-flex items-center px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs border border-gray-200"
+                                  >
+                                    {serviceLabel(serviceSurchargesData, s.id)}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
-                        
-                        {/* Vehicle cards */}
-                        {point.vehiclesToPickup.map((vehicle) => (
-                          <VehicleCard
-                            key={vehicle.id}
-                            vehicle={vehicle}
-                            onChange={(updatedVehicle) => updateVehicle(point.id, vehicle.id, updatedVehicle)}
-                            onRemove={() => removeVehicle(point.id, vehicle.id)}
-                            className="mb-3"
+                        <div
+                          className={`flex flex-col gap-2 min-w-0 ${
+                            !point.isStopOnly && serviceSurchargesData.length > 0 ? '' : 'col-span-2'
+                          }`}
+                        >
+                          <label className="block text-sm font-medium text-gray-500">הערות</label>
+                          <textarea
+                            value={point.notes}
+                            onChange={(e) => updatePoint(point.id, { notes: e.target.value })}
+                            placeholder="הערות לנקודה זו..."
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
                           />
-                        ))}
-                        
-                        {/* Add vehicle buttons */}
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => addVehicleToPickup(point.id, true)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                            tabIndex={-1}
-                            className="flex-1 py-2.5 border-2 border-dashed border-green-300 rounded-xl text-sm text-green-600 hover:border-green-400 hover:bg-green-50 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Plus size={16} />
-                            רכב תקין
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addVehicleToPickup(point.id, false)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
-                            tabIndex={-1}
-                            className="flex-1 py-2.5 border-2 border-dashed border-orange-300 rounded-xl text-sm text-orange-600 hover:border-orange-400 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Plus size={16} />
-                            רכב תקול
-                          </button>
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* Notes */}
-                    {!isBase && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1.5">הערות</label>
-                        <textarea
-                          value={point.notes}
-                          onChange={(e) => updatePoint(point.id, { notes: e.target.value })}
-                          placeholder="הערות לנקודה זו..."
-                          rows={2}
-                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
-                        />
                       </div>
                     )}
                   </div>
@@ -794,14 +1036,56 @@ export function RouteBuilder({
       
       {/* Summary */}
       {points.length > 0 && (
-        <div className="p-4 bg-gray-100 rounded-xl">
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
           <h3 className="font-medium text-gray-800 mb-2">סיכום מסלול</h3>
           <div className="text-sm text-gray-600 space-y-1">
             <p>📍 {points.filter(p => p.type !== 'base').length} נקודות</p>
+            <p className="flex items-center gap-2 flex-wrap">
+              <span>📏 מרחק נסיעה משוער:</span>
+              {distanceLoading ? (
+                <Loader2 size={16} className="animate-spin text-gray-500" aria-label="מחשב מרחק" />
+              ) : (
+                <span>{totalDistance} ק״מ</span>
+              )}
+            </p>
             <p>🚗 {points.reduce((sum, p) => sum + p.vehiclesToPickup.length, 0)} רכבים</p>
             {points.some(p => p.dropToStorage) && (
               <p>📦 כולל הורדה לאחסנה</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {servicesModalPoint && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+              <h3 className="font-bold text-gray-800 text-base">שירותים נוספים</h3>
+              <button
+                type="button"
+                onClick={() => setServicesModalPointId(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 min-h-0">
+              <ServiceSurchargeSelector
+                services={serviceSurchargesData}
+                selectedServices={servicesModalPoint.services ?? []}
+                onChange={(next) => updatePoint(servicesModalPoint.id, { services: next })}
+                label=" "
+              />
+            </div>
+            <div className="px-4 pb-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setServicesModalPointId(null)}
+                className="w-full py-2.5 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
+              >
+                אישור
+              </button>
+            </div>
           </div>
         </div>
       )}

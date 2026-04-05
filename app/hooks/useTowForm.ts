@@ -36,6 +36,12 @@ interface RouteStop {
   notes: string
 }
 
+type CustomRouteData = {
+  totalDistanceKm: number
+  vehicles: { type: string; isWorking: boolean }[]
+  services: SelectedService[]
+}
+
 export function useTowForm(editTowId?: string) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -101,7 +107,11 @@ export function useTowForm(editTowId?: string) {
   const [towType, setTowType] = useState<TowType>('')
   // Route Builder state
   const [routePoints, setRoutePoints] = useState<RoutePoint[]>([])
-  const [customRouteData, setCustomRouteData] = useState<{ totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }>({ totalDistanceKm: 0, vehicles: [] })
+  const [customRouteData, setCustomRouteData] = useState<CustomRouteData>({
+    totalDistanceKm: 0,
+    vehicles: [],
+    services: []
+  })
 
   // Reset when tow type changes
   useEffect(() => {
@@ -496,6 +506,7 @@ export function useTowForm(editTowId?: string) {
             vehiclesToDropoff: (p.vehicles || [])
               .filter((pv: any) => pv.action === 'dropoff')
               .map((pv: any) => pv.vehicle?.id || ''),
+            services: [],
           }))
           setRoutePoints(points)
         }

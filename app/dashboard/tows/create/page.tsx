@@ -19,7 +19,6 @@ import {
   MapPin,
   Plus,
   Minus,
-  User,
   Calendar,
   Loader2,
 } from 'lucide-react'
@@ -32,6 +31,7 @@ import {
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
+import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow } from '../../../lib/queries/tows'
@@ -292,15 +292,6 @@ function CreateTowForm({
     if (timeParam) setTowTime(timeParam)
     if (driverParam) setPreSelectedDriverId(driverParam)
   }, [dateParam, timeParam, driverParam])
-
-  // Filter customers by search
-  const filteredCustomers = customers.filter(
-    (c) =>
-      !customerSearch ||
-      c.name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      c.phone?.includes(customerSearch) ||
-      (c as { id_number?: string }).id_number?.includes(customerSearch)
-  )
 
   const handleNowClick = () => {
     const now = new Date()
@@ -659,229 +650,64 @@ function CreateTowForm({
       <div className="px-4 py-4 sm:py-6 flex flex-col items-center gap-6">
         <div className="w-[680px] max-w-full">
           {/* Section 1 — לקוח */}
-          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
-              <h2 className="font-bold text-gray-800 text-sm sm:text-base">
-                לקוח
-              </h2>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="flex gap-2 mb-4">
+          <CreateCustomerSection
+            customers={customers}
+            customersWithPricing={customersWithPricing}
+            selectedCustomerId={selectedCustomerId}
+            customerTab={customerTab}
+            onCustomerTabChange={setCustomerTab}
+            customerSearch={customerSearch}
+            onCustomerSearchChange={setCustomerSearch}
+            customerName={customerName}
+            customerPhone={customerPhone}
+            onCustomerNameChange={setCustomerName}
+            onCustomerPhoneChange={setCustomerPhone}
+            onCustomerSelect={handleCustomerSelect}
+            customerStoredVehicles={customerStoredVehicles}
+            towDate={towDate}
+            towTime={towTime}
+            onTowDateChange={setTowDate}
+            onTowTimeChange={setTowTime}
+            onNowClick={handleNowClick}
+            customerOrderNumber={customerOrderNumber}
+            onCustomerOrderNumberChange={setCustomerOrderNumber}
+            editTowId={editTowId}
+            orderNumber={orderNumber}
+          />
+
+          {/* Section 2 — סוג גרירה */}
+          <section className="mb-6">
+            <h2 className="font-bold text-gray-800 text-sm sm:text-base mb-3 px-1">
+              סוג גרירה
+            </h2>
+            <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+              {[
+                { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B' },
+                { value: 'exchange' as const, label: 'תקין ↔ תקול', sub: '3 שלבים' },
+                { value: 'custom' as const, label: 'מסלול מותאם', sub: 'נקודות חופשיות' },
+              ].map((option, i) => (
                 <button
+                  key={option.value}
                   type="button"
-                  onClick={() => setCustomerTab('existing')}
-                  className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium ${
-                    customerTab === 'existing'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 font-medium'
-                  }`}
+                  onClick={() => handleTowTypeSelect(option.value)}
+                  className={`flex-1 py-2.5 px-2 text-center transition-colors
+                    ${i > 0 ? 'border-r border-gray-200' : ''}
+                    ${
+                      towType === option.value
+                        ? 'bg-[#33d4ff] text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
                 >
-                  לקוח קיים
+                  <div className="text-sm font-medium">{option.label}</div>
+                  <div
+                    className={`text-xs mt-0.5 ${
+                      towType === option.value ? 'text-white/80' : 'text-gray-400'
+                    }`}
+                  >
+                    {option.sub}
+                  </div>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setCustomerTab('casual')}
-                  className={`flex-1 py-2 px-3 rounded-xl text-sm font-medium ${
-                    customerTab === 'casual'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 font-medium'
-                  }`}
-                >
-                  לקוח מזדמן
-                </button>
-              </div>
-
-              {customerTab === 'existing' ? (
-                <>
-                  <input
-                    type="text"
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                    placeholder="חיפוש לפי שם, טלפון, ת.ז."
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm mb-4"
-                  />
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {filteredCustomers.slice(0, 10).map((c) => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() =>
-                          handleCustomerSelect(
-                            c.id,
-                            c.name || '',
-                            c.phone || ''
-                          )
-                        }
-                        className={`w-full p-3 rounded-xl border text-right ${
-                          selectedCustomerId === c.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        <div className="font-medium text-gray-800">{c.name}</div>
-                        <div className="text-sm text-gray-500">{c.phone}</div>
-                        <div className="flex gap-1 mt-1">
-                          {customersWithPricing.some(
-                            (cp) => cp.customer_id === c.id
-                          ) && (
-                            <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded">
-                              מחירון אישי
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {selectedCustomerId && (
-                    <div className="mt-4 p-3 bg-gray-50 rounded-xl">
-                      <p className="font-medium text-gray-800">{customerName}</p>
-                      <p className="text-sm text-gray-500">{customerPhone}</p>
-                    </div>
-                  )}
-                  {customerStoredVehicles.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs text-gray-500 mb-2">רכבים באחסנה</p>
-                    <div className="flex flex-wrap gap-2">
-                      {customerStoredVehicles.map((v) => (
-                        <div
-                          key={v.id}
-                          className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 flex items-center gap-1"
-                        >
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
-                          }`} />
-                          <span>{v.plate_number} — {v.vehicle_data?.model || ''}</span>
-                          <span className="text-xs text-gray-400 mr-1">
-                            {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">בחירת רכב תתאפשר לאחר בחירת סוג גרירה</p>
-                  </div>
-                )}
-                </>
-              ) : (
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="שם הלקוח *"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                  />
-                  <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="טלפון"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                  />
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Section 2 — תזמון */}
-          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
-              <h2 className="font-bold text-gray-800 text-sm sm:text-base">
-                תזמון
-              </h2>
-            </div>
-            <div className="p-4 sm:p-5 flex flex-wrap gap-4 items-end">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">תאריך</label>
-                <input
-                  type="date"
-                  value={towDate}
-                  onChange={(e) => setTowDate(e.target.value)}
-                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">שעה</label>
-                <input
-                  type="time"
-                  value={towTime}
-                  onChange={(e) => setTowTime(e.target.value)}
-                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleNowClick}
-                className="px-4 py-2.5 bg-cyan-500 text-white rounded-xl text-sm font-medium hover:bg-cyan-600"
-              >
-                עכשיו
-              </button>
-            </div>
-            <div className="px-4 sm:px-5 pb-4 sm:pb-5 flex flex-wrap gap-4">
-              {editTowId && orderNumber && (
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">מספר הזמנה</label>
-                  <div className="px-4 py-2.5 bg-gray-100 border border-gray-300 rounded-xl text-sm text-gray-600 font-mono">
-                    #{orderNumber}
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">מספר הזמנה של הלקוח</label>
-                <input
-                  type="text"
-                  value={customerOrderNumber}
-                  onChange={(e) => setCustomerOrderNumber(e.target.value)}
-                  placeholder="אופציונלי"
-                  className="px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Section 3 — סוג גרירה */}
-          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
-              <h2 className="font-bold text-gray-800 text-sm sm:text-base">
-                סוג גרירה
-              </h2>
-            </div>
-            <div className="p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <button
-                type="button"
-                onClick={() => handleTowTypeSelect('single')}
-                className={`p-4 rounded-xl border-2 text-right transition-all ${
-                  towType === 'single'
-                    ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50'
-                    : 'border-gray-300 hover:border-gray-300'
-                }`}
-              >
-                <p className="font-medium text-gray-800">גרירה פשוטה</p>
-                <p className="text-xs text-gray-500 mt-1">A→B, כולל מ/לאחסנה</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTowTypeSelect('exchange')}
-                className={`p-4 rounded-xl border-2 text-right transition-all ${
-                  towType === 'exchange'
-                    ? 'ring-2 ring-amber-500 border-amber-500 bg-amber-50'
-                    : 'border-gray-300 hover:border-gray-300'
-                }`}
-              >
-                <p className="font-medium text-gray-800">תקין ↔ תקול</p>
-                <p className="text-xs text-gray-500 mt-1">3 שלבים</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTowTypeSelect('custom')}
-                className={`p-4 rounded-xl border-2 text-right transition-all ${
-                  towType === 'custom'
-                    ? 'ring-2 ring-purple-500 border-purple-500 bg-purple-50'
-                    : 'border-gray-300 hover:border-gray-300'
-                }`}
-              >
-                <p className="font-medium text-gray-800">מסלול מותאם</p>
-                <p className="text-xs text-gray-500 mt-1">נקודות חופשיות</p>
-              </button>
+              ))}
             </div>
           </section>
 
@@ -2077,26 +1903,57 @@ function CreateTowForm({
                 )}
 
                 {towType === 'custom' && (
-                  <RouteBuilder
-                    companyId={companyId || ''}
-                    customerId={selectedCustomerId}
-                    customerName={customerName}
-                    customerPhone={customerPhone}
-                    baseAddress={basePriceList?.base_address}
-                    baseLat={basePriceList?.base_lat}
-                    baseLng={basePriceList?.base_lng}
-                    onPointsChange={setRoutePoints}
-                    onPinDropClick={(id) =>
-                      setPinDropModal({ isOpen: true, field: id })
-                    }
-                    onRouteDataChange={setCustomRouteData}
-                    pinDropResult={pinDropResult}
-                    onPinDropHandled={() => setPinDropResult(null)}
-                    requiredTruckTypes={requiredTruckTypes}
-                    onRequiredTruckTypesChange={setRequiredTruckTypes}
-                    truckTypeSectionRef={truckTypeSectionRef}
-                    truckTypeError={truckTypeError}
-                  />
+                  <>
+                    <RouteBuilder
+                      companyId={companyId || ''}
+                      customerId={selectedCustomerId}
+                      customerName={customerName}
+                      customerPhone={customerPhone}
+                      baseAddress={basePriceList?.base_address}
+                      baseLat={basePriceList?.base_lat}
+                      baseLng={basePriceList?.base_lng}
+                      onPointsChange={setRoutePoints}
+                      onPinDropClick={(id) =>
+                        setPinDropModal({ isOpen: true, field: id })
+                      }
+                      onRouteDataChange={setCustomRouteData}
+                      pinDropResult={pinDropResult}
+                      onPinDropHandled={() => setPinDropResult(null)}
+                      requiredTruckTypes={requiredTruckTypes}
+                      onRequiredTruckTypesChange={setRequiredTruckTypes}
+                      truckTypeSectionRef={truckTypeSectionRef}
+                      truckTypeError={truckTypeError}
+                    />
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">תוספות זמן</h3>
+                      </div>
+                      <div className="p-4">
+                        <TimeSurchargesSection
+                          timeSurchargesData={timeSurchargesData}
+                          towDate={towDate}
+                          towTime={towTime}
+                          isHoliday={isHoliday}
+                          setIsHoliday={setIsHoliday}
+                          activeTimeSurchargesList={activeTimeSurchargesList}
+                          setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                          setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">תוספות מיקום</h3>
+                      </div>
+                      <div className="p-4">
+                        <LocationSurchargesSection
+                          locationSurchargesData={locationSurchargesData}
+                          selectedLocationSurcharges={selectedLocationSurcharges}
+                          setSelectedLocationSurcharges={setSelectedLocationSurcharges}
+                        />
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </section>

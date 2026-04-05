@@ -62,7 +62,11 @@ export interface SaveTowInput {
   
   // Custom Tow Data
   routePoints?: RoutePoint[]
-  customRouteData?: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }
+  customRouteData?: {
+    totalDistanceKm: number
+    vehicles: { type: string; isWorking: boolean }[]
+    services?: SelectedService[]
+  }
   
   // Pricing
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
@@ -195,6 +199,24 @@ export interface PreparedTowData {
 
 // ==================== Helper Functions ====================
 
+function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
+  if (!services?.length) return []
+  const map = new Map<string, SelectedService>()
+  for (const s of services) {
+    const existing = map.get(s.id)
+    if (!existing) {
+      map.set(s.id, { ...s })
+    } else {
+      map.set(s.id, {
+        id: s.id,
+        quantity: (existing.quantity ?? 1) + (s.quantity ?? 1),
+        manualPrice: existing.manualPrice ?? s.manualPrice,
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
 /**
  * מיפוי סוג רכב מקוד לטיפוס DB
  */
@@ -261,10 +283,11 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
     manufacturer: v.vehicleData?.manufacturer,
     model: v.vehicleData?.model,
     year: v.vehicleData?.year ? Number(v.vehicleData.year) : undefined,
-    vehicleType: mapVehicleType(v.vehicleCode),
+    vehicleType: mapVehicleType(v.vehicleType ?? 'private') ?? 'private',
+    vehicleCode: v.vehicleCode || undefined,
     color: v.vehicleData?.color,
     isWorking: v.isWorking,
-    towReason: v.isWorking ? undefined : 'לא נוסע',
+    towReason: v.isWorking ? undefined : (v.defects?.filter(Boolean).join(', ') || 'לא נוסע'),
     driveType: v.vehicleData?.driveType,
     fuelType: v.vehicleData?.fuelType,
     totalWeight: v.vehicleData?.totalWeight ? Number(v.vehicleData.totalWeight) : undefined,
@@ -299,6 +322,21 @@ export function convertRoutePointsToTowPoints(
   for (const rp of routePoints) {
     // דילוג על נקודות בסיס בלבד (בלי רכבים)
     if (rp.type === 'base' && rp.vehiclesToPickup.length === 0 && rp.vehiclesToDropoff.length === 0) {
+      continue
+    }
+
+    if (rp.isStopOnly) {
+      points.push({
+        point_order: pointOrder++,
+        point_type: 'stop',
+        address: rp.address || null,
+        lat: rp.addressData?.lat || null,
+        lng: rp.addressData?.lng || null,
+        contact_name: rp.contactName || null,
+        contact_phone: rp.contactPhone || null,
+        notes: rp.notes || null,
+        vehicleIndices: [],
+      })
       continue
     }
     
@@ -573,66 +611,126 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
 
 /**
  * בניית פירוט מחיר לגרירה מותאמת (custom)
+ * Uses the same calculateTowPrice path as single tow: multi-vehicle base sum, route distance,
+ * time/location/service surcharges, VAT from input.vatPercent, services from customRouteData.services.
  */
 export function buildCustomTowPriceBreakdown(
-  input: SaveTowInput, 
+  input: SaveTowInput,
   routePoints: RoutePoint[]
 ): PriceBreakdown & { vehicle_count: number; route_points: RoutePoint[] } {
-  const activePriceList = (input.priceMode === 'recommended_customer' && input.selectedCustomerPricing?.price_list)
-    ? input.selectedCustomerPricing.price_list
-    : input.basePriceList
+  const activePriceList =
+    input.priceMode === 'recommended_customer' && input.selectedCustomerPricing?.price_list
+      ? input.selectedCustomerPricing.price_list
+      : input.basePriceList
+
   const vehicles = input.customRouteData?.vehicles || []
-  const totalDistanceKm = input.customRouteData?.totalDistanceKm || 0
-  const pricePerKm = activePriceList?.price_per_km || 12
-  
-  // חישוב מחיר בסיס לכל הרכבים
+  const totalDistanceKm = input.customRouteData?.totalDistanceKm ?? 0
+  const basePrices = extractBasePrices(activePriceList)
+
   let totalBasePrice = 0
-  const vehicleTypeMap: Record<string, string> = {
-    'private': 'base_price_private',
-    'motorcycle': 'base_price_motorcycle',
-    'heavy': 'base_price_heavy',
-    'machinery': 'base_price_machinery'
-  }
-  
-  vehicles.forEach(v => {
-    const priceField = vehicleTypeMap[v.type] || 'base_price_private'
-    totalBasePrice += activePriceList?.[priceField] || 180
+  vehicles.forEach((v) => {
+    const vt = (v.type as VehicleType) || 'private'
+    totalBasePrice += basePrices[vt] ?? basePrices.private
   })
-  
-  const distancePrice = Math.round(totalDistanceKm * pricePerKm)
-  const subtotal = totalBasePrice + distancePrice
-  
-  // תוספות זמן (פשוט יותר לגרירה מותאמת)
-  const timeSurchargesBreakdown = (input.activeTimeSurcharges || []).map(s => ({
-    id: s.id,
-    label: s.label,
-    percent: s.surcharge_percent,
-    amount: Math.round(subtotal * s.surcharge_percent / 100)
-  }))
-  const timeAmount = timeSurchargesBreakdown.reduce((sum, s) => Math.max(sum, s.amount), 0)
-  
-  const beforeDiscount = subtotal + timeAmount
-  const discountPercent = input.selectedCustomerPricing?.discount_percent || 0
-  const discountAmount = Math.round(beforeDiscount * discountPercent / 100)
-  const beforeVat = beforeDiscount - discountAmount
-  const vatAmount = Math.round(beforeVat * 0.18)
-  const total = beforeVat + vatAmount
+
+  const routeServices = aggregateRouteServices(input.customRouteData?.services)
+
+  const locationSurcharges = (input.selectedLocationSurcharges || [])
+    .map((id) => input.locationSurchargesData?.find((l) => l.id === id))
+    .filter(Boolean)
+    .map((s) => ({ percent: s!.surcharge_percent }))
+
+  const serviceSurcharges = routeServices
+    .map((selected) => {
+      const s = input.serviceSurchargesData?.find((x) => x.id === selected.id)
+      if (!s) return { amount: 0 }
+      if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
+      if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
+      return { amount: s.price }
+    })
+    .filter((x) => x.amount > 0)
+
+  const result = calculateTowPrice({
+    priceList: {
+      base_prices: extractBasePrices(activePriceList),
+      price_per_km: activePriceList?.price_per_km ?? 12,
+      minimum_price: activePriceList?.minimum_price ?? 250,
+    },
+    vehicleType: 'private',
+    distanceKm: totalDistanceKm,
+    basePriceOverride: totalBasePrice,
+    timeSurcharges: input.activeTimeSurcharges || [],
+    towDate: input.towDate || '',
+    towTime: input.towTime || '',
+    isHoliday: false,
+    activeTimeSurchargeIds: (input.activeTimeSurcharges || []).map((s) => s.id),
+    locationSurcharges,
+    serviceSurcharges,
+    priceMode: 'recommended',
+    discountPercent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    manualAdjustmentPercent: input.manualAdjustmentPercent ?? 0,
+    vatPercent: input.vatPercent ?? 0.18,
+  })
+
+  const timeSurchargesBreakdown =
+    (input.activeTimeSurcharges || []).length > 0 && result.maxTimeSurchargePercent > 0
+      ? (() => {
+          const maxS =
+            (input.activeTimeSurcharges || []).find(
+              (s) => s.surcharge_percent === result.maxTimeSurchargePercent
+            ) || (input.activeTimeSurcharges || [])[0]
+          return [
+            {
+              id: maxS?.id ?? '',
+              label: result.maxTimeSurchargeLabel || maxS?.label || '',
+              percent: result.maxTimeSurchargePercent,
+              amount: Math.round(result.subtotal * result.maxTimeSurchargePercent / 100),
+            },
+          ]
+        })()
+      : []
+
+  const locationSurchargesBreakdown = (input.selectedLocationSurcharges || [])
+    .map((id) => input.locationSurchargesData?.find((l) => l.id === id))
+    .filter(Boolean)
+    .map((s) => ({
+      id: s!.id,
+      label: s!.label,
+      percent: s!.surcharge_percent,
+      amount: Math.round(result.subtotal * s!.surcharge_percent / 100),
+    }))
+
+  const serviceSurchargesBreakdown = routeServices
+    .map((selected) => {
+      const s = input.serviceSurchargesData?.find((x) => x.id === selected.id)
+      if (!s) return null
+      let amount = 0
+      let units: number | undefined
+      if (s.price_type === 'manual') amount = selected.manualPrice || 0
+      else if (s.price_type === 'per_unit') {
+        units = selected.quantity || 1
+        amount = s.price * units
+      } else amount = s.price
+      if (amount <= 0) return null
+      return { id: s.id, label: s.label, price: s.price, units, amount }
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null)
 
   return {
-    base_price: totalBasePrice,
+    base_price: result.basePrice,
     vehicle_type: 'mixed',
     vehicle_count: vehicles.length,
     distance_km: totalDistanceKm,
-    distance_price: distancePrice,
+    distance_price: Math.round(result.distancePrice),
     time_surcharges: timeSurchargesBreakdown,
-    location_surcharges: [],
-    service_surcharges: [],
-    subtotal: beforeDiscount,
-    discount_percent: discountPercent,
-    discount_amount: discountAmount,
-    vat_amount: vatAmount,
-    total: total,
-    route_points: routePoints
+    location_surcharges: locationSurchargesBreakdown,
+    service_surcharges: serviceSurchargesBreakdown,
+    subtotal: result.beforeVat,
+    discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    discount_amount: Math.round(result.discountAmount),
+    vat_amount: Math.round(result.vatAmount),
+    total: result.total,
+    route_points: routePoints,
   }
 }
 
@@ -717,17 +815,20 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   // גרירה מותאמת
   if (input.towType === 'custom' && input.routePoints) {
     const priceBreakdown = input.priceMode === 'custom'
-  ? (input.existingPriceBreakdown
-      ? {
-          ...input.existingPriceBreakdown,
-          location_surcharges: buildLocationSurchargesBreakdown(
-            input,
-            input.existingPriceBreakdown.base_price + input.existingPriceBreakdown.distance_price
-          ),
-          service_surcharges: buildServiceSurchargesBreakdown(input)
-        }
-      : null)
-  : buildSingleTowPriceBreakdown(input)
+      ? (input.existingPriceBreakdown
+          ? {
+              ...input.existingPriceBreakdown,
+              location_surcharges: buildLocationSurchargesBreakdown(
+                input,
+                input.existingPriceBreakdown.base_price + input.existingPriceBreakdown.distance_price
+              ),
+              service_surcharges: buildServiceSurchargesBreakdown({
+                ...input,
+                selectedServices: aggregateRouteServices(input.customRouteData?.services),
+              }),
+            }
+          : null)
+      : buildCustomTowPriceBreakdown(input, input.routePoints)
     const vehicles = collectVehiclesFromRoutePoints(input.routePoints)
     const legs = convertRoutePointsToLegs(input.routePoints)
     

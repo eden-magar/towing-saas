@@ -6,6 +6,24 @@ import { SelectedService } from '../shared'
 import { calculateTowPrice, extractBasePrices } from '../../../lib/utils/price-calculator'
 import { VehicleType } from '../../../lib/types'
 
+function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
+  if (!services?.length) return []
+  const map = new Map<string, SelectedService>()
+  for (const s of services) {
+    const existing = map.get(s.id)
+    if (!existing) {
+      map.set(s.id, { ...s })
+    } else {
+      map.set(s.id, {
+        id: s.id,
+        quantity: (existing.quantity ?? 1) + (s.quantity ?? 1),
+        manualPrice: existing.manualPrice ?? s.manualPrice,
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
 interface DistanceResult {
   distanceKm: number
   durationMinutes: number
@@ -55,6 +73,12 @@ interface PriceSummaryProps {
   // מסלול מותאם אישית
   towType?: string
   customRouteVehicleCount?: number
+  customRouteData?: {
+    totalDistanceKm: number
+    vehicles: { type: string; isWorking: boolean }[]
+    services?: SelectedService[]
+  }
+  vatPercent?: number
   towDate?: string
   towTime?: string
   isHoliday?: boolean
@@ -83,6 +107,8 @@ export function PriceSummary({
   saving,
   towType,
   customRouteVehicleCount = 0,
+  customRouteData,
+  vatPercent = 0.18,
   towDate = '',
   towTime = '',
   isHoliday = false
@@ -108,8 +134,13 @@ export function PriceSummary({
     : basePriceList
 
   const hasDataForCalculation = isCustomRoute
-    ? (customRouteVehicleCount > 0 && (distance?.distanceKm ?? 0) > 0)
+    ? (customRouteData
+        ? (customRouteData.vehicles.length > 0 && (customRouteData.totalDistanceKm ?? 0) > 0)
+        : (customRouteVehicleCount > 0 && (distance?.distanceKm ?? 0) > 0))
     : hasVehicleType
+
+  const effectiveVatPercent = vatPercent ?? 0.18
+  const vatPercentLabel = Math.round(effectiveVatPercent * 100)
 
   let priceResult: ReturnType<typeof calculateTowPrice> | null = null
   if ((priceMode === 'recommended' || priceMode === 'recommended_customer') && hasDataForCalculation) {
@@ -117,15 +148,29 @@ export function PriceSummary({
     const distanceKm = (distance?.distanceKm ?? 0) + baseToPickupKm
     const basePrices = extractBasePrices(activePriceList)
     let basePriceOverride: number | undefined
-    if (isCustomRoute) {
+    let calcVehicleType: VehicleType = (vehicleType as VehicleType) || 'private'
+    if (isCustomRoute && customRouteData) {
+      let totalBase = 0
+      customRouteData.vehicles.forEach(v => {
+        const vt = (v.type as VehicleType) || 'private'
+        totalBase += basePrices[vt] ?? basePrices.private
+      })
+      basePriceOverride = totalBase
+      calcVehicleType = 'private'
+    } else if (isCustomRoute) {
       const basePerVehicle = basePrices.private
       basePriceOverride = basePerVehicle * customRouteVehicleCount
+      calcVehicleType = 'private'
     }
     const locationSurcharges = selectedLocationSurcharges
       .map(id => locationSurchargesData.find(l => l.id === id))
       .filter(Boolean)
       .map(s => ({ percent: s!.surcharge_percent }))
-    const serviceSurcharges = selectedServices.map(selected => {
+    const routeServicesForPrice =
+      isCustomRoute && customRouteData
+        ? aggregateRouteServices(customRouteData.services ?? [])
+        : selectedServices
+    const serviceSurcharges = routeServicesForPrice.map(selected => {
       const s = serviceSurchargesData.find(x => x.id === selected.id)
       if (!s) return { amount: 0 }
       if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
@@ -139,9 +184,9 @@ export function PriceSummary({
         price_per_km: activePriceList?.price_per_km ?? 12,
         minimum_price: activePriceList?.minimum_price ?? 250
       },
-      vehicleType: (vehicleType as VehicleType) || 'private',
+      vehicleType: calcVehicleType,
       distanceKm,
-      basePriceOverride,
+      ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       timeSurcharges: activeTimeSurcharges,
       towDate,
       towTime,
@@ -151,7 +196,7 @@ export function PriceSummary({
       serviceSurcharges,
       priceMode: 'recommended',
       discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
-      vatPercent: 0.18
+      vatPercent: effectiveVatPercent
     })
   }
 
@@ -168,8 +213,12 @@ export function PriceSummary({
     .map(id => locationSurchargesData.find(l => l.id === id))
     .filter(Boolean) as LocationSurcharge[]
   const locationAmount = priceResult?.locationSurchargeAmount ?? 0
+  const servicesForDisplay =
+    isCustomRoute && customRouteData
+      ? aggregateRouteServices(customRouteData.services ?? [])
+      : selectedServices
   const activeServices: { label: string; amount: number }[] = []
-  selectedServices.forEach(selected => {
+  servicesForDisplay.forEach(selected => {
     const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
     if (surcharge) {
       let amount = 0
@@ -217,7 +266,7 @@ export function PriceSummary({
                 <div className="flex justify-between">
                   <span className="text-gray-500">
                     {isCustomRoute 
-                      ? `מחיר בסיס (${customRouteVehicleCount} רכבים)`
+                      ? `מחיר בסיס (${customRouteData?.vehicles.length ?? customRouteVehicleCount} רכבים)`
                       : `מחיר בסיס (${getVehicleTypeLabel(vehicleType)})`
                     }
                   </span>
@@ -275,7 +324,7 @@ export function PriceSummary({
                 {/* מע"מ */}
                 {beforeVat > 0 && (
                   <div className="flex justify-between border-t border-gray-100 pt-2">
-                    <span className="text-gray-500">מע״מ (18%)</span>
+                    <span className="text-gray-500">מע״מ ({vatPercentLabel}%)</span>
                     <span className="text-gray-700">₪{vatAmount}</span>
                   </div>
                 )}

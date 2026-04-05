@@ -259,7 +259,10 @@ export function useTowSave(params: UseTowSaveParams) {
       manualWeight,
       pickupAddress,
       dropoffAddress,
-      distance,
+      distance:
+        towType === 'custom'
+          ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 }
+          : distance,
       startFromBase,
       baseToPickupDistance,
       // Custom tow

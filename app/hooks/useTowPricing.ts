@@ -12,6 +12,24 @@ import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
 import { calculateTowPrice, extractBasePrices, TowPriceResult } from '../lib/utils/price-calculator'
 
+function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
+  if (!services?.length) return []
+  const map = new Map<string, SelectedService>()
+  for (const s of services) {
+    const existing = map.get(s.id)
+    if (!existing) {
+      map.set(s.id, { ...s })
+    } else {
+      map.set(s.id, {
+        id: s.id,
+        quantity: (existing.quantity ?? 1) + (s.quantity ?? 1),
+        manualPrice: existing.manualPrice ?? s.manualPrice,
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
 interface UseTowPricingParams {
   towType: TowType
   vehicleType: VehicleType | ''
@@ -26,7 +44,11 @@ interface UseTowPricingParams {
   selectedServices: SelectedService[]
   serviceSurchargesData: ServiceSurcharge[]
   selectedCustomerPricing: CustomerWithPricing | null
-  customRouteData: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }
+  customRouteData: {
+    totalDistanceKm: number
+    vehicles: { type: string; isWorking: boolean }[]
+    services: SelectedService[]
+  }
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   selectedPriceItem: PriceItem | null
   customPrice: string
@@ -170,13 +192,16 @@ export function useTowPricing(params: UseTowPricingParams) {
         .map(id => locationSurchargesData.find(l => l.id === id))
         .filter(Boolean)
         .map(s => ({ percent: s!.surcharge_percent }))
-      const svcSurcharges = selectedServices.map(selected => {
-        const s = serviceSurchargesData.find(x => x.id === selected.id)
-        if (!s) return { amount: 0 }
-        if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-        if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
-        return { amount: s.price }
-      }).filter(x => x.amount > 0)
+      const routeServices = aggregateRouteServices(customRouteData.services)
+      const svcSurcharges = routeServices
+        .map((selected) => {
+          const s = serviceSurchargesData.find((x) => x.id === selected.id)
+          if (!s) return { amount: 0 }
+          if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
+          if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
+          return { amount: s.price }
+        })
+        .filter((x) => x.amount > 0)
 
       const result = calculateTowPrice({
         priceList: {
