@@ -1,6 +1,6 @@
   'use client'
 
-  import React, { useEffect, useState, useRef, useMemo } from 'react'
+  import React, { useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
   import { useRouter } from 'next/navigation'
   import { useAuth } from '../lib/AuthContext'
   import { getDashboardStats, DashboardStats } from '../lib/queries/dashboard'
@@ -35,6 +35,14 @@
 
   const DRIVER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4']
 
+  const PIXELS_PER_HOUR = 40
+
+  /** Same fractional-hour convention as `app/dashboard/calendar/page.tsx` (local browser time). */
+  function getLocalFractionalHour(dateStr: string): number {
+    const d = new Date(dateStr)
+    return d.getHours() + d.getMinutes() / 60
+  }
+
   export default function DashboardPage() {
     const { user, companyId, loading: authLoading } = useAuth()
     const router = useRouter()
@@ -50,6 +58,8 @@
     const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
     const [calendarDate, setCalendarDate] = useState(new Date())
     const [calendarTows, setCalendarTows] = useState<any[]>([])
+    const calendarTheadRef = useRef<HTMLTableSectionElement>(null)
+    const [calendarTheadHeightPx, setCalendarTheadHeightPx] = useState(33)
     const [todayTows, setTodayTows] = useState<any[]>([])
     const [activeDrivers, setActiveDrivers] = useState<any[]>([])
     const [allDrivers, setAllDrivers] = useState<any[]>([])
@@ -380,10 +390,20 @@
     : allActiveDriverIds.filter((id: string) => selectedDrivers.includes(id))
     const HOURS = Array.from({ length: 24 }, (_, i) => i) // 00:00–23:00
 
+    useLayoutEffect(() => {
+      const el = calendarTheadRef.current
+      if (!el) return
+      const measure = () => setCalendarTheadHeightPx(Math.round(el.getBoundingClientRect().height))
+      measure()
+      const ro = new ResizeObserver(measure)
+      ro.observe(el)
+      return () => ro.disconnect()
+    }, [calendarDate, calendarTows.length, driverIds.length, loading, authLoading, selectedDrivers.length, allDrivers.length])
+
     const getTowsForDriverHour = (driverId: string, hour: number) => {
     return filteredCalendarTows.filter((t: any) => {
         if (t.driver_id !== driverId) return false
-        const towHour = t.scheduled_at ? new Date(t.scheduled_at).getHours() : new Date(t.created_at).getHours()
+        const towHour = Math.floor(getLocalFractionalHour(t.scheduled_at || t.created_at))
         return towHour === hour
       })
     }
@@ -636,7 +656,7 @@
                 ) : (
                   <div className="relative">
                     <table className="w-full text-xs border-collapse" style={{ minWidth: `${driverIds.length * 120 + 60}px` }}>
-                      <thead>
+                      <thead ref={calendarTheadRef}>
                         <tr className="sticky top-0 bg-gray-50 z-10">
                           <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-100 w-8"></th>
                           {driverIds.map((id, i) => (
@@ -648,7 +668,7 @@
                       </thead>
                       <tbody style={{ position: 'relative' }}>
                         {HOURS.map(hour => (
-                          <tr key={hour} className="border-b border-gray-200" style={{ height: '40px' }}>
+                          <tr key={hour} className="border-b border-gray-200" style={{ height: `${PIXELS_PER_HOUR}px` }}>
                             <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium">{hour}:00</td>
                             {driverIds.map(id => {
                               const tows = getTowsForDriverHour(id as string, hour)
@@ -708,7 +728,7 @@
                             className="pointer-events-none"
                             style={{
                               position: 'absolute',
-                              top: `${getCurrentTimePosition() * 40}px`,
+                              top: `${getCurrentTimePosition() * PIXELS_PER_HOUR}px`,
                               left: 0,
                               right: 0,
                               height: '2px',
@@ -736,10 +756,9 @@
                           const isCompleted = t.status === 'completed' && t.completed_at
                           const endMs = isCompleted ? new Date(t.completed_at).getTime() : now
                           const elapsedMinutes = Math.max(60, (endMs - scheduledMs) / 60000)
-                          const startHour = new Date(t.scheduled_at).getHours() + new Date(t.scheduled_at).getMinutes() / 60
-                          const theadHeight = 33 // approximate thead height in px
-                          const top = theadHeight + startHour * 40
-                          const height = (elapsedMinutes / 60) * 40
+                          const startHour = getLocalFractionalHour(t.scheduled_at)
+                          const top = calendarTheadHeightPx + startHour * PIXELS_PER_HOUR
+                          const height = (elapsedMinutes / 60) * PIXELS_PER_HOUR
                           return (
                             <div
                               key={t.id}

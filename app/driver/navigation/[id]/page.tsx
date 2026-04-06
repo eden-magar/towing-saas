@@ -68,6 +68,16 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     }
   }
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadTask()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
   // Get addresses and contacts
   const getNavigationData = () => {
     if (!task) return { address: '', contact: '', phone: '', notes: '' }
@@ -169,8 +179,11 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
   }
 
   const handleArrived = async () => {
-    if (!task || !user) return
-    
+    if (!task || !user) {
+      alert('טוען נתונים, נסה שוב')
+      return
+    }
+
     setIsUpdating(true)
     try {
       const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')

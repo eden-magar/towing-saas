@@ -143,8 +143,10 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // הגעתי לנקודה
   const handleArrived = async (notes?: string) => {
-    if (!currentPoint || !user) return
-    
+    if (!currentPoint || !user) {
+      alert(`חסר: currentPoint=${!!currentPoint} user=${!!user}`)
+      return
+    }
     try {
       await updatePointStatus(currentPoint.id, 'arrived', undefined, undefined, notes)
       if (currentPoint.point_type === 'dropoff') {
@@ -157,7 +159,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       await loadTask()
     } catch (error) {
       console.error('Error updating arrival:', error)
-      alert('שגיאה בעדכון ההגעה')
+      alert(`שגיאה: ${JSON.stringify(error)}`)
     }
   }
 
