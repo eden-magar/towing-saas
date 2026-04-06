@@ -24,6 +24,8 @@ interface UseTowSaveParams {
   vehiclePlate: string
   // Save state
   setSaving: (v: boolean) => void
+  /** Optional: pass from parent for debug logging (e.g. current saving flag). */
+  saving?: boolean
   setError: (v: string) => void
   // Customer
   selectedCustomerId: string | null
@@ -113,6 +115,7 @@ export function useTowSave(params: UseTowSaveParams) {
     storageVehicleCondition,
     vehiclePlate,
     setSaving,
+    saving,
     setError,
     selectedCustomerId,
     customerName,
@@ -179,9 +182,13 @@ export function useTowSave(params: UseTowSaveParams) {
   } = params
 
   const handleSave = async () => {
-  if (!companyId || !user) return
-  if (towType !== 'single' && towType !== 'custom' && towType !== 'exchange') return
-  
+  if (!companyId || !user) {
+    return
+  }
+  if (towType !== 'single' && towType !== 'custom' && towType !== 'exchange') {
+    return
+  }
+
   // Validation - truck type is required
   if (requiredTruckTypes.length === 0) {
     setTruckTypeError(true)
@@ -385,9 +392,9 @@ export function useTowSave(params: UseTowSaveParams) {
         router.push('/dashboard')
       }
     }
-    } catch (err) {
-      console.error('Error saving tow:', err)
-      setError(editTowId ? 'שגיאה בעדכון הגרירה' : 'שגיאה ביצירת הגרירה')
+    } catch (error) {
+      console.error('Save error:', error)
+      setError(error instanceof Error ? error.message : JSON.stringify(error))
     } finally {
       setSaving(false)
     }

@@ -710,7 +710,13 @@
                                   )
                                 }) : (
                                   <button
-                                    onClick={() => router.push('/dashboard/tows/create')}
+                                    onClick={() => {
+                                      const params = new URLSearchParams()
+                                      params.set('driver', id as string)
+                                      params.set('date', calendarDate.toISOString().split('T')[0])
+                                      params.set('time', `${String(hour).padStart(2, '0')}:00`)
+                                      router.push(`/dashboard/tows/create?${params.toString()}`)
+                                    }}
                                     className="w-full h-5 border border-dashed border-gray-100 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"
                                   >
                                     +

@@ -22,6 +22,7 @@ import {
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../lib/types'
 import { getCustomerStoredVehicles, StoredVehicleWithCustomer } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
+import { extractBasePrices } from '../lib/utils/price-calculator'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
@@ -556,8 +557,8 @@ export function useTowForm(editTowId?: string) {
       ? (workingVehicleType || defectiveVehicleType ? (workingVehicleType || 'private') : '')
       : vehicleType,
     basePriceOverride: towType === 'exchange' && basePriceList && workingVehicleType && defectiveVehicleType
-      ? (basePriceList.base_prices?.[workingVehicleType as VehicleType] ?? 0) +
-        (basePriceList.base_prices?.[defectiveVehicleType as VehicleType] ?? 0)
+      ? (extractBasePrices(basePriceList)[workingVehicleType as VehicleType] ?? 0) +
+        (extractBasePrices(basePriceList)[defectiveVehicleType as VehicleType] ?? 0)
       : undefined,
     distance: towType === 'exchange' ? exchangeTotalDistance : distance,
     startFromBase,

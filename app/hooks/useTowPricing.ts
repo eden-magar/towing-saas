@@ -238,12 +238,6 @@ export function useTowPricing(params: UseTowPricingParams) {
       .filter(Boolean)
       .map(s => ({ percent: s!.surcharge_percent }))
 
-    console.log('DEBUG location:', {
-      selectedLocationSurcharges,
-      locationSurchargesData: locationSurchargesData.map(l => ({ id: l.id, label: l.label, percent: l.surcharge_percent })),
-      result: locationSurcharges
-    })
-
     const serviceSurcharges = selectedServices.map(selected => {
       const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
       if (!surcharge) return { amount: 0 }

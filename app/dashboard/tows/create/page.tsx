@@ -366,6 +366,7 @@ function CreateTowForm({
       const result = await lookupVehicle(defectiveVehiclePlate)
       if (result.found && result.data) {
         setDefectiveVehicleData(result)
+        setDefectiveVehicleType(result.source || 'private')
       } else {
         setDefectiveVehicleData(null)
       }
@@ -2179,7 +2180,7 @@ function CreateTowForm({
                       ₪{finalPrice}
                     </p>
                     <p className="text-sm text-amber-800 mb-4">
-                      {towType} • {totalDistanceKm.toFixed(1)} ק״מ
+                      {towType} • {(towType === 'exchange' ? (exchangeTotalDistance?.distanceKm ?? 0) : totalDistanceKm).toFixed(1)} ק״מ
                     </p>
                     <div className="flex gap-3">
                       <button
