@@ -552,7 +552,9 @@ export function useTowForm(editTowId?: string) {
   // ==================== Price Calculations ====================
   const { recommendedPrice, finalPrice, priceResult } = useTowPricing({
     towType,
-    vehicleType: towType === 'exchange' ? (workingVehicleType || 'private') : vehicleType,
+    vehicleType: towType === 'exchange'
+      ? (workingVehicleType || defectiveVehicleType ? (workingVehicleType || 'private') : '')
+      : vehicleType,
     basePriceOverride: towType === 'exchange' && basePriceList && workingVehicleType && defectiveVehicleType
       ? (basePriceList.base_prices?.[workingVehicleType as VehicleType] ?? 0) +
         (basePriceList.base_prices?.[defectiveVehicleType as VehicleType] ?? 0)
