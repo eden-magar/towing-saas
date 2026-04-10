@@ -869,6 +869,22 @@ export default function TowDetailsPage() {
         </div>
       </header>
 
+      {tow.status === 'cancelled' && (
+        <div className="max-w-6xl mx-auto px-4 mt-4">
+          <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 border-r-4 border-r-red-500 rounded-xl">
+            <span className="text-red-500 text-lg">✕</span>
+            <div>
+              <p className="font-bold text-red-700 text-sm">גרירה זו בוטלה</p>
+              {(tow as { cancellation_reason?: string | null }).cancellation_reason && (
+                <p className="text-red-500 text-xs mt-0.5">
+                  {(tow as { cancellation_reason?: string | null }).cancellation_reason}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6">
         <div className="flex gap-1 mb-4 sm:mb-6 bg-gray-100 p-1 rounded-xl w-fit overflow-x-auto">
           <button

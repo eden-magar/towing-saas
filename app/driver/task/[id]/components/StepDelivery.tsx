@@ -35,6 +35,20 @@ export default function StepDelivery({
   const isPickup = pointType === 'pickup'
   const isExchange = pointType === 'exchange'
   const isStop = pointType === 'stop'
+  const isDropoff = pointType === 'dropoff'
+
+  const title =
+    isPickup ? 'הערות לאיסוף'
+    : isExchange ? 'אישור החלפה'
+    : isStop ? 'הערות עצירה'
+    : isDropoff ? 'מסירת רכב'
+    : 'פרטי מסירה'
+
+  const subtitle =
+    isPickup ? 'הרכב הועמס בהצלחה'
+    : isExchange ? 'אישור החלפה'
+    : isStop ? 'ניתן להוסיף פרטים לעצירה'
+    : 'למי נמסר הרכב?'
 
   // העתקה מהלקוח
   const handleSameAsCustomer = (checked: boolean) => {
@@ -79,14 +93,11 @@ export default function StepDelivery({
         <div className="flex items-center justify-center gap-2 mb-2">
           {isPickup ? <Package size={24} /> : <FileText size={24} />}
           <h1 className="text-2xl font-bold">
-            {isPickup ? 'סיום העמסה' 
-              : isExchange ? 'אישור החלפה'
-              : isStop ? 'אישור עצירה'
-              : 'פרטי מסירה'}
+            {title}
           </h1>
         </div>
         <p className="text-white/80">
-          {isPickup ? 'הרכב הועמס בהצלחה' : 'למי נמסר הרכב?'}
+          {subtitle}
         </p>
       </div>
 
@@ -207,7 +218,7 @@ export default function StepDelivery({
           ) : (
             <>
               <Check size={22} />
-              {isPickup ? 'המשך לנקודה הבאה' : 'סיים גרירה'}
+              {isPickup ? 'המשך לנקודה הבאה' : isDropoff ? 'סיים גרירה' : 'המשך'}
             </>
           )}
         </button>

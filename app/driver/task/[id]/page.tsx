@@ -165,11 +165,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // סיום צילום - עובר לשלב סיום
   const handleCameraComplete = async () => {
-    if (currentPoint?.point_type === 'pickup') {
-      await completeCurrentPoint()
-    } else {
-      setPointStep('delivery')
-    }
+    setPointStep('delivery')
   }
 
   const handleCameraAfterComplete = async () => {
@@ -191,6 +187,8 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     if (currentPoint?.point_type === 'stop') {
       await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
     } else if (currentPoint?.point_type === 'dropoff') {
+      await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
+    } else if (currentPoint?.point_type === 'pickup') {
       await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
     } else {
       setPendingDeliveryData({ recipientName, recipientPhone, notes, cashCollected })
