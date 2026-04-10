@@ -245,67 +245,97 @@ const handleAccept = async () => {
 
             {/* Route Points */}
             <div className="space-y-3 mb-4">
-              {/* Pickup */}
-              <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold">1</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-emerald-700 mb-1">איסוף</div>
-                    <div className="font-medium text-gray-800 mb-2">{addresses.pickup.address}</div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {addresses.pickup.phone && (
-                        <button 
-                          onClick={() => openPhone(addresses.pickup.phone)}
-                          className="flex items-center gap-1.5 bg-white text-emerald-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-emerald-200"
-                        >
-                          <Phone className="w-4 h-4" />
-                          {addresses.pickup.contact || 'התקשר'}
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => openWaze(addresses.pickup.address)}
-                        className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
-                      >
-                        <Navigation className="w-4 h-4" />
-                        נווט
-                      </button>
+              {task.points && task.points.length > 0 ? (
+                [...task.points]
+                  .sort((a, b) => a.point_order - b.point_order)
+                  .map((point, index) => {
+                    const label =
+                      point.point_type === 'pickup' ? 'איסוף' :
+                      point.point_type === 'dropoff' ? 'יעד' :
+                      point.point_type === 'exchange' ? 'נקודת החלפה' :
+                      'עצירה'
+                    const color =
+                      point.point_type === 'pickup' ? 'bg-green-50 border-green-200 text-green-700' :
+                      point.point_type === 'dropoff' ? 'bg-red-50 border-red-200 text-red-700' :
+                      point.point_type === 'exchange' ? 'bg-purple-50 border-purple-200 text-purple-700' :
+                      'bg-gray-50 border-gray-200 text-gray-700'
+                    return (
+                      <div key={point.id} className={`p-3 rounded-xl border ${color} mb-2`}>
+                        <div className="text-xs font-medium mb-1">
+                          {label} #{index + 1}
+                        </div>
+                        <div className="text-sm font-medium">{point.address || 'לא צוין'}</div>
+                        {point.contact_name && (
+                          <div className="text-xs mt-1 opacity-70">{point.contact_name}</div>
+                        )}
+                      </div>
+                    )
+                  })
+              ) : (
+                <>
+                  {/* Pickup */}
+                  <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-bold">1</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-emerald-700 mb-1">איסוף</div>
+                        <div className="font-medium text-gray-800 mb-2">{addresses.pickup.address}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {addresses.pickup.phone && (
+                            <button 
+                              onClick={() => openPhone(addresses.pickup.phone)}
+                              className="flex items-center gap-1.5 bg-white text-emerald-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-emerald-200"
+                            >
+                              <Phone className="w-4 h-4" />
+                              {addresses.pickup.contact || 'התקשר'}
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => openWaze(addresses.pickup.address)}
+                            className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+                          >
+                            <Navigation className="w-4 h-4" />
+                            נווט
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Dropoff */}
-              <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold">2</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-red-700 mb-1">יעד</div>
-                    <div className="font-medium text-gray-800 mb-2">{addresses.dropoff.address}</div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {addresses.dropoff.phone && (
-                        <button 
-                          onClick={() => openPhone(addresses.dropoff.phone)}
-                          className="flex items-center gap-1.5 bg-white text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-200"
-                        >
-                          <Phone className="w-4 h-4" />
-                          {addresses.dropoff.contact || 'התקשר'}
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => openWaze(addresses.dropoff.address)}
-                        className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
-                      >
-                        <Navigation className="w-4 h-4" />
-                        נווט
-                      </button>
+                  {/* Dropoff */}
+                  <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-bold">2</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-red-700 mb-1">יעד</div>
+                        <div className="font-medium text-gray-800 mb-2">{addresses.dropoff.address}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {addresses.dropoff.phone && (
+                            <button 
+                              onClick={() => openPhone(addresses.dropoff.phone)}
+                              className="flex items-center gap-1.5 bg-white text-red-700 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-200"
+                            >
+                              <Phone className="w-4 h-4" />
+                              {addresses.dropoff.contact || 'התקשר'}
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => openWaze(addresses.dropoff.address)}
+                            className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+                          >
+                            <Navigation className="w-4 h-4" />
+                            נווט
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
             {/* Notes */}
