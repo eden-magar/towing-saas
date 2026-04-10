@@ -190,6 +190,40 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
   }
 }
 
+/** Map embedded tow_points rows from getDriverTasks to DriverTaskPoint (list view subset + nulls). */
+function mapEmbeddedTowPointsToDriverTaskPoints(
+  rows:
+    | Array<{
+        id: string
+        point_order: number
+        point_type: string
+        address: string | null
+        status: string
+      }>
+    | null
+    | undefined
+): DriverTaskPoint[] {
+  if (!rows?.length) return []
+  return [...rows]
+    .sort((a, b) => a.point_order - b.point_order)
+    .map((p) => ({
+      id: p.id,
+      point_order: p.point_order,
+      point_type: p.point_type as DriverTaskPoint['point_type'],
+      address: p.address,
+      lat: null,
+      lng: null,
+      contact_name: null,
+      contact_phone: null,
+      status: p.status as DriverTaskPoint['status'],
+      arrived_at: null,
+      completed_at: null,
+      recipient_name: null,
+      recipient_phone: null,
+      notes: null,
+    }))
+}
+
 // ==================== שליפת משימות הנהג ====================
 
 export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
@@ -214,6 +248,13 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
       ),
       tow_rejection_requests (
         id,
+        status
+      ),
+      points:tow_points (
+        id,
+        point_order,
+        point_type,
+        address,
         status
       )
     `)
@@ -244,13 +285,6 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     .in('tow_id', towIds)
     .order('leg_order', { ascending: true })
 
-  // שליפת נקודות
-  const { data: points } = await supabase
-    .from('tow_points')
-    .select('*')
-    .in('tow_id', towIds)
-    .order('point_order', { ascending: true })
-
   // מיפוי לפי tow_id
   const vehiclesByTow: Record<string, DriverTaskVehicle[]> = {}
   vehicles?.forEach(v => {
@@ -262,12 +296,6 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
   legs?.forEach(l => {
     if (!legsByTow[l.tow_id]) legsByTow[l.tow_id] = []
     legsByTow[l.tow_id].push(l)
-  })
-
-  const pointsByTow: Record<string, DriverTaskPoint[]> = {}
-  points?.forEach(p => {
-    if (!pointsByTow[p.tow_id]) pointsByTow[p.tow_id] = []
-    pointsByTow[p.tow_id].push(p)
   })
 
   return tows.map(tow => ({
@@ -288,7 +316,7 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     truck: tow.truck as any,
     vehicles: vehiclesByTow[tow.id] || [],
     legs: legsByTow[tow.id] || [],
-    points: pointsByTow[tow.id] || []
+    points: mapEmbeddedTowPointsToDriverTaskPoints((tow as any).points)
   }))
 }
 
