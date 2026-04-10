@@ -175,6 +175,10 @@ function CreateTowForm({
     setExchangeContactName,
     exchangeContactPhone,
     setExchangeContactPhone,
+    workingDestinationContact,
+    setWorkingDestinationContact,
+    workingDestinationContactPhone,
+    setWorkingDestinationContactPhone,
     workingVehicleContact,
     setWorkingVehicleContact,
     workingVehicleContactPhone,
@@ -480,6 +484,8 @@ function CreateTowForm({
         exchangePointAddress: towType === 'exchange' ? exchangeAddress : undefined,
         exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
         exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
+        workingDestinationContactName: towType === 'exchange' ? workingDestinationContact : undefined,
+        workingDestinationContactPhone: towType === 'exchange' ? workingDestinationContactPhone : undefined,
         defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
         defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContact : undefined,
         defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
@@ -1764,109 +1770,115 @@ function CreateTowForm({
                         )}
                       </div>
 
-                      {/* Row 8: מוצא */}
-                      <div className="border-t border-gray-100 pt-3 min-h-[120px] flex flex-col">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקין</label>
-                        {workingVehicleSource === 'storage' ? (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
-                            <span>🏪 {workingVehicleAddress?.address || storageAddress || 'כתובת האחסנה'}</span>
-                            <button
-                              type="button"
-                              onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
-                              className="mr-auto text-gray-400 hover:text-red-500"
-                            >✕</button>
+                      {/* כתובות: DOM order מוצא תקין → יעד תקין → מוצא תקול → יעד תקול */}
+                      <div className="col-span-1 lg:col-span-2 border-t border-gray-100 pt-3">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="space-y-3">
+                            <div className="min-h-[120px] flex flex-col">
+                              <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקין</label>
+                              {workingVehicleSource === 'storage' ? (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+                                  <span>🏪 {workingVehicleAddress?.address || storageAddress || 'כתובת האחסנה'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
+                                    className="mr-auto text-gray-400 hover:text-red-500"
+                                  >✕</button>
+                                </div>
+                              ) : (
+                                <AddressInput
+                                  value={workingVehicleAddress}
+                                  onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
+                                  label=""
+                                  hideLabel
+                                  onPinDropClick={() => handlePinDropOpen('workingVehicle')}
+                                />
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setStartFromBase(!startFromBase)}
+                                className={`mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                                  startFromBase
+                                    ? 'bg-blue-500 text-white border-blue-500'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                                }`}
+                              >
+                                יציאה מהחניון
+                              </button>
+                            </div>
+                            <div className="border-t border-gray-100 pt-3 min-h-[100px] flex flex-col">
+                              <label className="block text-xs font-medium text-gray-500 mb-1">יעד הרכב התקין</label>
+                              <AddressInput
+                                value={workingVehicleDestinationAddress}
+                                onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
+                                label=""
+                                hideLabel
+                                onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                              />
+                              {!workingVehicleDestinationIsStorage ? (
+                                <button
+                                  type="button"
+                                  onClick={() => { setWorkingVehicleDestinationIsStorage(true); if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng }) }}
+                                  className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors w-fit"
+                                >
+                                  <span>🏪</span> שמור באחסנה
+                                </button>
+                              ) : (
+                                <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg w-fit">
+                                  <span className="text-xs text-blue-600">🏪 לאחסנה</span>
+                                  <button type="button" onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        ) : (
-                          <AddressInput
-                            value={workingVehicleAddress}
-                            onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
-                            label=""
-                            hideLabel
-                            onPinDropClick={() => handlePinDropOpen('workingVehicle')}
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => setStartFromBase(!startFromBase)}
-                          className={`mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
-                            startFromBase
-                              ? 'bg-blue-500 text-white border-blue-500'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-                          }`}
-                        >
-                          יציאה מהחניון
-                        </button>
-                      </div>
-                      <div className="border-t border-gray-100 pt-3 min-h-[120px] flex flex-col">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקול</label>
-                        <AddressInput
-                          value={exchangeAddress}
-                          onChange={(d: AddressData) => setExchangeAddress(d)}
-                          label=""
-                          hideLabel
-                          onPinDropClick={() => handlePinDropOpen('exchange')}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
-                          disabled={!workingVehicleDestinationAddress?.address}
-                          className="mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          זהה ליעד התקין
-                        </button>
-                      </div>
-
-                      {/* Row 9: יעד */}
-                      <div className="border-t border-gray-100 pt-3 min-h-[100px] flex flex-col">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">יעד הרכב התקין</label>
-                        <AddressInput
-                          value={workingVehicleDestinationAddress}
-                          onChange={(d: AddressData) => setWorkingVehicleDestinationAddress(d)}
-                          label=""
-                          hideLabel
-                          onPinDropClick={() => handlePinDropOpen('workingDestination')}
-                        />
-                        {!workingVehicleDestinationIsStorage ? (
-                          <button
-                            type="button"
-                            onClick={() => { setWorkingVehicleDestinationIsStorage(true); if (storageAddress) setWorkingVehicleDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng }) }}
-                            className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors w-fit"
-                          >
-                            <span>🏪</span> שמור באחסנה
-                          </button>
-                        ) : (
-                          <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg w-fit">
-                            <span className="text-xs text-blue-600">🏪 לאחסנה</span>
-                            <button type="button" onClick={() => { setWorkingVehicleDestinationIsStorage(false); setWorkingVehicleDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                          <div className="space-y-3">
+                            <div className="min-h-[120px] flex flex-col">
+                              <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקול</label>
+                              <AddressInput
+                                value={exchangeAddress}
+                                onChange={(d: AddressData) => setExchangeAddress(d)}
+                                label=""
+                                hideLabel
+                                onPinDropClick={() => handlePinDropOpen('exchange')}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
+                                disabled={!workingVehicleDestinationAddress?.address}
+                                className="mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                זהה ליעד התקין
+                              </button>
+                            </div>
+                            <div className="border-t border-gray-100 pt-3 min-h-[100px] flex flex-col">
+                              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יעד הרכב התקול</label>
+                              <AddressInput
+                                value={defectiveDestinationAddress}
+                                onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
+                                label=""
+                                hideLabel
+                                onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
+                              />
+                              {defectiveDestination !== 'storage' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDefectiveDestination('storage')
+                                    if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
+                                  }}
+                                  className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:border-orange-300 hover:text-orange-600 transition-colors w-fit"
+                                >
+                                  <span>🏪</span> שמור באחסנה
+                                </button>
+                              ) : (
+                                <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg w-fit">
+                                  <span className="text-xs text-orange-600">🏪 לאחסנה</span>
+                                  <button type="button" onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                      <div className="border-t border-gray-100 pt-3 min-h-[100px] flex flex-col">
-                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יעד הרכב התקול</label>
-                        <AddressInput
-                          value={defectiveDestinationAddress}
-                          onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
-                          label=""
-                          hideLabel
-                          onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
-                        />
-                        {defectiveDestination !== 'storage' ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDefectiveDestination('storage')
-                              if (storageAddress) setDefectiveDestinationAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
-                            }}
-                            className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:border-orange-300 hover:text-orange-600 transition-colors w-fit"
-                          >
-                            <span>🏪</span> שמור באחסנה
-                          </button>
-                        ) : (
-                          <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg w-fit">
-                            <span className="text-xs text-orange-600">🏪 לאחסנה</span>
-                            <button type="button" onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
-                          </div>
-                        )}
+                        </div>
                       </div>
                     </div>
 
@@ -2266,12 +2278,14 @@ function CreateTowForm({
                 <div className="p-4 sm:p-5 space-y-4">
                   {towType === 'exchange' ? (
                     <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                       {/* 1 — איש קשר במוצא תקין */}
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium">איש קשר במוצא — רכב תקין</label>
-                          <button type="button" onClick={() => copyFromCustomer('pickup')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                          <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
+                          <div className="flex gap-1.5 flex-wrap justify-end">
+                            <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
@@ -2281,42 +2295,55 @@ function CreateTowForm({
 
                       {/* 2 — איש קשר ביעד תקין */}
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium">איש קשר ביעד — רכב תקין</label>
-                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* 3 — איש קשר במוצא תקול */}
-                      <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium">איש קשר במוצא — רכב תקול</label>
-                          <div className="flex gap-2">
-                            {exchangeContactName && (
-                              <button type="button"
-                                onClick={() => { setDefectiveDestinationContact(exchangeContactName); setDefectiveDestinationContactPhone(exchangeContactPhone) }}
-                                className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">זהה ליעד תקין</button>
-                            )}
-                            <button type="button" onClick={() => copyFromCustomer('exchange_pickup')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                          <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
+                          <div className="flex gap-1.5 flex-wrap justify-end">
+                            <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
+                          <input type="text" value={workingDestinationContact} onChange={(e) => setWorkingDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <input type="tel" value={workingDestinationContactPhone} onChange={(e) => setWorkingDestinationContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                        </div>
+                      </div>
+
+                      {/* 3 — איש קשר במוצא תקול */}
+                      <div>
+                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                          <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
+                          <button
+                            type="button"
+                            onClick={() => copyFromCustomer('exchange_pickup')}
+                            className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
+                          >
+                            כמו לקוח 👤
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                           <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
+                        {workingDestinationContact && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDefectiveDestinationContact(workingDestinationContact)
+                              setDefectiveDestinationContactPhone(workingDestinationContactPhone)
+                            }}
+                            className="mt-1.5 text-xs text-cyan-600 hover:underline"
+                          >
+                            זהה ליעד תקין ↓
+                          </button>
+                        )}
                       </div>
 
                       {/* 4 — איש קשר ביעד תקול */}
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium">איש קשר ביעד — רכב תקול</label>
-                          <button type="button" onClick={() => copyFromCustomer('dropoff')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                          <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
+                          <div className="flex gap-1.5 flex-wrap justify-end">
+                            <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />

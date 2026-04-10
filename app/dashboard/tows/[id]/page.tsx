@@ -483,6 +483,11 @@ export default function TowDetailsPage() {
       const locationSurcharges = (tow.price_breakdown.location_surcharges || []).map((s: any) => ({ percent: s.percent }))
       const serviceSurcharges = (tow.price_breakdown.service_surcharges || []).map((s: any) => ({ amount: s.amount }))
 
+      const basePriceOverride =
+        tow.tow_type === 'exchange'
+          ? (tow.price_breakdown?.base_price ?? undefined)
+          : undefined
+
       const newResult = calculateTowPrice({
         priceList: {
           base_prices: {
@@ -507,6 +512,7 @@ export default function TowDetailsPage() {
         priceMode: 'recommended',
         discountPercent: tow.price_breakdown.discount_percent || 0,
         vatPercent: 0.18,
+        ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       })
 
       const oldPrice = tow.price_breakdown.total

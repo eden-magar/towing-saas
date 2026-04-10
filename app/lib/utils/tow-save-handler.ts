@@ -96,17 +96,22 @@ export interface SaveTowInput {
   existingPriceBreakdown?: PriceBreakdown | null
   // Exchange specific
   workingVehiclePlate?: string
+  workingVehicleCode?: string
   workingVehicleData?: any
   workingVehicleType?: string
+  defectiveVehicleType?: string
   workingVehicleSourceAddress?: AddressData
   workingVehicleDestinationAddress?: AddressData
   workingVehicleContactName?: string
   workingVehicleContactPhone?: string
   defectiveVehiclePlate?: string
+  defectiveVehicleCode?: string
   defectiveVehicleData?: any
   exchangePointAddress?: AddressData
   exchangeContactName?: string
   exchangeContactPhone?: string
+  workingDestinationContactName?: string
+  workingDestinationContactPhone?: string
   defectiveDestinationAddress?: AddressData
   defectiveDestinationContactName?: string
   defectiveDestinationContactPhone?: string
@@ -189,6 +194,8 @@ export interface PreparedTowData {
   exchangePointAddress?: AddressData
   exchangeContactName?: string
   exchangeContactPhone?: string
+  workingDestinationContactName?: string
+  workingDestinationContactPhone?: string
   defectiveDestinationAddress?: AddressData
   defectiveDestinationContactName?: string
   defectiveDestinationContactPhone?: string
@@ -533,6 +540,12 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     })
     .filter(x => x.amount > 0)
 
+  const exchangeBasePriceOverride =
+    input.towType === 'exchange' && input.workingVehicleType && input.defectiveVehicleType
+      ? (extractBasePrices(activePriceList)[input.workingVehicleType as VehicleType] ?? 0) +
+        (extractBasePrices(activePriceList)[input.defectiveVehicleType as VehicleType] ?? 0)
+      : undefined
+
   const result = calculateTowPrice({
     priceList: {
       base_prices: extractBasePrices(activePriceList),
@@ -541,6 +554,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     },
     vehicleType: (input.vehicleType as VehicleType) || 'private',
     distanceKm,
+    ...(exchangeBasePriceOverride !== undefined ? { basePriceOverride: exchangeBasePriceOverride } : {}),
     timeSurcharges: input.activeTimeSurcharges || [],
     towDate: input.towDate || '',
     towTime: input.towTime || '',
@@ -870,6 +884,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   if (input.workingVehiclePlate) {
     vehicles.push({
       plateNumber: input.workingVehiclePlate,
+      vehicleCode: input.workingVehicleCode || undefined,
       vehicleType: mapVehicleType(input.workingVehicleType || ''),
       manufacturer: input.workingVehicleData?.data?.manufacturer,
       model: input.workingVehicleData?.data?.model,
@@ -888,6 +903,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   if (input.defectiveVehiclePlate) {
     vehicles.push({
       plateNumber: input.defectiveVehiclePlate,
+      vehicleCode: input.defectiveVehicleCode || undefined,
       vehicleType: mapVehicleType(input.vehicleType || ''),
       manufacturer: input.defectiveVehicleData?.data?.manufacturer,
       model: input.defectiveVehicleData?.data?.model,
@@ -953,6 +969,24 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       contact_phone: input.defectiveDestinationContactPhone || null,
       notes: null,
       vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+    })
+  }
+
+  // נקודה 4 — יעד רכב תקין
+  if (
+    input.workingVehicleDestinationAddress?.address &&
+    input.workingVehicleDestinationAddress.address !== input.exchangePointAddress?.address
+  ) {
+    points.push({
+      point_order: 3,
+      point_type: 'dropoff',
+      address: input.workingVehicleDestinationAddress.address,
+      lat: input.workingVehicleDestinationAddress.lat || null,
+      lng: input.workingVehicleDestinationAddress.lng || null,
+      contact_name: input.workingDestinationContactName || null,
+      contact_phone: input.workingDestinationContactPhone || null,
+      notes: null,
+      vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
     })
   }
 

@@ -80,20 +80,29 @@ interface UseTowSaveParams {
   secondDriverScheduledAt?: string | null
   // Exchange specific
   workingVehiclePlate?: string
+  workingVehicleCode?: string
   workingVehicleData?: any
   workingVehicleType?: string
+  workingSelectedServices?: SelectedService[]
+  defectiveSelectedServices?: SelectedService[]
+  defectiveVehicleType?: VehicleType | ''
   workingVehicleSourceAddress?: AddressData
   workingVehicleDestinationAddress?: AddressData
   workingVehicleContactName?: string
   workingVehicleContactPhone?: string
   defectiveVehiclePlate?: string
+  defectiveVehicleCode?: string
   defectiveVehicleData?: any
   exchangePointAddress?: AddressData
   exchangeContactName?: string
   exchangeContactPhone?: string
+  workingDestinationContactName?: string
+  workingDestinationContactPhone?: string
   defectiveDestinationAddress?: AddressData
   defectiveDestinationContactName?: string
   defectiveDestinationContactPhone?: string
+  /** Full route chain km for exchange (working → … → exchange → … → defective); used for save breakdown. */
+  exchangeTotalDistance?: DistanceResult | null
   // Storage
   selectedStoredVehicleId: string | null
   // Post-save
@@ -162,20 +171,28 @@ export function useTowSave(params: UseTowSaveParams) {
     secondDriverId,
     secondDriverScheduledAt,
     workingVehiclePlate,
+    workingVehicleCode,
     workingVehicleData,
     workingVehicleType,
+    workingSelectedServices,
+    defectiveSelectedServices,
+    defectiveVehicleType,
     workingVehicleSourceAddress,
     workingVehicleDestinationAddress,
     workingVehicleContactName,
     workingVehicleContactPhone,
     defectiveVehiclePlate,
+    defectiveVehicleCode,
     defectiveVehicleData,
     exchangePointAddress,
     exchangeContactName,
     exchangeContactPhone,
+    workingDestinationContactName,
+    workingDestinationContactPhone,
     defectiveDestinationAddress,
     defectiveDestinationContactName,
     defectiveDestinationContactPhone,
+    exchangeTotalDistance,
     selectedStoredVehicleId,
     setSavedTowId,
     setShowAssignNowModal,
@@ -269,7 +286,9 @@ export function useTowSave(params: UseTowSaveParams) {
       distance:
         towType === 'custom'
           ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 }
-          : distance,
+          : towType === 'exchange'
+            ? exchangeTotalDistance ?? null
+            : distance,
       startFromBase,
       baseToPickupDistance,
       // Custom tow
@@ -288,7 +307,10 @@ export function useTowSave(params: UseTowSaveParams) {
       activeTimeSurcharges: activeTimeSurchargesList,
       selectedLocationSurcharges,
       locationSurchargesData,
-      selectedServices,
+      selectedServices:
+        towType === 'exchange'
+          ? [...(workingSelectedServices ?? []), ...(defectiveSelectedServices ?? [])]
+          : selectedServices,
       serviceSurchargesData,
       // Additional
       notes,
@@ -300,17 +322,22 @@ export function useTowSave(params: UseTowSaveParams) {
       invoiceName: invoiceName || undefined,
       dropoffToStorage,
       workingVehiclePlate: towType === 'exchange' ? workingVehiclePlate : undefined,
+      workingVehicleCode: towType === 'exchange' ? workingVehicleCode : undefined,
       workingVehicleData: towType === 'exchange' ? workingVehicleData : undefined,
       workingVehicleType: towType === 'exchange' ? workingVehicleType : undefined,
+      defectiveVehicleType: towType === 'exchange' ? defectiveVehicleType || undefined : undefined,
       workingVehicleSourceAddress: towType === 'exchange' ? workingVehicleSourceAddress : undefined,
       workingVehicleDestinationAddress: towType === 'exchange' ? workingVehicleDestinationAddress : undefined,
       workingVehicleContactName: towType === 'exchange' ? workingVehicleContactName : undefined,
       workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
       defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
+      defectiveVehicleCode: towType === 'exchange' ? defectiveVehicleCode : undefined,
       defectiveVehicleData: towType === 'exchange' ? defectiveVehicleData : undefined,
       exchangePointAddress: towType === 'exchange' ? exchangePointAddress : undefined,
       exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
       exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
+      workingDestinationContactName: towType === 'exchange' ? workingDestinationContactName : undefined,
+      workingDestinationContactPhone: towType === 'exchange' ? workingDestinationContactPhone : undefined,
       defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
       defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContactName : undefined,
       defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,

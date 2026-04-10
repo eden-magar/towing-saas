@@ -186,6 +186,8 @@ export function useTowForm(editTowId?: string) {
   const [workingVehicleDestinationAddress, setWorkingVehicleDestinationAddress] = useState<AddressData>({ address: '' })
   const [exchangeContactName, setExchangeContactName] = useState('')
   const [exchangeContactPhone, setExchangeContactPhone] = useState('')
+  const [workingDestinationContact, setWorkingDestinationContact] = useState('')
+  const [workingDestinationContactPhone, setWorkingDestinationContactPhone] = useState('')
   
   const [defectiveVehiclePlate, setDefectiveVehiclePlate] = useState('')
   const [defectiveVehicleData, setDefectiveVehicleData] = useState<VehicleLookupResult | null>(null)
@@ -706,7 +708,15 @@ export function useTowForm(editTowId?: string) {
     }
   }
 
-  const copyFromCustomer = (target: 'pickup' | 'dropoff' | 'exchange_pickup') => {
+  const copyFromCustomer = (
+    target:
+      | 'pickup'
+      | 'dropoff'
+      | 'exchange_pickup'
+      | 'working_source'
+      | 'working_destination'
+      | 'defective_destination',
+  ) => {
     if (target === 'pickup') {
       setPickupContactName(customerName)
       setPickupContactPhone(customerPhone)
@@ -716,6 +726,15 @@ export function useTowForm(editTowId?: string) {
     } else if (target === 'exchange_pickup') {
       setExchangeContactName(customerName)
       setExchangeContactPhone(customerPhone)
+    } else if (target === 'working_source') {
+      setWorkingVehicleContact(customerName)
+      setWorkingVehicleContactPhone(customerPhone)
+    } else if (target === 'working_destination') {
+      setWorkingDestinationContact(customerName)
+      setWorkingDestinationContactPhone(customerPhone)
+    } else if (target === 'defective_destination') {
+      setDefectiveDestinationContact(customerName)
+      setDefectiveDestinationContactPhone(customerPhone)
     }
   }
 
@@ -750,6 +769,7 @@ export function useTowForm(editTowId?: string) {
     pickupAddress,
     dropoffAddress,
     distance,
+    exchangeTotalDistance,
     startFromBase,
     baseToPickupDistance,
     routePoints,
@@ -777,17 +797,24 @@ export function useTowForm(editTowId?: string) {
     secondDriverId,
     secondDriverScheduledAt,
     workingVehiclePlate,
+    workingVehicleCode,
     workingVehicleData,
     workingVehicleType,
+    workingSelectedServices,
+    defectiveSelectedServices,
+    defectiveVehicleType,
     workingVehicleSourceAddress: workingVehicleAddress,
     workingVehicleDestinationAddress,
     workingVehicleContactName: workingVehicleContact,
     workingVehicleContactPhone,
     defectiveVehiclePlate,
+    defectiveVehicleCode,
     defectiveVehicleData,
     exchangePointAddress: exchangeAddress,
     exchangeContactName,
     exchangeContactPhone,
+    workingDestinationContactName: workingDestinationContact,
+    workingDestinationContactPhone,
     defectiveDestinationAddress: defectiveDestinationAddress,
     defectiveDestinationContactName: defectiveDestinationContact,
     defectiveDestinationContactPhone,
@@ -880,6 +907,8 @@ export function useTowForm(editTowId?: string) {
     workingVehicleDestinationAddress, setWorkingVehicleDestinationAddress,
     exchangeContactName, setExchangeContactName,
     exchangeContactPhone, setExchangeContactPhone,
+    workingDestinationContact, setWorkingDestinationContact,
+    workingDestinationContactPhone, setWorkingDestinationContactPhone,
     defectiveVehiclePlate, setDefectiveVehiclePlate,
     defectiveVehicleData, setDefectiveVehicleData,
     defectiveVehicleType, setDefectiveVehicleType,
