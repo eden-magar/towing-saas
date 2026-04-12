@@ -24,6 +24,47 @@ import {
 } from '@/app/lib/queries/rejection-requests'
 import { supabase } from '@/app/lib/supabase'
 
+type RoutePointLite = { point_type: string; point_order: number }
+
+/** Labels for route points: simple tow = איסוף/יעד; exchange 3-point / 4-point = תקין/תקול suffixes per spec */
+function getRoutePointLabel(
+  point: RoutePointLite,
+  towType: string | undefined | null,
+  allPoints: RoutePointLite[]
+): string {
+  const sorted = [...allPoints].sort((a, b) => a.point_order - b.point_order)
+  const po = point.point_order
+  const pt = point.point_type
+
+  if (towType !== 'exchange') {
+    if (pt === 'pickup') return 'איסוף'
+    if (pt === 'dropoff') return 'יעד'
+    if (pt === 'exchange') return 'נקודת החלפה'
+    return 'עצירה'
+  }
+
+  const hasExchangePoint = sorted.some(p => p.point_type === 'exchange')
+
+  if (hasExchangePoint) {
+    if (pt === 'exchange') return 'נקודת החלפה'
+    if (pt === 'pickup') return 'איסוף תקין'
+    if (pt === 'dropoff') return 'פריקה תקול'
+    return 'עצירה'
+  }
+
+  if (sorted.length === 4) {
+    if (po === 0 && pt === 'pickup') return 'איסוף תקין'
+    if (po === 1 && pt === 'dropoff') return 'פריקה תקין'
+    if (po === 2 && pt === 'pickup') return 'איסוף תקול'
+    if (po === 3 && pt === 'dropoff') return 'פריקה תקול'
+  }
+
+  if (pt === 'pickup') return 'איסוף'
+  if (pt === 'dropoff') return 'יעד'
+  if (pt === 'exchange') return 'נקודת החלפה'
+  return 'עצירה'
+}
+
 interface NewTaskModalProps {
   task: DriverTask
   driverId: string
@@ -261,11 +302,7 @@ const handleAccept = async () => {
                 [...task.points]
                   .sort((a, b) => a.point_order - b.point_order)
                   .map((point, index) => {
-                    const label =
-                      point.point_type === 'pickup' ? 'איסוף' :
-                      point.point_type === 'dropoff' ? 'יעד' :
-                      point.point_type === 'exchange' ? 'נקודת החלפה' :
-                      'עצירה'
+                    const label = getRoutePointLabel(point, task.tow_type, task.points)
                     const color =
                       point.point_type === 'pickup' ? 'bg-green-50 border-green-200 text-green-700' :
                       point.point_type === 'dropoff' ? 'bg-red-50 border-red-200 text-red-700' :

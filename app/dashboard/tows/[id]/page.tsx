@@ -54,6 +54,46 @@ const truckTypeLabels: Record<string, string> = {
   'wheel_lift_cradle': 'משקפיים'
 }
 
+type RoutePointLite = { point_type: string; point_order: number }
+
+function getRoutePointLabel(
+  point: RoutePointLite,
+  towType: string | undefined | null,
+  allPoints: RoutePointLite[]
+): string {
+  const sorted = [...allPoints].sort((a, b) => a.point_order - b.point_order)
+  const po = point.point_order
+  const pt = point.point_type
+
+  if (towType !== 'exchange') {
+    if (pt === 'pickup') return 'איסוף'
+    if (pt === 'dropoff') return 'יעד'
+    if (pt === 'exchange') return 'נקודת החלפה'
+    return 'עצירה'
+  }
+
+  const hasExchangePoint = sorted.some(p => p.point_type === 'exchange')
+
+  if (hasExchangePoint) {
+    if (pt === 'exchange') return 'נקודת החלפה'
+    if (pt === 'pickup') return 'איסוף תקין'
+    if (pt === 'dropoff') return 'פריקה תקול'
+    return 'עצירה'
+  }
+
+  if (sorted.length === 4) {
+    if (po === 0 && pt === 'pickup') return 'איסוף תקין'
+    if (po === 1 && pt === 'dropoff') return 'פריקה תקין'
+    if (po === 2 && pt === 'pickup') return 'איסוף תקול'
+    if (po === 3 && pt === 'dropoff') return 'פריקה תקול'
+  }
+
+  if (pt === 'pickup') return 'איסוף'
+  if (pt === 'dropoff') return 'יעד'
+  if (pt === 'exchange') return 'נקודת החלפה'
+  return 'עצירה'
+}
+
 interface EditVehicle {
   id: string
   plateNumber: string
@@ -1366,10 +1406,7 @@ export default function TowDetailsPage() {
                                 : point.point_type === 'stop' ? 'text-gray-600'
                                 : 'text-red-700'
                               }`}>
-                                {point.point_type === 'pickup' ? 'איסוף' 
-                                  : point.point_type === 'exchange' ? 'נקודת החלפה'
-                                  : point.point_type === 'stop' ? 'עצירה'
-                                  : 'פריקה'}
+                                {getRoutePointLabel(point, tow.tow_type, tow.points ?? [])}
                               </div>
                               <div className="text-gray-800 font-medium">{point.address || 'לא צוין'}</div>
                               {point.notes && (
