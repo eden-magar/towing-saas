@@ -242,16 +242,18 @@ export default function StepOnTheWay({
           )}
         </div>
 
-        <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
-          <label className="block text-sm text-gray-500 mb-2 text-right">הערות הגעה (אופציונלי)</label>
-          <textarea
-            value={arrivalNotes}
-            onChange={(e) => setArrivalNotes(e.target.value)}
-            placeholder="הערות לגבי הנקודה..."
-            rows={2}
-            className="w-full p-2 border border-gray-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
-          />
-        </div>
+        {point.point_type !== 'pickup' && point.point_type !== 'dropoff' && (
+          <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+            <label className="block text-sm text-gray-500 mb-2 text-right">הערות הגעה (אופציונלי)</label>
+            <textarea
+              value={arrivalNotes}
+              onChange={(e) => setArrivalNotes(e.target.value)}
+              placeholder="הערות לגבי הנקודה..."
+              rows={2}
+              className="w-full p-2 border border-gray-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+            />
+          </div>
+        )}
       </div>
 
       {/* Bottom Actions - Fixed */}
