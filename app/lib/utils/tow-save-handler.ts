@@ -81,6 +81,9 @@ export interface SaveTowInput {
   selectedLocationSurcharges?: string[]
   locationSurchargesData?: LocationSurcharge[]
   selectedServices?: SelectedService[]
+  /** Exchange: separate lists so service_surcharges can store vehicle_role */
+  workingSelectedServices?: SelectedService[]
+  defectiveSelectedServices?: SelectedService[]
   serviceSurchargesData?: ServiceSurcharge[]
   
   // Additional
@@ -475,6 +478,42 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
   }
   
   return points
+}
+
+function buildExchangeServiceSurchargesBreakdown(
+  workingServices: SelectedService[],
+  defectiveServices: SelectedService[],
+  serviceSurchargesData: ServiceSurcharge[] | undefined
+): PriceBreakdown['service_surcharges'] {
+  const data = serviceSurchargesData ?? []
+  const build = (services: SelectedService[], role: 'working' | 'defective') =>
+    services
+      .map((selected) => {
+        const s = data.find((x) => x.id === selected.id)
+        if (!s) return null
+        let amount = 0
+        let units: number | undefined
+        if (s.price_type === 'manual') {
+          amount = selected.manualPrice || 0
+        } else if (s.price_type === 'per_unit') {
+          units = selected.quantity || 1
+          amount = s.price * units
+        } else {
+          amount = s.price
+        }
+        if (amount <= 0) return null
+        return {
+          id: s.id,
+          label: s.label,
+          price: s.price,
+          units,
+          amount,
+          vehicle_role: role,
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+
+  return [...build(workingServices, 'working'), ...build(defectiveServices, 'defective')]
 }
 
 function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['service_surcharges'] {
@@ -874,9 +913,23 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירת החלפה (exchange)
   if (input.towType === 'exchange') {
-  const priceBreakdown = input.priceMode === 'custom'
-    ? (input.existingPriceBreakdown ?? null)
-    : buildSingleTowPriceBreakdown(input)
+  let priceBreakdown: PriceBreakdown | null =
+    input.priceMode === 'custom'
+      ? (input.existingPriceBreakdown ?? null)
+      : buildSingleTowPriceBreakdown(input)
+
+  const useExchangeServiceRoles =
+    input.workingSelectedServices !== undefined || input.defectiveSelectedServices !== undefined
+  if (priceBreakdown && useExchangeServiceRoles) {
+    priceBreakdown = {
+      ...priceBreakdown,
+      service_surcharges: buildExchangeServiceSurchargesBreakdown(
+        input.workingSelectedServices ?? [],
+        input.defectiveSelectedServices ?? [],
+        input.serviceSurchargesData
+      ),
+    }
+  }
 
   const vehicles: PreparedTowData['vehicles'] = []
 

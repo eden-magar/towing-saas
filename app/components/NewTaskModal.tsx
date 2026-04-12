@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { openWaze } from '@/app/lib/utils/navigation'
 import { useState, useEffect } from 'react'
@@ -107,7 +107,9 @@ export default function NewTaskModal({
     return {
       name: `${v.manufacturer || ''} ${v.model || ''}`.trim() || 'רכב',
       plate: v.plate_number || '',
-      color: v.color || ''
+      color: v.color || '',
+      vehicle_code: v.vehicle_code || undefined,
+      is_working: v.is_working
     }
   }
 
@@ -229,9 +231,20 @@ const handleAccept = async () => {
                 </div>
                 <div className="flex-1">
                   <div className="font-bold text-gray-800">{vehicle.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {vehicle.plate}
-                    {vehicle.color && ` • ${vehicle.color}`}
+                  <div className="text-sm text-gray-500 flex flex-wrap items-center gap-1.5">
+                    <span>{vehicle.plate}</span>
+                    {vehicle.vehicle_code && <span className="text-xs text-gray-400"> #{vehicle.vehicle_code}</span>}
+                    {vehicle.is_working === true && (
+                      <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
+                        תקין
+                      </span>
+                    )}
+                    {vehicle.is_working === false && (
+                      <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-md font-medium">
+                        תקול
+                      </span>
+                    )}
+                    {vehicle.color && <span>• {vehicle.color}</span>}
                   </div>
                 </div>
               </div>

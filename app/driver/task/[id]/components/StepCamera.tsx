@@ -366,7 +366,20 @@ export default function StepCamera({
               
               {/* Vehicle indicator */}
               <div className="bg-black/50 px-4 py-2 rounded-full text-center">
-                <p className="text-white text-xs">{currentVehicle?.plate_number}</p>
+                <p className="text-white text-xs flex flex-wrap items-center justify-center gap-1.5">
+                  <span>{currentVehicle?.plate_number}</span>
+                  {currentVehicle?.vehicle_code && <span className="text-xs text-gray-400"> #{currentVehicle.vehicle_code}</span>}
+                  {currentVehicle?.is_working === true && (
+                    <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
+                      תקין
+                    </span>
+                  )}
+                  {currentVehicle?.is_working === false && (
+                    <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-md font-medium">
+                      תקול
+                    </span>
+                  )}
+                </p>
                 <p className="text-white font-bold">{currentImages.length}/{minPhotosPerVehicle}</p>
               </div>
               
@@ -488,7 +501,20 @@ export default function StepCamera({
                   <Car size={24} className="text-slate-400" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-white">{currentVehicle?.plate_number}</p>
+                  <p className="font-bold text-white flex flex-wrap items-center gap-1.5">
+                    <span>{currentVehicle?.plate_number}</span>
+                    {currentVehicle?.vehicle_code && <span className="text-xs text-gray-400"> #{currentVehicle.vehicle_code}</span>}
+                    {currentVehicle?.is_working === true && (
+                      <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
+                        תקין
+                      </span>
+                    )}
+                    {currentVehicle?.is_working === false && (
+                      <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-md font-medium">
+                        תקול
+                      </span>
+                    )}
+                  </p>
                   <p className="text-gray-400 text-sm">{currentVehicle?.manufacturer} {currentVehicle?.model}</p>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-sm font-bold ${

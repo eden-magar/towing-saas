@@ -186,11 +186,12 @@ export default function DriverHomePage() {
   }
 
   const getVehicleInfo = (task: DriverTask) => {
-  if (task.vehicles.length === 0) return { name: 'אין פרטי רכב', plate: '' }
+  if (task.vehicles.length === 0) return { name: 'אין פרטי רכב', plate: '', vehicleCode: '' }
   const v = task.vehicles[0]
   return {
     name: `${v.manufacturer || ''} ${v.model || ''}`.trim() || 'רכב',
-    plate: v.plate_number || ''
+    plate: v.plate_number || '',
+    vehicleCode: v.vehicle_code || ''
   }
 }
 
@@ -528,6 +529,9 @@ export default function DriverHomePage() {
                     {getVehicleInfo(currentTask).plate && (
                       <span className="bg-white/20 text-xs font-mono px-2 py-0.5 rounded">
                         {getVehicleInfo(currentTask).plate}
+                        {getVehicleInfo(currentTask).vehicleCode && (
+                          <span className="text-xs text-gray-400"> #{getVehicleInfo(currentTask).vehicleCode}</span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -635,6 +639,9 @@ export default function DriverHomePage() {
                           {getVehicleInfo(task).plate && (
                             <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-mono px-2 py-0.5 rounded mt-1">
                               {getVehicleInfo(task).plate}
+                              {getVehicleInfo(task).vehicleCode && (
+                                <span className="text-xs text-gray-400"> #{getVehicleInfo(task).vehicleCode}</span>
+                              )}
                             </span>
                           )}
                         </div>

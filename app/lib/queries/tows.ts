@@ -12,7 +12,14 @@ export interface PriceBreakdown {
   distance_price: number
   time_surcharges: { id: string; label: string; percent: number; amount: number }[]
   location_surcharges: { id: string; label: string; percent: number; amount: number }[]
-  service_surcharges: { id: string; label: string; price: number; units?: number; amount: number }[]
+  service_surcharges: {
+    id: string
+    label: string
+    price: number
+    units?: number
+    amount: number
+    vehicle_role?: 'working' | 'defective'
+  }[]
   subtotal: number
   discount_percent: number
   discount_amount: number

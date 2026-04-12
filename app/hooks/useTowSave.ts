@@ -341,6 +341,8 @@ export function useTowSave(params: UseTowSaveParams) {
       defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
       defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContactName : undefined,
       defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
+      workingSelectedServices: towType === 'exchange' ? workingSelectedServices : undefined,
+      defectiveSelectedServices: towType === 'exchange' ? defectiveSelectedServices : undefined,
       existingPriceBreakdown: originalTow?.price_breakdown ?? null,
     })
 

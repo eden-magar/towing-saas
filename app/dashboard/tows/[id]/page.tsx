@@ -1705,6 +1705,14 @@ export default function TowDetailsPage() {
                         </span>
                       </div>
                     )}
+                    {Number((tow as { cash_collected?: number | null }).cash_collected) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">מזומן שנגבה</span>
+                        <span className="font-medium text-green-700">
+                          ₪{(tow as { cash_collected?: number | null }).cash_collected}
+                        </span>
+                      </div>
+                    )}
                     {tow.invoice_name && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">שם לחשבונית</span>

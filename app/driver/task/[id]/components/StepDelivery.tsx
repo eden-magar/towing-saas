@@ -15,6 +15,7 @@ interface StepDeliveryProps {
   onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
   isLastPoint: boolean
   finalPrice?: number | null
+  dropoffToStorage?: boolean
 }
 
 export default function StepDelivery({
@@ -22,7 +23,8 @@ export default function StepDelivery({
   customer,
   onComplete,
   isLastPoint,
-  finalPrice
+  finalPrice,
+  dropoffToStorage
 }: StepDeliveryProps) {
   const [recipientName, setRecipientName] = useState('')
   const [recipientPhone, setRecipientPhone] = useState('')
@@ -103,6 +105,14 @@ export default function StepDelivery({
 
       {/* Content Card */}
       <div className="flex-1 bg-white rounded-t-3xl px-5 pt-6 pb-40">
+        {dropoffToStorage && (
+          <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center gap-2">
+            <span>🏪</span>
+            <p className="text-sm font-medium text-indigo-700">
+              הרכב מיועד לאחסנה — יש לגרור לחניון הבסיס
+            </p>
+          </div>
+        )}
         {isLastPoint && (
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4">
             {finalPrice != null && (

@@ -98,18 +98,70 @@ export default function StepOnTheWay({
         <p className="text-white/80">{subtitle}</p>
       </div>
 
-      {priceBreakdown?.service_surcharges?.length > 0 && (
-        <div className="mx-4 mb-3 p-2 bg-blue-50 rounded-xl flex flex-wrap gap-1">
-          {priceBreakdown.service_surcharges.map((s: any) => (
-            <span
-              key={s.id}
-              className="text-xs bg-white border border-blue-200 text-blue-600 px-2 py-0.5 rounded-md"
-            >
-              {s.label}
-            </span>
-          ))}
-        </div>
-      )}
+      {(() => {
+        const surcharges = priceBreakdown?.service_surcharges ?? []
+        const hasVehicleRoles = surcharges.some(
+          (s: { vehicle_role?: string }) =>
+            s.vehicle_role === 'working' || s.vehicle_role === 'defective'
+        )
+        const workingServices = surcharges.filter(
+          (s: { vehicle_role?: string }) => s.vehicle_role === 'working'
+        )
+        const defectiveServices = surcharges.filter(
+          (s: { vehicle_role?: string }) => s.vehicle_role === 'defective'
+        )
+        if (hasVehicleRoles) {
+          return (
+            <>
+              {workingServices.length > 0 && (
+                <div className="mx-4 mb-2 p-2 bg-blue-50 rounded-xl">
+                  <p className="text-xs text-green-600 font-medium mb-1">שירותים — תקין</p>
+                  <div className="flex flex-wrap gap-1">
+                    {workingServices.map((s: any) => (
+                      <span
+                        key={`${s.id}-working`}
+                        className="text-xs bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-md"
+                      >
+                        {s.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {defectiveServices.length > 0 && (
+                <div className="mx-4 mb-3 p-2 bg-blue-50 rounded-xl">
+                  <p className="text-xs text-orange-600 font-medium mb-1">שירותים — תקול</p>
+                  <div className="flex flex-wrap gap-1">
+                    {defectiveServices.map((s: any) => (
+                      <span
+                        key={`${s.id}-defective`}
+                        className="text-xs bg-white border border-orange-200 text-orange-700 px-2 py-0.5 rounded-md"
+                      >
+                        {s.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )
+        }
+        if (surcharges.length > 0) {
+          return (
+            <div className="mx-4 mb-3 p-2 bg-blue-50 rounded-xl flex flex-wrap gap-1">
+              {surcharges.map((s: any) => (
+                <span
+                  key={s.id}
+                  className="text-xs bg-white border border-blue-200 text-blue-600 px-2 py-0.5 rounded-md"
+                >
+                  {s.label}
+                </span>
+              ))}
+            </div>
+          )
+        }
+        return null
+      })()}
 
       {/* Content Card */}
       <div className="flex-1 bg-gray-50 rounded-t-3xl px-5 pt-6 pb-4">
@@ -119,7 +171,20 @@ export default function StepOnTheWay({
               <div key={v.id || idx} className="bg-white rounded-xl p-3 shadow-sm flex items-start gap-2">
                 <Car size={16} className="text-gray-400 shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <span className="text-sm font-medium text-gray-700 font-mono">{v.plate_number}</span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-medium text-gray-700 font-mono">{v.plate_number}</span>
+                    {v.vehicle_code && <span className="text-xs text-gray-400"> #{v.vehicle_code}</span>}
+                    {v.is_working === true && (
+                      <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
+                        תקין
+                      </span>
+                    )}
+                    {v.is_working === false && (
+                      <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-md font-medium">
+                        תקול
+                      </span>
+                    )}
+                  </div>
                   {v.tow_reason && !v.is_working && (
                     <div className="text-xs text-orange-600 mt-1">
                       {'\uD83D\uDD27'} תקלות: {v.tow_reason}

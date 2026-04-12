@@ -6,6 +6,7 @@ import { DriverStatus } from '../types'
 export interface DriverTaskVehicle {
   id: string
   plate_number: string
+  vehicle_code?: string | null
   manufacturer: string | null
   model: string | null
   year: number | null

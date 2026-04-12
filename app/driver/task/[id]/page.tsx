@@ -430,6 +430,12 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
       {/* תוכן לפי השלב */}
       <div className="pt-16 h-full overflow-auto">
+        {task.notes && (
+          <div className="mx-4 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-xs font-medium text-amber-600 mb-1">📋 הערות דיספצ&apos;ר</p>
+            <p className="text-sm text-amber-800">{task.notes}</p>
+          </div>
+        )}
         {pointStep === 'on_the_way' && currentPoint && (
           <StepOnTheWay
             point={currentPoint}
@@ -470,6 +476,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             onComplete={handleDeliveryComplete}
             isLastPoint={currentPointIndex + 1 >= totalPoints}
             finalPrice={task.final_price}
+            dropoffToStorage={!!task.dropoff_to_storage && currentPointIndex + 1 >= totalPoints}
           />
         )}
       </div>
