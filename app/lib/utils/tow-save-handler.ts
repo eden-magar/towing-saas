@@ -977,71 +977,141 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   const points: PreparedTowPoint[] = []
 
-  // נקודה 1 — איסוף התקין
-  if (input.workingVehicleSourceAddress?.address) {
-    points.push({
-      point_order: 0,
-      point_type: 'pickup',
-      address: input.workingVehicleSourceAddress.address,
-      lat: input.workingVehicleSourceAddress.lat || null,
-      lng: input.workingVehicleSourceAddress.lng || null,
-      contact_name: input.workingVehicleContactName || null,
-      contact_phone: input.workingVehicleContactPhone || null,
-      notes: null,
-      vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
-    })
-  }
-
-  // נקודה 2 — נקודת החלפה
-  if (input.exchangePointAddress?.address) {
-    points.push({
-      point_order: 1,
-      point_type: 'exchange',
-      address: input.exchangePointAddress.address,
-      lat: input.exchangePointAddress.lat || null,
-      lng: input.exchangePointAddress.lng || null,
-      contact_name: input.exchangeContactName || null,
-      contact_phone: input.exchangeContactPhone || null,
-      notes: null,
-      vehicleIndices: [
-        ...(workingIdx >= 0 ? [workingIdx] : []),
-        ...(defectiveIdx >= 0 ? [defectiveIdx] : [])
-      ]
-    })
-  }
-
-  // נקודה 3 — יעד התקול
-  if (input.defectiveDestinationAddress?.address) {
-    points.push({
-      point_order: 2,
-      point_type: 'dropoff',
-      address: input.defectiveDestinationAddress.address,
-      lat: input.defectiveDestinationAddress.lat || null,
-      lng: input.defectiveDestinationAddress.lng || null,
-      contact_name: input.defectiveDestinationContactName || null,
-      contact_phone: input.defectiveDestinationContactPhone || null,
-      notes: null,
-      vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
-    })
-  }
-
-  // נקודה 4 — יעד רכב תקין
-  if (
+  const isFourPointFlow = !!(
     input.workingVehicleDestinationAddress?.address &&
     input.workingVehicleDestinationAddress.address !== input.exchangePointAddress?.address
-  ) {
-    points.push({
-      point_order: 3,
-      point_type: 'dropoff',
-      address: input.workingVehicleDestinationAddress.address,
-      lat: input.workingVehicleDestinationAddress.lat || null,
-      lng: input.workingVehicleDestinationAddress.lng || null,
-      contact_name: input.workingDestinationContactName || null,
-      contact_phone: input.workingDestinationContactPhone || null,
-      notes: null,
-      vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
-    })
+  )
+
+  if (isFourPointFlow) {
+    // 4-point flow: pickup תקין → dropoff תקין → pickup תקול → dropoff תקול
+
+    // Point 0: איסו�� תקין
+    if (input.workingVehicleSourceAddress?.address) {
+      points.push({
+        point_order: 0,
+        point_type: 'pickup',
+        address: input.workingVehicleSourceAddress.address,
+        lat: input.workingVehicleSourceAddress.lat || null,
+        lng: input.workingVehicleSourceAddress.lng || null,
+        contact_name: input.workingVehicleContactName || null,
+        contact_phone: input.workingVehicleContactPhone || null,
+        notes: null,
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+      })
+    }
+
+    // Point 1: הורדת תקין
+    if (input.workingVehicleDestinationAddress?.address) {
+      points.push({
+        point_order: 1,
+        point_type: 'dropoff',
+        address: input.workingVehicleDestinationAddress.address,
+        lat: input.workingVehicleDestinationAddress.lat || null,
+        lng: input.workingVehicleDestinationAddress.lng || null,
+        contact_name: input.workingDestinationContactName || null,
+        contact_phone: input.workingDestinationContactPhone || null,
+        notes: null,
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+      })
+    }
+
+    // Point 2: איסו�� תקול
+    if (input.exchangePointAddress?.address) {
+      points.push({
+        point_order: 2,
+        point_type: 'pickup',
+        address: input.exchangePointAddress.address,
+        lat: input.exchangePointAddress.lat || null,
+        lng: input.exchangePointAddress.lng || null,
+        contact_name: input.exchangeContactName || null,
+        contact_phone: input.exchangeContactPhone || null,
+        notes: null,
+        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+      })
+    }
+
+    // Point 3: הורדת תקול
+    if (input.defectiveDestinationAddress?.address) {
+      points.push({
+        point_order: 3,
+        point_type: 'dropoff',
+        address: input.defectiveDestinationAddress.address,
+        lat: input.defectiveDestinationAddress.lat || null,
+        lng: input.defectiveDestinationAddress.lng || null,
+        contact_name: input.defectiveDestinationContactName || null,
+        contact_phone: input.defectiveDestinationContactPhone || null,
+        notes: null,
+        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+      })
+    }
+  } else {
+    // נקודה 1 — איסוף התקין
+    if (input.workingVehicleSourceAddress?.address) {
+      points.push({
+        point_order: 0,
+        point_type: 'pickup',
+        address: input.workingVehicleSourceAddress.address,
+        lat: input.workingVehicleSourceAddress.lat || null,
+        lng: input.workingVehicleSourceAddress.lng || null,
+        contact_name: input.workingVehicleContactName || null,
+        contact_phone: input.workingVehicleContactPhone || null,
+        notes: null,
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+      })
+    }
+
+    // נקודה 2 — נקודת החלפה
+    if (input.exchangePointAddress?.address) {
+      points.push({
+        point_order: 1,
+        point_type: 'exchange',
+        address: input.exchangePointAddress.address,
+        lat: input.exchangePointAddress.lat || null,
+        lng: input.exchangePointAddress.lng || null,
+        contact_name: input.exchangeContactName || null,
+        contact_phone: input.exchangeContactPhone || null,
+        notes: null,
+        vehicleIndices: [
+          ...(workingIdx >= 0 ? [workingIdx] : []),
+          ...(defectiveIdx >= 0 ? [defectiveIdx] : [])
+        ]
+      })
+    }
+
+    // נקודה 3 — יעד התקול
+    if (input.defectiveDestinationAddress?.address) {
+      points.push({
+        point_order: 2,
+        point_type: 'dropoff',
+        address: input.defectiveDestinationAddress.address,
+        lat: input.defectiveDestinationAddress.lat || null,
+        lng: input.defectiveDestinationAddress.lng || null,
+        contact_name: input.defectiveDestinationContactName || null,
+        contact_phone: input.defectiveDestinationContactPhone || null,
+        notes: null,
+        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+      })
+    }
+
+    // נקודה 4 — יעד רכב תקין
+    if (
+      input.workingVehicleDestinationAddress?.address &&
+      input.workingVehicleDestinationAddress.address !== input.exchangePointAddress?.address
+    ) {
+      points.push({
+        point_order: 3,
+        point_type: 'dropoff',
+        address: input.workingVehicleDestinationAddress.address,
+        lat: input.workingVehicleDestinationAddress.lat || null,
+        lng: input.workingVehicleDestinationAddress.lng || null,
+        contact_name: input.workingDestinationContactName || null,
+        contact_phone: input.workingDestinationContactPhone || null,
+        notes: null,
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+      })
+    }
   }
+
 
   const legs: PreparedTowData['legs'] = [{
     legType: 'pickup',
