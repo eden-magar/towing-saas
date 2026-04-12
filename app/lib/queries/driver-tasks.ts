@@ -115,6 +115,7 @@ export interface TowStatusHistoryEntry {
 
 export interface TaskDetailFull {
   id: string
+  company_id: string
   order_number: string | null
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
@@ -421,6 +422,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     .from('tows')
     .select(`
       id,
+      company_id,
       order_number,
       status,
       tow_type,
@@ -491,6 +493,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
 
   return {
     id: tow.id,
+    company_id: tow.company_id,
     order_number: tow.order_number,
     status: tow.status,
     tow_type: tow.tow_type,

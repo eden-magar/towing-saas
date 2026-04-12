@@ -241,8 +241,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           if (lastVehicle?.plate_number) {
             try {
               await addVehicleToStorage({
-                companyId: task.customer?.id ? 
-                  (task as any).company_id : '',
+                companyId: task.company_id || '',
                 customerId: task.customer?.id || undefined,
                 plateNumber: lastVehicle.plate_number,
                 vehicleData: lastVehicle.manufacturer ? {
@@ -253,7 +252,8 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
                 towId: task.id,
                 performedBy: user.id,
                 notes: 'נכנס מגרירה',
-                vehicleCondition: 'operational',
+                vehicleCondition: lastVehicle.tow_reason ? 'faulty' : 'operational',
+                vehicleCode: lastVehicle.vehicle_code || undefined,
               })
             } catch (e) {
               console.error('Storage error:', e)
