@@ -112,6 +112,7 @@ export default function TowDetailsPage() {
   const towId = params.id as string
   
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tow, setTow] = useState<TowWithDetails | null>(null)
@@ -209,7 +210,7 @@ export default function TowDetailsPage() {
   // טעינת נתונים
   useEffect(() => {
     if (companyId && towId) {
-      loadData()
+      loadData(true)
     }
   }, [companyId, towId])
 
@@ -224,19 +225,19 @@ export default function TowDetailsPage() {
         schema: 'public',
         table: 'tow_points',
         filter: `tow_id=eq.${towId}`
-      }, () => loadData())
+      }, () => loadData(false))
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'tow_images',
         filter: `tow_id=eq.${towId}`
-      }, () => loadData())
+      }, () => loadData(false))
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'tows',
         filter: `id=eq.${towId}`
-      }, () => loadData())
+      }, () => loadData(false))
       .subscribe()
 
     return () => {
@@ -244,9 +245,10 @@ export default function TowDetailsPage() {
     }
   }, [towId])
 
-  const loadData = async () => {
+  const loadData = async (isInitial = false) => {
     if (!companyId) return
-    setLoading(true)
+    if (isInitial) setLoading(true)
+    else setIsRefreshing(true)
     try {
       const [towData, driversData, trucksData, customersData, serviceSurcharges, basePriceListData, timeSurchargesDataResult] = await Promise.all([
         getTowWithPoints(towId),
@@ -278,7 +280,8 @@ export default function TowDetailsPage() {
       console.error('Error loading tow:', err)
       setError('שגיאה בטעינת הגרירה')
     } finally {
-      setLoading(false)
+      if (isInitial) setLoading(false)
+      else setIsRefreshing(false)
     }
   }
 
@@ -842,6 +845,11 @@ export default function TowDetailsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {isRefreshing && (
+        <div className="fixed top-4 left-4 z-50">
+          <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" />
+        </div>
+      )}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex justify-between items-center h-14 sm:h-16">
