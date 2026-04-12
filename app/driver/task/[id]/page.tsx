@@ -139,6 +139,14 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     const filtered = (task?.vehicles || []).filter((v: any) => pointVehicleIds.includes(v.id))
     return filtered.length > 0 ? filtered : task?.vehicles || []
   })()
+
+  const cameraVehicles =
+    pointStep === 'camera' && currentPoint?.point_type === 'exchange'
+      ? currentPointVehicles.filter((v: any) => !v.is_working)
+      : pointStep === 'camera_after' && currentPoint?.point_type === 'exchange'
+        ? currentPointVehicles.filter((v: any) => v.is_working)
+        : currentPointVehicles
+
   const totalPoints = task?.points.length || 0
 
   // הגעתי לנקודה
@@ -429,7 +437,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           <StepCamera
             towId={task.id}
             point={currentPoint}
-            vehicles={currentPointVehicles}
+            vehicles={cameraVehicles}
             userId={user?.id || ''}
             onComplete={handleCameraComplete}
           />
@@ -439,7 +447,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           <StepCamera
             towId={task.id}
             point={currentPoint}
-            vehicles={currentPointVehicles}
+            vehicles={cameraVehicles}
             userId={user?.id || ''}
             onComplete={handleCameraAfterComplete}
             isAfterDelivery={true}

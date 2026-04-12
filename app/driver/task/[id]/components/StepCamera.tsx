@@ -440,7 +440,13 @@ export default function StepCamera({
         <>
           <div className="px-5 pt-1 pb-2 text-white text-center">
             <h1 className="text-lg font-bold">
-              {isAfterDelivery ? 'צלם לאחר הפריקה' : 'צלם את הרכבים'}
+              {isExchange
+                ? isAfterDelivery
+                  ? 'צלם רכב תקין לאחר הפריקה'
+                  : 'צלם רכב תקול לפני העמסה'
+                : isAfterDelivery
+                  ? 'צלם לאחר הפריקה'
+                  : 'צלם את הרכבים'}
             </h1>
           </div>
 
