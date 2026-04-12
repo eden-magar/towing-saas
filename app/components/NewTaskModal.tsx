@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { openWaze } from '@/app/lib/utils/navigation'
 import { useState, useEffect } from 'react'
@@ -337,6 +337,23 @@ const handleAccept = async () => {
                 </>
               )}
             </div>
+
+            {/* שירותים נוספים */}
+            {task.price_breakdown?.service_surcharges?.length > 0 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-xs font-medium text-blue-700 mb-2">⚙️ שירותים נוספים</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {task.price_breakdown.service_surcharges.map((s: any) => (
+                    <span
+                      key={s.id}
+                      className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded-lg"
+                    >
+                      {s.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Notes */}
             {task.notes && (

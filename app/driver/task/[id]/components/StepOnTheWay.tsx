@@ -2,7 +2,7 @@
 
 import { openWaze } from '@/app/lib/utils/navigation'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   MapPin, 
   Phone, 
@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
-import { DriverTaskPoint, DriverTaskVehicle } from '@/app/lib/queries/driver-tasks'
+import { DriverTaskPoint, DriverTaskVehicle, getTaskDetail, type TaskDetailFull } from '@/app/lib/queries/driver-tasks'
 
 interface StepOnTheWayProps {
   point: DriverTaskPoint
@@ -38,6 +38,19 @@ export default function StepOnTheWay({
   const [loading, setLoading] = useState(false)
   const [showRoute, setShowRoute] = useState(false)
   const [arrivalNotes, setArrivalNotes] = useState('')
+  const [priceBreakdown, setPriceBreakdown] = useState<any>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getTaskDetail(taskId).then((detail: TaskDetailFull | null) => {
+      if (!cancelled && detail?.price_breakdown) {
+        setPriceBreakdown(detail.price_breakdown)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [taskId])
 
   const isPickup = point.point_type === 'pickup'
   const isExchange = point.point_type === 'exchange'
@@ -85,15 +98,35 @@ export default function StepOnTheWay({
         <p className="text-white/80">{subtitle}</p>
       </div>
 
+      {priceBreakdown?.service_surcharges?.length > 0 && (
+        <div className="mx-4 mb-3 p-2 bg-blue-50 rounded-xl flex flex-wrap gap-1">
+          {priceBreakdown.service_surcharges.map((s: any) => (
+            <span
+              key={s.id}
+              className="text-xs bg-white border border-blue-200 text-blue-600 px-2 py-0.5 rounded-md"
+            >
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Content Card */}
       <div className="flex-1 bg-gray-50 rounded-t-3xl px-5 pt-6 pb-4">
         {vehicles.length > 0 && (
-          <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center gap-2 flex-wrap">
-            <Car size={16} className="text-gray-400 shrink-0" />
+          <div className="space-y-2 mb-3">
             {vehicles.map((v, idx) => (
-              <span key={v.id || idx} className="text-sm font-medium text-gray-700 font-mono">
-                {v.plate_number}{idx < vehicles.length - 1 ? ',' : ''}
-              </span>
+              <div key={v.id || idx} className="bg-white rounded-xl p-3 shadow-sm flex items-start gap-2">
+                <Car size={16} className="text-gray-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-gray-700 font-mono">{v.plate_number}</span>
+                  {v.tow_reason && !v.is_working && (
+                    <div className="text-xs text-orange-600 mt-1">
+                      {'\uD83D\uDD27'} תקלות: {v.tow_reason}
+                    </div>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}

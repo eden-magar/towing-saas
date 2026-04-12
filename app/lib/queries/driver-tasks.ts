@@ -69,6 +69,7 @@ export interface DriverTask {
   vehicles: DriverTaskVehicle[]
   legs: DriverTaskLeg[]
   points: DriverTaskPoint[]
+  price_breakdown?: any
 }
 
 export interface DriverInfo {
@@ -140,6 +141,7 @@ export interface TaskDetailFull {
   legs: DriverTaskLeg[]
   points: DriverTaskPoint[]
   images: TowImage[]
+  price_breakdown?: any
 }
 
 // ==================== שליפת פרטי נהג ====================
@@ -237,6 +239,7 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
       scheduled_at,
       notes,
       created_at,
+      price_breakdown,
       customer:customers (
         id,
         name,
@@ -427,6 +430,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
       completed_at,
       created_at,
       dropoff_to_storage,
+      price_breakdown,
       customer:customers (
         id,
         name,
@@ -496,6 +500,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     completed_at: tow.completed_at,
     created_at: tow.created_at,
     dropoff_to_storage: tow.dropoff_to_storage,
+    price_breakdown: (tow as any).price_breakdown ?? undefined,
     customer: tow.customer as any,
     truck: tow.truck as any,
     vehicles: vehicles || [],

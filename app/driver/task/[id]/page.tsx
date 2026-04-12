@@ -173,10 +173,18 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // סיום צילום - עובר לשלב סיום
   const handleCameraComplete = async () => {
-    setPointStep('delivery')
+    if (currentPoint?.point_type === 'exchange') {
+      setPointStep('camera_after')
+    } else {
+      setPointStep('delivery')
+    }
   }
 
   const handleCameraAfterComplete = async () => {
+    if (currentPoint?.point_type === 'exchange') {
+      setPointStep('delivery')
+      return
+    }
     if (!pendingDeliveryData) {
       setPointStep('delivery')
       return
@@ -192,15 +200,16 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // סיום פרטי מסירה/הערות
   const handleDeliveryComplete = async (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => {
+    if (currentPoint?.point_type === 'exchange') {
+      await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
+      return
+    }
     if (currentPoint?.point_type === 'stop') {
       await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
     } else if (currentPoint?.point_type === 'dropoff') {
       await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
     } else if (currentPoint?.point_type === 'pickup') {
       await completeCurrentPoint(recipientName, recipientPhone, notes, cashCollected)
-    } else {
-      setPendingDeliveryData({ recipientName, recipientPhone, notes, cashCollected })
-      setPointStep('camera_after')
     }
   }
 

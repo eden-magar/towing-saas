@@ -1372,7 +1372,26 @@ export default function TowDetailsPage() {
                                   : 'פריקה'}
                               </div>
                               <div className="text-gray-800 font-medium">{point.address || 'לא צוין'}</div>
-                              
+                              {point.notes && (
+                                <div className="text-xs text-gray-500 italic mt-1">{point.notes}</div>
+                              )}
+                              {(point.recipient_name || point.recipient_phone) && (
+                                <div className="text-xs text-gray-600 mt-1">
+                                  נמסר ל: {point.recipient_name || '—'}
+                                  {point.recipient_phone ? ` ${point.recipient_phone}` : ''}
+                                </div>
+                              )}
+                              {(point.arrived_at || point.completed_at) && (
+                                <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                                  {point.arrived_at && (
+                                    <span>הגעה: {new Date(point.arrived_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                  )}
+                                  {point.completed_at && (
+                                    <span>סיום: {new Date(point.completed_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                                  )}
+                                </div>
+                              )}
+
                               {/* רכבים בנקודה */}
                               {point.vehicles && point.vehicles.length > 0 && (
                                 <div className="text-sm text-gray-500 mt-1">
@@ -1398,28 +1417,14 @@ export default function TowDetailsPage() {
 
                               {/* סטטוס נקודה */}
                               {point.status && point.status !== 'pending' && (
-                                <div className="mt-2 pt-2 border-t border-gray-200/50 space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                      point.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                                      point.status === 'arrived' ? 'bg-blue-100 text-blue-700' :
-                                      'bg-gray-100 text-gray-600'
-                                    }`}>
-                                      {point.status === 'completed' ? 'הושלם' : point.status === 'arrived' ? 'הנהג הגיע' : point.status}
-                                    </span>
-                                    {point.arrived_at && (
-                                      <span className="text-xs text-gray-400">הגעה: {new Date(point.arrived_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    )}
-                                    {point.completed_at && (
-                                      <span className="text-xs text-gray-400">סיום: {new Date(point.completed_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    )}
-                                  </div>
-                                  {point.recipient_name && (
-                                    <div className="text-sm text-gray-500">מקבל: {point.recipient_name} {point.recipient_phone && `(${point.recipient_phone})`}</div>
-                                  )}
-                                  {point.notes && (
-                                    <div className="text-sm text-gray-500">הערות: {point.notes}</div>
-                                  )}
+                                <div className="mt-2 pt-2 border-t border-gray-200/50">
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    point.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                    point.status === 'arrived' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {point.status === 'completed' ? 'הושלם' : point.status === 'arrived' ? 'הנהג הגיע' : point.status}
+                                  </span>
                                 </div>
                               )}
 
