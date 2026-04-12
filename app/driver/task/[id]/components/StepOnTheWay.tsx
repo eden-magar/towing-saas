@@ -174,6 +174,7 @@ export default function StepOnTheWay({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-sm font-medium text-gray-700 font-mono">{v.plate_number}</span>
                     {v.vehicle_code && <span className="text-xs text-gray-400"> #{v.vehicle_code}</span>}
+                    {v.color && <span className="text-xs text-gray-400">• {v.color}</span>}
                     {v.is_working === true && (
                       <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
                         תקין

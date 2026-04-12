@@ -516,6 +516,7 @@ export default function StepCamera({
                     )}
                   </p>
                   <p className="text-gray-400 text-sm">{currentVehicle?.manufacturer} {currentVehicle?.model}</p>
+                  {currentVehicle?.color && <span className="text-xs text-gray-400">{currentVehicle.color}</span>}
                 </div>
                 <div className={`px-3 py-1 rounded-full text-sm font-bold ${
                   currentImages.length >= minPhotosPerVehicle 
