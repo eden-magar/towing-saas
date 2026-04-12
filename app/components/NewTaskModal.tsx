@@ -223,38 +223,37 @@ const handleAccept = async () => {
               </span>
             </div>
 
-            {/* Vehicle Card */}
-            <div className="bg-gray-50 rounded-2xl p-4 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Car className="w-6 h-6 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold text-gray-800">{vehicle.name}</div>
-                  <div className="text-sm text-gray-500 flex flex-wrap items-center gap-1.5">
-                    <span>{vehicle.plate}</span>
-                    {vehicle.vehicle_code && <span className="text-xs text-gray-400"> #{vehicle.vehicle_code}</span>}
-                    {vehicle.is_working === true && (
-                      <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
-                        תקין
-                      </span>
-                    )}
-                    {vehicle.is_working === false && (
-                      <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-md font-medium">
-                        תקול
-                      </span>
-                    )}
-                    {vehicle.color && <span>• {vehicle.color}</span>}
+            {/* Vehicle Cards */}
+            {task.vehicles.map((v: any, idx: number) => (
+              <div key={v.id || idx} className="bg-gray-50 rounded-2xl p-4 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <Car className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-gray-800">
+                      {`${v.manufacturer || ''} ${v.model || ''}`.trim() || 'רכב'}
+                    </div>
+                    <div className="text-sm text-gray-500 flex flex-wrap items-center gap-1.5">
+                      <span>{v.plate_number}</span>
+                      {v.vehicle_code && <span className="text-xs text-gray-400">#{v.vehicle_code}</span>}
+                      {v.is_working === true && (
+                        <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md">תקין</span>
+                      )}
+                      {v.is_working === false && (
+                        <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-md">תקול</span>
+                      )}
+                      {v.color && <span>• {v.color}</span>}
+                    </div>
                   </div>
                 </div>
+                {v.tow_reason && (
+                  <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-orange-600">
+                    🔧 {v.tow_reason}
+                  </div>
+                )}
               </div>
-              {task.vehicles[0]?.tow_reason && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <div className="text-sm text-gray-500">סיבת גרירה:</div>
-                  <div className="text-sm font-medium text-gray-700">{task.vehicles[0].tow_reason}</div>
-                </div>
-              )}
-            </div>
+            ))}
 
             {/* Route Points */}
             <div className="space-y-3 mb-4">
@@ -352,11 +351,15 @@ const handleAccept = async () => {
             </div>
 
             {/* שירותים נוספים */}
-            {task.price_breakdown?.service_surcharges?.length > 0 && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                <p className="text-xs font-medium text-blue-700 mb-2">⚙️ שירותים נוספים</p>
+            {task.price_breakdown?.service_surcharges?.length > 0 && (() => {
+              const allServices = task.price_breakdown.service_surcharges
+              const workingServices = allServices.filter((s: any) => s.vehicle_role === 'working')
+              const defectiveServices = allServices.filter((s: any) => s.vehicle_role === 'defective')
+              const globalServices = allServices.filter((s: any) => !s.vehicle_role)
+
+              const ServiceChips = ({ services }: { services: any[] }) => (
                 <div className="flex flex-wrap gap-1.5">
-                  {task.price_breakdown.service_surcharges.map((s: any) => (
+                  {services.map((s: any) => (
                     <span
                       key={s.id}
                       className="text-xs bg-white border border-blue-200 text-blue-700 px-2 py-0.5 rounded-lg"
@@ -365,8 +368,27 @@ const handleAccept = async () => {
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
+              )
+
+              return (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-xs font-medium text-blue-700 mb-2">⚙️ שירותים נוספים</p>
+                  {workingServices.length > 0 && (
+                    <div className="mb-1.5">
+                      <p className="text-xs text-green-600 mb-1">תקין:</p>
+                      <ServiceChips services={workingServices} />
+                    </div>
+                  )}
+                  {defectiveServices.length > 0 && (
+                    <div className="mb-1.5">
+                      <p className="text-xs text-orange-600 mb-1">תקול:</p>
+                      <ServiceChips services={defectiveServices} />
+                    </div>
+                  )}
+                  {globalServices.length > 0 && <ServiceChips services={globalServices} />}
+                </div>
+              )
+            })()}
 
             {/* Notes */}
             {task.notes && (
