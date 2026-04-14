@@ -100,6 +100,7 @@ export async function searchStoredVehicle(
     `)
     .eq('company_id', companyId)
     .eq('plate_number', plateNumber)
+    .eq('current_status', 'stored')
     .maybeSingle()
 
   if (error) {
