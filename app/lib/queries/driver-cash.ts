@@ -21,7 +21,8 @@ export async function getDriverCashBalance(driverId: string): Promise<number> {
   for (const tx of data) {
     if (tx.type === 'collection') {
       balance += Number(tx.amount)
-    } else if (tx.type === 'approval') {
+    }
+    if (tx.type === 'transfer' || tx.type === 'approval') {
       balance -= Number(tx.amount)
     }
   }
@@ -86,6 +87,11 @@ export async function createCashTransfer(
   createdBy: string,
   notes?: string
 ): Promise<void> {
+  const balance = await getDriverCashBalance(driverId)
+  if (amount > balance) {
+    throw new Error('לא ניתן להעביר סכום גבוה מהיתרה')
+  }
+
   const { error } = await supabase
     .from('driver_cash_transactions')
     .insert({

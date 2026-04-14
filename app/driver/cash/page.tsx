@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
 import { 
@@ -100,6 +101,9 @@ const [transferAmount, setTransferAmount] = useState<number>(0)
     }
   }
 
+  const collectionTransactions = transactions.filter((tx) => tx.type === 'collection')
+  const transferTransactions = transactions.filter((tx) => tx.type === 'transfer')
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -149,31 +153,85 @@ const [transferAmount, setTransferAmount] = useState<number>(0)
             <p>אין עסקאות עדיין</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {transactions.map((tx) => {
-              const info = getTypeInfo(tx.type)
-              const Icon = info.icon
-              return (
-                <div key={tx.id} className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm">
-                  <div className={`w-10 h-10 ${info.bg} rounded-full flex items-center justify-center`}>
-                    <Icon size={20} className={info.color} />
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-bold text-gray-700 mb-2">גביות לפי גרירה</h3>
+              {collectionTransactions.length === 0 ? (
+                <p className="text-sm text-gray-400">אין גביות להצגה</p>
+              ) : (
+                collectionTransactions.map((transaction) => (
+                  <div key={transaction.id} className="flex items-center justify-between p-3 bg-white rounded-xl border mb-2">
+                    <div>
+                      <p className="text-sm font-medium">+₪{Number(transaction.amount).toLocaleString()}</p>
+                      <p className="text-xs text-gray-500">{formatDate(transaction.created_at)} • {formatTime(transaction.created_at)}</p>
+                    </div>
+                    <div className="text-right">
+                      {(transaction as any).order_number && (
+                        (transaction as any).tow_id ? (
+                          <Link
+                            href={`/driver/task/${(transaction as any).tow_id}`}
+                            className="text-xs text-cyan-600 font-medium hover:underline"
+                          >
+                            גרירה #{(transaction as any).order_number}
+                          </Link>
+                        ) : (
+                          <p className="text-xs text-cyan-600 font-medium">
+                            גרירה #{(transaction as any).order_number}
+                          </p>
+                        )
+                      )}
+                      {(transaction as any).customer_name && (
+                        <p className="text-xs text-gray-400">{(transaction as any).customer_name}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800">{info.label}</p>
-                     <p className="text-xs text-gray-400">
-                      {formatDate(tx.created_at)} • {formatTime(tx.created_at)}
-                      {(tx as any).order_number && <span className="mr-1">• גרירה #{(tx as any).order_number}{(tx as any).customer_order_number ? ` (${(tx as any).customer_order_number})` : ''}</span>}
-                    </p>
-                    {tx.notes && (
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">{tx.notes}</p>
-                    )}
+                ))
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold text-gray-700 mb-2">העברות לחברה</h3>
+              {transferTransactions.length === 0 ? (
+                <p className="text-sm text-gray-400">אין העברות להצגה</p>
+              ) : (
+                transferTransactions.map((transaction) => (
+                  <div key={transaction.id} className="bg-white rounded-xl p-4 flex items-center justify-between shadow-sm border mb-2">
+                    <div>
+                      <p className="text-sm text-red-600">-₪{Number(transaction.amount).toLocaleString()}</p>
+                      <p className="text-xs text-gray-400">{transaction.notes || 'העברה לחברה'}</p>
+                    </div>
+                    <p className="text-xs text-gray-500">{formatDate(transaction.created_at)} • {formatTime(transaction.created_at)}</p>
                   </div>
-                  <p className={`font-bold text-lg ${tx.type === 'collection' ? 'text-red-500' : 'text-emerald-500'}`}>
-                    {tx.type === 'collection' ? '+' : '-'}₪{Number(tx.amount).toLocaleString()}
-                  </p>
-                </div>
-              )
-            })}
+                ))
+              )}
+            </div>
+
+            {transactions.filter((tx) => tx.type === 'approval').length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-2">אישורי מנהל</h3>
+                {transactions
+                  .filter((tx) => tx.type === 'approval')
+                  .map((tx) => {
+                    const info = getTypeInfo(tx.type)
+                    const Icon = info.icon
+                    return (
+                      <div key={tx.id} className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-sm border mb-2">
+                        <div className={`w-10 h-10 ${info.bg} rounded-full flex items-center justify-center`}>
+                          <Icon size={20} className={info.color} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800">{info.label}</p>
+                          <p className="text-xs text-gray-400">{formatDate(tx.created_at)} • {formatTime(tx.created_at)}</p>
+                          {tx.notes && (
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">{tx.notes}</p>
+                          )}
+                        </div>
+                        <p className="font-bold text-lg text-emerald-500">-₪{Number(tx.amount).toLocaleString()}</p>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
           </div>
         )}
       </div>
