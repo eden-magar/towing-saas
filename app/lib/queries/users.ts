@@ -265,28 +265,18 @@ export async function toggleUserStatus(userId: string): Promise<boolean> {
 // ==================== DELETE USER ====================
 
 export async function deleteUser(userId: string): Promise<void> {
-  // Delete from users table (drivers will cascade or need manual delete)
-  const { error: driverError } = await supabase
-    .from('drivers')
-    .delete()
-    .eq('user_id', userId)
+  const { data: { session } } = await supabase.auth.getSession()
+  const response = await fetch(`/api/users/${userId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${session?.access_token}`,
+    },
+  })
 
-  if (driverError) {
-    console.error('Error deleting driver:', driverError)
+  if (!response.ok) {
+    const data = await response.json()
+    throw new Error(data.error || 'Failed to delete user')
   }
-
-  const { error } = await supabase
-    .from('users')
-    .delete()
-    .eq('id', userId)
-
-  if (error) {
-    console.error('Error deleting user:', error)
-    throw error
-  }
-
-  // Note: Deleting from auth.users requires admin privileges
-  // The user won't be able to log in since the users table record is gone
 }
 
 // ==================== RESET PASSWORD ====================

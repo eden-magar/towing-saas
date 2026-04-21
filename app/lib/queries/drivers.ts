@@ -214,33 +214,18 @@ export async function updateDriver(input: UpdateDriverInput) {
 
 // ==================== מחיקת נהג ====================
 
-export async function deleteDriver(driverId: string, userId: string) {
-  // 1. ביטול שיוכי גררים
-  await supabase
-    .from('driver_truck_assignments')
-    .delete()
-    .eq('driver_id', driverId)
+export async function deleteDriver(driverId: string, _userId: string) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const response = await fetch(`/api/drivers/${driverId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${session?.access_token}`,
+    },
+  })
 
-  // 2. מחיקת נהג
-  const { error: driverError } = await supabase
-    .from('drivers')
-    .delete()
-    .eq('id', driverId)
-
-  if (driverError) {
-    console.error('Error deleting driver:', driverError)
-    throw driverError
-  }
-
-  // 3. מחיקת משתמש
-  const { error: userError } = await supabase
-    .from('users')
-    .delete()
-    .eq('id', userId)
-
-  if (userError) {
-    console.error('Error deleting user:', userError)
-    throw userError
+  if (!response.ok) {
+    const data = await response.json()
+    throw new Error(data.error || 'Failed to delete driver')
   }
 
   return true
