@@ -39,5 +39,30 @@ export async function GET(request: NextRequest) {
     return response
   }
 
-  return NextResponse.redirect(new URL('/login', request.url))
+  // Implicit flow: session is in URL fragment (#access_token=...).
+  // Server-side redirects lose the fragment, so we use a client-side
+  // redirect that preserves it. The Supabase client will then detect
+  // the session from the fragment (detectSessionInUrl: true).
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>מעבר...</title>
+  <script>
+    // Preserve the URL fragment when redirecting
+    var nextUrl = ${JSON.stringify(next)};
+    var fragment = window.location.hash;
+    window.location.replace(nextUrl + fragment);
+  </script>
+</head>
+<body>
+  <noscript>
+    <p>נדרש JavaScript. <a href="${next}">לחץ/י כאן להמשך</a></p>
+  </noscript>
+</body>
+</html>`
+
+  return new NextResponse(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  })
 }
