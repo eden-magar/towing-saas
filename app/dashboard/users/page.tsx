@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
+import { supabase } from '../../lib/supabase'
 import { 
   Search, 
   Plus, 
@@ -20,18 +21,15 @@ import {
   ChevronLeft,
   Edit,
   Trash2,
-  Key,
   Ban,
   CheckCircle,
   XCircle,
   Eye,
-  EyeOff,
   RefreshCw
 } from 'lucide-react'
 import {
   getUsers,
   getUserStats,
-  createUser,
   updateUser,
   toggleUserStatus,
   deleteUser,
@@ -70,7 +68,6 @@ export default function UsersPage() {
     full_name: '',
     email: '',
     phone: '',
-    password: '',
     role: 'dispatcher' as UserRole
   })
   const [showPassword, setShowPassword] = useState(false)
@@ -121,27 +118,43 @@ export default function UsersPage() {
 
   // Create user
   async function handleCreateUser() {
-    if (!companyId || !newUser.full_name || !newUser.email || !newUser.password) return
+    if (!companyId || !newUser.full_name || !newUser.email || !newUser.role) return
 
     setSaving(true)
     setError('')
 
     try {
-      await createUser({
-        email: newUser.email,
-        password: newUser.password,
-        full_name: newUser.full_name,
-        phone: newUser.phone || undefined,
-        role: newUser.role,
-        company_id: companyId
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          email: newUser.email,
+          full_name: newUser.full_name,
+          phone: newUser.phone || undefined,
+          role: newUser.role,
+          company_id: companyId,
+        }),
       })
+
+      const data = await response.json()
+      if (!response.ok) {
+        if (response.status === 409 || data.error?.includes('already registered')) {
+          setError('כתובת האימייל כבר קיימת במערכת')
+        } else {
+          setError(data.error || 'שגיאה ביצירת המשתמש')
+        }
+        return
+      }
 
       setShowAddModal(false)
       setNewUser({
         full_name: '',
         email: '',
         phone: '',
-        password: '',
         role: 'dispatcher'
       })
       await loadData()
@@ -231,7 +244,7 @@ export default function UsersPage() {
     for (let i = 0; i < 10; i++) {
       password += chars.charAt(Math.floor(Math.random() * chars.length))
     }
-    setNewUser({ ...newUser, password })
+    void password
   }
 
   if (loading) {
@@ -604,36 +617,6 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">סיסמה זמנית *</label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={newUser.password}
-                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                      placeholder="סיסמה זמנית"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={generatePassword}
-                    className="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 transition-colors"
-                  >
-                    <Key size={18} />
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">המשתמש יתבקש להחליף את הסיסמה בהתחברות הראשונה</p>
-              </div>
-
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">תפקיד *</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
@@ -681,9 +664,9 @@ export default function UsersPage() {
               </button>
               <button
                 onClick={handleCreateUser}
-                disabled={!newUser.full_name || !newUser.email || !newUser.password || saving}
+                disabled={!newUser.full_name || !newUser.email || saving}
                 className={`flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${
-                  newUser.full_name && newUser.email && newUser.password && !saving
+                  newUser.full_name && newUser.email && !saving
                     ? 'bg-cyan-500 text-white hover:bg-cyan-600'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
