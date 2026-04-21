@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
       const resetLink = resetData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/login`
 
       await resend.emails.send({
-        from: 'מגרר <onboarding@resend.dev>',
+        from: 'מגרר <noreply@magrar-crm.com>',
         to: email,
         subject: 'הוזמנת לפורטל הלקוח — מגרר',
         html: `
