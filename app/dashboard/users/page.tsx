@@ -352,7 +352,6 @@ export default function UsersPage() {
               { id: 'all', label: 'הכל' },
               { id: 'company_admin', label: 'מנהלים' },
               { id: 'dispatcher', label: 'מוקדנים' },
-              { id: 'driver', label: 'נהגים' },
             ].map((role) => (
               <button
                 key={role.id}
@@ -636,11 +635,10 @@ export default function UsersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">תפקיד *</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'company_admin', label: 'מנהל', icon: Crown, color: 'text-amber-500' },
                     { id: 'dispatcher', label: 'מוקדן', icon: Headphones, color: 'text-blue-500' },
-                    { id: 'driver', label: 'נהג', icon: Truck, color: 'text-emerald-500' },
                   ].map((role) => (
                     <button
                       key={role.id}

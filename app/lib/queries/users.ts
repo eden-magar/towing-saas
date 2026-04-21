@@ -47,7 +47,7 @@ export async function getUsers(companyId: string): Promise<UserWithDetails[]> {
       driver:drivers(id, status, license_number)
     `)
     .eq('company_id', companyId)
-    .neq('role', 'customer')
+    .in('role', ['super_admin', 'company_admin', 'dispatcher'])
     .order('created_at', { ascending: false })
 
   if (error) {
