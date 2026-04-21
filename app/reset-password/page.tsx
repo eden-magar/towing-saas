@@ -13,8 +13,12 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
 
   const handleReset = async () => {
-    if (password.length < 6) {
-      setError('הסיסמה חייבת להכיל לפחות 6 תווים')
+    if (password.length < 8) {
+      setError('הסיסמה חייבת להכיל לפחות 8 תווים')
+      return
+    }
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('הסיסמה חייבת להכיל אות גדולה, אות קטנה וספרה')
       return
     }
     if (password !== confirmPassword) {
@@ -30,7 +34,18 @@ export default function ResetPasswordPage() {
     })
 
     if (updateError) {
-      setError(updateError.message)
+      const msg = updateError.message || ''
+      let hebrewError = 'שגיאה בעדכון הסיסמה'
+      if (msg.toLowerCase().includes('at least') && msg.toLowerCase().includes('character')) {
+        hebrewError = 'הסיסמה חלשה מדי. נדרשים לפחות 8 תווים, כולל אות גדולה, אות קטנה וספרה'
+      } else if (msg.toLowerCase().includes('weak') || msg.toLowerCase().includes('pwned')) {
+        hebrewError = 'הסיסמה חלשה או נפוצה מדי. נסי סיסמה מורכבת יותר'
+      } else if (msg.toLowerCase().includes('same') && msg.toLowerCase().includes('password')) {
+        hebrewError = 'הסיסמה החדשה זהה לקודמת. בחרי סיסמה אחרת'
+      } else if (msg.toLowerCase().includes('session')) {
+        hebrewError = 'פג תוקף. בקשי קישור איפוס חדש'
+      }
+      setError(hebrewError)
       setLoading(false)
       return
     }
@@ -86,7 +101,7 @@ export default function ResetPasswordPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-gray-800"
-                placeholder="לפחות 6 תווים"
+                placeholder="לפחות 8 תווים"
               />
               <button
                 type="button"
@@ -96,6 +111,11 @@ export default function ResetPasswordPage() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+              הסיסמה חייבת להכיל לפחות 8 תווים, כולל:
+              <br />
+              אות גדולה באנגלית (A-Z), אות קטנה באנגלית (a-z), וספרה (0-9)
+            </p>
           </div>
 
           <div>
