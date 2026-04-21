@@ -83,6 +83,9 @@ export async function POST(req: NextRequest) {
       const { data: resetData } = await supabaseAdmin.auth.admin.generateLink({
         type: 'recovery',
         email,
+        options: {
+          redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/reset-password`,
+        },
       })
 
       const resetLink = resetData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/login`
