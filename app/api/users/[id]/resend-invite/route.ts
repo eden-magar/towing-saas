@@ -12,7 +12,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const currentUser = await getAuthUser(request)
@@ -21,16 +21,16 @@ export async function POST(
       return forbiddenResponse()
     }
 
-    const { userId } = await params
+    const { id } = await params
 
-    if (!userId) {
+    if (!id) {
       return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
     }
 
     const { data: targetUser, error: targetUserError } = await supabaseAdmin
       .from('users')
       .select('id, email, full_name, role, company_id')
-      .eq('id', userId)
+      .eq('id', id)
       .single()
 
     if (targetUserError || !targetUser) {
