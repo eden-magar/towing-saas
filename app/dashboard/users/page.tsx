@@ -61,6 +61,7 @@ export default function UsersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithDetails | null>(null)
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Form state
@@ -167,6 +168,30 @@ export default function UsersPage() {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleResendInvite(user: UserWithDetails) {
+    if (!confirm('לשלוח קישור הזמנה חדש למייל ' + user.email + '?')) return
+
+    setShowActionsMenu(null)
+    setResendingId(user.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch(`/api/users/${user.id}/resend-invite`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        alert(data.error || 'שגיאה')
+        return
+      }
+      alert('הקישור נשלח שוב למייל')
+    } finally {
+      setResendingId(null)
     }
   }
 
@@ -487,6 +512,17 @@ export default function UsersPage() {
                           >
                             <Edit size={16} />
                             ערוך
+                          </button>
+                          <button
+                            type="button"
+                            disabled={resendingId === user.id}
+                            onClick={() => {
+                              void handleResendInvite(user)
+                            }}
+                            className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                          >
+                            <RefreshCw size={16} className={resendingId === user.id ? 'animate-spin' : ''} />
+                            {resendingId === user.id ? 'שולח...' : 'שלח קישור הזמנה חדש'}
                           </button>
                           <button 
                             onClick={() => handleToggleStatus(user)}

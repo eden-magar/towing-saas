@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, Phone, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, XCircle, MoreHorizontal, AlertTriangle, MapPin, BarChart2 } from 'lucide-react'
+import { Plus, Search, Phone, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, XCircle, MoreHorizontal, AlertTriangle, MapPin, BarChart2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
@@ -31,6 +31,7 @@ export default function DriversPage() {
   const [editingDriver, setEditingDriver] = useState<DriverWithDetails | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [resendingId, setResendingId] = useState<string | null>(null)
   const [showLicenseWarning, setShowLicenseWarning] = useState(false)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [duplicateField, setDuplicateField] = useState('')
@@ -119,6 +120,35 @@ export default function DriversPage() {
       setError('שגיאה בטעינת הנתונים')
     } finally {
       setPageLoading(false)
+    }
+  }
+
+  async function handleResendDriverInvite(driver: DriverWithDetails) {
+    const email = driver.user?.email
+    if (!email) {
+      alert('אין כתובת מייל לנהג')
+      return
+    }
+    if (!confirm('לשלוח קישור הזמנה חדש למייל ' + email + '?')) return
+
+    setOpenMenuId(null)
+    setResendingId(driver.id)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch(`/api/drivers/${driver.id}/resend-invite`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        alert(data.error || 'שגיאה')
+        return
+      }
+      alert('הקישור נשלח שוב למייל')
+    } finally {
+      setResendingId(null)
     }
   }
 
@@ -541,6 +571,19 @@ export default function DriversPage() {
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
+                          disabled={resendingId === driver.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void handleResendDriverInvite(driver)
+                          }}
+                          className="flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 text-xs"
+                          title="שלח קישור הזמנה חדש"
+                        >
+                          <RefreshCw size={18} className={resendingId === driver.id ? 'animate-spin' : ''} />
+                          {resendingId === driver.id ? 'שולח...' : ''}
+                        </button>
+                        <button
                           onClick={() => openEditModal(driver)}
                           className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                         >
@@ -607,6 +650,15 @@ export default function DriversPage() {
                           >
                             <Edit2 size={16} />
                             עריכה
+                          </button>
+                          <button
+                            type="button"
+                            disabled={resendingId === driver.id}
+                            onClick={() => void handleResendDriverInvite(driver)}
+                            className="flex items-center gap-2 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <RefreshCw size={16} className={resendingId === driver.id ? 'animate-spin' : ''} />
+                            {resendingId === driver.id ? 'שולח...' : 'שלח קישור הזמנה חדש'}
                           </button>
                           <button
                             onClick={() => {
