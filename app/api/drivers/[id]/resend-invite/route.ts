@@ -12,7 +12,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ driverId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const currentUser = await getAuthUser(request)
@@ -21,16 +21,16 @@ export async function POST(
       return forbiddenResponse()
     }
 
-    const { driverId } = await params
+    const { id } = await params
 
-    if (!driverId) {
+    if (!id) {
       return NextResponse.json({ error: 'חסר מזהה נהג' }, { status: 400 })
     }
 
     const { data: driverRow, error: driverError } = await supabaseAdmin
       .from('drivers')
       .select('id, company_id, user_id')
-      .eq('id', driverId)
+      .eq('id', id)
       .single()
 
     if (driverError || !driverRow) {

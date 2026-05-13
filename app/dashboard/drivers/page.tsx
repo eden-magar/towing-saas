@@ -8,6 +8,7 @@ import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
 import DriversMap from '../../components/DriversMap'
 import DriverHoursTab from '../../components/DriverHoursTab'
+import ResendInviteModal from '../../components/ResendInviteModal'
 
 
 export default function DriversPage() {
@@ -31,7 +32,11 @@ export default function DriversPage() {
   const [editingDriver, setEditingDriver] = useState<DriverWithDetails | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
-  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendModal, setResendModal] = useState<{
+    isOpen: boolean
+    driverId: string | null
+    email: string
+  }>({ isOpen: false, driverId: null, email: '' })
   const [showLicenseWarning, setShowLicenseWarning] = useState(false)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [duplicateField, setDuplicateField] = useState('')
@@ -123,51 +128,18 @@ export default function DriversPage() {
     }
   }
 
-  async function handleResendDriverInvite(driver: DriverWithDetails) {
+  function openResendModal(driver: DriverWithDetails) {
     const email = driver.user?.email
     if (!email) {
       alert('אין כתובת מייל לנהג')
       return
     }
-    if (!confirm('לשלוח קישור הזמנה חדש למייל ' + email + '?')) return
-
+    setResendModal({
+      isOpen: true,
+      driverId: driver.id,
+      email,
+    })
     setOpenMenuId(null)
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
-
-    setResendingId(driver.id)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch(`/api/drivers/${driver.id}/resend-invite`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        signal: controller.signal,
-      })
-      let data: { error?: string }
-      try {
-        data = await response.json()
-      } catch {
-        alert('תשובה לא תקינה מהשרת. נסי שוב')
-        return
-      }
-      if (!response.ok) {
-        alert(data.error || 'שגיאה בשליחת הקישור')
-        return
-      }
-      alert('הקישור נשלח שוב למייל')
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        alert('הבקשה לקחה יותר מדי זמן. נסי שוב')
-      } else {
-        alert('שגיאת רשת. נסי שוב')
-      }
-    } finally {
-      clearTimeout(timeoutId)
-      setResendingId(null)
-    }
   }
 
   const filteredDrivers = drivers.filter(driver => {
@@ -600,14 +572,11 @@ export default function DriversPage() {
                           <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-10">
                             <button
                               type="button"
-                              disabled={resendingId === driver.id}
-                              onClick={() => {
-                                void handleResendDriverInvite(driver)
-                              }}
-                              className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                              onClick={() => openResendModal(driver)}
+                              className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                             >
-                              <RefreshCw size={16} className={resendingId === driver.id ? 'animate-spin' : ''} />
-                              {resendingId === driver.id ? 'שולח...' : 'שלח קישור הזמנה חדש'}
+                              <RefreshCw size={16} />
+                              שלח קישור הזמנה חדש
                             </button>
                             <button
                               type="button"
@@ -692,12 +661,11 @@ export default function DriversPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={resendingId === driver.id}
-                            onClick={() => void handleResendDriverInvite(driver)}
-                            className="flex items-center gap-2 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                            onClick={() => openResendModal(driver)}
+                            className="flex items-center gap-2 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
                           >
-                            <RefreshCw size={16} className={resendingId === driver.id ? 'animate-spin' : ''} />
-                            {resendingId === driver.id ? 'שולח...' : 'שלח קישור הזמנה חדש'}
+                            <RefreshCw size={16} />
+                            שלח קישור הזמנה חדש
                           </button>
                           <button
                             onClick={() => {
@@ -1180,6 +1148,60 @@ export default function DriversPage() {
                 </div>
               </div>
             )}
+
+      <ResendInviteModal
+        isOpen={resendModal.isOpen}
+        email={resendModal.email}
+        onClose={() =>
+          setResendModal({ isOpen: false, driverId: null, email: '' })
+        }
+        onConfirm={async () => {
+          const driverId = resendModal.driverId
+          if (!driverId) {
+            return { success: false, error: 'חסר מזהה נהג' }
+          }
+
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const response = await fetch(`/api/drivers/${driverId}/resend-invite`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session?.access_token}`,
+              },
+              signal: controller.signal,
+            })
+            let data: { error?: string }
+            try {
+              data = await response.json()
+            } catch {
+              return {
+                success: false,
+                error: 'תשובה לא תקינה מהשרת. נסי שוב',
+              }
+            }
+            if (!response.ok) {
+              return {
+                success: false,
+                error: data.error || 'שגיאה בשליחת הקישור',
+              }
+            }
+            return { success: true }
+          } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              return {
+                success: false,
+                error: 'הבקשה לקחה יותר מדי זמן. נסי שוב',
+              }
+            }
+            return { success: false, error: 'שגיאת רשת. נסי שוב' }
+          } finally {
+            clearTimeout(timeoutId)
+          }
+        }}
+      />
 
       {openMenuId && (
         <div

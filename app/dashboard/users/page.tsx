@@ -39,6 +39,7 @@ import {
   UserStats,
   UserRole
 } from '../../lib/queries/users'
+import ResendInviteModal from '../../components/ResendInviteModal'
 
 export default function UsersPage() {
   const { companyId } = useAuth()
@@ -61,7 +62,11 @@ export default function UsersPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserWithDetails | null>(null)
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
-  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendModal, setResendModal] = useState<{
+    isOpen: boolean
+    userId: string | null
+    email: string
+  }>({ isOpen: false, userId: null, email: '' })
   const [saving, setSaving] = useState(false)
 
   // Form state
@@ -168,48 +173,6 @@ export default function UsersPage() {
       }
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function handleResendInvite(user: UserWithDetails) {
-    if (!confirm('לשלוח קישור הזמנה חדש למייל ' + user.email + '?')) return
-
-    setShowActionsMenu(null)
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
-
-    setResendingId(user.id)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch(`/api/users/${user.id}/resend-invite`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        signal: controller.signal,
-      })
-      let data: { error?: string }
-      try {
-        data = await response.json()
-      } catch {
-        alert('תשובה לא תקינה מהשרת. נסי שוב')
-        return
-      }
-      if (!response.ok) {
-        alert(data.error || 'שגיאה בשליחת הקישור')
-        return
-      }
-      alert('הקישור נשלח שוב למייל')
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        alert('הבקשה לקחה יותר מדי זמן. נסי שוב')
-      } else {
-        alert('שגיאת רשת. נסי שוב')
-      }
-    } finally {
-      clearTimeout(timeoutId)
-      setResendingId(null)
     }
   }
 
@@ -533,14 +496,18 @@ export default function UsersPage() {
                           </button>
                           <button
                             type="button"
-                            disabled={resendingId === user.id}
                             onClick={() => {
-                              void handleResendInvite(user)
+                              setResendModal({
+                                isOpen: true,
+                                userId: user.id,
+                                email: user.email,
+                              })
+                              setShowActionsMenu(null)
                             }}
-                            className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                            className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                           >
-                            <RefreshCw size={16} className={resendingId === user.id ? 'animate-spin' : ''} />
-                            {resendingId === user.id ? 'שולח...' : 'שלח קישור הזמנה חדש'}
+                            <RefreshCw size={16} />
+                            שלח קישור הזמנה חדש
                           </button>
                           <button 
                             onClick={() => handleToggleStatus(user)}
@@ -918,6 +885,60 @@ export default function UsersPage() {
           onClick={() => setShowActionsMenu(null)}
         />
       )}
+
+      <ResendInviteModal
+        isOpen={resendModal.isOpen}
+        email={resendModal.email}
+        onClose={() =>
+          setResendModal({ isOpen: false, userId: null, email: '' })
+        }
+        onConfirm={async () => {
+          const userId = resendModal.userId
+          if (!userId) {
+            return { success: false, error: 'חסר מזהה משתמש' }
+          }
+
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const response = await fetch(`/api/users/${userId}/resend-invite`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session?.access_token}`,
+              },
+              signal: controller.signal,
+            })
+            let data: { error?: string }
+            try {
+              data = await response.json()
+            } catch {
+              return {
+                success: false,
+                error: 'תשובה לא תקינה מהשרת. נסי שוב',
+              }
+            }
+            if (!response.ok) {
+              return {
+                success: false,
+                error: data.error || 'שגיאה בשליחת הקישור',
+              }
+            }
+            return { success: true }
+          } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') {
+              return {
+                success: false,
+                error: 'הבקשה לקחה יותר מדי זמן. נסי שוב',
+              }
+            }
+            return { success: false, error: 'שגיאת רשת. נסי שוב' }
+          } finally {
+            clearTimeout(timeoutId)
+          }
+        }}
+      />
     </div>
   )
 }
