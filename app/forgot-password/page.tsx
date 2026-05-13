@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -14,18 +13,41 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-    if (error) {
-      setError('שגיאה בשליחת המייל. נסי שוב.')
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+        signal: controller.signal,
+      })
+
+      let data: { success?: boolean; message?: string; error?: string }
+      try {
+        data = await response.json()
+      } catch {
+        setError('תשובה לא תקינה מהשרת. נסי שוב.')
+        return
+      }
+
+      if (!response.ok) {
+        setError(data.error || 'שגיאה בשליחת המייל. נסי שוב.')
+        return
+      }
+
+      setSent(true)
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('הבקשה ארכה זמן רב מדי. נסי שוב.')
+      } else {
+        setError('שגיאה בשליחת המייל. נסי שוב.')
+      }
+    } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
-      return
     }
-
-    setSent(true)
-    setLoading(false)
   }
 
   return (
