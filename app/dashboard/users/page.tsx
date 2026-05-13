@@ -175,6 +175,10 @@ export default function UsersPage() {
     if (!confirm('לשלוח קישור הזמנה חדש למייל ' + user.email + '?')) return
 
     setShowActionsMenu(null)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
     setResendingId(user.id)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -183,14 +187,28 @@ export default function UsersPage() {
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         },
+        signal: controller.signal,
       })
-      const data = await response.json()
+      let data: { error?: string }
+      try {
+        data = await response.json()
+      } catch {
+        alert('תשובה לא תקינה מהשרת. נסי שוב')
+        return
+      }
       if (!response.ok) {
-        alert(data.error || 'שגיאה')
+        alert(data.error || 'שגיאה בשליחת הקישור')
         return
       }
       alert('הקישור נשלח שוב למייל')
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        alert('הבקשה לקחה יותר מדי זמן. נסי שוב')
+      } else {
+        alert('שגיאת רשת. נסי שוב')
+      }
     } finally {
+      clearTimeout(timeoutId)
       setResendingId(null)
     }
   }

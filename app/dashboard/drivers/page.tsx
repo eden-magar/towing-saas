@@ -132,6 +132,10 @@ export default function DriversPage() {
     if (!confirm('לשלוח קישור הזמנה חדש למייל ' + email + '?')) return
 
     setOpenMenuId(null)
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
     setResendingId(driver.id)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -140,14 +144,28 @@ export default function DriversPage() {
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         },
+        signal: controller.signal,
       })
-      const data = await response.json()
+      let data: { error?: string }
+      try {
+        data = await response.json()
+      } catch {
+        alert('תשובה לא תקינה מהשרת. נסי שוב')
+        return
+      }
       if (!response.ok) {
-        alert(data.error || 'שגיאה')
+        alert(data.error || 'שגיאה בשליחת הקישור')
         return
       }
       alert('הקישור נשלח שוב למייל')
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        alert('הבקשה לקחה יותר מדי זמן. נסי שוב')
+      } else {
+        alert('שגיאת רשת. נסי שוב')
+      }
     } finally {
+      clearTimeout(timeoutId)
       setResendingId(null)
     }
   }
@@ -569,32 +587,53 @@ export default function DriversPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="relative">
                         <button
                           type="button"
-                          disabled={resendingId === driver.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            void handleResendDriverInvite(driver)
-                          }}
-                          className="flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 text-xs"
-                          title="שלח קישור הזמנה חדש"
+                          onClick={() => setOpenMenuId(openMenuId === driver.id ? null : driver.id)}
+                          className="p-2 hover:bg-gray-100 rounded-lg"
                         >
-                          <RefreshCw size={18} className={resendingId === driver.id ? 'animate-spin' : ''} />
-                          {resendingId === driver.id ? 'שולח...' : ''}
+                          <MoreHorizontal size={18} className="text-gray-400" />
                         </button>
-                        <button
-                          onClick={() => openEditModal(driver)}
-                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(driver.id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+
+                        {openMenuId === driver.id && (
+                          <div className="absolute left-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-10">
+                            <button
+                              type="button"
+                              disabled={resendingId === driver.id}
+                              onClick={() => {
+                                void handleResendDriverInvite(driver)
+                              }}
+                              className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                            >
+                              <RefreshCw size={16} className={resendingId === driver.id ? 'animate-spin' : ''} />
+                              {resendingId === driver.id ? 'שולח...' : 'שלח קישור הזמנה חדש'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openEditModal(driver)
+                                setOpenMenuId(null)
+                              }}
+                              className="w-full px-4 py-2 text-right text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                            >
+                              <Edit2 size={16} />
+                              ערוך
+                            </button>
+                            <hr className="my-1" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowDeleteConfirm(driver.id)
+                                setOpenMenuId(null)
+                              }}
+                              className="w-full px-4 py-2 text-right text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <Trash2 size={16} />
+                              מחק
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1141,6 +1180,13 @@ export default function DriversPage() {
                 </div>
               </div>
             )}
+
+      {openMenuId && (
+        <div
+          className="fixed inset-0 z-5 hidden lg:block"
+          onClick={() => setOpenMenuId(null)}
+        />
+      )}
 
     </div>
   )
