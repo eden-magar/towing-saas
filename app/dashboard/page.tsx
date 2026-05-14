@@ -428,8 +428,13 @@
     }, [calendarDate, calendarTows.length, driverIds.length, loading, authLoading, selectedDrivers.length, allDrivers.length])
 
     const getTowsForDriverHour = (driverId: string, hour: number) => {
-    return filteredCalendarTows.filter((t: any) => {
+      return filteredCalendarTows.filter((t: any) => {
         if (t.driver_id !== driverId) return false
+        // Skip tows rendered by the overlay layer to avoid visual duplication
+        const renderedInOverlay =
+          (t.status === 'in_progress' || t.status === 'assigned' || t.status === 'completed') &&
+          t.scheduled_at
+        if (renderedInOverlay) return false
         const towHour = Math.floor(getLocalFractionalHour(t.scheduled_at || t.created_at))
         return towHour === hour
       })
@@ -795,11 +800,29 @@
                         return liveTows.map((t: any) => {
                           const rect = driverColumnRects[driverIdx]
                           if (!rect) return null
-                          const scheduledMs = new Date(t.scheduled_at).getTime()
-                          const isCompleted = t.status === 'completed' && t.completed_at
-                          const endMs = isCompleted ? new Date(t.completed_at).getTime() : now
-                          const elapsedMinutes = Math.max(60, (endMs - scheduledMs) / 60000)
-                          const startHour = getLocalFractionalHour(t.scheduled_at)
+                          // Use actual start time if available, otherwise scheduled time
+                          const effectiveStartIso = t.started_at || t.scheduled_at
+                          const startMs = new Date(effectiveStartIso).getTime()
+
+                          // End time depends on status
+                          let endMs: number
+                          if (t.status === 'completed' && t.completed_at) {
+                            endMs = new Date(t.completed_at).getTime()
+                          } else if (t.status === 'in_progress') {
+                            // Live - growing, but capped at end of the displayed day
+                            const endOfDay = new Date(calendarDate)
+                            endOfDay.setHours(23, 59, 59, 999)
+                            endMs = Math.min(now, endOfDay.getTime())
+                          } else if (t.status === 'assigned') {
+                            // Not started yet - fixed 60-minute default block
+                            endMs = startMs + 60 * 60 * 1000
+                          } else {
+                            // Defensive fallback for any other status
+                            endMs = startMs + 60 * 60 * 1000
+                          }
+
+                          const elapsedMinutes = Math.max(60, (endMs - startMs) / 60000)
+                          const startHour = getLocalFractionalHour(effectiveStartIso)
                           const top = calendarTheadHeightPx + startHour * PIXELS_PER_HOUR
                           const height = (elapsedMinutes / 60) * PIXELS_PER_HOUR
                           return (
@@ -817,6 +840,23 @@
                                 zIndex: 5,
                               }}
                             >
+                              {/* badges wrapper - future-proofed for receipt/payment icons */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 2,
+                                  left: 2,
+                                  display: 'flex',
+                                  gap: 2,
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                {t.status === 'completed' && (
+                                  <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                                    ✓ בוצעה
+                                  </span>
+                                )}
+                              </div>
                               {t.customer?.name || t.order_number?.slice(-4) || t.id.slice(0, 4)}
                             </div>
                           )
