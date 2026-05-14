@@ -837,19 +837,46 @@ const handleSkipPriceUpdate = () => {
               {/* Tow Events */}
               <div className={`absolute top-0 left-0 bottom-0 pointer-events-none ${isMobile ? 'right-[50%]' : 'right-[12.5%]'}`}>
                 {filteredTows.map((tow) => {
-                  const { dayIndex, hour } = getTowPosition(tow)
-                  
+                  const { dayIndex } = getTowPosition(tow)
+
                   // בדיקה אם היום מוצג
                   const displayIndex = displayedDays.findIndex(d => d.dayIndex === dayIndex)
                   if (displayIndex === -1) return null
-                  
+
+                  const effectiveStartIso = tow.started_at || tow.scheduled_at || tow.created_at
+                  const effectiveStart = new Date(effectiveStartIso)
+                  const hour = effectiveStart.getHours() + effectiveStart.getMinutes() / 60
+
                   const top = hour * 50
-                  const isLive = tow.status === 'in_progress' || tow.status === 'assigned'
-                  const isCompleted = tow.status === 'completed' && (tow as any).completed_at
-                  const scheduledMs = new Date(tow.scheduled_at || tow.created_at).getTime()
-                  const endMs = isCompleted ? new Date((tow as any).completed_at).getTime() : now
-                  const elapsedMinutes = (isLive || isCompleted) ? Math.max(60, (endMs - scheduledMs) / 60000) : 60
-                  const height = (elapsedMinutes / 60) * 50
+                  const startMs = effectiveStart.getTime()
+                  const scheduledForFallback = tow.scheduled_at || tow.created_at
+                  const scheduledMs = scheduledForFallback
+                    ? new Date(scheduledForFallback).getTime()
+                    : startMs
+
+                  let endMs: number
+                  if (tow.status === 'completed' && (tow as any).completed_at) {
+                    endMs = new Date((tow as any).completed_at).getTime()
+                  } else if (tow.status === 'in_progress') {
+                    const dayDate = new Date(effectiveStart)
+                    const endOfDay = new Date(
+                      dayDate.getFullYear(),
+                      dayDate.getMonth(),
+                      dayDate.getDate(),
+                      23,
+                      59,
+                      59,
+                      999
+                    )
+                    endMs = Math.min(now, endOfDay.getTime())
+                  } else if (tow.status === 'assigned') {
+                    endMs = scheduledMs + 60 * 60 * 1000
+                  } else {
+                    endMs = startMs + 60 * 60 * 1000
+                  }
+
+                  const elapsedMinutes = Math.max(60, (endMs - startMs) / 60000)
+                  const heightPx = (elapsedMinutes / 60) * 50
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
                   const collision = weekCollisionLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
@@ -876,7 +903,7 @@ const handleSkipPriceUpdate = () => {
                       } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                       style={{
                         top: `${top}px`,
-                        height: `${Math.max(height - 4, 20)}px`,
+                        height: `${Math.max(heightPx - 4, 20)}px`,
                         right: `${right + 0.3}%`,
                         width: `${slotWidth - 0.6}%`,
                         backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : tow.status === 'in_progress' ? '#f97316' : driverColor,
@@ -893,16 +920,37 @@ const handleSkipPriceUpdate = () => {
                           לשיבוץ
                         </div>
                       )}
-                      {tow.status === 'completed' && (
-                        <div className="absolute top-1 left-1 bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
-                          ✓ בוצעה
-                        </div>
-                      )}
-                      <div className="font-bold truncate text-[10px] sm:text-xs">
-                        {tow.customer?.name || 'ללא לקוח'}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 2,
+                          left: 2,
+                          display: 'flex',
+                          gap: 2,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        {tow.status === 'completed' && (
+                          <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                            ✓ בוצעה
+                          </span>
+                        )}
                       </div>
-                      <div className="truncate opacity-90 text-[9px] sm:text-[11px]">
-                        {route.from} ← {route.to}
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold truncate text-[10px] sm:text-xs">
+                            {tow.customer?.name || 'ללא לקוח'}
+                          </div>
+                          <div className="truncate opacity-90 text-[9px] sm:text-[11px]">
+                            {route.from} ← {route.to}
+                          </div>
+                        </div>
+                        <div className="text-[9px] sm:text-[11px] opacity-80 shrink-0">
+                          {effectiveStart.toLocaleTimeString('he-IL', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </div>
                       </div>
                     </div>
                     )
