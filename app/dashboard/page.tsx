@@ -59,7 +59,9 @@
     const [calendarDate, setCalendarDate] = useState(new Date())
     const [calendarTows, setCalendarTows] = useState<any[]>([])
     const calendarTheadRef = useRef<HTMLTableSectionElement>(null)
+    const calendarOverlayLayoutRef = useRef<HTMLDivElement>(null)
     const [calendarTheadHeightPx, setCalendarTheadHeightPx] = useState(33)
+    const [driverColumnRects, setDriverColumnRects] = useState<{ left: number; width: number }[]>([])
     const [todayTows, setTodayTows] = useState<any[]>([])
     const [activeDrivers, setActiveDrivers] = useState<any[]>([])
     const [allDrivers, setAllDrivers] = useState<any[]>([])
@@ -393,11 +395,35 @@
 
     useLayoutEffect(() => {
       const el = calendarTheadRef.current
-      if (!el) return
-      const measure = () => setCalendarTheadHeightPx(Math.round(el.getBoundingClientRect().height))
+      if (!el) {
+        setDriverColumnRects([])
+        return
+      }
+      const measure = () => {
+        setCalendarTheadHeightPx(Math.round(el.getBoundingClientRect().height))
+
+        const layoutEl = calendarOverlayLayoutRef.current
+        if (!layoutEl) {
+          setDriverColumnRects([])
+          return
+        }
+        const containerRect = layoutEl.getBoundingClientRect()
+        const allThs = el.querySelectorAll('th')
+        const rects: { left: number; width: number }[] = []
+        for (let i = 1; i < allThs.length; i++) {
+          const thRect = allThs[i].getBoundingClientRect()
+          rects.push({
+            left: thRect.left - containerRect.left,
+            width: thRect.width,
+          })
+        }
+        setDriverColumnRects(rects)
+      }
       measure()
       const ro = new ResizeObserver(measure)
       ro.observe(el)
+      const layoutEl = calendarOverlayLayoutRef.current
+      if (layoutEl) ro.observe(layoutEl)
       return () => ro.disconnect()
     }, [calendarDate, calendarTows.length, driverIds.length, loading, authLoading, selectedDrivers.length, allDrivers.length])
 
@@ -664,7 +690,7 @@
                 {driverIds.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-300 text-xs">אין גרירות ביום זה</div>
                 ) : (
-                  <div className="relative">
+                  <div ref={calendarOverlayLayoutRef} className="relative">
                     <table className="w-full text-xs border-collapse" style={{ minWidth: `${driverIds.length * 120 + 60}px` }}>
                       <thead ref={calendarTheadRef}>
                         <tr className="sticky top-0 bg-gray-50 z-10">
@@ -759,15 +785,16 @@
                       </tbody>
                     </table>
 
-                    <div className="absolute inset-0 pointer-events-none" style={{ paddingRight: '32px' }}>
+                    <div className="absolute inset-0 pointer-events-none">
                       {driverIds.map((id, driverIdx) => {
                         const liveTows = filteredCalendarTows.filter((t: any) =>
                           t.driver_id === id &&
                           (t.status === 'in_progress' || t.status === 'assigned' || t.status === 'completed') &&
                           t.scheduled_at
                         )
-                        const driverWidth = 100 / driverIds.length
                         return liveTows.map((t: any) => {
+                          const rect = driverColumnRects[driverIdx]
+                          if (!rect) return null
                           const scheduledMs = new Date(t.scheduled_at).getTime()
                           const isCompleted = t.status === 'completed' && t.completed_at
                           const endMs = isCompleted ? new Date(t.completed_at).getTime() : now
@@ -783,8 +810,8 @@
                               style={{
                                 top: `${top}px`,
                                 height: `${Math.max(height, 20)}px`,
-                                right: `calc(${driverIdx * driverWidth}% + 2px)`,
-                                width: `calc(${driverWidth}% - 4px)`,
+                                left: `${rect.left + 2}px`,
+                                width: `${rect.width - 4}px`,
                                 backgroundColor: t.status === 'completed' ? '#16a34a' : t.status === 'in_progress' ? '#f97316' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length] + '99',
                                 border: `1px solid ${t.status === 'in_progress' ? '#ea580c' : DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]}`,
                                 zIndex: 5,
