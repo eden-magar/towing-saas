@@ -995,7 +995,7 @@ const handleSkipPriceUpdate = () => {
                     {hours.map((hour) => (
                       <div
                         key={hour}
-                        className="flex border-b border-gray-100 group"
+                        className="flex border-b border-gray-100"
                         style={{ height: '60px' }}
                       >
                         <div className="w-16 sm:w-20 p-2 text-sm text-gray-400 text-center border-l border-gray-200 flex-shrink-0">
@@ -1005,7 +1005,7 @@ const handleSkipPriceUpdate = () => {
                           <div
                             key={`${hour}-${String(driverColId)}`}
                             onClick={() => handleSlotClick(selectedDate, hour)}
-                            className="flex-1 min-w-0 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative border-l border-gray-100"
+                            className="group flex-1 min-w-0 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative border-l border-gray-100"
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, 0, hour)}
                           >
@@ -1029,11 +1029,34 @@ const handleSkipPriceUpdate = () => {
                         return colTows.map((tow) => {
                           const rect = dayDriverColumnRects[driverIdx]
                           if (!rect) return null
-                          const towDate = new Date(tow.scheduled_at || tow.created_at)
-                          const hourFrac = towDate.getHours() + towDate.getMinutes() / 60
-                          const top = hourFrac * 60
+                          const effectiveStartIso = tow.started_at || tow.scheduled_at || tow.created_at
+                          const effectiveStart = new Date(effectiveStartIso)
+                          const hour = effectiveStart.getHours() + effectiveStart.getMinutes() / 60
+                          const top = hour * 60
                           const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                           const route = getRoute(tow)
+
+                          const startMs = effectiveStart.getTime()
+                          const scheduledForFallback = tow.scheduled_at || tow.created_at
+                          const scheduledMs = scheduledForFallback
+                            ? new Date(scheduledForFallback).getTime()
+                            : startMs
+
+                          let endMs: number
+                          if (tow.status === 'completed' && (tow as any).completed_at) {
+                            endMs = new Date((tow as any).completed_at).getTime()
+                          } else if (tow.status === 'in_progress') {
+                            const endOfDay = new Date(selectedDate)
+                            endOfDay.setHours(23, 59, 59, 999)
+                            endMs = Math.min(now, endOfDay.getTime())
+                          } else if (tow.status === 'assigned') {
+                            endMs = scheduledMs + 60 * 60 * 1000
+                          } else {
+                            endMs = startMs + 60 * 60 * 1000
+                          }
+
+                          const elapsedMinutes = Math.max(60, (endMs - startMs) / 60000)
+                          const heightPx = (elapsedMinutes / 60) * 60
 
                           return (
                             <div
@@ -1053,14 +1076,7 @@ const handleSkipPriceUpdate = () => {
                               } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                               style={{
                                 top: `${top}px`,
-                                height: (() => {
-                                  const isLive = tow.status === 'in_progress' || tow.status === 'assigned'
-                                  const isCompleted = tow.status === 'completed' && (tow as any).completed_at
-                                  const scheduledMs = new Date(tow.scheduled_at || tow.created_at).getTime()
-                                  const endMs = isCompleted ? new Date((tow as any).completed_at).getTime() : now
-                                  const elapsedMinutes = (isLive || isCompleted) ? Math.max(60, (endMs - scheduledMs) / 60000) : 60
-                                  return `${(elapsedMinutes / 60) * 60}px`
-                                })(),
+                                height: `${heightPx}px`,
                                 left: `${rect.left + 2}px`,
                                 width: `${rect.width - 4}px`,
                                 backgroundColor:
@@ -1084,11 +1100,22 @@ const handleSkipPriceUpdate = () => {
                                   לשיבוץ
                                 </div>
                               )}
-                              {tow.status === 'completed' && (
-                                <div className="absolute top-1 left-1 bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
-                                  ✓ בוצעה
-                                </div>
-                              )}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 2,
+                                  left: 2,
+                                  display: 'flex',
+                                  gap: 2,
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                {tow.status === 'completed' && (
+                                  <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                                    ✓ בוצעה
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex-1 min-w-0">
                                   <div className="font-bold truncate text-sm">
@@ -1099,7 +1126,7 @@ const handleSkipPriceUpdate = () => {
                                   </div>
                                 </div>
                                 <div className="text-xs opacity-80 mr-2">
-                                  {towDate.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                                  {effectiveStart.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               </div>
                             </div>
