@@ -114,6 +114,7 @@
     })
 
     const searchWrapRef = useRef<HTMLDivElement>(null)
+    const calendarScrollRef = useRef<HTMLDivElement>(null)
     const [towSearchInput, setTowSearchInput] = useState('')
     const [towSearchDebounced, setTowSearchDebounced] = useState('')
     const [towSearchResults, setTowSearchResults] = useState<TowWithDetails[]>([])
@@ -419,6 +420,15 @@
       return now.getHours() + now.getMinutes() / 60
     }
 
+    useEffect(() => {
+      if (loading || authLoading) return
+      const container = calendarScrollRef.current
+      if (!container) return
+      const currentTimePosition = getCurrentTimePosition() * PIXELS_PER_HOUR
+      // Position current time roughly in the top third of the visible area
+      container.scrollTop = Math.max(0, currentTimePosition - container.clientHeight / 3)
+    }, [loading, authLoading])
+
     function formatWaitTime(createdAt: string): string {
       const minutes = Math.round((Date.now() - new Date(createdAt).getTime()) / 60000)
       if (minutes < 60) return `${minutes} דק׳`
@@ -650,7 +660,7 @@
                   </div>
                 )}
               </div>
-              <div className="flex-1 overflow-auto min-h-0">
+              <div ref={calendarScrollRef} className="flex-1 overflow-auto min-h-0">
                 {driverIds.length === 0 ? (
                   <div className="flex items-center justify-center h-full text-gray-300 text-xs">אין גרירות ביום זה</div>
                 ) : (

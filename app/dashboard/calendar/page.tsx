@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
 import { getDrivers } from '../../lib/queries/drivers'
@@ -137,6 +137,8 @@ export default function CalendarPage() {
 
   // זיהוי מובייל
   const [isMobile, setIsMobile] = useState(false)
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 640)
@@ -360,6 +362,16 @@ export default function CalendarPage() {
     const now = new Date()
     return now.getHours() + now.getMinutes() / 60
   }
+
+  useEffect(() => {
+    if (loading) return
+    const container = scrollContainerRef.current
+    if (!container) return
+    const hourHeight = view === 'week' ? 50 : 60
+    const currentTimePosition = getCurrentTime() * hourHeight
+    // Position current time roughly in the top third of the visible area
+    container.scrollTop = Math.max(0, currentTimePosition - container.clientHeight / 3)
+  }, [view, loading])
 
   // Drag & Drop
   const handleDragStart = (e: React.DragEvent, tow: TowWithDetails) => {
@@ -752,7 +764,7 @@ const handleSkipPriceUpdate = () => {
             )}
 
             {/* Time Grid */}
-            <div className="relative">
+            <div ref={scrollContainerRef} className="relative overflow-y-auto max-h-[calc(100vh-280px)]">
               {hours.map((hour) => (
                 <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-2' : 'grid-cols-8'}`} style={{ height: '50px' }}>
                   <div className="p-1 sm:p-2 text-xs sm:text-sm text-gray-400 text-center border-l border-gray-200 flex items-start justify-center">
@@ -910,7 +922,7 @@ const handleSkipPriceUpdate = () => {
             {/* Time Grid for Day View */}
             <div className="overflow-x-auto">
               <div className="min-w-[300px]">
-                <div className="relative">
+                <div ref={scrollContainerRef} className="relative overflow-y-auto max-h-[calc(100vh-280px)]">
                   {hours.map((hour) => {
                     return (
                       <div
