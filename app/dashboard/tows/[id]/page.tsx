@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
+import { normalizePlate } from '../../../lib/utils/plate-number'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
@@ -1222,7 +1223,7 @@ export default function TowDetailsPage() {
                               <input
                                 type="text"
                                 value={vehicle.plateNumber}
-                                onChange={(e) => updateVehicle(vehicle.id, 'plateNumber', e.target.value)}
+                                onChange={(e) => updateVehicle(vehicle.id, 'plateNumber', normalizePlate(e.target.value))}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                               />
                             </div>

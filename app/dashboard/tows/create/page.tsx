@@ -33,6 +33,7 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
+import { normalizePlate } from '../../../lib/utils/plate-number'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow } from '../../../lib/queries/tows'
 import { addVehicleToStorage, releaseVehicleFromStorage, searchStoredVehicle } from '../../../lib/queries/storage'
@@ -744,7 +745,7 @@ function CreateTowForm({
                               <input
                                 type="text"
                                 value={vehiclePlate}
-                                onChange={(e) => { setVehiclePlate(e.target.value); setPlateStorageWarning(null); setVehicleNotFound(false) }}
+                                onChange={(e) => { setVehiclePlate(normalizePlate(e.target.value)); setPlateStorageWarning(null); setVehicleNotFound(false) }}
                                 onBlur={async (e) => {
                                   const val = e.target.value.trim()
                                   if (val && val.replace(/[^0-9]/g, '').length >= 5) {
@@ -1495,7 +1496,7 @@ function CreateTowForm({
                         <input
                           type="text"
                           value={defectiveVehiclePlate}
-                          onChange={(e) => { setDefectiveVehiclePlate(e.target.value); setDefectiveVehicleNotFound(false) }}
+                          onChange={(e) => { setDefectiveVehiclePlate(normalizePlate(e.target.value)); setDefectiveVehicleNotFound(false) }}
                           onBlur={async (e) => {
                             const val = e.target.value.trim()
                             if (val && val.replace(/[^0-9]/g, '').length >= 5) {

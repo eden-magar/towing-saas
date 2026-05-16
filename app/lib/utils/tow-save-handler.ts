@@ -4,6 +4,7 @@ import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/Ro
 import { SelectedService } from '../../components/tow-forms/shared'
 import { calculateTowPrice, extractBasePrices } from './price-calculator'
 import { VehicleType } from '../types'
+import { normalizePlate } from './plate-number'
 
 // ==================== Types ====================
 
@@ -289,7 +290,7 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
   
   // המרה לפורמט של createTow
   return Array.from(vehiclesMap.values()).map(v => ({
-    plateNumber: v.plateNumber,
+    plateNumber: normalizePlate(v.plateNumber),
     manufacturer: v.vehicleData?.manufacturer,
     model: v.vehicleData?.model,
     year: v.vehicleData?.year ? Number(v.vehicleData.year) : undefined,
@@ -813,7 +814,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   : buildSingleTowPriceBreakdown(input)
     
     const vehicles: PreparedTowData['vehicles'] = [{
-      plateNumber: input.vehiclePlate || '',
+      plateNumber: normalizePlate(input.vehiclePlate || ''),
       vehicleType: mapVehicleType(input.vehicleType || ''),
       manufacturer: input.vehicleData?.data?.manufacturer || input.manualManufacturer,
       model: input.vehicleData?.data?.model,
@@ -936,7 +937,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   // רכב תקין
   if (input.workingVehiclePlate) {
     vehicles.push({
-      plateNumber: input.workingVehiclePlate,
+      plateNumber: normalizePlate(input.workingVehiclePlate),
       vehicleCode: input.workingVehicleCode || undefined,
       vehicleType: mapVehicleType(input.workingVehicleType || ''),
       manufacturer: input.workingVehicleData?.data?.manufacturer,
@@ -955,7 +956,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   // רכב תקול
   if (input.defectiveVehiclePlate) {
     vehicles.push({
-      plateNumber: input.defectiveVehiclePlate,
+      plateNumber: normalizePlate(input.defectiveVehiclePlate),
       vehicleCode: input.defectiveVehicleCode || undefined,
       vehicleType: mapVehicleType(input.vehicleType || ''),
       manufacturer: input.defectiveVehicleData?.data?.manufacturer,

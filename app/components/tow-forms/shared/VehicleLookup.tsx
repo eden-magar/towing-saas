@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Search, Loader2, AlertTriangle } from 'lucide-react'
 import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
+import { normalizePlate } from '../../../lib/utils/plate-number'
 
 interface VehicleLookupProps {
   plateNumber: string
@@ -69,7 +70,7 @@ export function VehicleLookup({
           type="text"
           value={plateNumber}
           onChange={(e) => {
-            const newValue = e.target.value
+            const newValue = normalizePlate(e.target.value)
             onPlateChange(newValue)
             if (newValue.replace(/[^0-9]/g, '').length < 5) {
               onVehicleDataChange(null)

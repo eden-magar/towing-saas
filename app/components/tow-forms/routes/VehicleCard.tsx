@@ -5,6 +5,7 @@ import { Car, Key, X, Search, Loader2 } from 'lucide-react'
 import { VehicleData } from './VehicleInfoCard'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { VehicleLookupResult } from '../../../lib/types'
+import { normalizePlate } from '../../../lib/utils/plate-number'
 
 const DEFECT_OPTIONS = [
   { value: 'אין חשמל', label: 'אין חשמל', icon: '🔋' },
@@ -205,7 +206,7 @@ export function VehicleCard({
               onChange={(e) =>
                 onChange({
                   ...vehicle,
-                  plateNumber: e.target.value,
+                  plateNumber: normalizePlate(e.target.value),
                   isFound: false,
                   vehicleNotFound: false,
                   vehicleData: undefined,

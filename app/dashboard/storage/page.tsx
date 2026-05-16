@@ -21,6 +21,7 @@ import {
   Building2
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
+import { normalizePlate } from '../../lib/utils/plate-number'
 import { 
   getStoredVehicles, 
   addVehicleToStorage, 
@@ -689,7 +690,7 @@ export default function StoragePage() {
                     <input
                       type="text"
                       value={formData.plateNumber}
-                      onChange={(e) => setFormData({ ...formData, plateNumber: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, plateNumber: normalizePlate(e.target.value) })}
                       onBlur={handleVehicleLookup}
                       disabled={modalMode === 'edit'}
                       placeholder="12-345-67"
