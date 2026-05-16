@@ -36,6 +36,7 @@ import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow } from '../../../lib/queries/tows'
 import { addVehicleToStorage, releaseVehicleFromStorage, searchStoredVehicle } from '../../../lib/queries/storage'
@@ -2198,7 +2199,7 @@ function CreateTowForm({
                       ₪{finalPrice}
                     </p>
                     <p className="text-sm text-amber-800 mb-4">
-                      {towType} • {(towType === 'exchange' ? (exchangeTotalDistance?.distanceKm ?? 0) : totalDistanceKm).toFixed(1)} ק״מ
+                      {getTowTypeLabel(towType)} • {(towType === 'exchange' ? (exchangeTotalDistance?.distanceKm ?? 0) : totalDistanceKm).toFixed(1)} ק״מ
                     </p>
                     <div className="flex gap-3">
                       <button
@@ -2536,7 +2537,7 @@ function CreateTowForm({
               <p className="text-xs text-gray-500">
                 {towDate} {towTime}
               </p>
-              <p className="text-xs text-gray-500 mt-1">{towType}</p>
+              <p className="text-xs text-gray-500 mt-1">{getTowTypeLabel(towType)}</p>
               <p className="text-xs mt-2">
                 {quoteApproved
                   ? 'אושר ✓'

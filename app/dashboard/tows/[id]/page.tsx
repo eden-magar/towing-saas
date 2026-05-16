@@ -7,6 +7,8 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
+import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
@@ -41,19 +43,6 @@ import { getTrucks } from '../../../lib/queries/trucks'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
 import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
 import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
-
-
-// מיפוי סוגי גרר לעברית
-const truckTypeLabels: Record<string, string> = {
-  'carrier': 'מוביל',
-  'carrier_large': 'מוביל גדול',
-  'crane_tow': 'מנוף',
-  'dolly': 'דולי',
-  'flatbed': 'רמסע',
-  'heavy_equipment': 'ציוד כבד',
-  'heavy_rescue': 'חילוץ כבד',
-  'wheel_lift_cradle': 'משקפיים'
-}
 
 type RoutePointLite = { point_type: string; point_order: number }
 
@@ -198,14 +187,6 @@ export default function TowDetailsPage() {
     completed: { label: 'הושלם', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
     cancelled: { label: 'בוטל', color: 'bg-gray-100 text-gray-500 border-gray-200' },
     quote: { label: 'הצעת מחיר', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  }
-
-  const towTypeLabels: Record<string, string> = {
-    simple: 'גרירה פשוטה',
-    with_base: 'יציאה מבסיס',
-    transfer: 'העברה',
-    multi_vehicle: 'מרובת רכבים',
-    exchange: 'תקין ↔ תקול',
   }
 
   // טעינת נתונים
@@ -793,7 +774,7 @@ export default function TowDetailsPage() {
                 <Truck size={16} className="text-gray-400" />
                 {(() => {
                   const truck = getDriverTrucks(selectedDriverId).find(t => t.id === selectedTruckId)
-                  return truck ? `${truckTypeLabels[truck.truck_type] || truck.truck_type} — ${truck.plate_number}` : ''
+                  return truck ? `${getTruckTypeLabel(truck.truck_type)} — ${truck.plate_number}` : ''
                 })()}
               </div>
             )}
@@ -867,7 +848,7 @@ export default function TowDetailsPage() {
                   </span>
                   {tow.tow_type && (
                     <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-gray-100 text-gray-700 border-gray-200">
-                      {towTypeLabels[tow.tow_type] || tow.tow_type}
+                      {getTowTypeLabel(tow.tow_type)}
                     </span>
                   )}
                 </div>
@@ -1331,7 +1312,7 @@ export default function TowDetailsPage() {
                       {(tow.required_truck_types as string[])?.length > 0 ? (
                         (tow.required_truck_types as string[]).map((type) => (
                           <span key={type} className="px-3 py-1.5 bg-[#33d4ff]/10 text-[#33d4ff] rounded-lg text-sm font-medium">
-                            {truckTypeLabels[type] || type}
+                            {getTruckTypeLabel(type)}
                           </span>
                         ))
                       ) : (
@@ -2424,7 +2405,7 @@ export default function TowDetailsPage() {
                           : 'border-gray-200'
                       }`}
                     >
-                      {truck.truck_type} — {truck.plate_number}
+                      {getTruckTypeLabel(truck.truck_type)} — {truck.plate_number}
                     </button>
                   ))}
                 </div>

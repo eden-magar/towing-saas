@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, User, Clock, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { getTruckTypeLabel } from '../lib/utils/truck-type-labels'
 
 interface DriverSchedulePickerProps {
   companyId: string
@@ -24,18 +25,6 @@ interface TowEvent {
   scheduled_at: string
   customer_name: string
   driver_id: string
-}
-
-// מיפוי סוגי גרר לעברית
-const truckTypeLabels: Record<string, string> = {
-  'carrier': 'מוביל',
-  'carrier_large': 'מוביל גדול',
-  'crane_tow': 'מנוף',
-  'dolly': 'דולי',
-  'flatbed': 'רמסע',
-  'heavy_equipment': 'ציוד כבד',
-  'heavy_rescue': 'חילוץ כבד',
-  'wheel_lift_cradle': 'משקפיים'
 }
 
 export function DriverSchedulePicker({
@@ -204,7 +193,7 @@ export function DriverSchedulePicker({
       {requiredTruckTypes && requiredTruckTypes.length > 0 && (
         <div className="mx-4 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
           <p className="text-sm text-amber-700 font-medium">
-            ⚠️ נדרש גרר מסוג: {requiredTruckTypes.map(t => truckTypeLabels[t] || t).join(', ')}
+            ⚠️ נדרש גרר מסוג: {requiredTruckTypes.map(t => getTruckTypeLabel(t)).join(', ')}
           </p>
         </div>
       )}
@@ -239,7 +228,7 @@ export function DriverSchedulePicker({
           <div className="space-y-3">
             {filteredDrivers.map(driver => {
               const driverTows = getDriverTows(driver.id)
-              const driverTruckTypes = driver.trucks.map(t => truckTypeLabels[t.truck_type] || t.truck_type)
+              const driverTruckTypes = driver.trucks.map(t => getTruckTypeLabel(t.truck_type))
               
               return (
                 <div

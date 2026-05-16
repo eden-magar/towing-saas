@@ -14,6 +14,7 @@ import type {
   LegacyPaymentType,
   LegacyPriceBredown,
 } from './types'
+import { getTruckTypeLabel } from '../../utils/truck-type-labels'
 
 // ---------------------------------------------------------------------------
 // Input shape (extends getTowWithPoints result + optional joins)
@@ -277,7 +278,7 @@ function buildSharedBase(tow: TowForLegacyMapping, towSelection: string) {
 function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
   const vehicles = sortVehicles(tow.vehicles ?? [])
   const hasSecondCar = vehicles.length >= 2
-  const towSelection = (tow.required_truck_types ?? []).join(', ')
+  const towSelection = (tow.required_truck_types ?? []).map(getTruckTypeLabel).filter(Boolean).join(', ')
   const points = sortPoints(tow.points ?? [])
 
   const pickupPoint = findPickupPoint(points)
@@ -336,7 +337,7 @@ function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
 
 function mapExchangeNewPayload(tow: TowForLegacyMapping): LegacyPayloadExchangeNew {
   const vehicles = sortVehicles(tow.vehicles ?? [])
-  const towSelection = (tow.required_truck_types ?? []).join(', ')
+  const towSelection = (tow.required_truck_types ?? []).map(getTruckTypeLabel).filter(Boolean).join(', ')
   const points = sortPoints(tow.points ?? [])
 
   const working =
