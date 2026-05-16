@@ -14,8 +14,10 @@ import { getDayTows } from '../../../lib/queries/calendar'
 import { TowWithDetails } from '../../../lib/queries/tows'
 import {
   ArrowRight,
+  ArrowLeftRight,
   Check,
   Truck,
+  Route,
   MapPin,
   Plus,
   Minus,
@@ -688,28 +690,31 @@ function CreateTowForm({
             <h2 className="font-bold text-gray-800 text-sm sm:text-base mb-3 px-1">
               סוג גרירה
             </h2>
-            <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+            <div className="grid grid-cols-3 gap-3">
               {[
-                { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B' },
-                { value: 'exchange' as const, label: 'תקין ↔ תקול', sub: '3 שלבים' },
-                { value: 'custom' as const, label: 'מסלול מותאם', sub: 'נקודות חופשיות' },
-              ].map((option, i) => (
+                { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B', icon: Truck },
+                { value: 'exchange' as const, label: 'תקין ↔ תקול', sub: '3 שלבים', icon: ArrowLeftRight },
+                { value: 'custom' as const, label: 'מסלול מותאם', sub: 'נקודות חופשיות', icon: Route },
+              ].map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => handleTowTypeSelect(option.value)}
-                  className={`flex-1 py-2.5 px-2 text-center transition-colors
-                    ${i > 0 ? 'border-r border-gray-200' : ''}
-                    ${
-                      towType === option.value
-                        ? 'bg-[#33d4ff] text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
+                  className={
+                    towType === option.value
+                      ? 'bg-[#33d4ff]/10 border-2 border-[#33d4ff] rounded-xl py-4 px-3 text-center cursor-pointer transition-all shadow-md'
+                      : 'bg-white border-2 border-gray-200 rounded-xl py-4 px-3 text-center cursor-pointer transition-all hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5'
+                  }
                 >
-                  <div className="text-sm font-medium">{option.label}</div>
+                  <option.icon
+                    className={`w-7 h-7 mx-auto mb-2 ${
+                      towType === option.value ? 'text-[#33d4ff]' : 'text-gray-500'
+                    }`}
+                  />
+                  <div className="text-base font-medium text-gray-800">{option.label}</div>
                   <div
-                    className={`text-xs mt-0.5 ${
-                      towType === option.value ? 'text-white/80' : 'text-gray-400'
+                    className={`text-xs mt-1 ${
+                      towType === option.value ? 'text-gray-600' : 'text-gray-400'
                     }`}
                   >
                     {option.sub}

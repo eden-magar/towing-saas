@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, User } from 'lucide-react'
+import { Search, User, ArrowLeftRight } from 'lucide-react'
 import { CustomerWithDetails } from '../../../lib/queries/customers'
 import { CustomerWithPricing } from '../../../lib/queries/price-lists'
 
@@ -161,9 +161,10 @@ export function CustomerSection({
               <button
                 type="button"
                 onClick={clearCustomer}
-                className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
+                className="flex items-center gap-1.5 text-xs text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 hover:border-gray-400 shrink-0 transition-colors"
               >
-                החלף
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                החלף לקוח
               </button>
               <div className="text-right flex-1 min-w-0">
                 <div className="font-medium text-sm text-gray-800 truncate">{customerName}</div>
