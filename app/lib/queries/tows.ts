@@ -900,6 +900,10 @@ interface UpdateTowInput {
   visibilityOverrides?: Record<string, boolean> | null
   secondDriverId?: string | null
   secondDriverScheduledAt?: string | null
+  towType?: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
+  driverId?: string | null
+  truckId?: string | null
+  status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
 
 }
 
@@ -921,7 +925,10 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.visibilityOverrides !== undefined) towUpdates.visibility_overrides = input.visibilityOverrides
   if (input.secondDriverId !== undefined) towUpdates.second_driver_id = input.secondDriverId
   if (input.secondDriverScheduledAt !== undefined) towUpdates.second_driver_scheduled_at = input.secondDriverScheduledAt
-
+  if (input.towType !== undefined) towUpdates.tow_type = input.towType
+  if (input.driverId !== undefined) towUpdates.driver_id = input.driverId
+  if (input.truckId !== undefined) towUpdates.truck_id = input.truckId
+  if (input.status !== undefined) towUpdates.status = input.status
 
   if (Object.keys(towUpdates).length > 0) {
     const { error: towError } = await supabase

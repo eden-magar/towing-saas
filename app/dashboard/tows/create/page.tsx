@@ -38,7 +38,7 @@ import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
-import { createTow } from '../../../lib/queries/tows'
+import { createTow, updateTow } from '../../../lib/queries/tows'
 import { addVehicleToStorage, releaseVehicleFromStorage, searchStoredVehicle } from '../../../lib/queries/storage'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import type { AddressData } from '../../../lib/google-maps'
@@ -242,6 +242,7 @@ function CreateTowForm({
     customerOrderNumber,
     setCustomerOrderNumber,
     orderNumber,
+    loadedTowStatus,
     notes,
     setNotes,
     selectedDefects,
@@ -300,6 +301,18 @@ function CreateTowForm({
     if (timeParam) setTowTime(timeParam)
     if (driverParam) setPreSelectedDriverId(driverParam)
   }, [dateParam, timeParam, driverParam])
+
+  useEffect(() => {
+    if (loadedTowStatus !== null && loadedTowStatus !== 'quote') {
+      setQuoteApproved(true)
+    }
+  }, [loadedTowStatus])
+
+  useEffect(() => {
+    if (editTowId && (loadedTowStatus === 'completed' || loadedTowStatus === 'cancelled')) {
+      router.push(`/dashboard/tows/${editTowId}`)
+    }
+  }, [loadedTowStatus, editTowId, router])
 
   const handleNowClick = () => {
     const now = new Date()
@@ -497,38 +510,43 @@ function CreateTowForm({
         manualColor,
         manualWeight,
       })
-      const result = await createTow({ ...towData, status: 'quote' as const })
-      if (selectedStoredVehicleId && companyId) {
-        await releaseVehicleFromStorage({
-          storedVehicleId: selectedStoredVehicleId,
-          towId: result.id,
-          performedBy: user.id,
-          notes: 'שוחרר לגרירה',
-        })
-      }
-      if (dropoffToStorage && companyId) {
-        await addVehicleToStorage({
-          companyId,
-          customerId: selectedCustomerId || undefined,
-          plateNumber: plate,
-          vehicleData: vData?.data
-            ? {
-                manufacturer: vData.data.manufacturer || undefined,
-                model: vData.data.model || undefined,
-                year: vData.data.year?.toString(),
-                color: vData.data.color || undefined,
-                gearType: vData.data.gearType || undefined,
-                driveType: vData.data.driveType || undefined,
-                totalWeight: vData.data.totalWeight?.toString(),
-                source: vData.source || undefined,
-                sourceLabel: vData.sourceLabel || undefined,
-              }
-            : undefined,
-          towId: result.id,
-          performedBy: user.id,
-          notes: 'נכנס מגרירה',
-          vehicleCondition: 'operational',
-        })
+      if (editTowId) {
+        await updateTow({ ...towData, towId: editTowId, status: 'quote', priceMode })
+        setQuoteSavedId(editTowId)
+      } else {
+        const result = await createTow({ ...towData, status: 'quote' as const })
+        if (selectedStoredVehicleId && companyId) {
+          await releaseVehicleFromStorage({
+            storedVehicleId: selectedStoredVehicleId,
+            towId: result.id,
+            performedBy: user.id,
+            notes: 'שוחרר לגרירה',
+          })
+        }
+        if (dropoffToStorage && companyId) {
+          await addVehicleToStorage({
+            companyId,
+            customerId: selectedCustomerId || undefined,
+            plateNumber: plate,
+            vehicleData: vData?.data
+              ? {
+                  manufacturer: vData.data.manufacturer || undefined,
+                  model: vData.data.model || undefined,
+                  year: vData.data.year?.toString(),
+                  color: vData.data.color || undefined,
+                  gearType: vData.data.gearType || undefined,
+                  driveType: vData.data.driveType || undefined,
+                  totalWeight: vData.data.totalWeight?.toString(),
+                  source: vData.source || undefined,
+                  sourceLabel: vData.sourceLabel || undefined,
+                }
+              : undefined,
+            towId: result.id,
+            performedBy: user.id,
+            notes: 'נכנס מגרירה',
+            vehicleCondition: 'operational',
+          })
+        }
       }
       router.push('/dashboard')
     } catch (err) {
@@ -580,6 +598,8 @@ function CreateTowForm({
     invoiceName,
     dropoffToStorage,
     selectedStoredVehicleId,
+    editTowId,
+    priceMode,
   ])
 
   const totalDistanceKm =
@@ -647,10 +667,10 @@ function CreateTowForm({
               </Link>
               <div>
                 <h1 className="font-bold text-gray-800 text-base sm:text-lg">
-                  גרירה חדשה
+                  {editTowId ? 'עריכת גרירה' : 'גרירה חדשה'}
                 </h1>
                 <p className="text-xs text-gray-500 hidden sm:block">
-                  מילוי פרטי הגרירה
+                  {editTowId ? 'עדכון פרטי הגרירה' : 'מילוי פרטי הגרירה'}
                 </p>
               </div>
             </div>

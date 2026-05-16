@@ -163,6 +163,7 @@ export function useTowForm(editTowId?: string) {
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
+  const [loadedTowStatus, setLoadedTowStatus] = useState<string | null>(null)
 
   // Storage
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
@@ -391,6 +392,7 @@ export function useTowForm(editTowId?: string) {
       try {
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
+        setLoadedTowStatus(tow.status)
         // Customer
         setSelectedCustomerId(tow.customer_id)
         setCustomerName(tow.customer?.name || '')
@@ -409,6 +411,7 @@ export function useTowForm(editTowId?: string) {
           'with_base': 'single',
           'transfer': 'custom',
           'multi_vehicle': 'custom',
+          'exchange': 'exchange',
         }
         setTowType(towTypeMap[tow.tow_type] || 'single')
         // Notes
@@ -444,40 +447,147 @@ export function useTowForm(editTowId?: string) {
         setSelectedLocationSurcharges(
           (tow.price_breakdown?.location_surcharges ?? []).map((s: { id: string }) => s.id)
         )
-        // Single tow - vehicle
-        const firstVehicle = tow.points
-          ?.flatMap((p: any) => p.vehicles || [])
-          ?.find((pv: any) => pv.vehicle)?.vehicle
-        if (firstVehicle) {
-          setVehiclePlate(firstVehicle.plate_number || '')
-          setVehicleCode('')
-          setVehicleType((firstVehicle as any).vehicle_type || '')
-          const defectsRaw = firstVehicle.tow_reason || ''
-          setSelectedDefects(
-            defectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean)
+
+        if (tow.tow_type === 'exchange') {
+          const vehicles = tow.vehicles ?? []
+          const working = vehicles.find((v: any) => v.is_working === true)
+          const defective = vehicles.find((v: any) => v.is_working === false)
+
+          setWorkingVehiclePlate(working?.plate_number ?? '')
+          setWorkingVehicleCode((working as any)?.vehicle_code ?? '')
+          setWorkingVehicleType((working?.vehicle_type as VehicleType) ?? '')
+          setDefectiveVehiclePlate(defective?.plate_number ?? '')
+          setDefectiveVehicleCode((defective as any)?.vehicle_code ?? '')
+          setDefectiveVehicleType((defective?.vehicle_type as VehicleType) ?? '')
+          setSelectedDefects((defective?.tow_reason ?? '').split(', ').filter(Boolean))
+          setDefectiveFaultDescription(defective?.tow_reason ?? '')
+
+          const sortedPoints = [...(tow.points ?? [])].sort(
+            (a: any, b: any) => a.point_order - b.point_order
           )
-        }
-        // Points / addresses
-        if (tow.points && tow.points.length > 0) {
-          const pickup = tow.points.find((p: any) => p.point_type === 'pickup')
-          const dropoff = tow.points.find((p: any) => p.point_type === 'dropoff')
-          if (pickup) {
-            setPickupAddress({ 
-              address: pickup.address || '',
-              lat: pickup.lat ? Number(pickup.lat) : undefined,
-              lng: pickup.lng ? Number(pickup.lng) : undefined
-            })
-            setPickupContactName(pickup.contact_name || '')
-            setPickupContactPhone(pickup.contact_phone || '')
+          const pointToAddressData = (p: any): AddressData => ({
+            address: p.address || '',
+            lat: p.lat ? Number(p.lat) : undefined,
+            lng: p.lng ? Number(p.lng) : undefined,
+          })
+          const linksOnlyWorking = (p: any) => {
+            const vehs = (p.vehicles ?? []).map((pv: any) => pv.vehicle).filter(Boolean)
+            return vehs.length > 0 && vehs.every((v: any) => v.is_working === true)
           }
-          if (dropoff) {
-            setDropoffAddress({ 
-              address: dropoff.address || '',
-              lat: dropoff.lat ? Number(dropoff.lat) : undefined,
-              lng: dropoff.lng ? Number(dropoff.lng) : undefined
-            })
-            setDropoffContactName(dropoff.contact_name || '')
-            setDropoffContactPhone(dropoff.contact_phone || '')
+          const linksDefective = (p: any) => {
+            const vehs = (p.vehicles ?? []).map((pv: any) => pv.vehicle).filter(Boolean)
+            return vehs.length > 0 && vehs.every((v: any) => v.is_working === false)
+          }
+
+          const hasExchangeHub = sortedPoints.some((p: any) => p.point_type === 'exchange')
+
+          if (hasExchangeHub) {
+            const workingSource = sortedPoints.find(
+              (p: any) => p.point_type === 'pickup' && linksOnlyWorking(p)
+            )
+            const exchangeHub = sortedPoints.find((p: any) => p.point_type === 'exchange')
+            const defectiveDest = sortedPoints.find(
+              (p: any) => p.point_type === 'dropoff' && linksDefective(p)
+            )
+            const workingDest = sortedPoints.find(
+              (p: any) => p.point_type === 'dropoff' && linksOnlyWorking(p)
+            )
+
+            if (workingSource) {
+              setWorkingVehicleAddress(pointToAddressData(workingSource))
+              setWorkingVehicleContact(workingSource.contact_name || '')
+              setWorkingVehicleContactPhone(workingSource.contact_phone || '')
+            }
+            if (exchangeHub) {
+              setExchangeAddress(pointToAddressData(exchangeHub))
+              setExchangeContactName(exchangeHub.contact_name || '')
+              setExchangeContactPhone(exchangeHub.contact_phone || '')
+            }
+            if (defectiveDest) {
+              setDefectiveDestinationAddress(pointToAddressData(defectiveDest))
+              setDefectiveDestinationContact(defectiveDest.contact_name || '')
+              setDefectiveDestinationContactPhone(defectiveDest.contact_phone || '')
+            }
+            if (workingDest) {
+              setWorkingVehicleDestinationAddress(pointToAddressData(workingDest))
+              setWorkingDestinationContact(workingDest.contact_name || '')
+              setWorkingDestinationContactPhone(workingDest.contact_phone || '')
+            }
+          } else if (sortedPoints.length === 4) {
+            const [p0, p1, p2, p3] = sortedPoints
+            setWorkingVehicleAddress(pointToAddressData(p0))
+            setWorkingVehicleContact(p0.contact_name || '')
+            setWorkingVehicleContactPhone(p0.contact_phone || '')
+            setWorkingVehicleDestinationAddress(pointToAddressData(p1))
+            setWorkingDestinationContact(p1.contact_name || '')
+            setWorkingDestinationContactPhone(p1.contact_phone || '')
+            setExchangeAddress(pointToAddressData(p2))
+            setExchangeContactName(p2.contact_name || '')
+            setExchangeContactPhone(p2.contact_phone || '')
+            setDefectiveDestinationAddress(pointToAddressData(p3))
+            setDefectiveDestinationContact(p3.contact_name || '')
+            setDefectiveDestinationContactPhone(p3.contact_phone || '')
+          }
+
+          const mapExchangeService = (s: {
+            id: string
+            price: number
+            units?: number
+            amount: number
+            vehicle_role?: string
+          }) => ({
+            id: s.id,
+            quantity: s.units,
+            manualPrice: s.units === undefined && s.amount !== s.price ? s.amount : undefined,
+          })
+          const serviceSurcharges = tow.price_breakdown?.service_surcharges ?? []
+          setWorkingSelectedServices(
+            serviceSurcharges
+              .filter((s: any) => s.vehicle_role === 'working')
+              .map(mapExchangeService)
+          )
+          setDefectiveSelectedServices(
+            serviceSurcharges
+              .filter((s: any) => s.vehicle_role === 'defective')
+              .map(mapExchangeService)
+          )
+          setSelectedServices([])
+        } else {
+          // Single tow - vehicle
+          const firstVehicle = tow.points
+            ?.flatMap((p: any) => p.vehicles || [])
+            ?.find((pv: any) => pv.vehicle)?.vehicle
+          if (firstVehicle) {
+            setVehiclePlate(firstVehicle.plate_number || '')
+            setVehicleCode('')
+            setVehicleType((firstVehicle as any).vehicle_type || '')
+            const defectsRaw = firstVehicle.tow_reason || ''
+            setSelectedDefects(
+              defectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean)
+            )
+          }
+          // Points / addresses
+          if (tow.points && tow.points.length > 0) {
+            const pickup = tow.points.find((p: any) => p.point_type === 'pickup')
+            const dropoff = tow.points.find((p: any) => p.point_type === 'dropoff')
+            if (pickup) {
+              setPickupAddress({
+                address: pickup.address || '',
+                lat: pickup.lat ? Number(pickup.lat) : undefined,
+                lng: pickup.lng ? Number(pickup.lng) : undefined,
+              })
+              setPickupContactName(pickup.contact_name || '')
+              setPickupContactPhone(pickup.contact_phone || '')
+            }
+            if (dropoff) {
+              setDropoffAddress({
+                address: dropoff.address || '',
+                lat: dropoff.lat ? Number(dropoff.lat) : undefined,
+                lng: dropoff.lng ? Number(dropoff.lng) : undefined,
+              })
+              setDropoffContactName(dropoff.contact_name || '')
+              setDropoffContactPhone(dropoff.contact_phone || '')
+            }
           }
         }
         // Custom tow - route points
@@ -863,6 +973,7 @@ export function useTowForm(editTowId?: string) {
     // Customer
     customerOrderNumber, setCustomerOrderNumber,
     orderNumber,
+    loadedTowStatus,
     customerName, setCustomerName,
     customerPhone, setCustomerPhone,
     customerEmail, setCustomerEmail,
