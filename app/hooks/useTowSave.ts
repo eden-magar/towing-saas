@@ -9,6 +9,7 @@ import { CustomerWithPricing, LocationSurcharge, ServiceSurcharge, TimeSurcharge
 import { VehicleLookupResult, VehicleType } from '../lib/types'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
+import { supabase } from '../lib/supabase'
 
 interface UseTowSaveParams {
   companyId: string | null
@@ -375,6 +376,32 @@ export function useTowSave(params: UseTowSaveParams) {
     router.push(`/dashboard/tows/${editTowId}`)
     } else {
       const result = await createTow(towData)
+
+      const createdStatus =
+        (towData as { status?: string; driverId?: string }).status ??
+        (towData.driverId ? 'assigned' : 'pending')
+      if (createdStatus !== 'quote') {
+        void (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+            if (!token) return
+            const res = await fetch('/api/integrations/legacy-calendar/sync', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ tow_id: result.id }),
+            })
+            if (!res.ok) {
+              console.warn('[legacy-calendar-sync] sync request failed', res.status)
+            }
+          } catch (err) {
+            console.warn('[legacy-calendar-sync] sync request failed', err)
+          }
+        })()
+      }
 
       if (selectedStoredVehicleId && companyId) {
         await releaseVehicleFromStorage({
