@@ -47,6 +47,7 @@ export async function getCustomerTows(
     .select(`
       id,
       order_number,
+      customer_order_number,
       status,
       tow_type,
       scheduled_at,

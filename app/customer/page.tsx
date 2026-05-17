@@ -82,6 +82,7 @@ export default function CustomerDashboard() {
     const q = searchQuery.toLowerCase()
     return (
       tow.order_number?.toLowerCase().includes(q) ||
+      tow.customer_order_number?.toLowerCase().includes(q) ||
       tow.vehicles.some(v => v.plate_number.includes(q)) ||
       tow.points.some(p => p.address?.toLowerCase().includes(q))
     )

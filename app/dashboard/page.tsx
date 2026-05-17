@@ -583,7 +583,13 @@
                         setIsSearching(false)
                       }}
                     >
-                      <span className="font-bold text-gray-800">{t.order_number ?? '—'}</span>
+                      <span className="font-bold text-gray-800">
+                        {t.order_number ? (
+                          <>{t.order_number}{t.customer_order_number ? ` (${t.customer_order_number})` : ''}</>
+                        ) : (
+                          '—'
+                        )}
+                      </span>
                       <span className="text-gray-400">|</span>
                       <span className="text-gray-700">{t.customer?.name ?? '—'}</span>
                       <span className="text-gray-400">|</span>

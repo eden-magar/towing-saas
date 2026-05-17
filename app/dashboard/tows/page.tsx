@@ -69,17 +69,19 @@ export default function TowsPage() {
       const customerName = tow.customer?.name?.toLowerCase() || ''
       const driverName = tow.driver?.user?.full_name?.toLowerCase() || ''
       const orderNum = tow.order_number?.toLowerCase() || ''
+      const customerOrderNum = tow.customer_order_number?.toLowerCase() || ''
       
-      // חיפוש עם # מחפש רק מספר הזמנה
+      // חיפוש עם # מחפש מספרי הזמנה (אוטומטי או של לקוח)
       if (query.startsWith('#')) {
         const orderQuery = query.slice(1)
-        return orderNum.startsWith(orderQuery)
+        return orderNum.startsWith(orderQuery) || customerOrderNum.startsWith(orderQuery)
       }
       
       if (!vehiclePlate.includes(query) && 
           !customerName.includes(query) && 
           !driverName.includes(query) &&
-          !orderNum.startsWith(query)) {
+          !orderNum.startsWith(query) &&
+          !customerOrderNum.startsWith(query)) {
         return false
       }
     }

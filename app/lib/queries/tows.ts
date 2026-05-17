@@ -250,14 +250,16 @@ export async function searchTows(companyId: string, query: string): Promise<TowW
 
   const pattern = `%${q}%`
 
-  const [orderRes, customersRes, vehiclesRes] = await Promise.all([
+  const [orderRes, customerOrderRes, customersRes, vehiclesRes] = await Promise.all([
     supabase.from('tows').select('id').eq('company_id', companyId).ilike('order_number', pattern),
+    supabase.from('tows').select('id').eq('company_id', companyId).ilike('customer_order_number', pattern),
     supabase.from('customers').select('id').ilike('name', pattern),
     supabase.from('tow_vehicles').select('tow_id').ilike('plate_number', pattern),
   ])
 
   const ids = new Set<string>()
   orderRes.data?.forEach((r: { id: string }) => ids.add(r.id))
+  customerOrderRes.data?.forEach((r: { id: string }) => ids.add(r.id))
 
   const customerIds = customersRes.data?.map((c: { id: string }) => c.id) || []
   if (customerIds.length > 0) {
