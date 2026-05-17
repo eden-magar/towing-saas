@@ -452,7 +452,7 @@ function CreateTowForm({
         companyId,
         userId: user.id,
         towType,
-        customerOrderNumber: '',
+        customerOrderNumber,
         customerId: finalCustomerId,
         customerName,
         customerPhone,

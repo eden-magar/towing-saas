@@ -255,7 +255,7 @@ function buildPricingFields(tow: TowForLegacyMapping): LegacyPricingFields {
 
 function buildSharedBase(tow: TowForLegacyMapping, towSelection: string) {
   return {
-    orderNumber: tow.order_number ?? '',
+    orderNumber: tow.customer_order_number || tow.order_number || '',
     executionDate: formatExecutionDate(tow.scheduled_at),
     executionTime: formatExecutionTime(tow.scheduled_at),
     towSelection,

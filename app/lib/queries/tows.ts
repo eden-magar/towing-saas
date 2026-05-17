@@ -865,6 +865,7 @@ export async function updateTowPrice(towId: string, finalPrice: number) {
 interface UpdateTowInput {
   towId: string
   customerId?: string | null
+  customerOrderNumber?: string | null
   notes?: string | null
   priceMode?: string | null
   finalPrice?: number | null
@@ -911,6 +912,7 @@ export async function updateTow(input: UpdateTowInput) {
   const towUpdates: Record<string, any> = {}
   
   if (input.customerId !== undefined) towUpdates.customer_id = input.customerId
+  if (input.customerOrderNumber !== undefined) towUpdates.customer_order_number = input.customerOrderNumber || null
   if (input.notes !== undefined) towUpdates.notes = input.notes
   if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
   if (input.recommendedPrice !== undefined) towUpdates.recommended_price = input.recommendedPrice
