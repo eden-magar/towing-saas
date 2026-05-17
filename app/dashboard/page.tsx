@@ -645,7 +645,7 @@
           <div className="flex flex-col gap-3 min-h-0">
 
             {/* יומן */}
-            <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-0">
+            <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-[380px]">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 flex-shrink-0">
                 <div className="flex items-center gap-1.5">
                   <button onClick={prevDay} className="w-5 h-5 flex items-center justify-center border border-gray-200 rounded text-gray-500 hover:bg-gray-50">
@@ -869,7 +869,7 @@
             </div>
 
             {/* 2×2 כרטיסים */}
-            <div className="flex gap-3 flex-shrink-0">
+            <div className="flex gap-3 min-h-0 overflow-y-auto">
               {/* Right column (RTL) */}
               <div className="flex flex-col gap-3 flex-1">
               {/* ממתינות לשיבוץ */}
@@ -881,11 +881,11 @@
                   </div>
                   {pendingTows.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full">{pendingTows.length}</span>}
                 </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-28">
                     {pendingTows.length === 0 ? (
                       <div className="px-3 py-3 text-xs text-gray-300 text-center">אין ממתינות</div>
                     ) : pendingTows.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(tow => (
-                    <div key={tow.id} onClick={() => router.push(`/dashboard/tows/${tow.id}`)} className="px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <div key={tow.id} onClick={() => router.push(`/dashboard/tows/${tow.id}`)} className="px-3 py-1.5 flex items-center gap-2 min-w-0 cursor-pointer hover:bg-gray-50 transition-colors">
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-medium text-gray-700 truncate">{tow.customer?.name || '—'} · {tow.vehicles?.[0]?.plate_number || '—'}</div>
                         <div className="text-xs text-gray-400 truncate">{tow.legs?.[0]?.from_address?.split(',')[0] || '—'} ← {tow.legs?.[tow.legs.length - 1]?.to_address?.split(',')[0] || '—'}</div>
@@ -908,15 +908,15 @@
                       {quoteTows.length}
                     </span>
                   </div>
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                  <div className="space-y-1 max-h-20 overflow-y-auto">
                     {quoteTows.map(t => (
                       <div
                         key={t.id}
                         onClick={() => router.push(`/dashboard/tows/${t.id}`)}
-                        className="flex items-center justify-between p-2 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs"
+                        className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs"
                       >
-                        <span className="font-medium">{t.order_number || t.id.slice(0, 8)}</span>
-                        <span className="text-gray-500">{t.customer?.name || 'לקוח'}</span>
+                        <span className="font-medium flex-shrink-0">{t.order_number || t.id.slice(0, 8)}</span>
+                        <span className="text-gray-500 flex-1 min-w-0 truncate">{t.customer?.name || 'לקוח'}</span>
                         <span className="text-amber-600 flex-shrink-0">{formatWaitTime(t.created_at)}</span>
                       </div>
                     ))}
