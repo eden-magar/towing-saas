@@ -4,7 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
-  const next = url.searchParams.get('next') || '/reset-password'
+  const nextRaw = url.searchParams.get('next') || '/reset-password'
+  // Allow only internal paths (start with /), reject protocol-relative (//)
+  // and absolute URLs (https://...) to prevent open redirect.
+  const next = nextRaw.startsWith('/') && !nextRaw.startsWith('//')
+    ? nextRaw
+    : '/reset-password'
 
   if (code) {
     const supabase = createClient(
