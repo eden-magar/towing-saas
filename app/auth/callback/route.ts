@@ -28,13 +28,13 @@ export async function GET(request: NextRequest) {
     
     if (data.session) {
       response.cookies.set('sb-access-token', data.session.access_token, {
-        httpOnly: false,
+        httpOnly: true,
         secure: true,
         sameSite: 'lax',
         maxAge: data.session.expires_in,
       })
       response.cookies.set('sb-refresh-token', data.session.refresh_token, {
-        httpOnly: false,
+        httpOnly: true,
         secure: true,
         sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 7,
