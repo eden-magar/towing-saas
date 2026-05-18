@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.2",
     "dotenv": "^17.2.3",
@@ -19,6 +21,7 @@
     "resend": "^6.5.2"
   },
   "devDependencies": {
+    "@inquirer/prompts": "^8.4.3",
     "@tailwindcss/postcss": "^4",
     "@types/google.maps": "^3.58.1",
     "@types/node": "^20",
