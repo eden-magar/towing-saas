@@ -5,6 +5,7 @@ import { Search, User, ArrowLeftRight } from 'lucide-react'
 import type { CustomerWithDetails } from '../../../lib/queries/customers'
 import type { CustomerWithPricing } from '../../../lib/queries/price-lists'
 import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import { Input, Button, FormCard } from '../../ui'
 
 export type CreateCustomerTab = 'existing' | 'casual'
 
@@ -99,31 +100,33 @@ export function CreateCustomerSection({
         </div>
       )}
       <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={onNowClick}
-          className="px-3 py-2 bg-[#33d4ff] text-white rounded-xl text-xs font-medium hover:bg-[#22c4ef] shrink-0"
+          className="shrink-0"
         >
           עכשיו
-        </button>
-        <input
+        </Button>
+        <Input
           type="date"
           value={towDate}
           onChange={(e) => onTowDateChange(e.target.value)}
-          className="flex-1 min-w-[7rem] px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+          className="flex-1 min-w-[7rem]"
         />
-        <input
+        <Input
           type="time"
           value={towTime}
           onChange={(e) => onTowTimeChange(e.target.value)}
-          className="flex-1 min-w-[7rem] px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+          className="flex-1 min-w-[7rem]"
         />
-        <input
+        <Input
           type="text"
           value={customerOrderNumber}
           onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
           placeholder="מס׳ הזמנת לקוח"
-          className="flex-1 min-w-[8rem] px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+          className="flex-1 min-w-[8rem]"
         />
       </div>
     </>
@@ -131,66 +134,68 @@ export function CreateCustomerSection({
 
   if (customerTab === 'casual') {
     return (
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <button
+      <FormCard
+        icon={User}
+        title="פרטי לקוח"
+        description="לקוח מזדמן - הזן פרטים חדשים"
+        actions={
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={switchToExisting}
-            className="text-xs text-blue-600 hover:underline"
           >
             חזור ללקוח קיים
-          </button>
-          <h3 className="font-semibold text-gray-700 text-sm">לקוח</h3>
-        </div>
+          </Button>
+        }
+      >
         <div className="p-3 space-y-3">
-          <input
+          <Input
             type="text"
             value={customerName}
             onChange={(e) => onCustomerNameChange(e.target.value)}
             placeholder="שם הלקוח *"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
           />
-          <input
+          <Input
             type="tel"
             value={customerPhone}
             onChange={(e) => onCustomerPhoneChange(e.target.value)}
             placeholder="טלפון"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
           />
         </div>
         {schedulingFooter}
-      </div>
+      </FormCard>
     )
   }
 
   if (!selectedCustomerId) {
     return (
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-        <div
-          className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-200"
-          dir="rtl"
-        >
-          <h3 className="font-semibold text-gray-700 text-sm">לקוח</h3>
-          <button
+      <FormCard
+        icon={User}
+        title="פרטי לקוח"
+        description="בחר לקוח קיים או צור לקוח מזדמן"
+        actions={
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={switchToWalkIn}
-            className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-2 py-1"
           >
             לקוח מזדמן
-          </button>
-        </div>
-
+          </Button>
+        }
+      >
         <div className="px-3 py-2 border-b border-gray-100" dir="rtl">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input
+            <Input
               type="text"
-              placeholder="חפש לפי שם, טלפון, ת.ז..."
               value={customerSearch}
               onChange={(e) => onCustomerSearchChange(e.target.value)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setTimeout(() => setIsFocused(false), 150)}
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40 text-right"
+              placeholder="חפש לפי שם, טלפון, ת.ז..."
+              className="pl-9 pr-3 text-right"
             />
           </div>
         </div>
@@ -228,24 +233,28 @@ export function CreateCustomerSection({
           </div>
         )}
         {schedulingFooter}
-      </div>
+      </FormCard>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
-        <h3 className="font-semibold text-gray-700 text-sm">לקוח</h3>
-      </div>
-      <div className="flex items-center justify-between px-4 py-3 gap-2">
-        <button
+    <FormCard
+      icon={User}
+      title="פרטי לקוח"
+      description="לקוח נבחר"
+      actions={
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={clearCustomer}
-          className="flex items-center gap-1.5 text-xs text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5 hover:bg-gray-50 hover:border-gray-400 shrink-0 transition-colors"
         >
-          <ArrowLeftRight className="w-3.5 h-3.5" />
+          <ArrowLeftRight size={12} />
           החלף לקוח
-        </button>
+        </Button>
+      }
+    >
+      <div className="flex items-center justify-between px-4 py-3 gap-2">
         <div className="text-right flex-1 min-w-0">
           <div className="font-medium text-sm text-gray-800 truncate">{customerName}</div>
           <div className="flex items-center gap-2 justify-end mt-0.5 flex-wrap">
@@ -291,6 +300,6 @@ export function CreateCustomerSection({
         </div>
       )}
       {schedulingFooter}
-    </div>
+    </FormCard>
   )
 }

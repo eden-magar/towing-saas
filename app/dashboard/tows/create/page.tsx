@@ -648,7 +648,7 @@ function CreateTowForm({
   const lockedPointer = quoteApproved ? 'auto' : 'none'
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
       {error && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
           {error}

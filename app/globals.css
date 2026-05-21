@@ -34,3 +34,73 @@ textarea::placeholder {
 html {
   font-size: 16px; 
 }
+
+/* ============================================
+   Golan Towing Design Tokens v2
+   ============================================ */
+:root {
+  /* Backgrounds */
+  --gt-canvas: #cddbe6;
+  --gt-surface: #ffffff;
+  --gt-surface-subtle: #e3ecf2;
+  --gt-surface-hover: #f5f8fa;
+
+  /* Borders */
+  --gt-border: #a3b6c7;
+  --gt-border-strong: #8ba3b7;
+  --gt-border-subtle: #c5d3df;
+
+  /* Text */
+  --gt-text-primary: #141414;
+  --gt-text-secondary: #4a5a6b;
+  --gt-text-tertiary: #8a9bab;
+  --gt-text-muted: #b8c5d1;
+
+  /* Brand: Deep Teal */
+  --gt-brand: #0891b2;
+  --gt-brand-hover: #0e7490;
+  --gt-brand-active: #155e75;
+  --gt-brand-subtle: #ecfeff;
+  --gt-brand-subtle-border: #a5f3fc;
+  --gt-brand-text: #0e7490;
+
+  /* Semantic */
+  --gt-success: #16a34a;
+  --gt-success-subtle: #f0fdf4;
+  --gt-success-border: #bbf7d0;
+  --gt-warning: #d97706;
+  --gt-warning-subtle: #fffbeb;
+  --gt-warning-border: #fde68a;
+  --gt-danger: #dc2626;
+  --gt-danger-subtle: #fef2f2;
+
+  /* Shadows */
+  --gt-shadow-xs: 0 1px 2px rgba(15, 76, 117, 0.04);
+  --gt-shadow-sm: 0 1px 3px rgba(15, 76, 117, 0.08), 0 1px 2px rgba(15, 76, 117, 0.04);
+  --gt-shadow-focus: 0 0 0 3px rgba(8, 145, 178, 0.15);
+}
+
+@theme {
+  --color-gt-canvas: #cddbe6;
+  --color-gt-surface: #ffffff;
+  --color-gt-surface-subtle: #e3ecf2;
+  --color-gt-surface-hover: #f5f8fa;
+  --color-gt-border: #a3b6c7;
+  --color-gt-border-strong: #8ba3b7;
+  --color-gt-border-subtle: #c5d3df;
+  --color-gt-text-primary: #141414;
+  --color-gt-text-secondary: #4a5a6b;
+  --color-gt-text-tertiary: #8a9bab;
+  --color-gt-text-muted: #b8c5d1;
+  --color-gt-brand: #0891b2;
+  --color-gt-brand-hover: #0e7490;
+  --color-gt-brand-active: #155e75;
+  --color-gt-brand-subtle: #ecfeff;
+  --color-gt-brand-subtle-border: #a5f3fc;
+  --color-gt-brand-text: #0e7490;
+  --color-gt-success: #16a34a;
+  --color-gt-success-subtle: #f0fdf4;
+  --color-gt-success-border: #bbf7d0;
+  --color-gt-danger: #dc2626;
+  --color-gt-danger-subtle: #fef2f2;
+}
