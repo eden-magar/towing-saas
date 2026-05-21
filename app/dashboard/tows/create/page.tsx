@@ -36,7 +36,7 @@ import {
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
-import { FormCard, FormSubcard } from '../../../components/ui'
+import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
@@ -153,6 +153,7 @@ function CreateTowForm({
     workingVehicleSource,
     setWorkingVehicleSource,
     selectedWorkingVehicleId,
+    setSelectedWorkingVehicleId,
     workingVehiclePlate,
     setWorkingVehiclePlate,
     workingVehicleData,
@@ -550,6 +551,39 @@ function CreateTowForm({
             vehicleCondition: 'operational',
           })
         }
+        if (towType === 'exchange' && workingVehicleSource === 'storage' && selectedWorkingVehicleId && companyId) {
+          await releaseVehicleFromStorage({
+            storedVehicleId: selectedWorkingVehicleId,
+            towId: result.id,
+            performedBy: user.id,
+            notes: 'שוחרר לגרירת חליפין',
+          })
+        }
+        if (towType === 'exchange' && defectiveDestination === 'storage' && defectiveVehiclePlate && companyId) {
+          await addVehicleToStorage({
+            companyId,
+            customerId: selectedCustomerId || undefined,
+            plateNumber: defectiveVehiclePlate,
+            vehicleData: defectiveVehicleData?.data
+              ? {
+                  manufacturer: defectiveVehicleData.data.manufacturer || undefined,
+                  model: defectiveVehicleData.data.model || undefined,
+                  year: defectiveVehicleData.data.year?.toString(),
+                  color: defectiveVehicleData.data.color || undefined,
+                  gearType: defectiveVehicleData.data.gearType || undefined,
+                  driveType: defectiveVehicleData.data.driveType || undefined,
+                  totalWeight: defectiveVehicleData.data.totalWeight?.toString(),
+                  source: defectiveVehicleData.source || undefined,
+                  sourceLabel: defectiveVehicleData.sourceLabel || undefined,
+                }
+              : undefined,
+            towId: result.id,
+            performedBy: user.id,
+            notes: 'נכנס מגרירת חליפין',
+            vehicleCondition: 'faulty',
+            vehicleCode: defectiveVehicleCode || undefined,
+          })
+        }
       }
       router.push('/dashboard')
     } catch (err) {
@@ -601,6 +635,10 @@ function CreateTowForm({
     invoiceName,
     dropoffToStorage,
     selectedStoredVehicleId,
+    workingVehicleSource,
+    selectedWorkingVehicleId,
+    defectiveDestination,
+    defectiveVehicleCode,
     editTowId,
     priceMode,
   ])
@@ -1450,16 +1488,17 @@ function CreateTowForm({
                     )}
 
                     {/* Exchange tow: shared row grid — תקין | תקול aligned */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch mb-4">
+                    <FormSubcard title="פרטי הרכבים">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {/* Row 1: headers */}
-                      <div className="px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between gap-2 flex-wrap min-h-[52px]">
-                        <h3 className="font-bold text-blue-800 text-sm">רכב תקין</h3>
+                      <div className="px-4 py-3 bg-gt-success-subtle border-b-2 border-gt-success rounded-xl flex items-center justify-between gap-2 flex-wrap min-h-[52px]">
+                        <h3 className="font-bold text-sm text-gt-success">רכב תקין</h3>
                         {workingVehicleSource === 'storage' ? (
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               type="button"
                               onClick={() => setShowWorkingStorageModal(true)}
-                              className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-blue-500 text-white border-blue-500"
+                              className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-gt-brand text-white border-gt-brand"
                             >
                               🏪 מאחסנה: {workingVehiclePlate}
                             </button>
@@ -1467,6 +1506,7 @@ function CreateTowForm({
                               type="button"
                               onClick={() => {
                                 setWorkingVehicleSource('address')
+                                setSelectedWorkingVehicleId(null)
                                 setWorkingVehiclePlate('')
                                 setWorkingVehicleData(null)
                                 setWorkingVehicleAddress({ address: '' })
@@ -1486,14 +1526,14 @@ function CreateTowForm({
                           )
                         )}
                       </div>
-                      <div className="px-4 py-3 bg-orange-50 border border-orange-100 rounded-xl flex items-center min-h-[52px]">
-                        <h3 className="font-bold text-orange-800 text-sm">רכב תקול</h3>
+                      <div className="px-4 py-3 bg-gt-warning-subtle border-b-2 border-gt-warning rounded-xl flex items-center min-h-[52px]">
+                        <h3 className="font-bold text-sm text-gt-warning">רכב תקול</h3>
                       </div>
 
                       {/* Row 2: plate (warning only on תקין — spacer on תקול for alignment) */}
                       <div className="flex flex-col gap-2 min-h-[72px] justify-end">
                         {plateStorageWarning && <p className="text-sm text-red-500">{plateStorageWarning}</p>}
-                        <input
+                        <Input
                           type="text"
                           value={workingVehiclePlate}
                           onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
@@ -1519,13 +1559,13 @@ function CreateTowForm({
                             }
                           }}
                           placeholder="לוחית תקין"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right font-mono tracking-widest"
+                          className="font-mono tracking-widest"
                           dir="ltr"
                         />
                       </div>
                       <div className="flex flex-col gap-2 min-h-[72px] justify-end">
                         <div className="min-h-[22px]" aria-hidden />
-                        <input
+                        <Input
                           type="text"
                           value={defectiveVehiclePlate}
                           onChange={(e) => { setDefectiveVehiclePlate(normalizePlate(e.target.value)); setDefectiveVehicleNotFound(false) }}
@@ -1544,28 +1584,28 @@ function CreateTowForm({
                             }
                           }}
                           placeholder="לוחית תקול"
-                          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] text-right font-mono tracking-widest"
+                          className="font-mono tracking-widest"
                           dir="ltr"
                         />
                       </div>
 
                       {/* Row 3: vehicle code */}
                       <div className="min-h-[40px] flex flex-col justify-center">
-                        <input
+                        <Input
                           type="text"
                           value={workingVehicleCode}
                           onChange={(e) => setWorkingVehicleCode(e.target.value)}
                           placeholder="קוד רכב תקין"
-                          className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#33d4ff]/40"
+                          className="text-xs py-1.5"
                         />
                       </div>
                       <div className="min-h-[40px] flex flex-col justify-center">
-                        <input
+                        <Input
                           type="text"
                           value={defectiveVehicleCode}
                           onChange={(e) => setDefectiveVehicleCode(e.target.value)}
                           placeholder="קוד רכב תקול"
-                          className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#33d4ff]/40"
+                          className="text-xs py-1.5"
                         />
                       </div>
 
@@ -1616,7 +1656,7 @@ function CreateTowForm({
                               <div>
                                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">סוג רכב *</label>
                                 <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
+                                  className="w-full px-3 py-2 border border-gt-border-subtle rounded-xl text-sm">
                                   <option value="">בחר סוג רכב</option>
                                   <option value="private">פרטי</option>
                                   <option value="suv">ג'יפ / SUV</option>
@@ -1630,24 +1670,21 @@ function CreateTowForm({
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יצרן</label>
-                                <input type="text" value={workingManualManufacturer}
+                                <Input type="text" value={workingManualManufacturer}
                                   onChange={(e) => setWorkingManualManufacturer(e.target.value)}
-                                  placeholder="למשל: טויוטה"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  placeholder="למשל: טויוטה" />
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">צבע</label>
-                                <input type="text" value={workingManualColor}
+                                <Input type="text" value={workingManualColor}
                                   onChange={(e) => setWorkingManualColor(e.target.value)}
-                                  placeholder="למשל: לבן"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  placeholder="למשל: לבן" />
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">משקל (ק"ג)</label>
-                                <input type="number" value={workingManualWeight}
+                                <Input type="number" value={workingManualWeight}
                                   onChange={(e) => setWorkingManualWeight(e.target.value)}
-                                  placeholder="אופציונלי"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  placeholder="אופציונלי" />
                               </div>
                             </div>
                           </div>
@@ -1661,7 +1698,7 @@ function CreateTowForm({
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
                                 <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value as VehicleType)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
+                                  className="w-full px-3 py-2 border border-gt-border-subtle rounded-xl text-sm">
                                   <option value="">בחר סוג רכב</option>
                                   <option value="private">פרטי</option>
                                   <option value="suv">ג'יפ / SUV</option>
@@ -1675,34 +1712,35 @@ function CreateTowForm({
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">יצרן</label>
-                                <input type="text" value={defectiveManualManufacturer}
+                                <Input type="text" value={defectiveManualManufacturer}
                                   onChange={(e) => setDefectiveManualManufacturer(e.target.value)}
-                                  placeholder="למשל: טויוטה"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  placeholder="למשל: טויוטה" />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">צבע</label>
-                                <input type="text" value={defectiveManualColor}
+                                <Input type="text" value={defectiveManualColor}
                                   onChange={(e) => setDefectiveManualColor(e.target.value)}
-                                  placeholder="למשל: לבן"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  placeholder="למשל: לבן" />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
-                                <input type="number" value={defectiveManualWeight}
+                                <Input type="number" value={defectiveManualWeight}
                                   onChange={(e) => setDefectiveManualWeight(e.target.value)}
-                                  placeholder="אופציונלי"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  placeholder="אופציונלי" />
                               </div>
                             </div>
                           </div>
                         )}
                       </div>
+                      </div>
+                    </FormSubcard>
 
+                    <FormSubcard title="תקלות וגרר">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {/* Row 6: סוג גרר תקין | תקלות + גרר נוסף (+ סוג גרר לתקול) */}
                       <div className="flex flex-col gap-2 min-h-[4.5rem] justify-start">
                         {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
-                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                          <div className="p-3 bg-gt-brand-subtle border border-gt-brand-subtle-border rounded-xl">
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">סוג גרר נדרש *</p>
                             <div className="flex gap-2 flex-wrap">
                               {TRUCK_OPTIONS.map((opt) => (
@@ -1712,7 +1750,7 @@ function CreateTowForm({
                                     if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
                                     else setRequiredTruckTypes([...current, opt.value])
                                   }}
-                                  className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-blue-500 text-white' : 'bg-white text-gray-700 border-2 border-gray-200'}`}>
+                                  className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-gt-brand text-white' : 'bg-white text-gray-700 border-2 border-gt-border-subtle'}`}>
                                   {opt.label}
                                 </button>
                               ))}
@@ -1766,7 +1804,11 @@ function CreateTowForm({
                           </div>
                         )}
                       </div>
+                      </div>
+                    </FormSubcard>
 
+                    <FormSubcard title="שירותים נוספים">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {/* Row 7: שירותים נוספים */}
                       <div className="min-h-[48px] flex flex-col justify-center">
                         {serviceSurchargesData.length > 0 ? (
@@ -1802,9 +1844,11 @@ function CreateTowForm({
                           <div className="min-h-[44px]" aria-hidden />
                         )}
                       </div>
+                      </div>
+                    </FormSubcard>
 
-                      {/* כתובות: DOM order מוצא תקין → יעד תקין → מוצא תקול → יעד תקול */}
-                      <div className="col-span-1 lg:col-span-2 border-t border-gray-100 pt-3">
+                    <FormSubcard title="כתובות ומסלול">
+                      <div className="space-y-4">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           <div className="space-y-3">
                             <div className="min-h-[120px] flex flex-col">
@@ -1814,7 +1858,7 @@ function CreateTowForm({
                                   <span>🏪 {workingVehicleAddress?.address || storageAddress || 'כתובת האחסנה'}</span>
                                   <button
                                     type="button"
-                                    onClick={() => { setWorkingVehicleSource('address'); setWorkingVehicleAddress({ address: '' }) }}
+                                    onClick={() => { setWorkingVehicleSource('address'); setSelectedWorkingVehicleId(null); setWorkingVehicleAddress({ address: '' }) }}
                                     className="mr-auto text-gray-400 hover:text-red-500"
                                   >✕</button>
                                 </div>
@@ -1832,8 +1876,8 @@ function CreateTowForm({
                                 onClick={() => setStartFromBase(!startFromBase)}
                                 className={`mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors ${
                                   startFromBase
-                                    ? 'bg-blue-500 text-white border-blue-500'
-                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                                    ? 'bg-gt-brand text-white border-gt-brand'
+                                    : 'bg-white text-gray-600 border-gt-border-subtle hover:border-gt-border-strong'
                                 }`}
                               >
                                 יציאה מהחניון
@@ -1878,7 +1922,7 @@ function CreateTowForm({
                                 type="button"
                                 onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
                                 disabled={!workingVehicleDestinationAddress?.address}
-                                className="mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                                className="mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-gt-brand-subtle-border bg-gt-brand-subtle text-gt-brand-text hover:bg-gt-surface-hover disabled:opacity-30 disabled:cursor-not-allowed"
                               >
                                 זהה ליעד התקין
                               </button>
@@ -1913,34 +1957,28 @@ function CreateTowForm({
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </FormSubcard>
 
-                    {/* תוספות זמן */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">תוספות זמן</h3>
-                      </div>
-                      <div className="p-4">
-                        <TimeSurchargesSection
-                          timeSurchargesData={timeSurchargesData}
-                          towDate={towDate}
-                          towTime={towTime}
-                          isHoliday={isHoliday}
-                          setIsHoliday={setIsHoliday}
-                          activeTimeSurchargesList={activeTimeSurchargesList}
-                          setActiveTimeSurchargesList={setActiveTimeSurchargesList}
-                          setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
-                        />
-                      </div>
-                    </div>
+                    <FormSubcard title="תוספות זמן">
+                      <TimeSurchargesSection
+                        timeSurchargesData={timeSurchargesData}
+                        towDate={towDate}
+                        towTime={towTime}
+                        isHoliday={isHoliday}
+                        setIsHoliday={setIsHoliday}
+                        activeTimeSurchargesList={activeTimeSurchargesList}
+                        setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                        setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
+                      />
+                    </FormSubcard>
 
-                    <div className="border-t border-gray-100 pt-3 mt-2">
+                    <FormSubcard title="תוספות מיקום">
                       <LocationSurchargesSection
                         locationSurchargesData={locationSurchargesData}
                         selectedLocationSurcharges={selectedLocationSurcharges}
                         setSelectedLocationSurcharges={setSelectedLocationSurcharges}
                       />
-                    </div>
+                    </FormSubcard>
                   </>
                 )}
 
@@ -2612,6 +2650,8 @@ function CreateTowForm({
                   type="button"
                   onClick={() => {
                     setWorkingVehicleSource('storage')
+                    setSelectedWorkingVehicleId(v.id)
+                    setStartFromBase(true)
                     setWorkingVehiclePlate(v.plate_number)
                     if (v.vehicle_data) {
                       setWorkingVehicleData({

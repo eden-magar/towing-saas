@@ -106,6 +106,9 @@ interface UseTowSaveParams {
   exchangeTotalDistance?: DistanceResult | null
   // Storage
   selectedStoredVehicleId: string | null
+  workingVehicleSource?: 'storage' | 'address'
+  selectedWorkingVehicleId?: string | null
+  defectiveDestination?: 'storage' | 'address'
   // Post-save
   setSavedTowId: (id: string) => void
   setShowAssignNowModal: (v: boolean) => void
@@ -195,6 +198,9 @@ export function useTowSave(params: UseTowSaveParams) {
     defectiveDestinationContactPhone,
     exchangeTotalDistance,
     selectedStoredVehicleId,
+    workingVehicleSource,
+    selectedWorkingVehicleId,
+    defectiveDestination,
     setSavedTowId,
     setShowAssignNowModal,
   } = params
@@ -438,6 +444,42 @@ export function useTowSave(params: UseTowSaveParams) {
           notes: 'נכנס מגרירה',
           vehicleCondition: storageVehicleCondition ?? (selectedDefects.length > 0 ? 'faulty' : 'operational'),
           vehicleCode: vehicleCode || undefined,
+        })
+      }
+
+      // Exchange mode: release working vehicle from storage if picked from storage
+      if (towType === 'exchange' && workingVehicleSource === 'storage' && selectedWorkingVehicleId && companyId) {
+        await releaseVehicleFromStorage({
+          storedVehicleId: selectedWorkingVehicleId,
+          towId: result.id,
+          performedBy: user?.id,
+          notes: 'שוחרר לגרירת חליפין'
+        })
+      }
+
+      // Exchange mode: add defective vehicle to storage if destination is storage
+      if (towType === 'exchange' && defectiveDestination === 'storage' && defectiveVehiclePlate && companyId) {
+        await addVehicleToStorage({
+          companyId,
+          customerId: selectedCustomerId || undefined,
+          plateNumber: defectiveVehiclePlate,
+          vehicleData: defectiveVehicleData?.data ? {
+            manufacturer: defectiveVehicleData.data.manufacturer || undefined,
+            model: defectiveVehicleData.data.model || undefined,
+            year: defectiveVehicleData.data.year?.toString() || undefined,
+            color: defectiveVehicleData.data.color || undefined,
+            gearType: defectiveVehicleData.data.gearType || undefined,
+            driveType: defectiveVehicleData.data.driveType || undefined,
+            totalWeight: defectiveVehicleData.data.totalWeight?.toString() || undefined,
+            source: defectiveVehicleData.source || undefined,
+            sourceLabel: defectiveVehicleData.sourceLabel || undefined,
+          } : undefined,
+          location: undefined,
+          towId: result.id,
+          performedBy: user?.id,
+          notes: 'נכנס מגרירת חליפין',
+          vehicleCondition: 'faulty',
+          vehicleCode: defectiveVehicleCode || undefined,
         })
       }
 

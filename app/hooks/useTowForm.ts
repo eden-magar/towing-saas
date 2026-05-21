@@ -929,6 +929,9 @@ export function useTowForm(editTowId?: string) {
     defectiveDestinationContactName: defectiveDestinationContact,
     defectiveDestinationContactPhone,
     selectedStoredVehicleId,
+    workingVehicleSource,
+    selectedWorkingVehicleId,
+    defectiveDestination,
     setSavedTowId,
     setShowAssignNowModal,
   })
