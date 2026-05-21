@@ -16,8 +16,10 @@ import {
   ArrowRight,
   ArrowLeftRight,
   Check,
+  Car,
   Truck,
   Route,
+  MapPinned,
   MapPin,
   Plus,
   Minus,
@@ -34,6 +36,7 @@ import {
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
+import { FormCard, FormSubcard } from '../../../components/ui'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
@@ -707,61 +710,70 @@ function CreateTowForm({
           />
 
           {/* Section 2 — סוג גרירה */}
-          <section className="mb-6">
-            <h2 className="font-bold text-gray-800 text-sm sm:text-base mb-3 px-1">
-              סוג גרירה
-            </h2>
-            <div className="grid grid-cols-3 gap-3">
+          <FormCard
+            icon={MapPinned}
+            title="סוג גרירה"
+            description="בחר את אופי המשימה"
+          >
+            <div className="grid grid-cols-3 gap-2.5">
               {[
                 { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B', icon: Truck },
                 { value: 'exchange' as const, label: 'תקין ↔ תקול', sub: '3 שלבים', icon: ArrowLeftRight },
                 { value: 'custom' as const, label: 'מסלול מותאם', sub: 'נקודות חופשיות', icon: Route },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => handleTowTypeSelect(option.value)}
-                  className={
-                    towType === option.value
-                      ? 'bg-[#33d4ff]/10 border-2 border-[#33d4ff] rounded-xl py-4 px-3 text-center cursor-pointer transition-all shadow-md'
-                      : 'bg-white border-2 border-gray-200 rounded-xl py-4 px-3 text-center cursor-pointer transition-all hover:border-gray-300 hover:shadow-md hover:-translate-y-0.5'
-                  }
-                >
-                  <option.icon
-                    className={`w-7 h-7 mx-auto mb-2 ${
-                      towType === option.value ? 'text-[#33d4ff]' : 'text-gray-500'
-                    }`}
-                  />
-                  <div className="text-base font-medium text-gray-800">{option.label}</div>
-                  <div
-                    className={`text-xs mt-1 ${
-                      towType === option.value ? 'text-gray-600' : 'text-gray-400'
-                    }`}
+              ].map((option) => {
+                const Icon = option.icon
+                const isActive = towType === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleTowTypeSelect(option.value)}
+                    className={
+                      isActive
+                        ? 'relative p-3 rounded-lg border border-gt-brand bg-gt-brand-subtle ring-1 ring-gt-brand transition-all duration-150'
+                        : 'relative p-3 rounded-lg border border-gt-border bg-white hover:border-gt-border-strong hover:bg-gt-surface-hover transition-all duration-150'
+                    }
                   >
-                    {option.sub}
-                  </div>
-                </button>
-              ))}
+                    <div className={
+                      isActive
+                        ? 'w-8 h-8 mx-auto mb-2 rounded-lg flex items-center justify-center bg-white text-gt-brand'
+                        : 'w-8 h-8 mx-auto mb-2 rounded-lg flex items-center justify-center bg-gt-surface-subtle text-gt-text-secondary'
+                    }>
+                      <Icon size={16} />
+                    </div>
+                    <div className={
+                      isActive
+                        ? 'text-sm font-semibold text-gt-brand-text'
+                        : 'text-sm font-semibold text-gt-text-primary'
+                    }>
+                      {option.label}
+                    </div>
+                    <div className={
+                      isActive
+                        ? 'text-[11px] mt-0.5 text-gt-brand-text opacity-75'
+                        : 'text-[11px] mt-0.5 text-gt-text-tertiary'
+                    }>
+                      {option.sub}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
-          </section>
+          </FormCard>
 
           {/* Section 4 — רכב ומסלול */}
           {towType && (
-            <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
-              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
-                <h2 className="font-bold text-gray-800 text-sm sm:text-base">
-                  רכב ומסלול
-                </h2>
-              </div>
-              <div className="p-4 sm:p-5 space-y-6">
+            <FormCard
+              icon={Car}
+              title="רכב ומסלול"
+              description="פרטי הרכב, תקלות, גרר ונקודות מסלול"
+            >
+              <div className="space-y-4">
                 {towType === 'single' && (
                   <>
                     {/* Block 1 — פרטי רכב */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">פרטי רכב</h3>
-                      </div>
-                      <div className="p-4 space-y-3">
+                    <FormSubcard title="פרטי רכב">
+                      <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -788,7 +800,7 @@ function CreateTowForm({
                                   vehiclePlate.replace(/[^0-9]/g, '').length < 5 ||
                                   defectiveLookupLoading
                                 }
-                                className="px-4 py-2.5 bg-cyan-500 text-white rounded-xl text-sm font-medium hover:bg-cyan-600"
+                                className="px-4 py-2.5 bg-gt-brand text-white rounded-xl text-sm font-medium hover:bg-gt-brand-hover"
                               >
                                 {defectiveLookupLoading ? (
                                   <Loader2 size={18} className="animate-spin" />
@@ -938,14 +950,11 @@ function CreateTowForm({
                           </div>
                         )}
                       </div>
-                    </div>
+                    </FormSubcard>
 
                     {/* Block 2 — תקלות וגרר */}
-                    <div ref={truckTypeSectionRef} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">תקלות וגרר</h3>
-                      </div>
-                      <div className="p-4">
+                    <div ref={truckTypeSectionRef}>
+                      <FormSubcard title="תקלות וגרר">
                         <div className="grid grid-cols-2 gap-3">
                           <button
                             type="button"
@@ -968,7 +977,7 @@ function CreateTowForm({
                               onClick={() => setShowTruckModal(true)}
                               className={`w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
                                 requiredTruckTypes.length > 0
-                                  ? 'border-blue-400 bg-blue-50 text-blue-700'
+                                  ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
                                   : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                               }`}
                             >
@@ -987,15 +996,12 @@ function CreateTowForm({
                             מומלץ: רמסע (רכב עם הנעה קדמית)
                           </p>
                         )}
-                      </div>
+                      </FormSubcard>
                     </div>
 
                     {/* Block 3 — כתובות ומסלול */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">כתובות ומסלול</h3>
-                      </div>
-                      <div className="p-4 space-y-4">
+                    <FormSubcard title="כתובות ומסלול">
+                      <div className="space-y-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <div className="flex items-center">
@@ -1013,7 +1019,7 @@ function CreateTowForm({
                               onClick={() => setStartFromBase(!startFromBase)}
                               className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
                                 startFromBase
-                                  ? 'bg-blue-500 text-white'
+                                  ? 'bg-gt-brand text-white'
                                   : 'bg-white text-gray-700 border border-gray-300 font-medium'
                               }`}
                             >
@@ -1047,7 +1053,7 @@ function CreateTowForm({
                               }}
                               className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
                                 dropoffToStorage
-                                  ? 'bg-blue-500 text-white'
+                                  ? 'bg-gt-brand text-white'
                                   : 'bg-white text-gray-700 border border-gray-300 font-medium'
                               }`}
                             >
@@ -1098,7 +1104,7 @@ function CreateTowForm({
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </FormSubcard>
 
                     {/* Block 4 — תוספות זמן */}
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
@@ -1992,7 +1998,7 @@ function CreateTowForm({
                   </>
                 )}
               </div>
-            </section>
+            </FormCard>
           )}
 
           {/* Section 5 — מחיר */}
