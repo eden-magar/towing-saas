@@ -6,7 +6,10 @@ import { Loader2, Navigation, Package } from 'lucide-react'
 import { AddressInput, AddressData } from './AddressInput'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
-import { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import {
+  isPickableStoredVehicle,
+  StoredVehicleWithCustomer,
+} from '../../../lib/queries/storage'
 
 interface DistanceResult {
   distanceKm: number
@@ -180,7 +183,7 @@ export function SingleRoute({
                 <span className="font-medium">ללקוח זה יש {customerStoredVehicles.length} רכבים באחסנה</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {customerStoredVehicles.map((vehicle) => (
+                {customerStoredVehicles.filter(isPickableStoredVehicle).map((vehicle) => (
                   <button
                     key={vehicle.id}
                     type="button"

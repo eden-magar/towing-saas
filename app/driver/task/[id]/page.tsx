@@ -13,7 +13,6 @@ import {
   type DriverTaskPoint
 } from '@/app/lib/queries/driver-tasks'
 import { createCashCollection, updateTowCashPayment } from '@/app/lib/queries/driver-cash'
-import { addVehicleToStorage } from '@/app/lib/queries/storage'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
 import { supabase } from '@/app/lib/supabase'
 import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle } from 'lucide-react'
@@ -234,33 +233,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
         }
         // סיום המשימה
         await updateTaskStatus(task.id, 'completed')
-        
-        // הכנסה לאחסנה אם נדרש
-        if (task.dropoff_to_storage && user) {
-          const lastVehicle = task.vehicles[0]
-          if (lastVehicle?.plate_number) {
-            try {
-              await addVehicleToStorage({
-                companyId: task.company_id || '',
-                customerId: task.customer?.id || undefined,
-                plateNumber: lastVehicle.plate_number,
-                vehicleData: lastVehicle.manufacturer ? {
-                  manufacturer: lastVehicle.manufacturer || undefined,
-                  model: lastVehicle.model || undefined,
-                  color: lastVehicle.color || undefined,
-                } : undefined,
-                towId: task.id,
-                performedBy: user.id,
-                notes: 'נכנס מגרירה',
-                vehicleCondition: lastVehicle.tow_reason ? 'faulty' : 'operational',
-                vehicleCode: lastVehicle.vehicle_code || undefined,
-              })
-            } catch (e) {
-              console.error('Storage error:', e)
-            }
-          }
-        }
-        
+
         await loadTask()
         setIsCompleted(true)
       } else {
@@ -477,6 +450,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             isLastPoint={currentPointIndex + 1 >= totalPoints}
             finalPrice={task.final_price}
             dropoffToStorage={!!task.dropoff_to_storage && currentPointIndex + 1 >= totalPoints}
+            isStorage={!!currentPoint.is_storage}
           />
         )}
       </div>

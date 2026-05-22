@@ -4,7 +4,10 @@ import { useState } from 'react'
 import { Search, User, ArrowLeftRight } from 'lucide-react'
 import type { CustomerWithDetails } from '../../../lib/queries/customers'
 import type { CustomerWithPricing } from '../../../lib/queries/price-lists'
-import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import {
+  getStoredVehicleStatusDisplay,
+  type StoredVehicleWithCustomer,
+} from '../../../lib/queries/storage'
 import { Input, Button, FormCard } from '../../ui'
 
 export type CreateCustomerTab = 'existing' | 'casual'
@@ -275,24 +278,39 @@ export function CreateCustomerSection({
         <div className="px-4 pb-4 pt-0 border-t border-gray-100">
           <p className="text-xs text-gray-500 mb-2">רכבים באחסנה</p>
           <div className="flex flex-wrap gap-2">
-            {customerStoredVehicles.map((v) => (
-              <div
-                key={v.id}
-                className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 flex items-center gap-1"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
+            {customerStoredVehicles.map((v) => {
+              const statusDisplay = getStoredVehicleStatusDisplay(v.current_status)
+              const isReserved = v.current_status === 'reserved_for_tow'
+              return (
+                <div
+                  key={v.id}
+                  className={`px-3 py-1.5 rounded-lg text-sm border flex items-center gap-1 flex-wrap ${
+                    isReserved
+                      ? 'border-amber-300 bg-amber-50'
+                      : 'border-gray-300 bg-white'
                   }`}
-                />
-                <span>
-                  {v.plate_number} — {v.vehicle_data?.model || ''}
-                </span>
-                <span className="text-xs text-gray-400 mr-1">
-                  {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
-                </span>
-              </div>
-            ))}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
+                    }`}
+                  />
+                  <span>
+                    {v.plate_number} — {v.vehicle_data?.model || ''}
+                  </span>
+                  <span className="text-xs text-gray-400 mr-1">
+                    {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
+                  </span>
+                  {v.current_status !== 'stored' && (
+                    <span
+                      className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusDisplay.badgeClass}`}
+                    >
+                      {statusDisplay.label}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
           <p className="text-xs text-gray-400 mt-1">
             בחירת רכב תתאפשר לאחר בחירת סוג גרירה

@@ -1,5 +1,10 @@
 import { supabase } from '../supabase'
 import { DriverStatus } from '../types'
+import {
+  addVehicleToStorage,
+  releaseVehicleFromStorage,
+  findStoredVehicleForRelease,
+} from './storage'
 
 // ==================== טיפוסים ====================
 
@@ -45,6 +50,7 @@ export interface DriverTaskPoint {
   recipient_name: string | null
   recipient_phone: string | null
   notes: string | null
+  is_storage?: boolean
   point_vehicles?: { id: string; tow_vehicle_id: string; action: string }[]
 }
 
@@ -694,6 +700,183 @@ export async function updateLegStatus(
 
 // ==================== עדכון סטטוס נקודה ====================
 
+type PointLinkedVehicle = {
+  id: string
+  plate_number: string
+  manufacturer: string | null
+  model: string | null
+  year: number | null
+  color: string | null
+  gear_type: string | null
+  drive_type: string | null
+  total_weight: number | null
+  vehicle_code: string | null
+  tow_reason: string | null
+  is_working: boolean | null
+}
+
+function vehicleToStorageData(vehicle: PointLinkedVehicle) {
+  if (!vehicle.manufacturer && !vehicle.model && !vehicle.color) {
+    return undefined
+  }
+  return {
+    manufacturer: vehicle.manufacturer || undefined,
+    model: vehicle.model || undefined,
+    year: vehicle.year != null ? String(vehicle.year) : undefined,
+    color: vehicle.color || undefined,
+    gearType: vehicle.gear_type || undefined,
+    driveType: vehicle.drive_type || undefined,
+    totalWeight:
+      vehicle.total_weight != null ? String(vehicle.total_weight) : undefined,
+  }
+}
+
+async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
+  const { data: point, error: pointError } = await supabase
+    .from('tow_points')
+    .select('id, point_type, is_storage, tow_id')
+    .eq('id', pointId)
+    .single()
+
+  if (pointError || !point) {
+    console.error('[storage] failed to load point for storage side effect:', pointError)
+    return
+  }
+
+  if (!point.is_storage) return
+
+  const { data: tow, error: towError } = await supabase
+    .from('tows')
+    .select('id, company_id, customer_id, driver_id, tow_type')
+    .eq('id', point.tow_id)
+    .single()
+
+  if (towError || !tow) {
+    console.error('[storage] failed to load tow for storage side effect:', towError)
+    return
+  }
+
+  let performedBy: string | undefined
+  if (tow.driver_id) {
+    const { data: driver } = await supabase
+      .from('drivers')
+      .select('user_id')
+      .eq('id', tow.driver_id)
+      .maybeSingle()
+    performedBy = driver?.user_id ?? undefined
+  }
+
+  const { data: pointVehicleRows, error: pvError } = await supabase
+    .from('tow_point_vehicles')
+    .select(
+      `
+      tow_vehicle_id,
+      vehicle:tow_vehicles (
+        id,
+        plate_number,
+        manufacturer,
+        model,
+        year,
+        color,
+        gear_type,
+        drive_type,
+        total_weight,
+        vehicle_code,
+        tow_reason,
+        is_working
+      )
+    `
+    )
+    .eq('tow_point_id', pointId)
+
+  if (pvError) {
+    console.error('[storage] failed to load point vehicles:', pvError)
+    return
+  }
+
+  let vehicles: PointLinkedVehicle[] = (pointVehicleRows ?? [])
+    .map((row) => {
+      const raw = row.vehicle
+      const v = (Array.isArray(raw) ? raw[0] : raw) as PointLinkedVehicle | null
+      return v?.plate_number ? v : null
+    })
+    .filter((v): v is PointLinkedVehicle => v != null)
+
+  if (vehicles.length === 0) {
+    const { data: towVehicles } = await supabase
+      .from('tow_vehicles')
+      .select(
+        'id, plate_number, manufacturer, model, year, color, gear_type, drive_type, total_weight, vehicle_code, tow_reason, is_working'
+      )
+      .eq('tow_id', point.tow_id)
+      .order('order_index', { ascending: true })
+
+    vehicles = (towVehicles ?? []).filter((v) => !!v.plate_number) as PointLinkedVehicle[]
+  }
+
+  if (vehicles.length === 0) {
+    console.error('[storage] no vehicles found for point', pointId)
+    return
+  }
+
+  const isExchange = tow.tow_type === 'exchange'
+
+  if (point.point_type === 'pickup') {
+    for (const vehicle of vehicles) {
+      try {
+        const stored = await findStoredVehicleForRelease(
+          tow.company_id,
+          vehicle.plate_number
+        )
+        if (!stored) {
+          console.error(
+            '[storage] no stored vehicle found for release:',
+            vehicle.plate_number
+          )
+          continue
+        }
+        const releaseNotes =
+          isExchange && vehicle.is_working
+            ? 'שוחרר לגרירת חליפין'
+            : 'שוחרר לגרירה'
+        await releaseVehicleFromStorage({
+          storedVehicleId: stored.id,
+          towId: tow.id,
+          performedBy,
+          notes: releaseNotes,
+        })
+      } catch (err) {
+        console.error('[storage] release failed for plate', vehicle.plate_number, err)
+      }
+    }
+    return
+  }
+
+  if (point.point_type === 'dropoff') {
+    for (const vehicle of vehicles) {
+      try {
+        const addNotes =
+          isExchange && vehicle.is_working === false
+            ? 'נכנס מגרירת חליפין'
+            : 'נכנס מגרירה'
+        await addVehicleToStorage({
+          companyId: tow.company_id,
+          customerId: tow.customer_id || undefined,
+          plateNumber: vehicle.plate_number,
+          vehicleData: vehicleToStorageData(vehicle),
+          towId: tow.id,
+          performedBy,
+          notes: addNotes,
+          vehicleCondition: vehicle.tow_reason ? 'faulty' : 'operational',
+          vehicleCode: vehicle.vehicle_code || undefined,
+        })
+      } catch (err) {
+        console.error('[storage] add failed for plate', vehicle.plate_number, err)
+      }
+    }
+  }
+}
+
 export async function updatePointStatus(
   pointId: string,
   status: 'pending' | 'arrived' | 'completed' | 'skipped',
@@ -724,6 +907,14 @@ export async function updatePointStatus(
   if (error) {
     console.error('Error updating point status:', error)
     throw error
+  }
+
+  if (status === 'completed') {
+    try {
+      await handleStorageOnPointCompleted(pointId)
+    } catch (storageErr) {
+      console.error('[storage] point completion storage side effect failed:', storageErr)
+    }
   }
 
   return true

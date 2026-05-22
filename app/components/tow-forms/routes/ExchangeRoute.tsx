@@ -12,7 +12,10 @@ import {
   StartFromBase
 } from '../shared'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
-import { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import {
+  isPickableStoredVehicle,
+  StoredVehicleWithCustomer,
+} from '../../../lib/queries/storage'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
 
 interface RouteStop {
@@ -322,7 +325,7 @@ export function ExchangeRoute({
                         <span className="font-medium text-sm">רכבים באחסנה ({customerStoredVehicles.length})</span>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {customerStoredVehicles.map((vehicle) => (
+                        {customerStoredVehicles.filter(isPickableStoredVehicle).map((vehicle) => (
                           <button
                             key={vehicle.id}
                             type="button"

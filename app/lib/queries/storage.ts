@@ -18,7 +18,8 @@ export interface StoredVehicle {
     source?: string
     sourceLabel?: string
   } | null
-  current_status: 'stored' | 'released'
+  current_status: 'stored' | 'reserved_for_tow' | 'released'
+  reserved_for_tow_id?: string | null
   location: string | null
   last_stored_at: string
   notes: string | null
@@ -41,12 +42,48 @@ export interface StorageHistoryItem {
   notes: string | null
 }
 
+export type StoredVehicleStatus = StoredVehicle['current_status']
+
+export function getStoredVehicleStatusDisplay(status: StoredVehicleStatus): {
+  label: string
+  badgeClass: string
+  dotClass: string
+} {
+  switch (status) {
+    case 'stored':
+      return {
+        label: 'באחסנה',
+        badgeClass: 'bg-emerald-100 text-emerald-700',
+        dotClass: 'bg-emerald-500',
+      }
+    case 'reserved_for_tow':
+      return {
+        label: 'ממתין לגרירה',
+        badgeClass: 'bg-amber-100 text-amber-700',
+        dotClass: 'bg-amber-500',
+      }
+    case 'released':
+      return {
+        label: 'שוחרר',
+        badgeClass: 'bg-gray-100 text-gray-600',
+        dotClass: 'bg-gray-400',
+      }
+  }
+}
+
+/** Vehicles selectable in tow-form storage picker modals */
+export function isPickableStoredVehicle(
+  vehicle: Pick<StoredVehicle, 'current_status'>
+): boolean {
+  return vehicle.current_status === 'stored'
+}
+
 // ==================== שליפת רכבים באחסנה ====================
 
 export async function getStoredVehicles(
   companyId: string, 
   customerId?: string | null,
-  statusFilter: 'stored' | 'released' | 'all' = 'stored'
+  statusFilter: 'stored' | 'reserved_for_tow' | 'released' | 'all' = 'stored'
 ): Promise<StoredVehicleWithCustomer[]> {
   let query = supabase
     .from('stored_vehicles')
@@ -83,6 +120,65 @@ export async function getStoredVehicles(
   }))
 }
 
+// ==================== שמירת רכב לגרירה (reserved) ====================
+
+export async function reserveVehicleForTow(params: {
+  storedVehicleId: string
+  towId: string
+}): Promise<void> {
+  const { storedVehicleId, towId } = params
+  const { error } = await supabase
+    .from('stored_vehicles')
+    .update({
+      current_status: 'reserved_for_tow',
+      reserved_for_tow_id: towId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storedVehicleId)
+    .eq('current_status', 'stored')
+
+  if (error) {
+    console.error('[reserveVehicleForTow] error:', error)
+    throw error
+  }
+}
+
+export async function unreserveVehicleFromTow(params: {
+  storedVehicleId: string
+}): Promise<void> {
+  const { storedVehicleId } = params
+  const { error } = await supabase
+    .from('stored_vehicles')
+    .update({
+      current_status: 'stored',
+      reserved_for_tow_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', storedVehicleId)
+    .eq('current_status', 'reserved_for_tow')
+
+  if (error) {
+    console.error('[unreserveVehicleFromTow] error:', error)
+    throw error
+  }
+}
+
+export async function getVehiclesReservedForTow(
+  towId: string
+): Promise<StoredVehicle[]> {
+  const { data, error } = await supabase
+    .from('stored_vehicles')
+    .select('*')
+    .eq('reserved_for_tow_id', towId)
+    .eq('current_status', 'reserved_for_tow')
+
+  if (error) {
+    console.error('[getVehiclesReservedForTow] error:', error)
+    return []
+  }
+  return (data as StoredVehicle[]) || []
+}
+
 // ==================== חיפוש רכב לפי מספר ====================
 
 export async function searchStoredVehicle(
@@ -113,6 +209,38 @@ export async function searchStoredVehicle(
   return {
     ...data,
     customer_name: (data.customer as any)?.name || null
+  }
+}
+
+/** Pickup completion: find vehicle in storage or reserved for this tow */
+export async function findStoredVehicleForRelease(
+  companyId: string,
+  plateNumber: string
+): Promise<StoredVehicleWithCustomer | null> {
+  const { data, error } = await supabase
+    .from('stored_vehicles')
+    .select(`
+      *,
+      customer:customers!customer_id (
+        id,
+        name
+      )
+    `)
+    .eq('company_id', companyId)
+    .eq('plate_number', plateNumber)
+    .in('current_status', ['stored', 'reserved_for_tow'])
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error finding stored vehicle for release:', error)
+    throw error
+  }
+
+  if (!data) return null
+
+  return {
+    ...data,
+    customer_name: (data.customer as any)?.name || null,
   }
 }
 
@@ -247,6 +375,7 @@ export async function getVehicleStorageHistory(
 export async function getStorageStats(companyId: string): Promise<{
   total: number
   stored: number
+  reserved: number
   released: number
   byCustomer: { customerId: string; customerName: string; count: number }[]
 }> {
@@ -263,6 +392,7 @@ export async function getStorageStats(companyId: string): Promise<{
 
   const vehicles = allVehicles || []
   const stored = vehicles.filter(v => v.current_status === 'stored')
+  const reserved = vehicles.filter(v => v.current_status === 'reserved_for_tow')
   const released = vehicles.filter(v => v.current_status === 'released')
 
   // ספירה לפי לקוח (רק באחסנה)
@@ -288,6 +418,7 @@ export async function getStorageStats(companyId: string): Promise<{
   return {
     total: vehicles.length,
     stored: stored.length,
+    reserved: reserved.length,
     released: released.length,
     byCustomer
   }
@@ -300,4 +431,34 @@ export async function getCustomerStoredVehicles(
   customerId: string
 ): Promise<StoredVehicleWithCustomer[]> {
   return getStoredVehicles(companyId, customerId, 'stored')
+}
+
+/** Customer card: stored + reserved (not released) */
+export async function getCustomerStoredVehiclesForDisplay(
+  companyId: string,
+  customerId: string
+): Promise<StoredVehicleWithCustomer[]> {
+  const { data, error } = await supabase
+    .from('stored_vehicles')
+    .select(`
+      *,
+      customer:customers!customer_id (
+        id,
+        name
+      )
+    `)
+    .eq('company_id', companyId)
+    .eq('customer_id', customerId)
+    .in('current_status', ['stored', 'reserved_for_tow'])
+    .order('last_stored_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching customer stored vehicles for display:', error)
+    throw error
+  }
+
+  return (data || []).map((item) => ({
+    ...item,
+    customer_name: (item.customer as { name?: string } | null)?.name || null,
+  }))
 }

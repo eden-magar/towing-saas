@@ -2,7 +2,11 @@ import { useRouter } from 'next/navigation'
 import { createCustomer } from '@/app/lib/queries/customers'
 import { prepareTowData } from '../lib/utils/tow-save-handler'
 import { createTow, updateTow, getTowWithPoints, saveTowChangeLogs } from '../lib/queries/tows'
-import { addVehicleToStorage, releaseVehicleFromStorage } from '../lib/queries/storage'
+import {
+  reserveVehicleForTow,
+  unreserveVehicleFromTow,
+  getVehiclesReservedForTow,
+} from '../lib/queries/storage'
 import { AddressData } from '../lib/google-maps'
 import { DistanceResult, PriceItem, TowType } from '../components/tow-forms/sections'
 import { CustomerWithPricing, LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../lib/queries/price-lists'
@@ -361,7 +365,33 @@ export function useTowSave(params: UseTowSaveParams) {
     })
 
     if (editTowId) {
-    
+    try {
+      const currentReservations = await getVehiclesReservedForTow(editTowId)
+      const desiredIds = new Set<string>()
+      if (towType === 'single' && selectedStoredVehicleId) {
+        desiredIds.add(selectedStoredVehicleId)
+      }
+      if (
+        towType === 'exchange' &&
+        workingVehicleSource === 'storage' &&
+        selectedWorkingVehicleId
+      ) {
+        desiredIds.add(selectedWorkingVehicleId)
+      }
+      for (const v of currentReservations) {
+        if (!desiredIds.has(v.id)) {
+          await unreserveVehicleFromTow({ storedVehicleId: v.id })
+        }
+      }
+      for (const id of desiredIds) {
+        if (!currentReservations.some((r) => r.id === id)) {
+          await reserveVehicleForTow({ storedVehicleId: id, towId: editTowId })
+        }
+      }
+    } catch (err) {
+      console.error('[useTowSave] sync storage reservations failed:', err)
+    }
+
     // שמירת לוג שינויים
     if (originalTow && user) {
       const changes: { field_name: string; old_value: string | null; new_value: string | null }[] = []
@@ -390,6 +420,27 @@ export function useTowSave(params: UseTowSaveParams) {
     } else {
       const result = await createTow(towData)
 
+      try {
+        if (towType === 'single' && selectedStoredVehicleId) {
+          await reserveVehicleForTow({
+            storedVehicleId: selectedStoredVehicleId,
+            towId: result.id,
+          })
+        }
+        if (
+          towType === 'exchange' &&
+          workingVehicleSource === 'storage' &&
+          selectedWorkingVehicleId
+        ) {
+          await reserveVehicleForTow({
+            storedVehicleId: selectedWorkingVehicleId,
+            towId: result.id,
+          })
+        }
+      } catch (err) {
+        console.error('[useTowSave] reserve storage failed:', err)
+      }
+
       const createdStatus =
         (towData as { status?: string; driverId?: string }).status ??
         (towData.driverId ? 'assigned' : 'pending')
@@ -414,80 +465,6 @@ export function useTowSave(params: UseTowSaveParams) {
             console.warn('[legacy-calendar-sync] sync request failed', err)
           }
         })()
-      }
-
-      if (selectedStoredVehicleId && companyId) {
-        await releaseVehicleFromStorage({
-          storedVehicleId: selectedStoredVehicleId,
-          towId: result.id,
-          performedBy: user?.id,
-          notes: 'שוחרר לגרירה'
-        })
-      }
-
-      if (dropoffToStorage && companyId) {
-        await addVehicleToStorage({
-          companyId,
-          customerId: selectedCustomerId || undefined,
-          plateNumber: vehiclePlate,
-          vehicleData: vehicleData?.data ? {
-            manufacturer: vehicleData.data.manufacturer || undefined,
-            model: vehicleData.data.model || undefined,
-            year: vehicleData.data.year?.toString() || undefined,
-            color: vehicleData.data.color || undefined,
-            gearType: vehicleData.data.gearType || undefined,
-            driveType: vehicleData.data.driveType || undefined,
-            totalWeight: vehicleData.data.totalWeight?.toString() || undefined,
-            source: vehicleData.source || undefined,
-            sourceLabel: vehicleData.sourceLabel || undefined,
-          } : (manualManufacturer || manualColor || manualWeight ? {
-            manufacturer: manualManufacturer || undefined,
-            color: manualColor || undefined,
-            totalWeight: manualWeight || undefined,
-          } : undefined),
-          location: undefined,
-          towId: result.id,
-          performedBy: user?.id,
-          notes: 'נכנס מגרירה',
-          vehicleCondition: storageVehicleCondition ?? (selectedDefects.length > 0 ? 'faulty' : 'operational'),
-          vehicleCode: vehicleCode || undefined,
-        })
-      }
-
-      // Exchange mode: release working vehicle from storage if picked from storage
-      if (towType === 'exchange' && workingVehicleSource === 'storage' && selectedWorkingVehicleId && companyId) {
-        await releaseVehicleFromStorage({
-          storedVehicleId: selectedWorkingVehicleId,
-          towId: result.id,
-          performedBy: user?.id,
-          notes: 'שוחרר לגרירת חליפין'
-        })
-      }
-
-      // Exchange mode: add defective vehicle to storage if destination is storage
-      if (towType === 'exchange' && defectiveDestination === 'storage' && defectiveVehiclePlate && companyId) {
-        await addVehicleToStorage({
-          companyId,
-          customerId: selectedCustomerId || undefined,
-          plateNumber: defectiveVehiclePlate,
-          vehicleData: defectiveVehicleData?.data ? {
-            manufacturer: defectiveVehicleData.data.manufacturer || undefined,
-            model: defectiveVehicleData.data.model || undefined,
-            year: defectiveVehicleData.data.year?.toString() || undefined,
-            color: defectiveVehicleData.data.color || undefined,
-            gearType: defectiveVehicleData.data.gearType || undefined,
-            driveType: defectiveVehicleData.data.driveType || undefined,
-            totalWeight: defectiveVehicleData.data.totalWeight?.toString() || undefined,
-            source: defectiveVehicleData.source || undefined,
-            sourceLabel: defectiveVehicleData.sourceLabel || undefined,
-          } : undefined,
-          location: undefined,
-          towId: result.id,
-          performedBy: user?.id,
-          notes: 'נכנס מגרירת חליפין',
-          vehicleCondition: 'faulty',
-          vehicleCode: defectiveVehicleCode || undefined,
-        })
       }
 
       setSavedTowId(result.id)

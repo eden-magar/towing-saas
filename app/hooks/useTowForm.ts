@@ -20,7 +20,11 @@ import {
   ServiceSurcharge 
 } from '../lib/queries/price-lists'
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../lib/types'
-import { getCustomerStoredVehicles, StoredVehicleWithCustomer } from '../lib/queries/storage'
+import {
+  getCustomerStoredVehiclesForDisplay,
+  getVehiclesReservedForTow,
+  StoredVehicleWithCustomer,
+} from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
 import { extractBasePrices } from '../lib/utils/price-calculator'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
@@ -137,7 +141,10 @@ export function useTowForm(editTowId?: string) {
       
       setStorageLoading(true)
       try {
-        const vehicles = await getCustomerStoredVehicles(companyId, selectedCustomerId)
+        const vehicles = await getCustomerStoredVehiclesForDisplay(
+          companyId,
+          selectedCustomerId
+        )
         setCustomerStoredVehicles(vehicles)
       } catch (err) {
         console.error('Error loading stored vehicles:', err)
@@ -643,6 +650,18 @@ export function useTowForm(editTowId?: string) {
             services: [],
           }))
           setRoutePoints(points)
+        }
+
+        const reserved = await getVehiclesReservedForTow(editTowId)
+        if (reserved.length > 0) {
+          const rv = reserved[0]
+          const effectiveType = towTypeMap[tow.tow_type] || 'single'
+          if (effectiveType === 'single') {
+            setSelectedStoredVehicleId(rv.id)
+          } else if (effectiveType === 'exchange') {
+            setSelectedWorkingVehicleId(rv.id)
+            setWorkingVehicleSource('storage')
+          }
         }
       } catch (err) {
         console.error('Error loading tow for edit:', err)

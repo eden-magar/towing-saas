@@ -18,6 +18,28 @@ import {
   TowImageType
 } from '@/app/lib/queries/driver-tasks'
 
+function StoragePointBadge({
+  pointType,
+}: {
+  pointType: DriverTaskPoint['point_type']
+}) {
+  if (pointType === 'pickup') {
+    return (
+      <div className="mx-4 mt-3 p-3 bg-blue-100 border-2 border-blue-400 rounded-xl text-center">
+        <p className="text-base font-bold text-blue-800">🏬 איסוף מאחסנה</p>
+      </div>
+    )
+  }
+  if (pointType === 'dropoff') {
+    return (
+      <div className="mx-4 mt-3 p-3 bg-orange-100 border-2 border-orange-400 rounded-xl text-center">
+        <p className="text-base font-bold text-orange-800">🏬 הורדה לאחסנה</p>
+      </div>
+    )
+  }
+  return null
+}
+
 interface StepCameraProps {
   towId: string
   point: DriverTaskPoint
@@ -321,6 +343,7 @@ export default function StepCamera({
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
+      {point.is_storage && <StoragePointBadge pointType={point.point_type} />}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* Camera View */}

@@ -42,7 +42,13 @@ import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow, updateTow } from '../../../lib/queries/tows'
-import { addVehicleToStorage, releaseVehicleFromStorage, searchStoredVehicle } from '../../../lib/queries/storage'
+import {
+  searchStoredVehicle,
+  reserveVehicleForTow,
+  unreserveVehicleFromTow,
+  getVehiclesReservedForTow,
+  isPickableStoredVehicle,
+} from '../../../lib/queries/storage'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import type { AddressData } from '../../../lib/google-maps'
 import type { SelectedService } from '../../../components/tow-forms/shared'
@@ -318,6 +324,10 @@ function CreateTowForm({
     }
   }, [loadedTowStatus, editTowId, router])
 
+  const storagePickupEditLocked =
+    !!editTowId &&
+    (loadedTowStatus === 'in_progress' || loadedTowStatus === 'completed')
+
   const handleNowClick = () => {
     const now = new Date()
     setTowDate(now.toISOString().split('T')[0])
@@ -519,75 +529,60 @@ function CreateTowForm({
         manualColor,
         manualWeight,
       })
+      let quoteTowId = editTowId
       if (editTowId) {
         await updateTow({ ...towData, towId: editTowId, status: 'quote', priceMode })
         setQuoteSavedId(editTowId)
+        try {
+          const currentReservations = await getVehiclesReservedForTow(editTowId)
+          const desiredIds = new Set<string>()
+          if (towType === 'single' && selectedStoredVehicleId) {
+            desiredIds.add(selectedStoredVehicleId)
+          }
+          if (
+            towType === 'exchange' &&
+            workingVehicleSource === 'storage' &&
+            selectedWorkingVehicleId
+          ) {
+            desiredIds.add(selectedWorkingVehicleId)
+          }
+          for (const v of currentReservations) {
+            if (!desiredIds.has(v.id)) {
+              await unreserveVehicleFromTow({ storedVehicleId: v.id })
+            }
+          }
+          for (const id of desiredIds) {
+            if (!currentReservations.some((r) => r.id === id)) {
+              await reserveVehicleForTow({ storedVehicleId: id, towId: editTowId })
+            }
+          }
+        } catch (err) {
+          console.error('[handleSaveAsQuote] sync storage reservations failed:', err)
+        }
       } else {
-        const result = await createTow({ ...towData, status: 'quote' as const })
-        if (selectedStoredVehicleId && companyId) {
-          await releaseVehicleFromStorage({
-            storedVehicleId: selectedStoredVehicleId,
-            towId: result.id,
-            performedBy: user.id,
-            notes: 'שוחרר לגרירה',
-          })
-        }
-        if (dropoffToStorage && companyId) {
-          await addVehicleToStorage({
-            companyId,
-            customerId: selectedCustomerId || undefined,
-            plateNumber: plate,
-            vehicleData: vData?.data
-              ? {
-                  manufacturer: vData.data.manufacturer || undefined,
-                  model: vData.data.model || undefined,
-                  year: vData.data.year?.toString(),
-                  color: vData.data.color || undefined,
-                  gearType: vData.data.gearType || undefined,
-                  driveType: vData.data.driveType || undefined,
-                  totalWeight: vData.data.totalWeight?.toString(),
-                  source: vData.source || undefined,
-                  sourceLabel: vData.sourceLabel || undefined,
-                }
-              : undefined,
-            towId: result.id,
-            performedBy: user.id,
-            notes: 'נכנס מגרירה',
-            vehicleCondition: 'operational',
-          })
-        }
-        if (towType === 'exchange' && workingVehicleSource === 'storage' && selectedWorkingVehicleId && companyId) {
-          await releaseVehicleFromStorage({
-            storedVehicleId: selectedWorkingVehicleId,
-            towId: result.id,
-            performedBy: user.id,
-            notes: 'שוחרר לגרירת חליפין',
-          })
-        }
-        if (towType === 'exchange' && defectiveDestination === 'storage' && defectiveVehiclePlate && companyId) {
-          await addVehicleToStorage({
-            companyId,
-            customerId: selectedCustomerId || undefined,
-            plateNumber: defectiveVehiclePlate,
-            vehicleData: defectiveVehicleData?.data
-              ? {
-                  manufacturer: defectiveVehicleData.data.manufacturer || undefined,
-                  model: defectiveVehicleData.data.model || undefined,
-                  year: defectiveVehicleData.data.year?.toString(),
-                  color: defectiveVehicleData.data.color || undefined,
-                  gearType: defectiveVehicleData.data.gearType || undefined,
-                  driveType: defectiveVehicleData.data.driveType || undefined,
-                  totalWeight: defectiveVehicleData.data.totalWeight?.toString(),
-                  source: defectiveVehicleData.source || undefined,
-                  sourceLabel: defectiveVehicleData.sourceLabel || undefined,
-                }
-              : undefined,
-            towId: result.id,
-            performedBy: user.id,
-            notes: 'נכנס מגרירת חליפין',
-            vehicleCondition: 'faulty',
-            vehicleCode: defectiveVehicleCode || undefined,
-          })
+        const quoteResult = await createTow({ ...towData, status: 'quote' as const })
+        quoteTowId = quoteResult.id
+        if (quoteTowId) {
+          try {
+            if (towType === 'single' && selectedStoredVehicleId) {
+              await reserveVehicleForTow({
+                storedVehicleId: selectedStoredVehicleId,
+                towId: quoteTowId,
+              })
+            }
+            if (
+              towType === 'exchange' &&
+              workingVehicleSource === 'storage' &&
+              selectedWorkingVehicleId
+            ) {
+              await reserveVehicleForTow({
+                storedVehicleId: selectedWorkingVehicleId,
+                towId: quoteTowId,
+              })
+            }
+          } catch (err) {
+            console.error('[handleSaveAsQuote] reserve storage failed:', err)
+          }
         }
       }
       router.push('/dashboard')
@@ -864,13 +859,19 @@ function CreateTowForm({
                               className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                           </div>
                         </div>
+                        {storagePickupEditLocked && (
+                          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+                            לא ניתן לשנות פרטי איסוף מאחסנה — הגרירה כבר התחילה
+                          </p>
+                        )}
                         <div className="flex justify-end">
                           {selectedCustomerId && customerStoredVehicles.length > 0 && (
                             <div className="flex items-center gap-1">
                               <button
                                 type="button"
+                                disabled={storagePickupEditLocked}
                                 onClick={() => setShowStorageModal(true)}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition-colors ${
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                   selectedStoredVehicleId
                                     ? 'border-green-400 bg-green-50 text-green-700'
                                     : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
@@ -1314,7 +1315,7 @@ function CreateTowForm({
                             </button>
                           </div>
                           <div className="p-4 flex flex-col gap-2">
-                            {customerStoredVehicles.map((v) => (
+                            {customerStoredVehicles.filter(isPickableStoredVehicle).map((v) => (
                               <button
                                 key={v.id}
                                 type="button"
@@ -1498,13 +1499,19 @@ function CreateTowForm({
                           <div className="flex flex-col gap-2">
                             <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">פרטי רכב</div>
                             <div className="space-y-3">
+                              {storagePickupEditLocked && (
+                                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                  לא ניתן לשנות פרטי איסוף מאחסנה — הגרירה כבר התחילה
+                                </p>
+                              )}
                               <div className="flex justify-end flex-wrap gap-2">
                                 {workingVehicleSource === 'storage' ? (
                                   <div className="flex items-center gap-1 shrink-0">
                                     <button
                                       type="button"
+                                      disabled={storagePickupEditLocked}
                                       onClick={() => setShowWorkingStorageModal(true)}
-                                      className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-gt-brand text-white border-gt-brand"
+                                      className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-gt-brand text-white border-gt-brand disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       🏪 מאחסנה: {workingVehiclePlate}
                                     </button>
@@ -1524,8 +1531,9 @@ function CreateTowForm({
                                   selectedCustomerId && customerStoredVehicles.length > 0 && (
                                     <button
                                       type="button"
+                                      disabled={storagePickupEditLocked}
                                       onClick={() => setShowWorkingStorageModal(true)}
-                                      className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-white text-blue-600 border-blue-200 hover:border-blue-400 shrink-0"
+                                      className="px-2.5 py-1 rounded-lg text-xs font-medium border bg-white text-blue-600 border-blue-200 hover:border-blue-400 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       🏪 מאחסנה
                                     </button>
@@ -2646,7 +2654,10 @@ function CreateTowForm({
               <button type="button" onClick={() => setShowWorkingStorageModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
             </div>
             <div className="p-4 flex flex-col gap-2">
-              {customerStoredVehicles.filter(v => v.vehicle_condition === 'operational').map((v) => (
+              {customerStoredVehicles
+                .filter(isPickableStoredVehicle)
+                .filter((v) => v.vehicle_condition === 'operational')
+                .map((v) => (
                 <button
                   key={v.id}
                   type="button"

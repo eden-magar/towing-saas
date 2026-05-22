@@ -1,4 +1,8 @@
 import { supabase } from '../supabase'
+import {
+  getVehiclesReservedForTow,
+  unreserveVehicleFromTow,
+} from './storage'
 import { getCompanySettings } from './settings'
 import type { TowChangeLog } from '../types'
 
@@ -730,6 +734,17 @@ export async function updateTowStatus(
   if (error) {
     console.error('Error updating tow status:', error)
     throw error
+  }
+
+  if (status === 'cancelled') {
+    try {
+      const reserved = await getVehiclesReservedForTow(towId)
+      for (const v of reserved) {
+        await unreserveVehicleFromTow({ storedVehicleId: v.id })
+      }
+    } catch (err) {
+      console.error('[updateTowStatus] failed to unreserve vehicles:', err)
+    }
   }
 
   return true

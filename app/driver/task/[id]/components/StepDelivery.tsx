@@ -9,8 +9,31 @@ import {
   Package
 } from 'lucide-react'
 
+function StoragePointBadge({
+  pointType,
+}: {
+  pointType: 'pickup' | 'dropoff' | 'exchange' | 'stop'
+}) {
+  if (pointType === 'pickup') {
+    return (
+      <div className="mx-4 mb-3 p-3 bg-blue-100 border-2 border-blue-400 rounded-xl text-center">
+        <p className="text-base font-bold text-blue-800">🏬 איסוף מאחסנה</p>
+      </div>
+    )
+  }
+  if (pointType === 'dropoff') {
+    return (
+      <div className="mx-4 mb-3 p-3 bg-orange-100 border-2 border-orange-400 rounded-xl text-center">
+        <p className="text-base font-bold text-orange-800">🏬 הורדה לאחסנה</p>
+      </div>
+    )
+  }
+  return null
+}
+
 interface StepDeliveryProps {
   pointType: 'pickup' | 'dropoff' | 'exchange' | 'stop'
+  isStorage?: boolean
   customer: { name: string; phone: string | null } | null
   onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
   isLastPoint: boolean
@@ -24,7 +47,8 @@ export default function StepDelivery({
   onComplete,
   isLastPoint,
   finalPrice,
-  dropoffToStorage
+  dropoffToStorage,
+  isStorage = false,
 }: StepDeliveryProps) {
   const [recipientName, setRecipientName] = useState('')
   const [recipientPhone, setRecipientPhone] = useState('')
@@ -102,6 +126,8 @@ export default function StepDelivery({
           {subtitle}
         </p>
       </div>
+
+      {isStorage && <StoragePointBadge pointType={pointType} />}
 
       {/* Content Card */}
       <div className="flex-1 bg-white rounded-t-3xl px-5 pt-6 pb-40">

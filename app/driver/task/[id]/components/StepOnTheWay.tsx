@@ -15,6 +15,28 @@ import {
 } from 'lucide-react'
 import { DriverTaskPoint, DriverTaskVehicle, getTaskDetail, type TaskDetailFull } from '@/app/lib/queries/driver-tasks'
 
+function StoragePointBadge({
+  pointType,
+}: {
+  pointType: DriverTaskPoint['point_type']
+}) {
+  if (pointType === 'pickup') {
+    return (
+      <div className="mx-4 mb-3 p-3 bg-blue-100 border-2 border-blue-400 rounded-xl text-center">
+        <p className="text-base font-bold text-blue-800">🏬 איסוף מאחסנה</p>
+      </div>
+    )
+  }
+  if (pointType === 'dropoff') {
+    return (
+      <div className="mx-4 mb-3 p-3 bg-orange-100 border-2 border-orange-400 rounded-xl text-center">
+        <p className="text-base font-bold text-orange-800">🏬 הורדה לאחסנה</p>
+      </div>
+    )
+  }
+  return null
+}
+
 interface StepOnTheWayProps {
   point: DriverTaskPoint
   vehicles: DriverTaskVehicle[]
@@ -97,6 +119,8 @@ export default function StepOnTheWay({
         <h1 className="text-2xl font-bold mb-1">{title}</h1>
         <p className="text-white/80">{subtitle}</p>
       </div>
+
+      {point.is_storage && <StoragePointBadge pointType={point.point_type} />}
 
       {(() => {
         const surcharges = priceBreakdown?.service_surcharges ?? []

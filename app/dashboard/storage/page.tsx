@@ -29,6 +29,7 @@ import {
   updateStoredVehicle,
   getStorageStats,
   getVehicleStorageHistory,
+  getStoredVehicleStatusDisplay,
   StoredVehicleWithCustomer,
   StorageHistoryItem
 } from '../../lib/queries/storage'
@@ -46,13 +47,21 @@ export default function StoragePage() {
   // Data states
   const [vehicles, setVehicles] = useState<StoredVehicleWithCustomer[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [stats, setStats] = useState({ total: 0, stored: 0, released: 0, byCustomer: [] as any[] })
+  const [stats, setStats] = useState({
+    total: 0,
+    stored: 0,
+    reserved: 0,
+    released: 0,
+    byCustomer: [] as { customerId: string; customerName: string; count: number }[],
+  })
   const [pageLoading, setPageLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   // UI states
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'stored' | 'released' | 'all'>('stored')
+  const [statusFilter, setStatusFilter] = useState<
+    'stored' | 'reserved_for_tow' | 'released' | 'all'
+  >('stored')
   const [customerFilter, setCustomerFilter] = useState<string>('')
   const [conditionFilter, setConditionFilter] = useState<'all' | 'operational' | 'faulty'>('all')
   const [showModal, setShowModal] = useState(false)
@@ -337,7 +346,7 @@ export default function StoragePage() {
       </div>
 
       {/* סטטיסטיקות */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-1">
             <Package size={18} className="text-blue-600" />
@@ -351,6 +360,13 @@ export default function StoragePage() {
           </div>
           <p className="text-lg sm:text-2xl font-bold text-gray-800">{stats.stored}</p>
           <p className="text-xs text-gray-500">באחסנה</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-lg flex items-center justify-center mx-auto mb-1">
+            <Package size={18} className="text-amber-600" />
+          </div>
+          <p className="text-lg sm:text-2xl font-bold text-gray-800">{stats.reserved}</p>
+          <p className="text-xs text-gray-500">ממתין לגרירה</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 text-center">
           <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-1">
@@ -389,17 +405,24 @@ export default function StoragePage() {
                 ))}
               </select>
               <div className="flex gap-1">
-                {(['stored', 'released', 'all'] as const).map((status) => (
+                {(
+                  [
+                    { value: 'stored' as const, label: 'באחסנה' },
+                    { value: 'reserved_for_tow' as const, label: 'ממתין לגרירה' },
+                    { value: 'released' as const, label: 'שוחררו' },
+                    { value: 'all' as const, label: 'הכל' },
+                  ] as const
+                ).map(({ value, label }) => (
                   <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
+                    key={value}
+                    onClick={() => setStatusFilter(value)}
                     className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-colors ${
-                      statusFilter === status
+                      statusFilter === value
                         ? 'bg-[#33d4ff] text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {status === 'stored' ? 'באחסנה' : status === 'released' ? 'שוחררו' : 'הכל'}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -480,23 +503,23 @@ export default function StoragePage() {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${
-                      vehicle.current_status === 'stored' 
-                        ? 'bg-emerald-100 text-emerald-700' 
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {vehicle.current_status === 'stored' ? (
-                        <>
-                          <PackageCheck size={14} />
-                          באחסנה
-                        </>
-                      ) : (
-                        <>
-                          <PackageX size={14} />
-                          שוחרר
-                        </>
-                      )}
-                    </span>
+                    {(() => {
+                      const statusDisplay = getStoredVehicleStatusDisplay(vehicle.current_status)
+                      const StatusIcon =
+                        vehicle.current_status === 'stored'
+                          ? PackageCheck
+                          : vehicle.current_status === 'reserved_for_tow'
+                            ? Package
+                            : PackageX
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${statusDisplay.badgeClass}`}
+                        >
+                          <StatusIcon size={14} />
+                          {statusDisplay.label}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-2">
@@ -541,9 +564,9 @@ export default function StoragePage() {
                     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
                       <Car size={24} className="text-gray-500" />
                     </div>
-                    <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white ${
-                      vehicle.current_status === 'stored' ? 'bg-emerald-500' : 'bg-gray-400'
-                    }`}></div>
+                    <div
+                      className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white ${getStoredVehicleStatusDisplay(vehicle.current_status).dotClass}`}
+                    ></div>
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -608,10 +631,10 @@ export default function StoragePage() {
               </div>
               
               <div className="px-4 pb-4 flex items-center gap-4 text-sm text-gray-600 flex-wrap">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  vehicle.current_status === 'stored' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {vehicle.current_status === 'stored' ? 'באחסנה' : 'שוחרר'}
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStoredVehicleStatusDisplay(vehicle.current_status).badgeClass}`}
+                >
+                  {getStoredVehicleStatusDisplay(vehicle.current_status).label}
                 </span>
                 {vehicle.customer_name && (
                   <span className="flex items-center gap-1">
