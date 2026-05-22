@@ -97,6 +97,7 @@ export interface SaveTowInput {
   paymentMethod?: string
   invoiceName?: string
   dropoffToStorage?: boolean
+  selectedStoredVehicleId?: string | null
   existingPriceBreakdown?: PriceBreakdown | null
   // Exchange specific
   workingVehiclePlate?: string
@@ -119,6 +120,9 @@ export interface SaveTowInput {
   defectiveDestinationAddress?: AddressData
   defectiveDestinationContactName?: string
   defectiveDestinationContactPhone?: string
+  workingVehicleSource?: 'storage' | 'address'
+  workingVehicleDestinationIsStorage?: boolean
+  defectiveDestination?: 'storage' | 'address'
   linkedTowId?: string
 }
 
@@ -137,6 +141,7 @@ export interface PreparedTowPoint {
   vehicleIndices: number[]
   // האם זו נקודה לאחסנה
   dropToStorage?: boolean
+  isStorage?: boolean
 }
 
 // Output ל-createTow
@@ -376,7 +381,8 @@ export function convertRoutePointsToTowPoints(
           contact_phone: rp.contactPhone || null,
           notes: rp.notes || null,
           vehicleIndices: dropoffVehicleIndices,
-          dropToStorage: rp.dropToStorage
+          dropToStorage: rp.dropToStorage,
+          isStorage: rp.dropToStorage === true,
         })
       }
       
@@ -394,7 +400,10 @@ export function convertRoutePointsToTowPoints(
         contact_name: rp.contactName || null,
         contact_phone: rp.contactPhone || null,
         notes: rp.notes || null,
-        vehicleIndices: pickupVehicleIndices
+        vehicleIndices: pickupVehicleIndices,
+        isStorage:
+          rp.type === 'storage' ||
+          rp.vehiclesToPickup.some((v) => v.fromStorage === true),
       })
     }
     // רק איסוף
@@ -412,7 +421,10 @@ export function convertRoutePointsToTowPoints(
         contact_name: rp.contactName || null,
         contact_phone: rp.contactPhone || null,
         notes: rp.notes || null,
-        vehicleIndices
+        vehicleIndices,
+        isStorage:
+          rp.type === 'storage' ||
+          rp.vehiclesToPickup.some((v) => v.fromStorage === true),
       })
     }
     // רק פריקה
@@ -434,7 +446,8 @@ export function convertRoutePointsToTowPoints(
         contact_phone: rp.contactPhone || null,
         notes: rp.notes || null,
         vehicleIndices,
-        dropToStorage: rp.dropToStorage
+        dropToStorage: rp.dropToStorage,
+        isStorage: rp.dropToStorage === true,
       })
     }
   }
@@ -459,7 +472,8 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
       contact_name: input.pickupContactName || null,
       contact_phone: input.pickupContactPhone || null,
       notes: null,
-      vehicleIndices: [0] // הרכב היחיד
+      vehicleIndices: [0], // הרכב היחיד
+      isStorage: !!input.selectedStoredVehicleId,
     })
   }
   
@@ -474,7 +488,8 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
       contact_name: input.dropoffContactName || null,
       contact_phone: input.dropoffContactPhone || null,
       notes: null,
-      vehicleIndices: [0] // הרכב היחיד
+      vehicleIndices: [0], // הרכב היחיד
+      isStorage: input.dropoffToStorage === true,
     })
   }
   
@@ -997,7 +1012,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.workingVehicleContactName || null,
         contact_phone: input.workingVehicleContactPhone || null,
         notes: null,
-        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : [],
+        isStorage: input.workingVehicleSource === 'storage',
       })
     }
 
@@ -1012,7 +1028,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.workingDestinationContactName || null,
         contact_phone: input.workingDestinationContactPhone || null,
         notes: null,
-        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : [],
+        isStorage: input.workingVehicleDestinationIsStorage === true,
       })
     }
 
@@ -1027,7 +1044,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.exchangeContactName || null,
         contact_phone: input.exchangeContactPhone || null,
         notes: null,
-        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : [],
+        isStorage: false,
       })
     }
 
@@ -1042,7 +1060,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.defectiveDestinationContactName || null,
         contact_phone: input.defectiveDestinationContactPhone || null,
         notes: null,
-        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : [],
+        isStorage: input.defectiveDestination === 'storage',
       })
     }
   } else {
@@ -1057,7 +1076,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.workingVehicleContactName || null,
         contact_phone: input.workingVehicleContactPhone || null,
         notes: null,
-        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : [],
+        isStorage: input.workingVehicleSource === 'storage',
       })
     }
 
@@ -1075,7 +1095,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         vehicleIndices: [
           ...(workingIdx >= 0 ? [workingIdx] : []),
           ...(defectiveIdx >= 0 ? [defectiveIdx] : [])
-        ]
+        ],
+        isStorage: false,
       })
     }
 
@@ -1090,7 +1111,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.defectiveDestinationContactName || null,
         contact_phone: input.defectiveDestinationContactPhone || null,
         notes: null,
-        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : []
+        vehicleIndices: defectiveIdx >= 0 ? [defectiveIdx] : [],
+        isStorage: input.defectiveDestination === 'storage',
       })
     }
 
@@ -1108,7 +1130,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         contact_name: input.workingDestinationContactName || null,
         contact_phone: input.workingDestinationContactPhone || null,
         notes: null,
-        vehicleIndices: workingIdx >= 0 ? [workingIdx] : []
+        vehicleIndices: workingIdx >= 0 ? [workingIdx] : [],
+        isStorage: input.workingVehicleDestinationIsStorage === true,
       })
     }
   }

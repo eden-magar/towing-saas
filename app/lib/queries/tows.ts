@@ -81,6 +81,7 @@ export interface TowPoint {
   recipient_name: string | null
   recipient_phone: string | null
   notes: string | null
+  is_storage: boolean
   created_at: string
   updated_at: string
 }
@@ -476,6 +477,7 @@ export interface PreparedTowPoint {
   notes: string | null
   vehicleIndices: number[]
   dropToStorage?: boolean
+  isStorage?: boolean
 }
 
 interface CreateTowInput {
@@ -661,6 +663,7 @@ export async function createTow(input: CreateTowInput) {
           contact_name: point.contact_name,
           contact_phone: point.contact_phone,
           notes: point.notes,
+          is_storage: point.isStorage || false,
           status: 'pending'
         })
 
@@ -1039,6 +1042,7 @@ export async function updateTow(input: UpdateTowInput) {
         contact_name: point.contact_name,
         contact_phone: point.contact_phone,
         notes: point.notes,
+        is_storage: point.isStorage || false,
         status: 'pending'
       })
 

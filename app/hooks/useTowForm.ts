@@ -497,6 +497,9 @@ export function useTowForm(editTowId?: string) {
               setWorkingVehicleAddress(pointToAddressData(workingSource))
               setWorkingVehicleContact(workingSource.contact_name || '')
               setWorkingVehicleContactPhone(workingSource.contact_phone || '')
+              if (workingSource.is_storage) {
+                setWorkingVehicleSource('storage')
+              }
             }
             if (exchangeHub) {
               setExchangeAddress(pointToAddressData(exchangeHub))
@@ -512,6 +515,12 @@ export function useTowForm(editTowId?: string) {
               setWorkingVehicleDestinationAddress(pointToAddressData(workingDest))
               setWorkingDestinationContact(workingDest.contact_name || '')
               setWorkingDestinationContactPhone(workingDest.contact_phone || '')
+              if (workingDest.is_storage) {
+                setWorkingVehicleDestinationIsStorage(true)
+              }
+            }
+            if (defectiveDest?.is_storage) {
+              setDefectiveDestination('storage')
             }
           } else if (sortedPoints.length === 4) {
             const [p0, p1, p2, p3] = sortedPoints
@@ -527,6 +536,15 @@ export function useTowForm(editTowId?: string) {
             setDefectiveDestinationAddress(pointToAddressData(p3))
             setDefectiveDestinationContact(p3.contact_name || '')
             setDefectiveDestinationContactPhone(p3.contact_phone || '')
+            if (p0.is_storage) {
+              setWorkingVehicleSource('storage')
+            }
+            if (p1.is_storage) {
+              setWorkingVehicleDestinationIsStorage(true)
+            }
+            if (p3.is_storage) {
+              setDefectiveDestination('storage')
+            }
           }
 
           const mapExchangeService = (s: {
@@ -587,6 +605,9 @@ export function useTowForm(editTowId?: string) {
               })
               setDropoffContactName(dropoff.contact_name || '')
               setDropoffContactPhone(dropoff.contact_phone || '')
+              if (dropoff.is_storage) {
+                setDropoffToStorage(true)
+              }
             }
           }
         }
@@ -931,6 +952,7 @@ export function useTowForm(editTowId?: string) {
     selectedStoredVehicleId,
     workingVehicleSource,
     selectedWorkingVehicleId,
+    workingVehicleDestinationIsStorage,
     defectiveDestination,
     setSavedTowId,
     setShowAssignNowModal,

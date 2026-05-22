@@ -402,6 +402,7 @@ export interface TowPoint {
   recipient_phone: string | null
   
   notes: string | null
+  is_storage?: boolean
   created_at: string
   updated_at: string
 }

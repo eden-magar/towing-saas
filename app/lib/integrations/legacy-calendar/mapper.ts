@@ -109,6 +109,35 @@ function pointToAddress(point: TowPointWithDetails | undefined): LegacyAddress {
   }
 }
 
+function storagePrefixForPoint(point: TowPointWithDetails | undefined): string {
+  if (!point?.is_storage) return ''
+  if (point.point_type === 'pickup') return '🚨 איסוף מאחסנה 🚨\n'
+  if (point.point_type === 'dropoff') return '🚨 הורדה לאחסנה 🚨\n'
+  return ''
+}
+
+function pointToAddressForCalendar(point: TowPointWithDetails | undefined): LegacyAddress {
+  const base = pointToAddress(point)
+  const prefix = storagePrefixForPoint(point)
+  if (!prefix) return base
+  const address = prefix + (base.address || '')
+  const physicalAddress = prefix + (base.physicalAddress || base.address || '')
+  return { ...base, address, physicalAddress }
+}
+
+function buildTowSelection(tow: TowForLegacyMapping): string {
+  const truckPart = (tow.required_truck_types ?? [])
+    .map(getTruckTypeLabel)
+    .filter(Boolean)
+    .join(', ')
+  const hasDollyService = (tow.price_breakdown?.service_surcharges ?? []).some(
+    (s) => s.label === 'דולי'
+  )
+  if (hasDollyService && truckPart) return `${truckPart} + דולי`
+  if (hasDollyService) return 'דולי'
+  return truckPart
+}
+
 function contactFromPoint(point: TowPointWithDetails | undefined): LegacyContact {
   return {
     name: point?.contact_name ?? '',
@@ -288,13 +317,13 @@ function buildSharedBase(tow: TowForLegacyMapping, towSelection: string) {
 function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
   const vehicles = sortVehicles(tow.vehicles ?? [])
   const hasSecondCar = vehicles.length >= 2
-  const towSelection = (tow.required_truck_types ?? []).map(getTruckTypeLabel).filter(Boolean).join(', ')
+  const towSelection = buildTowSelection(tow)
   const points = sortPoints(tow.points ?? [])
 
   const pickupPoint = findPickupPoint(points)
   const dropoffPoint = findDropoffPoint(points)
-  const sourceAddr = pointToAddress(pickupPoint)
-  const destAddr = pointToAddress(dropoffPoint)
+  const sourceAddr = pointToAddressForCalendar(pickupPoint)
+  const destAddr = pointToAddressForCalendar(dropoffPoint)
 
   const primary = vehicles[0]
   const defectiveCar: LegacyDefectiveCar = {
@@ -329,8 +358,8 @@ function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
     const secondPoints = second?.id ? pointsLinkedToVehicle(points, second.id) : []
     if (secondPoints.length > 0) {
       const { pickup, dropoff } = pickupAndDropoffFromSubset(secondPoints)
-      secondCar.source = pointToAddress(pickup)
-      secondCar.destination = pointToAddress(dropoff)
+      secondCar.source = pointToAddressForCalendar(pickup)
+      secondCar.destination = pointToAddressForCalendar(dropoff)
       secondCar.primaryContact = contactFromPoint(pickup)
       secondCar.destinationContact = contactFromPoint(dropoff)
     }
@@ -347,7 +376,7 @@ function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
 
 function mapExchangeNewPayload(tow: TowForLegacyMapping): LegacyPayloadExchangeNew {
   const vehicles = sortVehicles(tow.vehicles ?? [])
-  const towSelection = (tow.required_truck_types ?? []).map(getTruckTypeLabel).filter(Boolean).join(', ')
+  const towSelection = buildTowSelection(tow)
   const points = sortPoints(tow.points ?? [])
 
   const working =
@@ -373,10 +402,10 @@ function mapExchangeNewPayload(tow: TowForLegacyMapping): LegacyPayloadExchangeN
   const workingStops = pickupAndDropoffFromSubset(workingSubset)
   const defectiveStops = pickupAndDropoffFromSubset(defectiveSubset)
 
-  const workingSourceAddr = pointToAddress(workingStops.pickup)
-  const workingDestAddr = pointToAddress(workingStops.dropoff)
-  const defectiveSourceAddr = pointToAddress(defectiveStops.pickup)
-  const defectiveDestAddr = pointToAddress(defectiveStops.dropoff)
+  const workingSourceAddr = pointToAddressForCalendar(workingStops.pickup)
+  const workingDestAddr = pointToAddressForCalendar(workingStops.dropoff)
+  const defectiveSourceAddr = pointToAddressForCalendar(defectiveStops.pickup)
+  const defectiveDestAddr = pointToAddressForCalendar(defectiveStops.dropoff)
 
   const workingCar: LegacyWorkingCar = {
     ...mapLegacyVehicle(working),

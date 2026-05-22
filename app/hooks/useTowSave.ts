@@ -108,6 +108,7 @@ interface UseTowSaveParams {
   selectedStoredVehicleId: string | null
   workingVehicleSource?: 'storage' | 'address'
   selectedWorkingVehicleId?: string | null
+  workingVehicleDestinationIsStorage?: boolean
   defectiveDestination?: 'storage' | 'address'
   // Post-save
   setSavedTowId: (id: string) => void
@@ -200,6 +201,7 @@ export function useTowSave(params: UseTowSaveParams) {
     selectedStoredVehicleId,
     workingVehicleSource,
     selectedWorkingVehicleId,
+    workingVehicleDestinationIsStorage,
     defectiveDestination,
     setSavedTowId,
     setShowAssignNowModal,
@@ -328,6 +330,7 @@ export function useTowSave(params: UseTowSaveParams) {
       paymentMethod: paymentMethod || undefined,
       invoiceName: invoiceName || undefined,
       dropoffToStorage,
+      selectedStoredVehicleId,
       workingVehiclePlate: towType === 'exchange' ? workingVehiclePlate : undefined,
       workingVehicleCode: towType === 'exchange' ? workingVehicleCode : undefined,
       workingVehicleData: towType === 'exchange' ? workingVehicleData : undefined,
@@ -348,6 +351,10 @@ export function useTowSave(params: UseTowSaveParams) {
       defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
       defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContactName : undefined,
       defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
+      workingVehicleSource: towType === 'exchange' ? workingVehicleSource : undefined,
+      workingVehicleDestinationIsStorage:
+        towType === 'exchange' ? workingVehicleDestinationIsStorage : undefined,
+      defectiveDestination: towType === 'exchange' ? defectiveDestination : undefined,
       workingSelectedServices: towType === 'exchange' ? workingSelectedServices : undefined,
       defectiveSelectedServices: towType === 'exchange' ? defectiveSelectedServices : undefined,
       existingPriceBreakdown: originalTow?.price_breakdown ?? null,
