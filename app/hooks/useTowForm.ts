@@ -194,7 +194,7 @@ export function useTowForm(editTowId?: string) {
   const [defectiveVehicleData, setDefectiveVehicleData] = useState<VehicleLookupResult | null>(null)
   const [defectiveVehicleType, setDefectiveVehicleType] = useState<VehicleType | ''>('')
   const [defectiveVehicleCode, setDefectiveVehicleCode] = useState('')
-  const [defectiveDestination, setDefectiveDestination] = useState<'storage' | 'address'>('storage')
+  const [defectiveDestination, setDefectiveDestination] = useState<'storage' | 'address'>('address')
   const [defectiveDestinationAddress, setDefectiveDestinationAddress] = useState<AddressData>({ address: '' })
   const [defectiveDestinationContact, setDefectiveDestinationContact] = useState('')
   const [defectiveDestinationContactPhone, setDefectiveDestinationContactPhone] = useState('')
