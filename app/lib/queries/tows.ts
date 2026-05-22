@@ -353,82 +353,114 @@ export async function searchTows(companyId: string, query: string): Promise<TowW
 
 // ==================== שליפת גרירה בודדת ====================
 
-export async function getTow(towId: string): Promise<TowWithDetails | null> {
-  const { data: tow, error } = await supabase
-    .from('tows')
-    .select(`
-      *,
-      customer:customers (
-        id,
-        name,
-        phone,
-        email,
-        address
-      ),
-      driver:drivers!tows_driver_id_fkey (
-        id,
-        user:users!drivers_user_id_fkey (
-          full_name,
-          phone
-        )
-      ),
-      second_driver:drivers!tows_second_driver_id_fkey (
-        id,
-        user:users!drivers_user_id_fkey (
-          full_name,
-          phone
-        )
-      ),
-      truck:tow_trucks (
-        id,
-        plate_number
-      )
-    `)
-    .eq('id', towId)
-    .single()
+/** Snapshot of tow fields at edit load — used for change logs / save without re-fetching. */
+export interface EditTowSnapshot {
+  final_price: number | null
+  payment_method: string | null
+  notes: string | null
+  scheduled_at: string | null
+  price_breakdown: PriceBreakdown | null
+}
 
-  if (error) {
-    console.error('Error fetching tow:', error)
-    throw error
+const TOW_WITH_RELATIONS_SELECT = `
+  *,
+  customer:customers (
+    id,
+    name,
+    phone,
+    email,
+    address
+  ),
+  driver:drivers!tows_driver_id_fkey (
+    id,
+    user:users!drivers_user_id_fkey (
+      full_name,
+      phone
+    )
+  ),
+  second_driver:drivers!tows_second_driver_id_fkey (
+    id,
+    user:users!drivers_user_id_fkey (
+      full_name,
+      phone
+    )
+  ),
+  truck:tow_trucks (
+    id,
+    plate_number
+  )
+`
+
+export async function getTow(towId: string): Promise<TowWithDetails | null> {
+  const [towRes, vehiclesRes, legsRes] = await Promise.all([
+    supabase
+      .from('tows')
+      .select(TOW_WITH_RELATIONS_SELECT)
+      .eq('id', towId)
+      .single(),
+    supabase
+      .from('tow_vehicles')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('tow_legs')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('leg_order', { ascending: true }),
+  ])
+
+  if (towRes.error) {
+    console.error('Error fetching tow:', towRes.error)
+    throw towRes.error
   }
 
-  if (!tow) return null
+  if (!towRes.data) return null
 
-  // שליפת כלי רכב
-  const { data: vehicles } = await supabase
-    .from('tow_vehicles')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('order_index', { ascending: true })
+  if (vehiclesRes.error) {
+    console.error('Error fetching tow vehicles:', vehiclesRes.error)
+    throw vehiclesRes.error
+  }
 
-  // שליפת רגליים
-  const { data: legs } = await supabase
-    .from('tow_legs')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('leg_order', { ascending: true })
+  if (legsRes.error) {
+    console.error('Error fetching tow legs:', legsRes.error)
+    throw legsRes.error
+  }
+
+  const tow = towRes.data
 
   return {
     ...tow,
     customer: tow.customer as any,
     driver: tow.driver as any,
     truck: tow.truck as any,
-    vehicles: vehicles || [],
-    legs: legs || []
+    vehicles: vehiclesRes.data || [],
+    legs: legsRes.data || [],
   }
 }
 
 // ==================== NEW: שליפת גרירה עם נקודות ====================
 
 export async function getTowWithPoints(towId: string): Promise<TowWithDetails | null> {
-  // שליפת הגרירה הבסיסית
-  const tow = await getTow(towId)
-  if (!tow) return null
-
-  // שליפת הנקודות
-  const { data: points, error: pointsError } = await supabase
-    .from('tow_points')
-    .select(`
+  const [towRes, vehiclesRes, legsRes, pointsRes] = await Promise.all([
+    supabase
+      .from('tows')
+      .select(TOW_WITH_RELATIONS_SELECT)
+      .eq('id', towId)
+      .single(),
+    supabase
+      .from('tow_vehicles')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('tow_legs')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('leg_order', { ascending: true }),
+    supabase
+      .from('tow_points')
+      .select(`
       *,
       vehicles:tow_point_vehicles (
         id,
@@ -454,16 +486,41 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
         created_at
       )
     `)
-    .eq('tow_id', towId)
-    .order('point_order', { ascending: true })
+      .eq('tow_id', towId)
+      .order('point_order', { ascending: true }),
+  ])
 
-  if (pointsError) {
-    console.error('Error fetching tow points:', pointsError)
+  if (towRes.error) {
+    console.error('Error fetching tow:', towRes.error)
+    throw towRes.error
   }
+
+  if (!towRes.data) return null
+
+  if (vehiclesRes.error) {
+    console.error('Error fetching tow vehicles:', vehiclesRes.error)
+    throw vehiclesRes.error
+  }
+
+  if (legsRes.error) {
+    console.error('Error fetching tow legs:', legsRes.error)
+    throw legsRes.error
+  }
+
+  if (pointsRes.error) {
+    console.error('Error fetching tow points:', pointsRes.error)
+  }
+
+  const tow = towRes.data
 
   return {
     ...tow,
-    points: points || []
+    customer: tow.customer as any,
+    driver: tow.driver as any,
+    truck: tow.truck as any,
+    vehicles: vehiclesRes.data || [],
+    legs: legsRes.data || [],
+    points: pointsRes.data || [],
   }
 }
 

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { DistanceResult, PriceItem } from '../components/tow-forms/sections'
 import { 
   CustomerWithPricing, 
@@ -175,7 +175,13 @@ export function useTowPricing(params: UseTowPricingParams) {
     if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
   }, [towDate, towTime, timeSurchargesData, isHoliday])
 
-  const calculateRecommendedPrice = (): TowPriceResult | null => {
+  const activeTimeSurchargeIds = activeTimeSurchargesList.map((s) => s.id).join(',')
+  const selectedLocationKey = selectedLocationSurcharges.join(',')
+  const selectedServicesKey = JSON.stringify(selectedServices)
+  const customRouteVehiclesKey = JSON.stringify(customRouteData.vehicles)
+  const customRouteServicesKey = JSON.stringify(customRouteData.services)
+
+  const recommendedResult = useMemo((): TowPriceResult | null => {
     const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
       ? selectedCustomerPricing.price_list
       : basePriceList
@@ -269,9 +275,35 @@ export function useTowPricing(params: UseTowPricingParams) {
       vatPercent: vatPercent,
     })
     return result
-  }
+  }, [
+    towType,
+    vehicleType,
+    basePriceOverride,
+    distance?.distanceKm,
+    distance?.durationMinutes,
+    startFromBase,
+    baseToPickupDistance?.distanceKm,
+    basePriceList,
+    activeTimeSurchargeIds,
+    hasManualTimeSurchargeOverride,
+    selectedLocationKey,
+    locationSurchargesData,
+    selectedServicesKey,
+    serviceSurchargesData,
+    selectedCustomerPricing,
+    customRouteData.totalDistanceKm,
+    customRouteVehiclesKey,
+    customRouteServicesKey,
+    priceMode,
+    towDate,
+    towTime,
+    timeSurchargesData,
+    isHoliday,
+    effectiveManualAdj,
+    vatPercent,
+  ])
 
-  const calculateFinalPrice = (): TowPriceResult | null => {
+  const finalResult = useMemo((): TowPriceResult | null => {
     const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
       ? selectedCustomerPricing.price_list
       : basePriceList
@@ -322,11 +354,18 @@ export function useTowPricing(params: UseTowPricingParams) {
       })
       return result
     }
-    return calculateRecommendedPrice()
-  }
-
-  const recommendedResult = calculateRecommendedPrice()
-  const finalResult = calculateFinalPrice()
+    return recommendedResult
+  }, [
+    priceMode,
+    customPrice,
+    customPriceIncludesVat,
+    selectedPriceItem?.id,
+    selectedPriceItem?.price,
+    selectedCustomerPricing?.discount_percent,
+    basePriceList,
+    vatPercent,
+    recommendedResult,
+  ])
 
   return {
     recommendedPrice: recommendedResult?.total ?? 0,

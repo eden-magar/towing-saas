@@ -1,7 +1,7 @@
 import { useRouter } from 'next/navigation'
 import { createCustomer } from '@/app/lib/queries/customers'
 import { prepareTowData } from '../lib/utils/tow-save-handler'
-import { createTow, updateTow, getTowWithPoints, saveTowChangeLogs } from '../lib/queries/tows'
+import { createTow, updateTow, saveTowChangeLogs, type EditTowSnapshot } from '../lib/queries/tows'
 import {
   reserveVehicleForTow,
   unreserveVehicleFromTow,
@@ -19,6 +19,8 @@ interface UseTowSaveParams {
   companyId: string | null
   user: { id: string } | null
   editTowId?: string
+  /** Values loaded at edit open — avoids re-fetching the tow on save. */
+  editTowSnapshot?: EditTowSnapshot | null
   towType: TowType
   // Validation refs/state
   requiredTruckTypes: string[]
@@ -125,6 +127,7 @@ export function useTowSave(params: UseTowSaveParams) {
     companyId,
     user,
     editTowId,
+    editTowSnapshot,
     towType,
     requiredTruckTypes,
     setTruckTypeError,
@@ -266,10 +269,7 @@ export function useTowSave(params: UseTowSaveParams) {
       }
     }
     
-    let originalTow = null
-    if (editTowId) {
-      originalTow = await getTowWithPoints(editTowId)
-    }
+    const originalTow = editTowId ? editTowSnapshot ?? null : null
 
     const towData = prepareTowData({
       companyId,

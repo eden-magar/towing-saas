@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
-import { getTowWithPoints } from '../lib/queries/tows'
+import { getTowWithPoints, type EditTowSnapshot } from '../lib/queries/tows'
 import { getCustomers, CustomerWithDetails } from '../lib/queries/customers'
 import { getDrivers } from '../lib/queries/drivers'
 import { getCompanySettings } from '../lib/queries/settings'
@@ -171,6 +171,7 @@ export function useTowForm(editTowId?: string) {
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
   const [loadedTowStatus, setLoadedTowStatus] = useState<string | null>(null)
+  const [editTowSnapshot, setEditTowSnapshot] = useState<EditTowSnapshot | null>(null)
 
   // Storage
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
@@ -400,6 +401,13 @@ export function useTowForm(editTowId?: string) {
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
         setLoadedTowStatus(tow.status)
+        setEditTowSnapshot({
+          final_price: tow.final_price,
+          payment_method: tow.payment_method,
+          notes: tow.notes,
+          scheduled_at: tow.scheduled_at,
+          price_breakdown: tow.price_breakdown,
+        })
         // Customer
         setSelectedCustomerId(tow.customer_id)
         setCustomerName(tow.customer?.name || '')
@@ -892,6 +900,7 @@ export function useTowForm(editTowId?: string) {
     companyId,
     user,
     editTowId,
+    editTowSnapshot,
     towType,
     requiredTruckTypes,
     setTruckTypeError,
