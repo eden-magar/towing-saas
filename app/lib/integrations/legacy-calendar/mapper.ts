@@ -62,19 +62,29 @@ function sortPoints(points: TowPointWithDetails[]): TowPointWithDetails[] {
 
 function formatExecutionDate(scheduledAt: string | null): string {
   const d = scheduledAt ? new Date(scheduledAt) : new Date()
-  if (Number.isNaN(d.getTime())) {
-    return new Date().toISOString().split('T')[0]
-  }
-  return d.toISOString().split('T')[0]
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(d)
+  const year = parts.find(p => p.type === 'year')?.value || ''
+  const month = parts.find(p => p.type === 'month')?.value || ''
+  const day = parts.find(p => p.type === 'day')?.value || ''
+  return `${year}-${month}-${day}`
 }
 
 function formatExecutionTime(scheduledAt: string | null): string {
-  if (!scheduledAt) return '00:00'
-  const d = new Date(scheduledAt)
-  if (Number.isNaN(d.getTime())) return '00:00'
-  const h = String(d.getHours()).padStart(2, '0')
-  const m = String(d.getMinutes()).padStart(2, '0')
-  return `${h}:${m}`
+  const d = scheduledAt ? new Date(scheduledAt) : new Date()
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(d)
+  const hour = parts.find(p => p.type === 'hour')?.value || '00'
+  const minute = parts.find(p => p.type === 'minute')?.value || '00'
+  return `${hour}:${minute}`
 }
 
 function pointToAddress(point: TowPointWithDetails | undefined): LegacyAddress {
