@@ -10,6 +10,50 @@ import DriversMap from '../../components/DriversMap'
 import DriverHoursTab from '../../components/DriverHoursTab'
 import ResendInviteModal from '../../components/ResendInviteModal'
 
+function getTruckTypeLabel(type: string) {
+  const types: Record<string, string> = {
+    carrier: 'מובילית',
+    carrier_large: 'מובילית 10+ רכבים',
+    crane_tow: 'גרר מנוף',
+    dolly: 'דולי (מערסל ידני)',
+    flatbed: 'רמסע',
+    heavy_equipment: 'ציוד כבד/לובי',
+    heavy_rescue: 'חילוץ כבד',
+    wheel_lift_cradle: 'משקפיים (מערסל)',
+  }
+  return types[type] || type
+}
+
+function AssignedTrucksCell({ trucks }: { trucks: TowTruck[] }) {
+  if (trucks.length === 0) {
+    return <span className="text-gray-400">ללא גרר משויך</span>
+  }
+  if (trucks.length === 1) {
+    const t = trucks[0]
+    return (
+      <div className="flex items-center gap-2 text-gray-600">
+        <Truck size={16} />
+        <span>
+          גרר: {t.plate_number}
+          <span className="text-gray-400 text-xs mr-1">({getTruckTypeLabel(t.truck_type)})</span>
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {trucks.map((t) => (
+        <span
+          key={t.id}
+          className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md text-sm"
+        >
+          <Truck size={12} className="text-gray-500" />
+          {t.plate_number}
+        </span>
+      ))}
+    </div>
+  )
+}
 
 export default function DriversPage() {
   const { companyId } = useAuth()
@@ -55,7 +99,7 @@ export default function DriversPage() {
     licenseExpiry: '',
     yearsExperience: 0,
     truckAssignment: 'none' as 'existing' | 'none',
-    selectedTruckId: null as string | null,
+    selectedTruckIds: [] as string[],
     initialStatus: 'available' as 'available' | 'unavailable',
     sendSms: true,
     sendEmail: false,
@@ -164,7 +208,7 @@ export default function DriversPage() {
       licenseExpiry: '',
       yearsExperience: 0,
       truckAssignment: 'none',
-      selectedTruckId: null,
+      selectedTruckIds: [],
       initialStatus: 'available',
       sendSms: true,
       sendEmail: false,
@@ -197,8 +241,8 @@ export default function DriversPage() {
       licenseType: driver.license_type || '',
       licenseExpiry: driver.license_expiry || '',
       yearsExperience: driver.years_experience || 0,
-      truckAssignment: driver.current_truck ? 'existing' : 'none',
-      selectedTruckId: driver.current_truck?.id || null,
+      truckAssignment: driver.current_trucks.length > 0 ? 'existing' : 'none',
+      selectedTruckIds: driver.current_trucks.map((t) => t.id),
       initialStatus: driver.status === 'unavailable' ? 'unavailable' : 'available',
       sendSms: false,
       sendEmail: false,
@@ -264,7 +308,7 @@ export default function DriversPage() {
           work_hours_start: formData.work_hours_start || null,
           work_hours_end: formData.work_hours_end || null,
           notes: formData.notes || undefined,
-          truckId: formData.truckAssignment === 'existing' ? formData.selectedTruckId : null,
+          truckIds: formData.truckAssignment === 'existing' ? formData.selectedTruckIds : [],
         })
       } else {
         // הוספה
@@ -281,7 +325,10 @@ export default function DriversPage() {
           yearsExperience: formData.yearsExperience,
           notes: formData.notes || undefined,
           initialStatus: formData.initialStatus as DriverStatus,
-          truckId: formData.truckAssignment === 'existing' ? formData.selectedTruckId || undefined : undefined,
+          truckIds:
+            formData.truckAssignment === 'existing' && formData.selectedTruckIds.length > 0
+              ? formData.selectedTruckIds
+              : undefined,
         })
         
         // הצגת הסיסמה הזמנית
@@ -324,26 +371,18 @@ export default function DriversPage() {
     break: { label: 'בהפסקה', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400', icon: Clock },
   }
 
-  // גררים פנויים (לא משויכים או משויכים לנהג הנוכחי)
-  const assignedTruckIds = drivers
-    .filter(d => d.current_truck && d.id !== editingDriver?.id)
-    .map(d => d.current_truck!.id)
-  
-  const availableTrucks = trucks.filter(t => !assignedTruckIds.includes(t.id))
-
-  const getTruckTypeLabel = (type: string) => {
-  const types: Record<string, string> = {
-    carrier: 'מובילית',
-    carrier_large: 'מובילית 10+ רכבים',
-    crane_tow: 'גרר מנוף',
-    dolly: 'דולי (מערסל ידני)',
-    flatbed: 'רמסע',
-    heavy_equipment: 'ציוד כבד/לובי',
-    heavy_rescue: 'חילוץ כבד',
-    wheel_lift_cradle: 'משקפיים (מערסל)',
+  const toggleSelectedTruck = (truckId: string) => {
+    setFormData((prev) => {
+      const nextIds = prev.selectedTruckIds.includes(truckId)
+        ? prev.selectedTruckIds.filter((id) => id !== truckId)
+        : [...prev.selectedTruckIds, truckId]
+      return {
+        ...prev,
+        selectedTruckIds: nextIds,
+        truckAssignment: nextIds.length > 0 ? 'existing' : 'none',
+      }
+    })
   }
-  return types[type] || type
-}
 
   if (pageLoading) {
     return (
@@ -498,7 +537,7 @@ export default function DriversPage() {
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">נהג</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">טלפון</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">רישיון</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">גרר משויך</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">גררים</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">גרירות היום</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">סטטוס</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">פעולות</th>
@@ -540,14 +579,7 @@ export default function DriversPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      {driver.current_truck ? (
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Truck size={16} />
-                          <span>{getTruckTypeLabel(driver.current_truck.truck_type)} {driver.current_truck.plate_number}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">לא משויך</span>
-                      )}
+                      <AssignedTrucksCell trucks={driver.current_trucks} />
                     </td>
                     <td className="px-4 py-4">
                       <span className="font-medium text-gray-800">{driver.today_tows_count || 0}</span>
@@ -691,14 +723,11 @@ export default function DriversPage() {
                   <span>{driver.today_tows_count || 0} גרירות</span>
                 </div>
                 
-                {driver.current_truck && (
-                  <div className="px-4 pb-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-                      <Truck size={14} />
-                      <span>{getTruckTypeLabel(driver.current_truck.truck_type)} {driver.current_truck.plate_number}</span>
-                    </div>
+                <div className="px-4 pb-4">
+                  <div className="text-sm text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                    <AssignedTrucksCell trucks={driver.current_trucks} />
                   </div>
-                )}
+                </div>
               </div>
             )
           })}
@@ -856,61 +885,79 @@ export default function DriversPage() {
                 </div>
               </div>
 
-              {/* שיוך גרר */}
+              {/* שיוך גררים */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">3</span>
-                  שיוך גרר
+                  שיוך גררים
                 </h3>
                 <div className="space-y-4">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setFormData({ ...formData, truckAssignment: 'existing', selectedTruckId: null })}
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, truckAssignment: 'existing' })
+                      }
                       className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                         formData.truckAssignment === 'existing' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      גרר קיים
+                      בחר גררים
                     </button>
                     <button
-                      onClick={() => setFormData({ ...formData, truckAssignment: 'none' })}
+                      type="button"
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          truckAssignment: 'none',
+                          selectedTruckIds: [],
+                        })
+                      }
                       className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                         formData.truckAssignment === 'none' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      ללא גרר
+                      ללא גרר משויך
                     </button>
                   </div>
 
                   {formData.truckAssignment === 'existing' && (
                     <div className="space-y-2">
-                      {availableTrucks.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-4">אין גררים פנויים</p>
+                      <p className="text-sm text-gray-600">בחר גררים (ניתן לבחור יותר מאחד):</p>
+                      {trucks.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-4">אין גררים פעילים במערכת</p>
                       ) : (
-                        availableTrucks.map((truck) => (
-                          <label
-                            key={truck.id}
-                            className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-colors ${
-                              formData.selectedTruckId === truck.id
-                                ? 'border-[#33d4ff] bg-cyan-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                name="truck"
-                                checked={formData.selectedTruckId === truck.id}
-                                onChange={() => setFormData({ ...formData, selectedTruckId: truck.id })}
-                                className="w-4 h-4 text-[#33d4ff]"
-                              />
-                              <div>
-                                <p className="font-medium text-gray-800">{truck.plate_number}</p>
-                                <p className="text-sm text-gray-500">{getTruckTypeLabel(truck.truck_type)}</p>
+                        trucks.map((truck) => {
+                          const checked = formData.selectedTruckIds.includes(truck.id)
+                          return (
+                            <label
+                              key={truck.id}
+                              className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[#33d4ff] bg-cyan-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleSelectedTruck(truck.id)}
+                                  className="w-4 h-4 text-[#33d4ff] rounded"
+                                />
+                                <div>
+                                  <p className="font-medium text-gray-800">{truck.plate_number}</p>
+                                  <p className="text-sm text-gray-500">{getTruckTypeLabel(truck.truck_type)}</p>
+                                </div>
                               </div>
-                            </div>
-                          </label>
-                        ))
+                            </label>
+                          )
+                        })
+                      )}
+                      {formData.selectedTruckIds.length > 0 && (
+                        <p className="text-xs text-gray-500">
+                          נבחרו {formData.selectedTruckIds.length} גררים
+                        </p>
                       )}
                     </div>
                   )}

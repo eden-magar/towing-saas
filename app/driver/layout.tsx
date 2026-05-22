@@ -179,12 +179,7 @@ export default function DriverLayout({
   const unreadCount = notifications.filter(n => !n.is_read).length
 
   // פרטי נהג - מהדאטאבייס או ברירת מחדל
-  const driverName = driverInfo?.user?.full_name || user?.full_name || 'נהג'
-  const driverAvatar = driverName.charAt(0)
   const driverStatus = driverInfo?.status || 'unavailable'
-  const driverTruck = driverInfo?.truck 
-    ? `${driverInfo.truck.manufacturer || ''} ${driverInfo.truck.model || ''} - ${driverInfo.truck.plate_number}`.trim()
-    : 'אין גרר משויך'
 
   // בדף משימה - לא מציגים את הניווט התחתון
   if (isTaskPage) {

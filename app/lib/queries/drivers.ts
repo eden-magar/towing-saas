@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { Driver, User, TowTruck, DriverWithDetails, DriverStatus } from '../types'
+import { syncDriverTruckAssignments } from './driver-truck-assignments'
 
 // ==================== שליפת נהגים ====================
 
@@ -56,20 +57,23 @@ export async function getDrivers(companyId: string): Promise<DriverWithDetails[]
     }
   })
 
-  // מיפוי שיוכים
-  const assignmentByDriver: Record<string, TowTruck> = {}
-  assignments?.forEach(a => {
+  // מיפוי שיוכים (מספר גררים לכל נהג)
+  const assignmentsByDriver: Record<string, TowTruck[]> = {}
+  assignments?.forEach((a) => {
     if (a.truck) {
-      assignmentByDriver[a.driver_id] = a.truck as unknown as TowTruck
+      if (!assignmentsByDriver[a.driver_id]) {
+        assignmentsByDriver[a.driver_id] = []
+      }
+      assignmentsByDriver[a.driver_id].push(a.truck as unknown as TowTruck)
     }
   })
 
   // חיבור הכל יחד
-  return drivers.map(driver => ({
+  return drivers.map((driver) => ({
     ...driver,
     user: driver.user as User,
-    current_truck: assignmentByDriver[driver.id] || null,
-    today_tows_count: countByDriver[driver.id] || 0
+    current_trucks: assignmentsByDriver[driver.id] || [],
+    today_tows_count: countByDriver[driver.id] || 0,
   }))
 }
 
@@ -90,7 +94,7 @@ interface CreateDriverInput {
   work_hours_end?: string | null
   notes?: string
   initialStatus: DriverStatus
-  truckId?: string
+  truckIds?: string[]
 }
 
 export async function createDriver(input: CreateDriverInput) {
@@ -116,7 +120,7 @@ export async function createDriver(input: CreateDriverInput) {
       work_hours_end: input.work_hours_end,
       notes: input.notes,
       initialStatus: input.initialStatus,
-      truckId: input.truckId
+      truckIds: input.truckIds,
     })
   })
 
@@ -146,7 +150,8 @@ interface UpdateDriverInput {
   work_hours_start?: string | null
   work_hours_end?: string | null
   notes?: string
-  truckId?: string | null
+  /** When provided, syncs current truck assignments to this list (empty = none). */
+  truckIds?: string[]
 }
 
 export async function updateDriver(input: UpdateDriverInput) {
@@ -186,27 +191,9 @@ export async function updateDriver(input: UpdateDriverInput) {
     throw driverError
   }
 
-  // 3. עדכון שיוך גרר
-  // קודם מבטלים שיוך נוכחי
-  await supabase
-    .from('driver_truck_assignments')
-    .update({ 
-      is_current: false, 
-      unassigned_at: new Date().toISOString() 
-    })
-    .eq('driver_id', input.driverId)
-    .eq('is_current', true)
-
-  // אם יש גרר חדש - יוצרים שיוך
-  if (input.truckId) {
-    await supabase
-      .from('driver_truck_assignments')
-      .insert({
-        driver_id: input.driverId,
-        truck_id: input.truckId,
-        is_current: true,
-        assigned_at: new Date().toISOString()
-      })
+  // 3. עדכון שיוכי גרר (אם הועבר מערך)
+  if (input.truckIds !== undefined) {
+    await syncDriverTruckAssignments(input.driverId, input.truckIds)
   }
 
   return true

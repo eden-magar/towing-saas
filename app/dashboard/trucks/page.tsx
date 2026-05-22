@@ -4,9 +4,39 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument } from '../../lib/queries/trucks'
-import { TruckWithDetails } from '../../lib/types'
+import { TruckWithDetails, TruckAssignedDriver } from '../../lib/types'
 import { getDrivers } from '../../lib/queries/drivers'
 import { DriverWithDetails } from '../../lib/types'
+
+function AssignedDriversCell({ assignedDrivers }: { assignedDrivers: TruckAssignedDriver[] }) {
+  if (assignedDrivers.length === 0) {
+    return <span className="text-sm text-gray-400">ללא נהג משויך</span>
+  }
+  if (assignedDrivers.length === 1) {
+    const d = assignedDrivers[0]
+    return (
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
+          <User size={14} className="text-blue-700" />
+        </div>
+        <span className="text-sm font-medium text-blue-800">{d.user.full_name}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {assignedDrivers.map((d) => (
+        <span
+          key={d.id}
+          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md text-sm"
+        >
+          <User size={12} />
+          {d.user.full_name}
+        </span>
+      ))}
+    </div>
+  )
+}
 
 export default function TrucksPage() {
   const { companyId } = useAuth()
@@ -56,7 +86,7 @@ export default function TrucksPage() {
     engineerReportPhotoUrl: '',
     lastWinterInspection: '',
     driverAssignment: 'none' as 'existing' | 'none',
-    selectedDriverId: null as string | null,
+    selectedDriverIds: [] as string[],
     initialStatus: 'available' as 'available' | 'inactive',
     notes: '',
   })
@@ -106,14 +136,14 @@ export default function TrucksPage() {
 
   const getTruckStatus = (truck: TruckWithDetails): 'available' | 'busy' | 'maintenance' | 'inactive' => {
     if (!truck.is_active) return 'inactive'
-    if (truck.assigned_driver) return 'busy'
+    if (truck.assigned_drivers.length > 0) return 'busy'
     return 'available'
   }
 
   const stats = {
     total: trucks.length,
-    available: trucks.filter(t => t.is_active && !t.assigned_driver).length,
-    busy: trucks.filter(t => t.is_active && t.assigned_driver).length,
+    available: trucks.filter(t => t.is_active && t.assigned_drivers.length === 0).length,
+    busy: trucks.filter(t => t.is_active && t.assigned_drivers.length > 0).length,
     maintenance: 0,
   }
 
@@ -174,7 +204,7 @@ export default function TrucksPage() {
       engineerReportPhotoUrl: '',
       lastWinterInspection: '',
       driverAssignment: 'none',
-      selectedDriverId: null,
+      selectedDriverIds: [],
       initialStatus: 'available',
       notes: '',
     })
@@ -212,8 +242,8 @@ export default function TrucksPage() {
       engineerReportExpiry: truckData.engineer_report_expiry || '',
       engineerReportPhotoUrl: truckData.engineer_report_photo_url || '',
       lastWinterInspection: truckData.last_winter_inspection || '',
-      driverAssignment: truck.assigned_driver ? 'existing' : 'none',
-      selectedDriverId: truck.assigned_driver?.id || null,
+      driverAssignment: truck.assigned_drivers.length > 0 ? 'existing' : 'none',
+      selectedDriverIds: truck.assigned_drivers.map((d) => d.id),
       initialStatus: truck.is_active ? 'available' : 'inactive',
       notes: truck.notes || '',
     })
@@ -306,7 +336,7 @@ export default function TrucksPage() {
           lastWinterInspection: formData.lastWinterInspection || undefined,
           notes: formData.notes || undefined,
           isActive: formData.initialStatus === 'available',
-          driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId : null,
+          driverIds: formData.driverAssignment === 'existing' ? formData.selectedDriverIds : [],
         })
       } else {
         await createTruck({
@@ -332,7 +362,10 @@ export default function TrucksPage() {
           lastWinterInspection: formData.lastWinterInspection || undefined,
           notes: formData.notes || undefined,
           isActive: formData.initialStatus === 'available',
-          driverId: formData.driverAssignment === 'existing' ? formData.selectedDriverId || undefined : undefined,
+          driverIds:
+            formData.driverAssignment === 'existing' && formData.selectedDriverIds.length > 0
+              ? formData.selectedDriverIds
+              : undefined,
         })
       }
 
@@ -358,9 +391,20 @@ export default function TrucksPage() {
     }
   }
 
-  const availableDrivers = drivers.filter(d => 
-    !d.current_truck || d.current_truck.id === editingTruck?.id
-  )
+  const selectableDrivers = drivers.filter((d) => d.status !== 'unavailable')
+
+  const toggleSelectedDriver = (driverId: string) => {
+    setFormData((prev) => {
+      const nextIds = prev.selectedDriverIds.includes(driverId)
+        ? prev.selectedDriverIds.filter((id) => id !== driverId)
+        : [...prev.selectedDriverIds, driverId]
+      return {
+        ...prev,
+        selectedDriverIds: nextIds,
+        driverAssignment: nextIds.length > 0 ? 'existing' : 'none',
+      }
+    })
+  }
 
   // מחיקת קובץ מה-state
   const handleFileDelete = (docType: string) => {
@@ -601,16 +645,10 @@ export default function TrucksPage() {
                   </div>
                 </div>
 
-                {truck.assigned_driver && (
-                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
-                        <User size={14} className="text-blue-700" />
-                      </div>
-                      <span className="text-sm font-medium text-blue-800">{truck.assigned_driver.user.full_name}</span>
-                    </div>
-                  </div>
-                )}
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-xs text-gray-500 mb-1.5">נהגים</p>
+                  <AssignedDriversCell assignedDrivers={truck.assigned_drivers} />
+                </div>
 
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between text-sm">
@@ -920,64 +958,82 @@ export default function TrucksPage() {
                 </div>
               </div>
 
-              {/* שיוך נהג */}
+              {/* שיוך נהגים */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
                   <span className="w-6 h-6 bg-[#33d4ff] text-white rounded-full flex items-center justify-center text-sm">6</span>
-                  שיוך נהג
+                  שיוך נהגים
                 </h3>
                 <div className="space-y-4">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setFormData({ ...formData, driverAssignment: 'existing', selectedDriverId: null })}
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, driverAssignment: 'existing' })
+                      }
                       className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                         formData.driverAssignment === 'existing' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      שייך לנהג
+                      בחר נהגים
                     </button>
                     <button
-                      onClick={() => setFormData({ ...formData, driverAssignment: 'none' })}
+                      type="button"
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          driverAssignment: 'none',
+                          selectedDriverIds: [],
+                        })
+                      }
                       className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
                         formData.driverAssignment === 'none' ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
                       }`}
                     >
-                      ללא שיוך
+                      ללא נהג משויך
                     </button>
                   </div>
 
                   {formData.driverAssignment === 'existing' && (
                     <div className="space-y-2">
-                      {availableDrivers.length === 0 ? (
+                      <p className="text-sm text-gray-600">בחר נהגים (ניתן לבחור יותר מאחד):</p>
+                      {selectableDrivers.length === 0 ? (
                         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                          <p className="text-sm text-amber-800">אין נהגים ללא גרר</p>
+                          <p className="text-sm text-amber-800">אין נהגים זמינים במערכת</p>
                         </div>
                       ) : (
-                        availableDrivers.map((driver) => (
-                          <label
-                            key={driver.id}
-                            className={`flex items-center gap-4 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
-                              formData.selectedDriverId === driver.id
-                                ? 'border-[#33d4ff] bg-cyan-50'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="driver"
-                              checked={formData.selectedDriverId === driver.id}
-                              onChange={() => setFormData({ ...formData, selectedDriverId: driver.id })}
-                              className="w-4 h-4 text-[#33d4ff]"
-                            />
-                            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                              <User size={18} className="text-gray-600" />
-                            </div>
-                            <div className="flex-1">
-                              <span className="font-medium text-gray-800">{driver.user.full_name}</span>
-                              <p className="text-sm text-gray-500">{driver.user.phone}</p>
-                            </div>
-                          </label>
-                        ))
+                        selectableDrivers.map((driver) => {
+                          const checked = formData.selectedDriverIds.includes(driver.id)
+                          return (
+                            <label
+                              key={driver.id}
+                              className={`flex items-center gap-4 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[#33d4ff] bg-cyan-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleSelectedDriver(driver.id)}
+                                className="w-4 h-4 text-[#33d4ff] rounded"
+                              />
+                              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                                <User size={18} className="text-gray-600" />
+                              </div>
+                              <div className="flex-1">
+                                <span className="font-medium text-gray-800">{driver.user.full_name}</span>
+                                <p className="text-sm text-gray-500">{driver.user.phone}</p>
+                              </div>
+                            </label>
+                          )
+                        })
+                      )}
+                      {formData.selectedDriverIds.length > 0 && (
+                        <p className="text-xs text-gray-500">
+                          נבחרו {formData.selectedDriverIds.length} נהגים
+                        </p>
                       )}
                     </div>
                   )}

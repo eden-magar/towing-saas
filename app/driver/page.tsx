@@ -177,11 +177,13 @@ export default function DriverHomePage() {
     return driverStatuses.find(s => s.id === status) || driverStatuses[3]
   }
 
+  /** גרר מהמשימה הפעילה (לא משיוך נהג–גרר) */
   const getTruckInfo = () => {
-    if (!driverInfo?.truck) return null
+    const towTruck = currentTask?.truck
+    if (!towTruck) return null
     return {
-      model: `${driverInfo.truck.manufacturer || ''} ${driverInfo.truck.model || ''}`.trim() || 'גרר',
-      plate: driverInfo.truck.plate_number
+      model: 'גרר',
+      plate: towTruck.plate_number,
     }
   }
 

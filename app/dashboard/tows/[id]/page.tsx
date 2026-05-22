@@ -269,6 +269,9 @@ export default function TowDetailsPage() {
 
   const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
 
+  const getDriverTrucks = (driverId: string) =>
+    trucks.filter((t) => t.assigned_drivers.some((d) => d.id === driverId))
+
   // סינון נהגים לפי סוג גרר נדרש ולפי חיפוש
   const filteredDrivers = drivers.filter(driver => {
   // הגנה על נהגים ללא user
@@ -284,15 +287,14 @@ export default function TowDetailsPage() {
   if (!requiredTypes || requiredTypes.length === 0) return true
   
   // בדיקה אם לנהג יש גרר מתאים
-  const driverTrucks = trucks.filter(t => t.assigned_driver?.id === driver.id)
+  const driverTrucks = getDriverTrucks(driver.id)
   return driverTrucks.some(truck => requiredTypes.includes(truck.truck_type))
 })
 
   // נהגים עם גרר מתאים
-  const driversWithMatchingTruck = filteredDrivers.filter(driver => {
-    const driverTrucks = trucks.filter(t => t.assigned_driver?.id === driver.id)
-    return driverTrucks.length > 0
-  })
+  const driversWithMatchingTruck = filteredDrivers.filter(
+    (driver) => getDriverTrucks(driver.id).length > 0
+  )
 
   const filteredCustomers = customers.filter(c => {
     if (!editCustomerSearch) return false
@@ -300,10 +302,6 @@ export default function TowDetailsPage() {
     return c.name.toLowerCase().includes(query) || 
            (c.phone && c.phone.includes(query))
   })
-
-  const getDriverTrucks = (driverId: string) => {
-    return trucks.filter(t => t.assigned_driver?.id === driverId)
-  }
 
   const getFromAddress = () => {
     // קודם ננסה מ-points (המבנה החדש)

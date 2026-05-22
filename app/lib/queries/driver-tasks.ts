@@ -79,16 +79,18 @@ export interface DriverTask {
   price_breakdown?: any
 }
 
+export interface DriverInfoTruck {
+  id: string
+  plate_number: string
+  manufacturer: string | null
+  model: string | null
+}
+
 export interface DriverInfo {
   id: string
   company_id: string
   status: DriverStatus | null
-  truck: {
-    id: string
-    plate_number: string
-    manufacturer: string | null
-    model: string | null
-  } | null
+  trucks: DriverInfoTruck[]
   user: {
     full_name: string
     phone: string | null
@@ -177,7 +179,7 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
     return null
   }
 
-  const { data: assignment } = await supabase
+  const { data: assignments, error: assignmentsError } = await supabase
     .from('driver_truck_assignments')
     .select(`
       truck:tow_trucks (
@@ -189,14 +191,26 @@ export async function getDriverByUserId(userId: string): Promise<DriverInfo | nu
     `)
     .eq('driver_id', driver.id)
     .eq('is_current', true)
-    .single()
+
+  if (assignmentsError) {
+    console.error('Error fetching driver truck assignments:', assignmentsError)
+  }
+
+  const trucks: DriverInfoTruck[] = (assignments || [])
+    .map((row) => {
+      const raw = row.truck
+      if (!raw) return null
+      const truck = (Array.isArray(raw) ? raw[0] : raw) as DriverInfoTruck
+      return truck.id ? truck : null
+    })
+    .filter((t): t is DriverInfoTruck => t != null)
 
   return {
     id: driver.id,
     company_id: driver.company_id,
     status: driver.status,
-    truck: assignment?.truck as any || null,
-    user: user
+    trucks,
+    user: user,
   }
 }
 

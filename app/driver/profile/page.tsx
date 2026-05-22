@@ -236,7 +236,6 @@ export default function DriverProfilePage() {
   const driverName = driverInfo?.user?.full_name || user?.full_name || 'נהג'
   const driverPhone = driverInfo?.user?.phone || ''
   const driverEmail = user?.email || ''
-  const truckInfo = driverInfo?.truck
   const currentStats = statsData ? (period === 'month' ? statsData.month : statsData.week) : null
   const chartData = statsData ? (period === 'month' ? statsData.monthlyChart : statsData.weeklyChart) : []
   const maxChartValue = Math.max(...chartData.map(d => d.tows), 1)
@@ -328,23 +327,6 @@ export default function DriverProfilePage() {
               </div>
               <ChevronLeft size={24} className="text-gray-400" />
             </button>
-
-            {truckInfo && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Truck size={24} className="text-blue-600" />
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">הגרר שלי</div>
-                    <div className="font-bold text-gray-800">{truckInfo.manufacturer} {truckInfo.model}</div>
-                  </div>
-                </div>
-                <span className="inline-block bg-yellow-400 text-gray-900 text-sm font-mono font-bold px-3 py-1 rounded border-2 border-yellow-500">
-                  {truckInfo.plate_number}
-                </span>
-              </div>
-            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">

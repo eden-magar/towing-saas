@@ -39,8 +39,15 @@ export async function POST(request: NextRequest) {
       work_hours_end,
       notes,
       initialStatus,
-      truckId
+      truckIds: truckIdsBody,
+      truckId: legacyTruckId,
     } = body
+
+    const truckIds: string[] = Array.isArray(truckIdsBody)
+      ? truckIdsBody.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      : legacyTruckId
+        ? [legacyTruckId]
+        : []
 
     // 1. יצירת משתמש ב-Auth (עם סיסמה זמנית)
     const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'
@@ -104,16 +111,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: driverError.message }, { status: 400 })
     }
 
-    // 4. שיוך גרר (אם נבחר)
-    if (truckId) {
-      await supabaseAdmin
+    // 4. שיוך גררים (אם נבחרו)
+    if (truckIds.length > 0) {
+      const now = new Date().toISOString()
+      const { error: assignError } = await supabaseAdmin
         .from('driver_truck_assignments')
-        .insert({
-          driver_id: driver.id,
-          truck_id: truckId,
-          is_current: true,
-          assigned_at: new Date().toISOString()
-        })
+        .insert(
+          truckIds.map((truck_id) => ({
+            driver_id: driver.id,
+            truck_id,
+            is_current: true,
+            assigned_at: now,
+          }))
+        )
+
+      if (assignError) {
+        console.error('Driver truck assignment error:', assignError)
+        return NextResponse.json({ error: assignError.message }, { status: 400 })
+      }
     }
 
     // 5. שלח מייל עם לינק להגדרת סיסמה

@@ -331,9 +331,18 @@ export interface VehicleLookupResult {
 
 // ==================== COMPOSITE TYPES (for JOINs) ====================
 
+/** Driver linked to a truck (assignment join shape). */
+export interface TruckAssignedDriver {
+  id: string
+  user: {
+    full_name: string
+    phone: string | null
+  }
+}
+
 export interface DriverWithDetails extends Driver {
   user: User
-  current_truck: TowTruck | null
+  current_trucks: TowTruck[]
   today_tows_count?: number
 }
 
@@ -350,13 +359,7 @@ export interface CustomerWithCompanyDetails extends Customer {
 }
 
 export interface TruckWithDetails extends TowTruck {
-  assigned_driver: {
-    id: string
-    user: {
-      full_name: string
-      phone: string
-    }
-  } | null
+  assigned_drivers: TruckAssignedDriver[]
   today_tows_count: number
 }
 

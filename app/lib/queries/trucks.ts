@@ -1,5 +1,9 @@
 import { supabase } from '../supabase'
-import { TruckWithDetails } from '../types'
+import { TruckWithDetails, TruckAssignedDriver } from '../types'
+import {
+  syncTruckDriverAssignments,
+  insertTruckDriverAssignments,
+} from './driver-truck-assignments'
 
 // ==================== העלאת קבצים ====================
 
@@ -85,22 +89,28 @@ export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> 
     }
   })
 
-  // מיפוי שיוכים
-const assignmentByTruck: Record<string, { id: string; user: { full_name: string; phone: string } }> = {}
-assignments?.forEach(a => {
-  const driver = a.driver as unknown as { id: string; user: { full_name: string; phone: string } | null }
-  if (driver && driver.user && driver.user.full_name) {
-    assignmentByTruck[a.truck_id] = {
-      id: driver.id,
-      user: driver.user
+  // מיפוי שיוכים (מספר נהגים לכל גרר)
+  const assignmentsByTruck: Record<string, TruckAssignedDriver[]> = {}
+  assignments?.forEach((a) => {
+    const driver = a.driver as unknown as {
+      id: string
+      user: { full_name: string; phone: string | null } | null
     }
-  }
-})
+    if (driver?.user?.full_name) {
+      if (!assignmentsByTruck[a.truck_id]) {
+        assignmentsByTruck[a.truck_id] = []
+      }
+      assignmentsByTruck[a.truck_id].push({
+        id: driver.id,
+        user: driver.user,
+      })
+    }
+  })
 
-  return trucks.map(truck => ({
+  return trucks.map((truck) => ({
     ...truck,
-    assigned_driver: assignmentByTruck[truck.id] || null,
-    today_tows_count: countByTruck[truck.id] || 0
+    assigned_drivers: assignmentsByTruck[truck.id] || [],
+    today_tows_count: countByTruck[truck.id] || 0,
   }))
 }
 
@@ -131,7 +141,7 @@ interface CreateTruckInput {
   //
   notes?: string
   isActive: boolean
-  driverId?: string
+  driverIds?: string[]
 }
 
 export async function createTruck(input: CreateTruckInput) {
@@ -171,16 +181,8 @@ export async function createTruck(input: CreateTruckInput) {
     throw error
   }
 
-  // שיוך נהג אם נבחר
-  if (input.driverId) {
-    await supabase
-      .from('driver_truck_assignments')
-      .insert({
-        driver_id: input.driverId,
-        truck_id: truck.id,
-        is_current: true,
-        assigned_at: new Date().toISOString()
-      })
+  if (input.driverIds?.length) {
+    await insertTruckDriverAssignments(truck.id, input.driverIds)
   }
 
   return truck
@@ -213,7 +215,8 @@ interface UpdateTruckInput {
   //
   notes?: string
   isActive?: boolean
-  driverId?: string | null
+  /** When provided, syncs current driver assignments to this list (empty = none). */
+  driverIds?: string[]
 }
 
 export async function updateTruck(input: UpdateTruckInput) {
@@ -251,27 +254,8 @@ export async function updateTruck(input: UpdateTruckInput) {
     throw error
   }
 
-  // עדכון שיוך נהג
-  // קודם מבטלים שיוך נוכחי
-  await supabase
-    .from('driver_truck_assignments')
-    .update({ 
-      is_current: false, 
-      unassigned_at: new Date().toISOString() 
-    })
-    .eq('truck_id', input.truckId)
-    .eq('is_current', true)
-
-  // אם יש נהג חדש - יוצרים שיוך
-  if (input.driverId) {
-    await supabase
-      .from('driver_truck_assignments')
-      .insert({
-        driver_id: input.driverId,
-        truck_id: input.truckId,
-        is_current: true,
-        assigned_at: new Date().toISOString()
-      })
+  if (input.driverIds !== undefined) {
+    await syncTruckDriverAssignments(input.truckId, input.driverIds)
   }
 
   return true
