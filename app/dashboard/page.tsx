@@ -1,6 +1,6 @@
   'use client'
 
-  import React, { useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
+  import React, { useCallback, useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
   import { useRouter } from 'next/navigation'
   import { useAuth } from '../lib/AuthContext'
   import { getDashboardStats, DashboardStats } from '../lib/queries/dashboard'
@@ -10,7 +10,6 @@
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, endShiftManually, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTows, updateTowSchedule } from '../lib/queries/calendar'
-  import { getDriverTasksForDriver } from '../lib/queries/driver-tasks-admin'
   import { supabase } from '../lib/supabase'
   import DriversMap from '../components/DriversMap'
   import Link from 'next/link'
@@ -41,6 +40,19 @@
   function getLocalFractionalHour(dateStr: string): number {
     const d = new Date(dateStr)
     return d.getHours() + d.getMinutes() / 60
+  }
+
+  /** Client-side day filter — matches `getCalendarTows` / `getDayTows` behavior. */
+  function filterTowsForDay(tows: TowWithDetails[], date: Date): TowWithDetails[] {
+    const startOfDay = new Date(date)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
+    return tows.filter(tow => {
+      if (tow.status === 'cancelled') return false
+      const towDate = new Date(tow.scheduled_at || tow.created_at)
+      return towDate >= startOfDay && towDate <= endOfDay
+    })
   }
 
   export default function DashboardPage() {
@@ -99,6 +111,9 @@
     }
   }
     const [loading, setLoading] = useState(true)
+    const [companyTows, setCompanyTows] = useState<TowWithDetails[]>([])
+    const [deferredLoaded, setDeferredLoaded] = useState(false)
+    const deferredLoadedRef = useRef(false)
 
     // modal state
     const [showApprovalModal, setShowApprovalModal] = useState(false)
@@ -169,15 +184,39 @@
       return () => document.removeEventListener('mousedown', onDoc)
     }, [])
 
-    const loadData = async () => {
+    const applyCompanyTows = useCallback((tows: TowWithDetails[]) => {
+      setCompanyTows(tows)
+      setPendingTows(tows.filter((t) => t.status === 'pending' && !t.driver_id))
+      setQuoteTows(tows.filter((t) => t.status === 'quote'))
+      setInProgressTows(tows.filter((t) => t.status === 'in_progress').length)
+      setTodayTows(filterTowsForDay(tows, new Date()))
+    }, [])
+
+    const loadEssential = useCallback(async () => {
       if (!companyId) return
       try {
-        const [
-          statsData, towsData, alertsData, rejectionsData,
-          driversData, overtimeData, activeDriversData, allDriversData,
-        ] = await Promise.all([
+        const [statsData, towsData] = await Promise.all([
           getDashboardStats(companyId),
           getTows(companyId),
+        ])
+        setStats(statsData)
+        applyCompanyTows(towsData)
+      } catch (err) {
+        console.error('Dashboard essential load error:', err)
+      }
+    }, [companyId, applyCompanyTows])
+
+    const loadDeferred = useCallback(async () => {
+      if (!companyId || deferredLoadedRef.current) return
+      try {
+        const [
+          alertsData,
+          rejectionsData,
+          driversData,
+          overtimeData,
+          activeDriversData,
+          allDriversData,
+        ] = await Promise.all([
           getExpiryAlerts(companyId),
           getPendingRejectionRequests(companyId),
           getAvailableDrivers(companyId),
@@ -186,10 +225,6 @@
           getDrivers(companyId),
         ])
 
-        setStats(statsData)
-        setPendingTows(towsData.filter((t: TowWithDetails) => t.status === 'pending' && !t.driver_id))
-        setQuoteTows(towsData.filter((t: TowWithDetails) => t.status === 'quote'))
-        setInProgressTows(towsData.filter((t: TowWithDetails) => t.status === 'in_progress').length)
         setAlerts(alertsData)
         setRejectionRequests(rejectionsData)
         setAvailableDrivers(driversData)
@@ -208,27 +243,91 @@
         setDriversWithLocation(mappedDrivers)
         setActiveDrivers(activeDriversData.map((d: any) => d.driver))
         setAllDrivers(allDriversData)
-        const todayData = await getDayTows(companyId, new Date())
-        setTodayTows(todayData || [])
+        deferredLoadedRef.current = true
+        setDeferredLoaded(true)
       } catch (err) {
-        console.error('Dashboard load error:', err)
-      } finally {
-        setLoading(false)
+        console.error('Dashboard deferred load error:', err)
       }
-    }
+    }, [companyId])
 
-    const loadCalendar = async () => {
+    const refreshEssential = useCallback(async () => {
+      await loadEssential()
+    }, [loadEssential])
+
+    const refreshRejections = useCallback(async () => {
       if (!companyId) return
       try {
-        const dateStr = calendarDate.toISOString().split('T')[0]
+        const rejectionsData = await getPendingRejectionRequests(companyId)
+        setRejectionRequests(rejectionsData)
+      } catch (err) {
+        console.error('Dashboard rejections refresh error:', err)
+      }
+    }, [companyId])
+
+    const refreshDriversAndMap = useCallback(async () => {
+      if (!companyId) return
+      try {
+        const [driversData, activeDriversData, allDriversData] = await Promise.all([
+          getAvailableDrivers(companyId),
+          getActiveDriversWithLocation(companyId),
+          getDrivers(companyId),
+        ])
+        setAvailableDrivers(driversData)
+        const mappedDrivers = activeDriversData
+          .map((d: any) => ({
+            id: d.driver.id,
+            name: d.driver.user?.full_name || 'נהג',
+            status: d.driver.status,
+            last_lat: d.driver.last_lat,
+            last_lng: d.driver.last_lng,
+            last_seen_at: d.driver.last_seen_at,
+          }))
+          .filter((d: any) => d.last_lat && d.last_lng)
+        setDriversWithLocation(mappedDrivers)
+        setActiveDrivers(activeDriversData.map((d: any) => d.driver))
+        setAllDrivers(allDriversData)
+      } catch (err) {
+        console.error('Dashboard drivers refresh error:', err)
+      }
+    }, [companyId])
+
+    const refreshShiftsAndOvertime = useCallback(async () => {
+      if (!companyId) return
+      try {
+        const overtimeData = await getDriversOvertime(companyId)
+        setOvertimeDrivers(overtimeData)
+      } catch (err) {
+        console.error('Dashboard shifts refresh error:', err)
+      }
+    }, [companyId])
+
+    const refreshAlerts = useCallback(async () => {
+      if (!companyId) return
+      try {
+        const alertsData = await getExpiryAlerts(companyId)
+        setAlerts(alertsData)
+      } catch (err) {
+        console.error('Dashboard alerts refresh error:', err)
+      }
+    }, [companyId])
+
+    const loadCalendarFromApi = useCallback(async () => {
+      if (!companyId) return
+      try {
         const tows = await getDayTows(companyId, calendarDate)
         setCalendarTows(tows || [])
       } catch (err) {
         console.error('Calendar load error:', err)
       }
-    }
+    }, [companyId, calendarDate])
 
-    const loadCalendarTows = loadCalendar
+    const loadCalendarTows = useCallback(async () => {
+      if (companyTows.length > 0) {
+        setCalendarTows(filterTowsForDay(companyTows, calendarDate))
+        return
+      }
+      await loadCalendarFromApi()
+    }, [companyTows, calendarDate, loadCalendarFromApi])
 
     const handleDragStart = (e: React.DragEvent, tow: any) => {
       setDraggedTow(tow)
@@ -324,33 +423,56 @@
     }
 
     useEffect(() => {
-      if (!authLoading && companyId) {
-        loadData()
-      } else if (!authLoading) {
+      if (authLoading) return
+      if (!companyId) {
         setLoading(false)
+        return
       }
-    }, [companyId, authLoading])
+
+      let cancelled = false
+      setLoading(true)
+      setDeferredLoaded(false)
+      deferredLoadedRef.current = false
+
+      ;(async () => {
+        await loadEssential()
+        if (!cancelled) setLoading(false)
+        if (!cancelled) void loadDeferred()
+      })()
+
+      return () => {
+        cancelled = true
+      }
+    }, [companyId, authLoading, loadEssential, loadDeferred])
 
     useEffect(() => {
-      loadCalendar()
-    }, [companyId, calendarDate])
+      if (companyTows.length > 0) {
+        setCalendarTows(filterTowsForDay(companyTows, calendarDate))
+        return
+      }
+      if (!companyId || authLoading || loading) return
+      void loadCalendarFromApi()
+    }, [companyId, calendarDate, companyTows, authLoading, loading, loadCalendarFromApi])
 
-    // Realtime — כל הטבלאות
+    // Realtime — scoped refreshes (no full dashboard reload)
     useEffect(() => {
       if (!companyId) return
 
       const channel = supabase
         .channel(`dashboard-realtime-${companyId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => { loadData(); loadCalendar() })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => loadData())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => loadData())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => loadData())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => loadData())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => { void refreshEssential() })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => { void refreshRejections() })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => {
+          void refreshShiftsAndOvertime()
+          void refreshDriversAndMap()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => { void refreshEssential() })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
         .subscribe()
 
       return () => { supabase.removeChannel(channel) }
-    }, [companyId])
+    }, [companyId, refreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime])
 
     const prevDay = () => {
       const d = new Date(calendarDate)
@@ -1098,7 +1220,8 @@
                     try {
                       await approveRejectionRequest(selectedRequest.id, user?.id || '', approvalAction === 'reassign' ? selectedNewDriver : undefined)
                       setShowApprovalModal(false); setSelectedRequest(null); setSelectedNewDriver(''); setApprovalAction('unassign')
-                      loadData()
+                      void refreshEssential()
+                      void refreshRejections()
                     } catch { alert('שגיאה באישור הבקשה') }
                     finally { setProcessingRequest(false) }
                   }}
@@ -1155,7 +1278,8 @@
                     console.log('endShift:', endShiftTarget?.shiftId, endShiftDate, endShiftTime)
                     const endedAt = new Date(`${endShiftDate}T${endShiftTime}:00`).toISOString()
                     await endShiftManually(endShiftTarget.shiftId, endedAt)
-                    await loadData()
+                    await refreshShiftsAndOvertime()
+                    await refreshDriversAndMap()
                     setShowEndShiftModal(false)
                     setEndShiftTarget(null)
                   }}
@@ -1189,7 +1313,8 @@
                     if (!denyConfirmRequest) return
                     await denyRejectionRequest(denyConfirmRequest.id, user?.id || '')
                     setDenyConfirmRequest(null)
-                    loadData()
+                    void refreshEssential()
+                    void refreshRejections()
                   }}
                   className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700"
                 >
