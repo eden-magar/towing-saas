@@ -35,7 +35,7 @@ import {
   Eye
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
-import { getTow, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow } from '../../../lib/queries/tows'
+import { getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow } from '../../../lib/queries/tows'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
@@ -168,6 +168,15 @@ export default function TowDetailsPage() {
   const [processingRejection, setProcessingRejection] = useState(false)
   const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
   const [basePriceList, setBasePriceList] = useState<any>(null)
+
+  const [driversTrucksLoaded, setDriversTrucksLoaded] = useState(false)
+  const [driversTrucksLoading, setDriversTrucksLoading] = useState(false)
+  const [customersLoaded, setCustomersLoaded] = useState(false)
+  const [customersLoading, setCustomersLoading] = useState(false)
+  const [pricingLoaded, setPricingLoaded] = useState(false)
+  const [pricingLoading, setPricingLoading] = useState(false)
+  const [changeLogsLoaded, setChangeLogsLoaded] = useState(false)
+  const [changeLogsLoading, setChangeLogsLoading] = useState(false)
   const [priceChangeModal, setPriceChangeModal] = useState<{
     oldPrice: number
     newPrice: number
@@ -189,14 +198,146 @@ export default function TowDetailsPage() {
     quote: { label: 'הצעת מחיר', color: 'bg-amber-100 text-amber-700 border-amber-200' },
   }
 
-  // טעינת נתונים
-  useEffect(() => {
-    if (companyId && towId) {
-      loadData(true)
+  const loadEssentialData = useCallback(async (isInitial: boolean) => {
+    if (!companyId || !towId) return
+    if (isInitial) setLoading(true)
+    else setIsRefreshing(true)
+    try {
+      const [towData, rejections] = await Promise.all([
+        getTowWithPoints(towId),
+        getRejectionRequestsForTow(towId),
+      ])
+      setTow(towData)
+      setRejectionRequests(rejections)
+      if (towData) {
+        const invoiceExists = await towHasInvoice(towId)
+        setHasInvoice(invoiceExists)
+      } else {
+        setHasInvoice(false)
+      }
+    } catch (err) {
+      console.error('Error loading tow:', err)
+      setError('שגיאה בטעינת הגרירה')
+    } finally {
+      if (isInitial) setLoading(false)
+      else setIsRefreshing(false)
     }
   }, [companyId, towId])
 
-  // Realtime - עדכון חי כשהנהג מעדכן
+  const refreshTow = useCallback(() => loadEssentialData(false), [loadEssentialData])
+
+  const loadDriversAndTrucks = useCallback(async () => {
+    if (!companyId || driversTrucksLoaded || driversTrucksLoading) return
+    setDriversTrucksLoading(true)
+    try {
+      const [driversData, trucksData] = await Promise.all([
+        getDrivers(companyId),
+        getTrucks(companyId),
+      ])
+      setDrivers(driversData)
+      setTrucks(trucksData)
+      setDriversTrucksLoaded(true)
+    } catch (err) {
+      console.error('Error loading drivers/trucks:', err)
+    } finally {
+      setDriversTrucksLoading(false)
+    }
+  }, [companyId, driversTrucksLoaded, driversTrucksLoading])
+
+  const loadCustomers = useCallback(async () => {
+    if (!companyId || customersLoaded || customersLoading) return
+    setCustomersLoading(true)
+    try {
+      const customersData = await getCustomers(companyId)
+      setCustomers(customersData)
+      setCustomersLoaded(true)
+    } catch (err) {
+      console.error('Error loading customers:', err)
+    } finally {
+      setCustomersLoading(false)
+    }
+  }, [companyId, customersLoaded, customersLoading])
+
+  const loadSurchargesAndPricing = useCallback(async () => {
+    if (!companyId) return null
+    if (pricingLoaded) {
+      return {
+        serviceSurcharges: serviceSurchargesData,
+        basePriceList,
+        timeSurcharges: timeSurchargesData,
+      }
+    }
+    if (pricingLoading) return null
+    setPricingLoading(true)
+    try {
+      const [serviceSurcharges, basePriceListData, timeSurchargesDataResult] = await Promise.all([
+        getServiceSurcharges(companyId),
+        getBasePriceList(companyId),
+        getTimeSurcharges(companyId),
+      ])
+      setServiceSurchargesData(serviceSurcharges)
+      setBasePriceList(basePriceListData)
+      setTimeSurchargesData(timeSurchargesDataResult)
+      setPricingLoaded(true)
+      return {
+        serviceSurcharges,
+        basePriceList: basePriceListData,
+        timeSurcharges: timeSurchargesDataResult,
+      }
+    } catch (err) {
+      console.error('Error loading pricing:', err)
+      return null
+    } finally {
+      setPricingLoading(false)
+    }
+  }, [companyId, pricingLoaded, pricingLoading, serviceSurchargesData, basePriceList, timeSurchargesData])
+
+  const loadChangeLogs = useCallback(async (force = false) => {
+    if (!towId) return
+    if ((changeLogsLoaded && !force) || changeLogsLoading) return
+    setChangeLogsLoading(true)
+    try {
+      const logs = await getTowChangeLogs(towId)
+      setChangeLogs(logs)
+      setChangeLogsLoaded(true)
+    } catch (err) {
+      console.error('Error loading change logs:', err)
+    } finally {
+      setChangeLogsLoading(false)
+    }
+  }, [towId, changeLogsLoaded, changeLogsLoading])
+
+  const openDriverModal = useCallback((type: 'assign' | 'change') => {
+    if (type === 'assign') setShowAssignModal(true)
+    else setShowChangeDriverModal(true)
+    void Promise.all([loadDriversAndTrucks(), loadSurchargesAndPricing()])
+  }, [loadDriversAndTrucks, loadSurchargesAndPricing])
+
+  const handleTabChange = useCallback((tab: 'details' | 'history' | 'images' | 'portal') => {
+    setActiveTab(tab)
+    if (tab === 'history') void loadChangeLogs()
+  }, [loadChangeLogs])
+
+  useEffect(() => {
+    setDriversTrucksLoaded(false)
+    setCustomersLoaded(false)
+    setPricingLoaded(false)
+    setChangeLogsLoaded(false)
+    setDrivers([])
+    setTrucks([])
+    setCustomers([])
+    setChangeLogs([])
+    setServiceSurchargesData([])
+    setBasePriceList(null)
+    setTimeSurchargesData([])
+  }, [towId])
+
+  useEffect(() => {
+    if (companyId && towId) {
+      void loadEssentialData(true)
+    }
+  }, [companyId, towId, loadEssentialData])
+
   useEffect(() => {
     if (!towId) return
 
@@ -207,70 +348,30 @@ export default function TowDetailsPage() {
         schema: 'public',
         table: 'tow_points',
         filter: `tow_id=eq.${towId}`
-      }, () => loadData(false))
+      }, () => { void refreshTow() })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'tow_images',
         filter: `tow_id=eq.${towId}`
-      }, () => loadData(false))
+      }, () => { void refreshTow() })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'tows',
         filter: `id=eq.${towId}`
-      }, () => loadData(false))
+      }, () => { void refreshTow() })
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [towId])
-
-  const loadData = async (isInitial = false) => {
-    if (!companyId) return
-    if (isInitial) setLoading(true)
-    else setIsRefreshing(true)
-    try {
-      const [towData, driversData, trucksData, customersData, serviceSurcharges, basePriceListData, timeSurchargesDataResult] = await Promise.all([
-        getTowWithPoints(towId),
-        getDrivers(companyId),
-        getTrucks(companyId),
-        getCustomers(companyId),
-        getServiceSurcharges(companyId),
-        getBasePriceList(companyId),
-        getTimeSurcharges(companyId),
-      ])
-      setTow(towData)
-      setDrivers(driversData)
-      setTrucks(trucksData)
-      setCustomers(customersData)
-      setServiceSurchargesData(serviceSurcharges)
-      setBasePriceList(basePriceListData)
-      setTimeSurchargesData(timeSurchargesDataResult)
-      
-      // בדיקה אם יש חשבונית לגרירה
-      if (towData) {
-        const invoiceExists = await towHasInvoice(towId)
-        setHasInvoice(invoiceExists)
-      }
-      const logs = await getTowChangeLogs(towId)
-      setChangeLogs(logs)
-      const rejections = await getRejectionRequestsForTow(towId)
-      setRejectionRequests(rejections)
-    } catch (err) {
-      console.error('Error loading tow:', err)
-      setError('שגיאה בטעינת הגרירה')
-    } finally {
-      if (isInitial) setLoading(false)
-      else setIsRefreshing(false)
-    }
-  }
+  }, [towId, refreshTow])
 
   const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
 
   const getDriverTrucks = (driverId: string) =>
-    trucks.filter((t) => t.assigned_drivers.some((d) => d.id === driverId))
+    trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
 
   // סינון נהגים לפי סוג גרר נדרש ולפי חיפוש
   const filteredDrivers = drivers.filter(driver => {
@@ -363,6 +464,7 @@ export default function TowDetailsPage() {
       }
 
       setIsEditing(true)
+      void Promise.all([loadCustomers(), loadSurchargesAndPricing()])
     }
   }
   const handleCancelEdit = () => {
@@ -460,7 +562,8 @@ export default function TowDetailsPage() {
           toAddress: editToAddress
         }]
       })
-      await loadData()
+      await refreshTow()
+      if (changeLogsLoaded) void loadChangeLogs(true)
       setIsEditing(false)
     } catch (err) {
       console.error('Error saving changes:', err)
@@ -498,11 +601,18 @@ export default function TowDetailsPage() {
   const handleAssignDriver = async () => {
     if (!selectedDriverId || !selectedTruckId || !tow) return
 
+    const pricing = await loadSurchargesAndPricing()
+
     // חישוב מחיר חדש לפי שעה חדשה
-    if (tow.price_breakdown && basePriceList && timeSurchargesData.length > 0 && tow.price_mode === 'recommended') {
+    if (
+      tow.price_breakdown &&
+      pricing?.basePriceList &&
+      pricing.timeSurcharges.length > 0 &&
+      tow.price_mode === 'recommended'
+    ) {
       const newDate = scheduleDate.toISOString().split('T')[0]
       const newTime = scheduleDate.toTimeString().slice(0, 5)
-      const activeSurcharges = getActiveTimeSurcharges(timeSurchargesData, newTime, newDate, false)
+      const activeSurcharges = getActiveTimeSurcharges(pricing.timeSurcharges, newTime, newDate, false)
       const locationSurcharges = (tow.price_breakdown.location_surcharges || []).map((s: any) => ({ percent: s.percent }))
       const serviceSurcharges = (tow.price_breakdown.service_surcharges || []).map((s: any) => ({ amount: s.amount }))
 
@@ -514,17 +624,17 @@ export default function TowDetailsPage() {
       const newResult = calculateTowPrice({
         priceList: {
           base_prices: {
-            private: basePriceList.base_price_private || 0,
-            motorcycle: basePriceList.base_price_motorcycle || 0,
-            heavy: basePriceList.base_price_heavy || 0,
-            machinery: basePriceList.base_price_machinery || 0,
+            private: pricing.basePriceList.base_price_private || 0,
+            motorcycle: pricing.basePriceList.base_price_motorcycle || 0,
+            heavy: pricing.basePriceList.base_price_heavy || 0,
+            machinery: pricing.basePriceList.base_price_machinery || 0,
           },
-          price_per_km: basePriceList.price_per_km || 12,
-          minimum_price: basePriceList.minimum_price || 250,
+          price_per_km: pricing.basePriceList.price_per_km || 12,
+          minimum_price: pricing.basePriceList.minimum_price || 250,
         },
         vehicleType: (tow.price_breakdown.vehicle_type as any) || 'private',
         distanceKm: tow.price_breakdown.distance_km || 0,
-        timeSurcharges: timeSurchargesData,
+        timeSurcharges: pricing.timeSurcharges,
         towDate: newDate,
         towTime: newTime,
         isHoliday: false,
@@ -607,7 +717,7 @@ export default function TowDetailsPage() {
         truckId: linkedTowTruckId,
         scheduledAt: linkedTowScheduleDate.toISOString(),
       })
-      await loadData()
+      await refreshTow()
       setShowLinkedTowModal(false)
       setLinkedTowDriverId(null)
       setLinkedTowTruckId(null)
@@ -624,7 +734,7 @@ export default function TowDetailsPage() {
     try {
       await assignDriver(tow.id, null as any, null as any)
       await updateTowStatus(tow.id, 'pending')
-      await loadData()
+      await refreshTow()
       setShowRemoveDriverConfirm(false)
     } catch (err) {
       console.error('Error removing driver:', err)
@@ -655,7 +765,7 @@ export default function TowDetailsPage() {
         selectedCancellationReason,
         cancellationDetails.trim() || undefined
       )
-      await loadData()
+      await refreshTow()
       setShowCancelModal(false)
       setSelectedCancellationReason('')
       setCancellationDetails('')
@@ -724,7 +834,11 @@ export default function TowDetailsPage() {
         </button>
       </div>
 
-      {!selectedDriverId ? (
+      {driversTrucksLoading && drivers.length === 0 ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : !selectedDriverId ? (
         <DriverCalendarPicker
           companyId={companyId || ''}
           drivers={drivers}
@@ -758,10 +872,10 @@ export default function TowDetailsPage() {
                 </div>
                 <div>
                   <p className="font-bold text-gray-800">
-                    {drivers.find(d => d.id === selectedDriverId)?.user.full_name}
+                    {drivers.find(d => d.id === selectedDriverId)?.user?.full_name}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {drivers.find(d => d.id === selectedDriverId)?.user.phone}
+                    {drivers.find(d => d.id === selectedDriverId)?.user?.phone}
                   </p>
                 </div>
               </div>
@@ -918,7 +1032,7 @@ export default function TowDetailsPage() {
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6">
         <div className="flex gap-1 mb-4 sm:mb-6 bg-gray-100 p-1 rounded-xl w-fit overflow-x-auto">
           <button
-            onClick={() => setActiveTab('details')}
+            onClick={() => handleTabChange('details')}
             className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
               activeTab === 'details' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'
             }`}
@@ -927,7 +1041,7 @@ export default function TowDetailsPage() {
             פרטים
           </button>
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleTabChange('history')}
             className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
               activeTab === 'history' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'
             }`}
@@ -936,7 +1050,7 @@ export default function TowDetailsPage() {
             היסטוריה
           </button>
           <button
-            onClick={() => setActiveTab('images')}
+            onClick={() => handleTabChange('images')}
             className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
               activeTab === 'images' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'
             }`}
@@ -945,7 +1059,7 @@ export default function TowDetailsPage() {
             תמונות
           </button>
           <button
-            onClick={() => setActiveTab('portal')}
+            onClick={() => handleTabChange('portal')}
             className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
               activeTab === 'portal' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-600 hover:text-gray-800'
             }`}
@@ -980,7 +1094,7 @@ export default function TowDetailsPage() {
                               onClick={async () => {
                                 setProcessingRejection(true)
                                 await approveRejectionRequest(req.id, user?.id || '')
-                                await loadData()
+                                await refreshTow()
                                 setProcessingRejection(false)
                               }}
                               disabled={processingRejection}
@@ -992,7 +1106,7 @@ export default function TowDetailsPage() {
                               onClick={async () => {
                                 setProcessingRejection(true)
                                 await denyRejectionRequest(req.id, user?.id || '')
-                                await loadData()
+                                await refreshTow()
                                 setProcessingRejection(false)
                               }}
                               disabled={processingRejection}
@@ -1028,9 +1142,16 @@ export default function TowDetailsPage() {
                             onChange={(e) => {
                               setEditCustomerSearch(e.target.value)
                               setShowCustomerResults(e.target.value.length > 0)
+                              if (!customersLoaded) void loadCustomers()
+                            }}
+                            onFocus={() => {
+                              if (!customersLoaded) void loadCustomers()
                             }}
                             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                           />
+                          {customersLoading && (
+                            <p className="text-xs text-gray-400 mt-1">טוען לקוחות...</p>
+                          )}
                           {showCustomerResults && filteredCustomers.length > 0 && (
                             <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-10 overflow-hidden max-h-48 overflow-y-auto">
                               {filteredCustomers.map((customer) => (
@@ -1145,7 +1266,10 @@ export default function TowDetailsPage() {
                     ניתן לשבץ נהג נוסף שיטפל בהובלת הרכב התקול ליעד
                   </p>
                   <button
-                    onClick={() => setShowLinkedTowModal(true)}
+                    onClick={() => {
+                      setShowLinkedTowModal(true)
+                      void loadDriversAndTrucks()
+                    }}
                     className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium"
                   >
                     הוסף נהג לרכב התקול
@@ -1581,7 +1705,7 @@ export default function TowDetailsPage() {
                       {canEdit && (
                         <div className="flex gap-2">
                           <button
-                            onClick={() => setShowChangeDriverModal(true)}
+                            onClick={() => openDriverModal('change')}
                             className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50"
                           >
                             שנה נהג
@@ -1602,7 +1726,7 @@ export default function TowDetailsPage() {
                       </div>
                       <p className="text-gray-500 mb-4">לא שובץ נהג</p>
                       <button
-                        onClick={() => setShowAssignModal(true)}
+                        onClick={() => openDriverModal('assign')}
                         className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] transition-colors"
                       >
                         שבץ נהג
@@ -1875,7 +1999,11 @@ export default function TowDetailsPage() {
               </div>
             </div>
 
-            {changeLogs.length > 0 && (
+            {changeLogsLoading && !changeLogsLoaded ? (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-8 flex justify-center">
+                <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : changeLogs.length > 0 ? (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
                   <h2 className="font-bold text-gray-800">שינויים</h2>
@@ -1901,7 +2029,11 @@ export default function TowDetailsPage() {
                   ))}
                 </div>
               </div>
-            )}
+            ) : changeLogsLoaded ? (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden p-6 text-center text-gray-400 text-sm">
+                אין רשומות שינוי
+              </div>
+            ) : null}
 
           </div>
         )}
@@ -2012,7 +2144,7 @@ export default function TowDetailsPage() {
                   }
 
                   await updateTow({ towId: tow.id, visibilityOverrides: updated })
-                  await loadData()
+                  await refreshTow()
                 }
 
                 return (
@@ -2374,7 +2506,11 @@ export default function TowDetailsPage() {
                 <X size={20} />
               </button>
             </div>
-            {!linkedTowDriverId ? (
+            {driversTrucksLoading && drivers.length === 0 ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : !linkedTowDriverId ? (
               <DriverCalendarPicker
                 companyId={companyId || ''}
                 drivers={drivers}

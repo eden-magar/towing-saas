@@ -66,7 +66,7 @@ export function DriverSchedulePicker({
           id,
           truck_type,
           plate_number,
-          assigned_driver:driver_truck_assignments!inner(driver_id)
+          assigned_drivers:driver_truck_assignments!inner(driver_id)
         `)
         .eq('company_id', companyId)
         .eq('driver_truck_assignments.is_current', true)
@@ -81,7 +81,7 @@ export function DriverSchedulePicker({
           id: d.id,
           user: Array.isArray(d.user) ? d.user[0] : d.user as { full_name: string; phone: string | null },
           trucks: (trucksData || [])
-            .filter(t => t.assigned_driver?.some((a: any) => a.driver_id === d.id))
+            .filter(t => (t.assigned_drivers ?? []).some((a: { driver_id: string }) => a.driver_id === d.id))
             .map(t => ({ id: t.id, truck_type: t.truck_type, plate_number: t.plate_number }))
         }))
       setDrivers(driversWithTrucks)
