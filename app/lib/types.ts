@@ -174,6 +174,8 @@ export interface Tow {
   linked_tow_id: string | null
   payment_method: string | null
   cash_collected: number | null
+  manually_closed_at: string | null
+  manually_closed_by: string | null
 }
 
 export interface TowVehicle {

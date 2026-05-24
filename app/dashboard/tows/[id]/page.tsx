@@ -35,7 +35,7 @@ import {
   Eye
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
-import { getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow } from '../../../lib/queries/tows'
+import { getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
@@ -126,6 +126,8 @@ export default function TowDetailsPage() {
   const [cancellationDetails, setCancellationDetails] = useState('')
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
+  const [showManualCloseModal, setShowManualCloseModal] = useState(false)
+  const [manualClosing, setManualClosing] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [showLinkedTowModal, setShowLinkedTowModal] = useState(false)
   const [creatingLinkedTow, setCreatingLinkedTow] = useState(false)
@@ -369,6 +371,8 @@ export default function TowDetailsPage() {
   }, [towId, refreshTow])
 
   const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
+  const canManualClose =
+    tow != null && (tow.status === 'assigned' || tow.status === 'in_progress')
 
   const getDriverTrucks = (driverId: string) =>
     trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
@@ -747,13 +751,29 @@ export default function TowDetailsPage() {
       setShowCantCancelModal(true)
       return
     }
-    
+
     if (['in_progress', 'driver_on_way', 'arrived_pickup', 'loading'].includes(tow.status)) {
       setCancelStep('warning')
     } else {
       setCancelStep('reason')
     }
     setShowCancelModal(true)
+  }
+
+  const handleConfirmManualClose = async () => {
+    if (!tow || !user?.id) return
+    setManualClosing(true)
+    try {
+      await manualCloseTow(tow.id, user.id)
+      await refreshTow()
+      if (changeLogsLoaded) void loadChangeLogs(true)
+      setShowManualCloseModal(false)
+    } catch (err) {
+      console.error('Error manually closing tow:', err)
+      alert(err instanceof Error ? err.message : 'שגיאה בסגירה ידנית של הגרירה')
+    } finally {
+      setManualClosing(false)
+    }
   }
 
   const handleConfirmCancel = async () => {
@@ -958,6 +978,11 @@ export default function TowDetailsPage() {
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${statusConfig[tow.status]?.color}`}>
                     {statusConfig[tow.status]?.label}
                   </span>
+                  {tow.manually_closed_at && (
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-violet-50 text-violet-700 border-violet-200">
+                      נסגרה ידנית
+                    </span>
+                  )}
                   {tow.tow_type && (
                     <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-gray-100 text-gray-700 border-gray-200">
                       {getTowTypeLabel(tow.tow_type)}
@@ -990,6 +1015,15 @@ export default function TowDetailsPage() {
                 </>
               ) : (
                 <>
+                  {canManualClose && (
+                    <button
+                      onClick={() => setShowManualCloseModal(true)}
+                      className="p-2 sm:px-3 sm:py-2 text-violet-700 hover:bg-violet-50 rounded-lg text-sm flex items-center gap-2"
+                    >
+                      <CheckCircle size={18} />
+                      <span className="hidden sm:inline">סגור גרירה ידנית</span>
+                    </button>
+                  )}
                   {canEdit && (
                   <button 
                     onClick={() => router.push(`/dashboard/tows/create?edit=${tow.id}`)}
@@ -1929,7 +1963,15 @@ export default function TowDetailsPage() {
               </div>
               <div className="p-4 sm:p-5">
                 {(() => {
-                  const events: { time: string; label: string; color: string }[] = []
+                  type TimelineEvent = {
+                    time: string
+                    label: string
+                    color: string
+                    isManualClose?: boolean
+                  }
+
+                  const events: TimelineEvent[] = []
+                  const manualCloseLog = changeLogs.find((log) => log.field_name === 'סגירה ידנית')
                   
                   events.push({ time: tow.created_at, label: 'גרירה נוצרה', color: 'bg-gray-400' })
                   
@@ -1955,6 +1997,19 @@ export default function TowDetailsPage() {
                   if (tow.completed_at) {
                     events.push({ time: tow.completed_at, label: 'גרירה הושלמה', color: 'bg-emerald-600' })
                   }
+
+                  if (tow.manually_closed_at) {
+                    const adminName =
+                      tow.manually_closed_by_user?.full_name ||
+                      manualCloseLog?.user?.full_name ||
+                      'מנהל'
+                    events.push({
+                      time: manualCloseLog?.changed_at || tow.manually_closed_at,
+                      label: `🔒 הגרירה נסגרה ידנית ע״י ${adminName}`,
+                      color: 'bg-orange-500',
+                      isManualClose: true,
+                    })
+                  }
                   
                   rejectionRequests.forEach(req => {
                     const reasonInfo = REJECTION_REASONS.find(r => r.key === req.reason)
@@ -1975,7 +2030,13 @@ export default function TowDetailsPage() {
                     }
                   })
 
-                  events.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+                  events.sort((a, b) => {
+                    const timeDiff = new Date(a.time).getTime() - new Date(b.time).getTime()
+                    if (timeDiff !== 0) return timeDiff
+                    if (a.isManualClose) return 1
+                    if (b.isManualClose) return -1
+                    return 0
+                  })
 
                   return (
                     <div className="space-y-0">
@@ -2010,20 +2071,33 @@ export default function TowDetailsPage() {
                 </div>
                 <div className="p-4 sm:p-5 space-y-3">
                   {changeLogs.map((log) => (
-                    <div key={log.id} className="border border-gray-100 rounded-xl p-3 text-sm">
-                      <div className="flex justify-between items-start">
-                        <span className="font-medium text-gray-800">{log.field_name}</span>
-                        <span className="text-xs text-gray-400">
-                          {new Date(log.changed_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-gray-500">
-                        <span className="line-through">{log.old_value || '—'}</span>
-                        <span className="mx-2">→</span>
-                        <span className="text-gray-800">{log.new_value || '—'}</span>
-                      </div>
-                      {log.user?.full_name && (
-                        <div className="mt-1 text-xs text-gray-400">על ידי {log.user.full_name}</div>
+                    <div key={log.id} className="border border-gray-100 rounded-xl p-3 text-sm" dir="rtl">
+                      {log.field_name === 'סגירה ידנית' ? (
+                        <div className="flex justify-between items-start gap-3">
+                          <span className="font-medium text-orange-700">
+                            🔒 הגרירה נסגרה ידנית ע״י {log.user?.full_name || 'מנהל'}
+                          </span>
+                          <span className="text-xs text-gray-400 shrink-0">
+                            {new Date(log.changed_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-start">
+                            <span className="font-medium text-gray-800">{log.field_name}</span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(log.changed_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-gray-500">
+                            <span className="line-through">{log.old_value || '—'}</span>
+                            <span className="mx-2">→</span>
+                            <span className="text-gray-800">{log.new_value || '—'}</span>
+                          </div>
+                          {log.user?.full_name && (
+                            <div className="mt-1 text-xs text-gray-400">על ידי {log.user.full_name}</div>
+                          )}
+                        </>
                       )}
                     </div>
                   ))}
@@ -2243,6 +2317,40 @@ export default function TowDetailsPage() {
                 className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
               >
                 הסר נהג
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showManualCloseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden" dir="rtl">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-violet-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-violet-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">סגירה ידנית של גרירה</h2>
+              <p className="text-gray-600 text-sm leading-relaxed">
+                האם לסגור את הגרירה ידנית? פעולה זו תסמן את כל הנקודות כהושלמו ולא ניתן יהיה לפתוח שוב.
+              </p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setShowManualCloseModal(false)}
+                disabled={manualClosing}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmManualClose()}
+                disabled={manualClosing}
+                className="flex-1 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors disabled:opacity-50"
+              >
+                {manualClosing ? 'סוגר...' : 'אשר סגירה'}
               </button>
             </div>
           </div>

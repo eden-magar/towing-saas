@@ -4,6 +4,7 @@ import {
   unreserveVehicleFromTow,
 } from './storage'
 import { getCompanySettings } from './settings'
+import { updatePointStatus } from './driver-tasks'
 import type { TowChangeLog } from '../types'
 
 // ==================== טיפוסים ====================
@@ -134,6 +135,11 @@ export interface TowWithDetails {
   start_from_base: boolean | null
   dropoff_to_storage: boolean | null
   visibility_overrides: Record<string, boolean> | null
+  manually_closed_at?: string | null
+  manually_closed_by?: string | null
+  manually_closed_by_user?: {
+    full_name: string
+  } | null
 
   // שדות מורחבים
   customer: {
@@ -388,6 +394,9 @@ const TOW_WITH_RELATIONS_SELECT = `
   truck:tow_trucks (
     id,
     plate_number
+  ),
+  manually_closed_by_user:users!tows_manually_closed_by_fkey (
+    full_name
   )
 `
 
@@ -803,6 +812,68 @@ export async function updateTowStatus(
       console.error('[updateTowStatus] failed to unreserve vehicles:', err)
     }
   }
+
+  return true
+}
+
+// ==================== סגירה ידנית (מנהל) ====================
+
+export async function manualCloseTow(towId: string, adminUserId: string) {
+  const tow = await getTowWithPoints(towId)
+  if (!tow) {
+    throw new Error('הגרירה לא נמצאה')
+  }
+
+  if (tow.status !== 'assigned' && tow.status !== 'in_progress') {
+    throw new Error('ניתן לסגור ידנית רק גרירות בשיבוץ או בביצוע')
+  }
+
+  const points = tow.points ?? []
+  for (const point of points) {
+    if (point.status !== 'completed' && point.status !== 'skipped') {
+      await updatePointStatus(point.id, 'completed')
+    }
+  }
+
+  const now = new Date().toISOString()
+  const { error: towError } = await supabase
+    .from('tows')
+    .update({
+      status: 'completed',
+      completed_at: now,
+      manually_closed_at: now,
+      manually_closed_by: adminUserId,
+      updated_at: now,
+    })
+    .eq('id', towId)
+
+  if (towError) {
+    console.error('Error manually closing tow:', towError)
+    throw towError
+  }
+
+  const { data: adminUser } = await supabase
+    .from('users')
+    .select('full_name')
+    .eq('id', adminUserId)
+    .maybeSingle()
+
+  const adminName = adminUser?.full_name || 'מנהל'
+  const closedAtLabel = new Date(now).toLocaleString('he-IL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  await saveTowChangeLogs(towId, adminUserId, [
+    {
+      field_name: 'סגירה ידנית',
+      old_value: tow.status,
+      new_value: `הגרירה נסגרה ידנית ע״י ${adminName} בתאריך ${closedAtLabel}`,
+    },
+  ])
 
   return true
 }
