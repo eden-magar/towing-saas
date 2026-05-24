@@ -299,9 +299,9 @@ function buildSharedBase(tow: TowForLegacyMapping, towSelection: string) {
     executionTime: formatExecutionTime(tow.scheduled_at),
     towSelection,
     notes: tow.notes ?? '',
-    submittedBy: tow.creator?.email ?? '',
+    submittedBy: '',
     clientName: tow.customer?.name ?? '',
-    clientPhone: tow.customer?.phone ?? '',
+    clientPhone: '',
     // Quotes are not "approved" in legacy terms; everything else is treated as approved
     priceApproved: tow.status !== 'quote',
     invoiceName: tow.invoice_name ?? '',

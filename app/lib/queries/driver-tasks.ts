@@ -68,6 +68,7 @@ export interface DriverTask {
     id: string
     name: string
     phone: string | null
+    customer_type: 'private' | 'business' | null
   } | null
   truck: {
     id: string
@@ -223,6 +224,8 @@ function mapEmbeddedTowPointsToDriverTaskPoints(
         point_type: string
         address: string | null
         status: string
+        contact_name?: string | null
+        contact_phone?: string | null
       }>
     | null
     | undefined
@@ -237,8 +240,8 @@ function mapEmbeddedTowPointsToDriverTaskPoints(
       address: p.address,
       lat: null,
       lng: null,
-      contact_name: null,
-      contact_phone: null,
+      contact_name: p.contact_name ?? null,
+      contact_phone: p.contact_phone ?? null,
       status: p.status as DriverTaskPoint['status'],
       arrived_at: null,
       completed_at: null,
@@ -265,7 +268,8 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
       customer:customers (
         id,
         name,
-        phone
+        phone,
+        customer_type
       ),
       truck:tow_trucks (
         id,
@@ -280,7 +284,9 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
         point_order,
         point_type,
         address,
-        status
+        status,
+        contact_name,
+        contact_phone
       )
     `)
     .eq('driver_id', driverId)
@@ -363,7 +369,8 @@ export async function getDriverTasksToday(driverId: string): Promise<DriverTask[
       customer:customers (
         id,
         name,
-        phone
+        phone,
+        customer_type
       ),
       truck:tow_trucks (
         id,

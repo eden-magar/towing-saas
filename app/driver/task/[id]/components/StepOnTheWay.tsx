@@ -14,6 +14,7 @@ import {
   ChevronUp
 } from 'lucide-react'
 import { DriverTaskPoint, DriverTaskVehicle, getTaskDetail, type TaskDetailFull } from '@/app/lib/queries/driver-tasks'
+import { resolveDriverContact } from '@/app/lib/utils/driver-contact'
 
 function StoragePointBadge({
   pointType,
@@ -40,7 +41,11 @@ function StoragePointBadge({
 interface StepOnTheWayProps {
   point: DriverTaskPoint
   vehicles: DriverTaskVehicle[]
-  customer: { name: string; phone: string | null } | null
+  customer: {
+    name: string
+    phone: string | null
+    customer_type?: 'private' | 'business' | 'insurance' | 'fleet' | null
+  } | null
   totalPoints: number
   currentIndex: number
   onArrived: (notes?: string) => Promise<void>
@@ -108,9 +113,8 @@ export default function StepOnTheWay({
     }
   }
 
-  // איש קשר לתצוגה
-  const contactName = point.contact_name || customer?.name || 'איש קשר'
-  const contactPhone = point.contact_phone || customer?.phone || ''
+  const { displayName: contactName, phone: contactPhone, canCall } =
+    resolveDriverContact(point, customer)
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
@@ -221,26 +225,26 @@ export default function StepOnTheWay({
           </div>
         )}
 
-        {(contactName || contactPhone) && (
-          <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center justify-between">
-            <div className="flex gap-2">
-              {contactPhone && (
-                <>
-                  <button onClick={() => openPhone(contactPhone)} className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center">
-                    <Phone size={16} className="text-white" />
-                  </button>
-                  <button onClick={() => openWhatsApp(contactPhone)} className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center">
-                    <MessageCircle size={16} className="text-white" />
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="text-right">
-              <p className="font-medium text-gray-800 text-sm">{contactName}</p>
-              <p className="text-xs text-gray-500">{contactPhone || 'אין מספר'}</p>
-            </div>
+        <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center justify-between">
+          <div className="flex gap-2">
+            {canCall && contactPhone && (
+              <>
+                <button onClick={() => openPhone(contactPhone)} className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center">
+                  <Phone size={16} className="text-white" />
+                </button>
+                <button onClick={() => openWhatsApp(contactPhone)} className="w-9 h-9 bg-green-500 rounded-xl flex items-center justify-center">
+                  <MessageCircle size={16} className="text-white" />
+                </button>
+              </>
+            )}
           </div>
-        )}
+          <div className="text-right">
+            <p className="font-medium text-gray-800 text-sm">{contactName}</p>
+            <p className="text-xs text-gray-500">
+              {canCall && contactPhone ? contactPhone : 'אין איש קשר זמין'}
+            </p>
+          </div>
+        </div>
 
         {/* Route */}
         <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">

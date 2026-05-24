@@ -445,6 +445,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
         {pointStep === 'delivery' && currentPoint && (
           <StepDelivery
             pointType={currentPoint.point_type}
+            point={currentPoint}
             customer={task.customer}
             onComplete={handleDeliveryComplete}
             isLastPoint={currentPointIndex + 1 >= totalPoints}

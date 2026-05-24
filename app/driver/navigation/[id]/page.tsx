@@ -7,8 +7,10 @@ import {
   getTaskDetail, 
   updateTaskStatusWithHistory,
   updateLegStatus,
-  type TaskDetailFull 
+  type TaskDetailFull,
+  type DriverTaskPoint,
 } from '../../../lib/queries/driver-tasks'
+import { resolveDriverContact } from '../../../lib/utils/driver-contact'
 import { 
   ArrowRight,
   MapPin, 
@@ -78,27 +80,56 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // Get addresses and contacts
+  const sortedPoints = task
+    ? [...task.points].sort((a, b) => a.point_order - b.point_order)
+    : []
+
+  const pickupPoint =
+    sortedPoints.find((p) => p.point_type === 'pickup') ?? sortedPoints[0]
+  const dropoffPoint =
+    sortedPoints.find((p) => p.point_type === 'dropoff') ??
+    sortedPoints[sortedPoints.length - 1]
+
+  const navPoint: DriverTaskPoint | null =
+    navigatingTo === 'source' ? pickupPoint ?? null : dropoffPoint ?? null
+
+  const navContact = resolveDriverContact(navPoint, task?.customer ?? null)
+
   const getNavigationData = () => {
-    if (!task) return { address: '', contact: '', phone: '', notes: '' }
-    
-    const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
-    const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
-    
+    if (!task) {
+      return {
+        address: '',
+        contact: '',
+        phone: '',
+        notes: '',
+        canCall: false,
+      }
+    }
+
+    const pickupLeg = task.legs.find((l) => l.leg_type === 'pickup')
+    const deliveryLeg = task.legs.find((l) => l.leg_type === 'delivery')
+
     if (navigatingTo === 'source') {
       return {
-        address: pickupLeg?.from_address || 'לא צוין',
-        contact: task.customer?.name || 'לקוח',
-        phone: task.customer?.phone || '',
-        notes: task.notes || ''
+        address:
+          navPoint?.address || pickupLeg?.from_address || 'לא צוין',
+        contact: navContact.displayName,
+        phone: navContact.phone || '',
+        notes: task.notes || '',
+        canCall: navContact.canCall,
       }
-    } else {
-      return {
-        address: deliveryLeg?.to_address || pickupLeg?.to_address || 'לא צוין',
-        contact: 'יעד',
-        phone: task.customer?.phone || '',
-        notes: ''
-      }
+    }
+
+    return {
+      address:
+        navPoint?.address ||
+        deliveryLeg?.to_address ||
+        pickupLeg?.to_address ||
+        'לא צוין',
+      contact: navContact.displayName,
+      phone: navContact.phone || '',
+      notes: '',
+      canCall: navContact.canCall,
     }
   }
 
@@ -413,8 +444,9 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
                 </p>
                 <p className="font-bold text-slate-800 text-lg">{navData.address}</p>
                 <p className="text-sm text-slate-500">
-                  {navData.contact}
-                  {navData.phone && ` • ${navData.phone}`}
+                  {navData.canCall && navData.phone
+                    ? `${navData.contact} • ${navData.phone}`
+                    : navData.contact}
                 </p>
               </div>
             </div>
@@ -433,7 +465,7 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
             <div className="grid grid-cols-4 gap-3 mb-4">
               <button 
                 onClick={openPhone}
-                disabled={!navData.phone}
+                disabled={!navData.canCall || !navData.phone}
                 className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95 disabled:opacity-50"
               >
                 <div className="w-11 h-11 bg-emerald-100 rounded-full flex items-center justify-center">
@@ -443,7 +475,7 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
               </button>
               <button 
                 onClick={openWhatsApp}
-                disabled={!navData.phone}
+                disabled={!navData.canCall || !navData.phone}
                 className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95 disabled:opacity-50"
               >
                 <div className="w-11 h-11 bg-green-100 rounded-full flex items-center justify-center">

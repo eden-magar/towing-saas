@@ -14,9 +14,11 @@ import {
   getDriverStats,
   acceptTask,
   rejectTask,
+  getCurrentPoint,
   DriverTask,
   DriverInfo
 } from '../lib/queries/driver-tasks'
+import { resolveDriverContact } from '../lib/utils/driver-contact'
 import { 
   MapPin, 
   Clock, 
@@ -690,18 +692,26 @@ export default function DriverHomePage() {
                         <Navigation size={16} />
                         נווט
                       </button>
-                      {task.customer?.phone && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openPhone(task.customer!.phone!)
-                          }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-50 text-green-600 rounded-xl text-sm font-medium"
-                        >
-                          <Phone size={16} />
-                          התקשר
-                        </button>
-                      )}
+                      {(() => {
+                        const currentPoint = getCurrentPoint(task.points)
+                        const contact = resolveDriverContact(
+                          currentPoint,
+                          task.customer
+                        )
+                        if (!contact.canCall || !contact.phone) return null
+                        return (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openPhone(contact.phone!)
+                            }}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 bg-green-50 text-green-600 rounded-xl text-sm font-medium"
+                          >
+                            <Phone size={16} />
+                            התקשר
+                          </button>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>

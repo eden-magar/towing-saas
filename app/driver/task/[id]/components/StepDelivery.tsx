@@ -34,7 +34,15 @@ function StoragePointBadge({
 interface StepDeliveryProps {
   pointType: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   isStorage?: boolean
-  customer: { name: string; phone: string | null } | null
+  point: {
+    contact_name: string | null
+    contact_phone: string | null
+  } | null
+  customer: {
+    name: string
+    phone: string | null
+    customer_type?: 'private' | 'business' | 'insurance' | 'fleet' | null
+  } | null
   onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
   isLastPoint: boolean
   finalPrice?: number | null
@@ -43,6 +51,7 @@ interface StepDeliveryProps {
 
 export default function StepDelivery({
   pointType,
+  point,
   customer,
   onComplete,
   isLastPoint,
@@ -53,7 +62,7 @@ export default function StepDelivery({
   const [recipientName, setRecipientName] = useState('')
   const [recipientPhone, setRecipientPhone] = useState('')
   const [notes, setNotes] = useState('')
-  const [sameAsCustomer, setSameAsCustomer] = useState(false)
+  const [sameAsDestinationContact, setSameAsDestinationContact] = useState(false)
   const [loading, setLoading] = useState(false)
   const [cashReceived, setCashReceived] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
@@ -76,15 +85,24 @@ export default function StepDelivery({
     : isStop ? 'ניתן להוסיף פרטים לעצירה'
     : 'למי נמסר הרכב?'
 
-  // העתקה מהלקוח
-  const handleSameAsCustomer = (checked: boolean) => {
-    setSameAsCustomer(checked)
-    if (checked && customer) {
-      setRecipientName(customer.name || '')
-      setRecipientPhone(customer.phone || '')
-    } else {
+  const canUseDestinationContactShortcut =
+    !!(point?.contact_name || point?.contact_phone) ||
+    (customer?.customer_type === 'private' &&
+      !!(customer.name || customer.phone))
+
+  const handleSameAsDestinationContact = (checked: boolean) => {
+    setSameAsDestinationContact(checked)
+    if (!checked) {
       setRecipientName('')
       setRecipientPhone('')
+      return
+    }
+    if (point?.contact_name || point?.contact_phone) {
+      setRecipientName(point.contact_name || '')
+      setRecipientPhone(point.contact_phone || '')
+    } else if (customer?.customer_type === 'private') {
+      setRecipientName(customer.name || '')
+      setRecipientPhone(customer.phone || '')
     }
   }
 
@@ -202,16 +220,15 @@ export default function StepDelivery({
               />
             </div>
 
-            {/* זהה למזמין */}
-            {customer && (
+            {canUseDestinationContactShortcut && (
               <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer mb-6">
                 <input
                   type="checkbox"
-                  checked={sameAsCustomer}
-                  onChange={(e) => handleSameAsCustomer(e.target.checked)}
+                  checked={sameAsDestinationContact}
+                  onChange={(e) => handleSameAsDestinationContact(e.target.checked)}
                   className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                 />
-                <span className="text-gray-700">זהה למזמין ({customer.name})</span>
+                <span className="text-gray-700">זהה לאיש קשר ביעד</span>
               </label>
             )}
           </>
