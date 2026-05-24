@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
       address,
       licenseNumber,
       licenseType,
+      licenseCategories,
+      licensePermits,
       licenseExpiry,
       yearsExperience,
       work_hours_start,
@@ -48,6 +50,15 @@ export async function POST(request: NextRequest) {
       : legacyTruckId
         ? [legacyTruckId]
         : []
+
+    const categories: string[] = Array.isArray(licenseCategories)
+      ? licenseCategories.filter((c: unknown): c is string => typeof c === 'string' && c.length > 0)
+      : licenseType
+        ? [licenseType]
+        : []
+    const permits: string[] = Array.isArray(licensePermits)
+      ? licensePermits.filter((p: unknown): p is string => typeof p === 'string' && p.length > 0)
+      : []
 
     // 1. יצירת משתמש ב-Auth (עם סיסמה זמנית)
     const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'
@@ -92,7 +103,9 @@ export async function POST(request: NextRequest) {
         user_id: authUser.user.id,
         company_id: companyId,
         license_number: licenseNumber,
-        license_type: licenseType,
+        license_type: categories[0] ?? licenseType ?? null,
+        license_categories: categories,
+        license_permits: permits,
         license_expiry: licenseExpiry,
         years_experience: yearsExperience || 0,
         work_hours_start: work_hours_start || null,

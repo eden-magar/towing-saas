@@ -9,6 +9,13 @@ import { supabase } from '../../lib/supabase'
 import DriversMap from '../../components/DriversMap'
 import DriverHoursTab from '../../components/DriverHoursTab'
 import ResendInviteModal from '../../components/ResendInviteModal'
+import {
+  LICENSE_CATEGORIES,
+  LICENSE_PERMITS,
+  formatLicenseLabel,
+  getDriverLicenseCategoriesDisplay,
+  toggleLicenseCode,
+} from '../../lib/constants/driver-licenses'
 
 function getTruckTypeLabel(type: string) {
   const types: Record<string, string> = {
@@ -22,6 +29,50 @@ function getTruckTypeLabel(type: string) {
     wheel_lift_cradle: 'משקפיים (מערסל)',
   }
   return types[type] || type
+}
+
+function DriverLicenseChips({ driver }: { driver: DriverWithDetails }) {
+  const categories =
+    driver.license_categories?.length > 0
+      ? driver.license_categories
+      : driver.license_type
+        ? [driver.license_type]
+        : []
+  const permits = driver.license_permits ?? []
+
+  if (categories.length === 0 && permits.length === 0) {
+    return <span className="text-gray-400 text-sm">---</span>
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 items-start">
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {categories.map((code) => (
+            <span
+              key={code}
+              className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium"
+            >
+              {code}
+            </span>
+          ))}
+        </div>
+      )}
+      {permits.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {permits.map((code) => (
+            <span
+              key={code}
+              className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-medium"
+              title="היתר"
+            >
+              {code}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function AssignedTrucksCell({ trucks }: { trucks: TowTruck[] }) {
@@ -95,7 +146,8 @@ export default function DriversPage() {
     email: '',
     address: '',
     licenseNumber: '',
-    licenseType: '',
+    licenseCategories: [] as string[],
+    licensePermits: [] as string[],
     licenseExpiry: '',
     yearsExperience: 0,
     truckAssignment: 'none' as 'existing' | 'none',
@@ -204,7 +256,8 @@ export default function DriversPage() {
       email: '',
       address: '',
       licenseNumber: '',
-      licenseType: '',
+      licenseCategories: [],
+      licensePermits: [],
       licenseExpiry: '',
       yearsExperience: 0,
       truckAssignment: 'none',
@@ -238,7 +291,12 @@ export default function DriversPage() {
       email: driver.user?.email || '',
       address: driver.user?.address || '',
       licenseNumber: driver.license_number || '',
-      licenseType: driver.license_type || '',
+      licenseCategories: driver.license_categories?.length
+        ? [...driver.license_categories]
+        : driver.license_type
+          ? [driver.license_type]
+          : [],
+      licensePermits: driver.license_permits?.length ? [...driver.license_permits] : [],
       licenseExpiry: driver.license_expiry || '',
       yearsExperience: driver.years_experience || 0,
       truckAssignment: driver.current_trucks.length > 0 ? 'existing' : 'none',
@@ -277,7 +335,8 @@ export default function DriversPage() {
       formData.phone,
       formData.idNumber || undefined,
       formData.licenseNumber || undefined,
-      editingDriver?.user.id
+      editingDriver?.user.id,
+      editingDriver?.id
     )
 
     if (duplicate && !showDuplicateWarning) {
@@ -302,7 +361,8 @@ export default function DriversPage() {
           address: formData.address || undefined,
           email: formData.email || undefined,
           licenseNumber: formData.licenseNumber || undefined,
-          licenseType: formData.licenseType || undefined,
+          licenseCategories: formData.licenseCategories,
+          licensePermits: formData.licensePermits,
           licenseExpiry: formData.licenseExpiry || undefined,
           yearsExperience: formData.yearsExperience,
           work_hours_start: formData.work_hours_start || null,
@@ -320,7 +380,8 @@ export default function DriversPage() {
           idNumber: formData.idNumber || undefined,
           address: formData.address || undefined,
           licenseNumber: formData.licenseNumber,
-          licenseType: formData.licenseType,
+          licenseCategories: formData.licenseCategories,
+          licensePermits: formData.licensePermits,
           licenseExpiry: formData.licenseExpiry,
           yearsExperience: formData.yearsExperience,
           notes: formData.notes || undefined,
@@ -567,12 +628,10 @@ export default function DriversPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-sm font-medium">
-                          {driver.license_type || '---'}
-                        </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <DriverLicenseChips driver={driver} />
                         {licenseExpired && (
-                          <span className="px-2 py-1 bg-red-50 text-red-600 rounded text-xs">
+                          <span className="px-2 py-1 bg-red-50 text-red-600 rounded text-xs shrink-0">
                             פג תוקף
                           </span>
                         )}
@@ -719,7 +778,13 @@ export default function DriversPage() {
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[driver.status]?.color || 'bg-gray-100 text-gray-600'}`}>
                     {statusConfig[driver.status]?.label || driver.status}
                   </span>
-                  <span>רישיון {driver.license_type || '---'}</span>
+                  <span>
+                    רישיון{' '}
+                    {getDriverLicenseCategoriesDisplay(
+                      driver.license_categories,
+                      driver.license_type
+                    )}
+                  </span>
                   <span>{driver.today_tows_count || 0} גרירות</span>
                 </div>
                 
@@ -836,29 +901,69 @@ export default function DriversPage() {
                   רישיון ונסיון
                 </h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">מספר רישיון נהיגה *</label>
-                      <input
-                        type="text"
-                        value={formData.licenseNumber}
-                        onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                      />
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">מספר רישיון נהיגה *</label>
+                    <input
+                      type="text"
+                      value={formData.licenseNumber}
+                      onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    />
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">דרגות רישיון</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-gray-100 rounded-lg p-3" dir="rtl">
+                      {LICENSE_CATEGORIES.map(({ code, name }) => (
+                        <label
+                          key={code}
+                          className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.licenseCategories.includes(code)}
+                            onChange={() =>
+                              setFormData({
+                                ...formData,
+                                licenseCategories: toggleLicenseCode(
+                                  formData.licenseCategories,
+                                  code
+                                ),
+                              })
+                            }
+                            className="rounded border-gray-300 text-[#33d4ff] focus:ring-[#33d4ff]"
+                          />
+                          <span>{formatLicenseLabel(code, name)}</span>
+                        </label>
+                      ))}
                     </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">דרגת רישיון *</label>
-                      <select
-                        value={formData.licenseType}
-                        onChange={(e) => setFormData({ ...formData, licenseType: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
-                      >
-                        <option value="">בחר דרגה</option>
-                        <option value="B">B - רכב פרטי</option>
-                        <option value="C">C - משאית קלה</option>
-                        <option value="C1">C1 - משאית עד 12 טון</option>
-                        <option value="C+E">C+E - משאית עם גרור</option>
-                      </select>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">היתרים</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-100 rounded-lg p-3" dir="rtl">
+                      {LICENSE_PERMITS.map(({ code, name }) => (
+                        <label
+                          key={code}
+                          className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.licensePermits.includes(code)}
+                            onChange={() =>
+                              setFormData({
+                                ...formData,
+                                licensePermits: toggleLicenseCode(
+                                  formData.licensePermits,
+                                  code
+                                ),
+                              })
+                            }
+                            className="rounded border-gray-300 text-[#33d4ff] focus:ring-[#33d4ff]"
+                          />
+                          <span>{formatLicenseLabel(code, name)}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

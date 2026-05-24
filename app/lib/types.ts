@@ -63,7 +63,9 @@ export interface Driver {
   license_number: string | null
   license_expiry: string | null
   status: DriverStatus
-  license_type: string | null    
+  license_type: string | null
+  license_categories: string[]
+  license_permits: string[]
   years_experience: number | null  
   notes: string | null
   work_hours_start: string | null

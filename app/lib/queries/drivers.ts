@@ -71,6 +71,8 @@ export async function getDrivers(companyId: string): Promise<DriverWithDetails[]
   // חיבור הכל יחד
   return drivers.map((driver) => ({
     ...driver,
+    license_categories: driver.license_categories ?? [],
+    license_permits: driver.license_permits ?? [],
     user: driver.user as User,
     current_trucks: assignmentsByDriver[driver.id] || [],
     today_tows_count: countByDriver[driver.id] || 0,
@@ -87,7 +89,10 @@ interface CreateDriverInput {
   idNumber?: string
   address?: string
   licenseNumber: string
-  licenseType: string
+  licenseCategories: string[]
+  licensePermits: string[]
+  /** @deprecated legacy single category; synced from first category when saving */
+  licenseType?: string
   licenseExpiry: string
   yearsExperience?: number
   work_hours_start?: string | null
@@ -113,6 +118,8 @@ export async function createDriver(input: CreateDriverInput) {
       idNumber: input.idNumber,
       address: input.address,
       licenseNumber: input.licenseNumber,
+      licenseCategories: input.licenseCategories,
+      licensePermits: input.licensePermits,
       licenseType: input.licenseType,
       licenseExpiry: input.licenseExpiry,
       yearsExperience: input.yearsExperience,
@@ -144,6 +151,9 @@ interface UpdateDriverInput {
   address?: string
   email?: string
   licenseNumber?: string
+  licenseCategories?: string[]
+  licensePermits?: string[]
+  /** @deprecated legacy single category */
   licenseType?: string
   licenseExpiry?: string
   yearsExperience?: number
@@ -173,17 +183,28 @@ export async function updateDriver(input: UpdateDriverInput) {
   }
 
   // 2. עדכון נהג
+  const driverUpdate: Record<string, unknown> = {
+    license_number: input.licenseNumber,
+    license_expiry: input.licenseExpiry,
+    years_experience: input.yearsExperience,
+    work_hours_start: input.work_hours_start,
+    work_hours_end: input.work_hours_end,
+    notes: input.notes,
+  }
+  if (input.licenseCategories !== undefined) {
+    driverUpdate.license_categories = input.licenseCategories
+    driverUpdate.license_type =
+      input.licenseCategories[0] ?? input.licenseType ?? null
+  } else if (input.licenseType !== undefined) {
+    driverUpdate.license_type = input.licenseType
+  }
+  if (input.licensePermits !== undefined) {
+    driverUpdate.license_permits = input.licensePermits
+  }
+
   const { error: driverError } = await supabase
     .from('drivers')
-    .update({
-      license_number: input.licenseNumber,
-      license_type: input.licenseType,
-      license_expiry: input.licenseExpiry,
-      years_experience: input.yearsExperience,
-      work_hours_start: input.work_hours_start,
-      work_hours_end: input.work_hours_end,
-      notes: input.notes
-    })
+    .update(driverUpdate)
     .eq('id', input.driverId)
 
   if (driverError) {
@@ -225,7 +246,8 @@ export async function checkDuplicates(
   phone: string,
   idNumber?: string,
   licenseNumber?: string,
-  excludeUserId?: string
+  excludeUserId?: string,
+  excludeDriverId?: string
 ): Promise<{ field: string; driverName: string } | null> {
   
   // בדיקת טלפון
@@ -262,15 +284,20 @@ export async function checkDuplicates(
     }
   }
 
-    // בדיקת רישיון
+  // בדיקת רישיון
   if (licenseNumber) {
-    const { data: licenseMatch } = await supabase
+    let licenseQuery = supabase
       .from('drivers')
       .select('id, user:users!user_id(full_name)')
       .eq('license_number', licenseNumber)
       .eq('company_id', companyId)
-      .maybeSingle()
-    
+
+    if (excludeDriverId) {
+      licenseQuery = licenseQuery.neq('id', excludeDriverId)
+    }
+
+    const { data: licenseMatch } = await licenseQuery.maybeSingle()
+
     if (licenseMatch?.user) {
       const user = licenseMatch.user as unknown as { full_name: string }
       return { field: 'מספר רישיון', driverName: user.full_name }
