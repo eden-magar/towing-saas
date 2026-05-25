@@ -1075,6 +1075,10 @@ export function useTowForm(editTowId?: string) {
       setDefectiveFaultDescription('')
       setWorkingSelectedServices([])
       setDefectiveSelectedServices([])
+      setHasStorageFollowUp(false)
+      setFollowUpAddress({ address: '' })
+      setFollowUpContactName('')
+      setFollowUpContactPhone('')
       return
     }
 
@@ -1392,6 +1396,9 @@ export function useTowForm(editTowId?: string) {
     selectedWorkingVehicleId,
     workingVehicleDestinationIsStorage,
     defectiveDestination,
+    defectiveManualManufacturer,
+    defectiveManualColor,
+    defectiveManualWeight,
     setSavedTowId,
     setShowAssignNowModal,
   })

@@ -126,6 +126,9 @@ interface UseTowSaveParams {
   selectedWorkingVehicleId?: string | null
   workingVehicleDestinationIsStorage?: boolean
   defectiveDestination?: 'storage' | 'address'
+  defectiveManualManufacturer?: string
+  defectiveManualColor?: string
+  defectiveManualWeight?: string
   // Post-save
   setSavedTowId: (id: string) => void
   setShowAssignNowModal: (v: boolean) => void
@@ -224,6 +227,9 @@ export function useTowSave(params: UseTowSaveParams) {
     selectedWorkingVehicleId,
     workingVehicleDestinationIsStorage,
     defectiveDestination,
+    defectiveManualManufacturer,
+    defectiveManualColor,
+    defectiveManualWeight,
     setSavedTowId,
     setShowAssignNowModal,
   } = params
@@ -434,29 +440,56 @@ export function useTowSave(params: UseTowSaveParams) {
     } else {
       const result = await createTow(towData)
 
-      if (
+      const shouldCreateFollowUp =
         hasStorageFollowUp &&
-        dropoffToStorage &&
-        towType === 'single' &&
         !editTowId &&
         followUpAddress?.address?.trim() &&
-        basePriceList?.base_address
-      ) {
+        basePriceList?.base_address &&
+        ((towType === 'single' && dropoffToStorage) ||
+          (towType === 'exchange' && defectiveDestination === 'storage'))
+
+      if (shouldCreateFollowUp && followUpAddress) {
+        const followUpPlate =
+          towType === 'single' ? vehiclePlate : (defectiveVehiclePlate ?? '')
+        const followUpVehicleData =
+          towType === 'single' ? vehicleData : (defectiveVehicleData ?? null)
+        const followUpVehicleType =
+          towType === 'single' ? vehicleType : (defectiveVehicleType ?? '')
+        const followUpVehicleCode =
+          towType === 'single' ? vehicleCode : defectiveVehicleCode
+        const followUpManufacturer =
+          towType === 'single'
+            ? vehicleData?.data?.manufacturer || manualManufacturer || null
+            : defectiveVehicleData?.data?.manufacturer ||
+              defectiveManualManufacturer ||
+              null
+        const followUpModel =
+          towType === 'single'
+            ? vehicleData?.data?.model || null
+            : defectiveVehicleData?.data?.model || null
+        const followUpYear =
+          towType === 'single'
+            ? vehicleData?.data?.year ?? null
+            : defectiveVehicleData?.data?.year ?? null
+        const followUpColor =
+          towType === 'single'
+            ? vehicleData?.data?.color || manualColor || null
+            : defectiveVehicleData?.data?.color || defectiveManualColor || null
+
         try {
           await createStorageFollowUpTow({
             parentTowId: result.id,
             companyId,
             createdBy: user.id,
             customerId: finalCustomerId ?? null,
-            vehiclePlate,
-            vehicleData,
-            vehicleType,
-            vehicleCode: vehicleCode || null,
-            vehicleManufacturer:
-              vehicleData?.data?.manufacturer || manualManufacturer || null,
-            vehicleModel: vehicleData?.data?.model || null,
-            vehicleYear: vehicleData?.data?.year ?? null,
-            vehicleColor: vehicleData?.data?.color || manualColor || null,
+            vehiclePlate: followUpPlate,
+            vehicleData: followUpVehicleData,
+            vehicleType: followUpVehicleType,
+            vehicleCode: followUpVehicleCode || null,
+            vehicleManufacturer: followUpManufacturer,
+            vehicleModel: followUpModel,
+            vehicleYear: followUpYear,
+            vehicleColor: followUpColor,
             pickupAddress: basePriceList.base_address,
             pickupLat: basePriceList.base_lat ?? null,
             pickupLng: basePriceList.base_lng ?? null,

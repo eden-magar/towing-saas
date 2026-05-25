@@ -2044,7 +2044,96 @@ function CreateTowForm({
                                 ) : (
                                   <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg w-fit">
                                     <span className="text-xs text-orange-600">🏪 לאחסנה</span>
-                                    <button type="button" onClick={() => { setDefectiveDestination('address'); setDefectiveDestinationAddress({ address: '' }) }} className="text-gray-400 hover:text-red-500 text-xs">✕</button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDefectiveDestination('address')
+                                        setDefectiveDestinationAddress({ address: '' })
+                                        setHasStorageFollowUp(false)
+                                        setFollowUpAddress({ address: '' })
+                                        setFollowUpContactName('')
+                                        setFollowUpContactPhone('')
+                                      }}
+                                      className="text-gray-400 hover:text-red-500 text-xs"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                )}
+                                {defectiveDestination === 'storage' && (
+                                  <div className="mt-3 pt-3 border-t border-gray-200">
+                                    <button
+                                      type="button"
+                                      role="switch"
+                                      aria-checked={hasStorageFollowUp}
+                                      onClick={() => {
+                                        const next = !hasStorageFollowUp
+                                        setHasStorageFollowUp(next)
+                                        if (!next) {
+                                          setFollowUpAddress({ address: '' })
+                                          setFollowUpContactName('')
+                                          setFollowUpContactPhone('')
+                                        }
+                                      }}
+                                      className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
+                                    >
+                                      <span
+                                        aria-hidden
+                                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
+                                          hasStorageFollowUp ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
+                                        }`}
+                                      >
+                                        <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-semibold text-gray-800">יש המשך לגרירה?</div>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                          צרי גרירה נוספת מהחניון אל יעד חדש
+                                        </div>
+                                      </div>
+                                    </button>
+
+                                    {hasStorageFollowUp && (
+                                      <div className="mt-3 space-y-2 bg-cyan-50/30 rounded-lg p-3 border border-cyan-100">
+                                        <div>
+                                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            יעד ההמשך
+                                          </label>
+                                          <AddressInput
+                                            value={followUpAddress}
+                                            onChange={(d: AddressData) => setFollowUpAddress(d)}
+                                            placeholder="כתובת היעד של הגרירה הבאה"
+                                          />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                              שם איש קשר ביעד
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={followUpContactName}
+                                              onChange={(e) => setFollowUpContactName(e.target.value)}
+                                              placeholder="שם"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                              טלפון איש קשר
+                                            </label>
+                                            <input
+                                              type="tel"
+                                              value={followUpContactPhone}
+                                              onChange={(e) => setFollowUpContactPhone(e.target.value)}
+                                              placeholder="050-1234567"
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
