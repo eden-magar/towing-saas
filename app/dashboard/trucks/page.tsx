@@ -2,37 +2,227 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye } from 'lucide-react'
+import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye, MoreHorizontal } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument, getTruckDocumentSignedUrl } from '../../lib/queries/trucks'
 import { TruckWithDetails, TruckAssignedDriver } from '../../lib/types'
 import { getDrivers } from '../../lib/queries/drivers'
 import { DriverWithDetails } from '../../lib/types'
 
-function AssignedDriversCell({ assignedDrivers }: { assignedDrivers: TruckAssignedDriver[] }) {
+type TruckDocFields = TruckWithDetails & {
+  license_photo_url?: string | null
+  tachograph_expiry?: string | null
+  tachograph_photo_url?: string | null
+  engineer_report_expiry?: string | null
+  engineer_report_photo_url?: string | null
+}
+
+function formatVehicleLine(truck: TruckWithDetails) {
+  if (!truck.manufacturer) return '-'
+  const parts = [truck.manufacturer, truck.model].filter(Boolean).join(' ')
+  return truck.year ? `${parts} · ${truck.year}` : parts
+}
+
+function formatExpiryTooltip(dateStr: string | null) {
+  if (!dateStr) return 'תאריך לא הוזן'
+  return `תוקף עד ${new Date(dateStr).toLocaleDateString('he-IL')}`
+}
+
+function getExpiryPillClasses(
+  dateStr: string | null,
+  isExpired: (d: string | null) => boolean,
+  isExpiringSoon: (d: string | null) => boolean
+) {
+  if (!dateStr) return 'bg-gray-50 text-gray-500'
+  if (isExpired(dateStr)) return 'bg-red-50 text-red-700'
+  if (isExpiringSoon(dateStr)) return 'bg-amber-50 text-amber-700'
+  return 'bg-emerald-50 text-emerald-700'
+}
+
+function getDriverInitials(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '??'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+function DriverInitialsAvatar({ fullName }: { fullName: string }) {
+  return (
+    <span
+      className="w-6 h-6 shrink-0 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium inline-flex items-center justify-center"
+      aria-hidden
+    >
+      {getDriverInitials(fullName)}
+    </span>
+  )
+}
+
+function TableDriversCell({ assignedDrivers }: { assignedDrivers: TruckAssignedDriver[] }) {
+  if (assignedDrivers.length === 0) {
+    return <span className="text-sm text-stone-400">ללא נהג משויך</span>
+  }
+  const first = assignedDrivers[0]
+  if (assignedDrivers.length === 1) {
+    return (
+      <span className="inline-flex items-center gap-[7px] text-sm text-stone-800">
+        <DriverInitialsAvatar fullName={first.user.full_name} />
+        {first.user.full_name}
+      </span>
+    )
+  }
+  const allNames = assignedDrivers.map((d) => d.user.full_name).join(', ')
+  return (
+    <span className="inline-flex items-center gap-[7px] text-sm text-stone-800" title={allNames}>
+      <DriverInitialsAvatar fullName={first.user.full_name} />
+      <span>
+        {first.user.full_name}
+        <span className="text-stone-400"> +{assignedDrivers.length - 1}</span>
+      </span>
+    </span>
+  )
+}
+
+function TableVehicleCell({ truck }: { truck: TruckWithDetails }) {
+  if (!truck.manufacturer) {
+    return <span className="text-sm text-stone-500">-</span>
+  }
+  const line1 = [truck.manufacturer, truck.model].filter(Boolean).join(' ')
+  return (
+    <div>
+      <p className="text-sm text-stone-800 leading-tight">{line1}</p>
+      {truck.year != null && truck.year > 0 && (
+        <p className="text-[11px] text-stone-500 leading-tight mt-0.5">{truck.year}</p>
+      )}
+    </div>
+  )
+}
+
+function TableStatusPill({
+  status,
+}: {
+  status: 'available' | 'busy' | 'maintenance' | 'inactive'
+}) {
+  const styles: Record<typeof status, { bg: string; text: string; label: string }> = {
+    busy: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'בפעילות' },
+    available: { bg: 'bg-stone-100', text: 'text-stone-600', label: 'פנוי' },
+    inactive: { bg: 'bg-stone-100', text: 'text-stone-400', label: 'לא פעיל' },
+    maintenance: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'בטיפול' },
+  }
+  const s = styles[status]
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${s.bg} ${s.text}`}
+    >
+      <span className="w-[5px] h-[5px] rounded-full bg-current shrink-0" />
+      {s.label}
+    </span>
+  )
+}
+
+function TowCountCell({ value }: { value: number }) {
+  const n = value || 0
+  return (
+    <span
+      className={`tabular-nums text-sm ${n === 0 ? 'text-stone-400' : 'text-stone-800 font-medium'}`}
+    >
+      {n}
+    </span>
+  )
+}
+
+function CompactDriversCell({ assignedDrivers }: { assignedDrivers: TruckAssignedDriver[] }) {
   if (assignedDrivers.length === 0) {
     return <span className="text-sm text-gray-400">ללא נהג משויך</span>
   }
   if (assignedDrivers.length === 1) {
-    const d = assignedDrivers[0]
-    return (
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
-          <User size={14} className="text-blue-700" />
-        </div>
-        <span className="text-sm font-medium text-blue-800">{d.user.full_name}</span>
-      </div>
-    )
+    return <span className="text-sm text-gray-800">{assignedDrivers[0].user.full_name}</span>
   }
+  const allNames = assignedDrivers.map((d) => d.user.full_name).join(', ')
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {assignedDrivers.map((d) => (
+    <span className="text-sm text-gray-800" title={allNames}>
+      {assignedDrivers[0].user.full_name} +{assignedDrivers.length - 1}
+    </span>
+  )
+}
+
+function ExpiryPillsRow({
+  truck,
+  isExpired,
+  isExpiringSoon,
+  onViewDocument,
+  viewingDocument,
+  compact = false,
+}: {
+  truck: TruckDocFields
+  isExpired: (d: string | null) => boolean
+  isExpiringSoon: (d: string | null) => boolean
+  onViewDocument: (path: string | null | undefined, e?: React.MouseEvent) => void
+  viewingDocument: boolean
+  compact?: boolean
+}) {
+  const pills = [
+    {
+      key: 'license',
+      label: 'רישיון',
+      date: truck.license_expiry,
+      photoUrl: truck.license_photo_url,
+      docTitle: 'צפה ברישיון רכב',
+    },
+    {
+      key: 'insurance',
+      label: 'ביטוח',
+      date: truck.insurance_expiry,
+    },
+    {
+      key: 'tachograph',
+      label: 'טכוגרף',
+      date: truck.tachograph_expiry ?? null,
+      photoUrl: truck.tachograph_photo_url,
+      docTitle: 'צפה בתעודת כיול טכוגרף',
+    },
+    {
+      key: 'engineer',
+      label: 'תסקיר',
+      date: truck.engineer_report_expiry ?? null,
+      photoUrl: truck.engineer_report_photo_url,
+      docTitle: 'צפה בתסקיר מהנדס',
+    },
+  ] as const
+
+  return (
+    <div
+      className={
+        compact
+          ? 'flex flex-nowrap gap-1 whitespace-nowrap'
+          : 'flex flex-wrap gap-1'
+      }
+    >
+      {pills.map((pill) => (
         <span
-          key={d.id}
-          className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md text-sm"
+          key={pill.key}
+          title={formatExpiryTooltip(pill.date)}
+          className={`inline-flex shrink-0 items-center gap-0.5 font-medium ${getExpiryPillClasses(
+            pill.date,
+            isExpired,
+            isExpiringSoon
+          )} ${
+            compact
+              ? 'text-[10px] px-[7px] py-0.5 rounded-[5px]'
+              : 'text-xs px-1.5 py-0.5 rounded'
+          }`}
         >
-          <User size={12} />
-          {d.user.full_name}
+          {pill.label}
+          {'photoUrl' in pill && pill.photoUrl && (
+            <button
+              type="button"
+              title={pill.docTitle}
+              onClick={(e) => onViewDocument(pill.photoUrl, e)}
+              disabled={viewingDocument}
+              className="p-0 leading-none rounded hover:bg-black/5 disabled:opacity-50"
+            >
+              <Eye size={12} className="w-3 h-3" />
+            </button>
+          )}
         </span>
       ))}
     </div>
@@ -63,6 +253,7 @@ export default function TrucksPage() {
   const [expiryWarningMessage, setExpiryWarningMessage] = useState('')
   const [uploading, setUploading] = useState<string | null>(null)
   const [viewingDocument, setViewingDocument] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   // File refs
   const licensePhotoRef = useRef<HTMLInputElement>(null)
@@ -643,166 +834,232 @@ export default function TrucksPage() {
       </div>
 
       {/* רשימת גררים */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredTrucks.map((truck) => {
-          const status = getTruckStatus(truck)
-          const truckData = truck as TruckWithDetails & {
-            license_photo_url?: string | null
-            tachograph_expiry?: string | null
-            tachograph_photo_url?: string | null
-            engineer_report_expiry?: string | null
-            engineer_report_photo_url?: string | null
-          }
-          return (
-            <div
-              key={truck.id}
-              className={`bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-lg transition-shadow border-r-4 ${
-                status === 'available' ? 'border-r-emerald-500' :
-                status === 'busy' ? 'border-r-blue-500' :
-                status === 'maintenance' ? 'border-r-amber-500' :
-                'border-r-gray-400'
-              } ${!truck.is_active ? 'opacity-60' : ''}`}
-            >
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${typeConfig[truck.truck_type as keyof typeof typeConfig]?.iconBg || 'bg-gray-100'}`}>
-                      <Truck size={24} className={typeConfig[truck.truck_type]?.color?.split(' ')[1] || 'text-gray-600'} />
-                    </div>
-                    <div>
-                      <h3 className="font-mono font-bold text-gray-800 text-lg">{truck.plate_number}</h3>
-                      <p className="text-sm text-gray-500">{typeConfig[truck.truck_type as keyof typeof typeConfig]?.label || truck.truck_type}</p>
-                    </div>
-                  </div>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-lg ${statusConfig[status]?.color}`}>
-                    {statusConfig[status]?.label}
-                  </span>
-                </div>
-
-                <div className="mb-4 p-3 bg-gray-100 rounded-xl border border-gray-200">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">רכב:</span>
-                    <span className="text-gray-800 font-medium">
-                      {truck.manufacturer || '-'} {truck.model || ''}{truck.year ? `, ${truck.year}` : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm mt-1">
-                    <span className="text-gray-500">קיבולת:</span>
-                    <span className="text-gray-800 font-medium">{truck.vehicle_capacity} רכבים</span>
-                  </div>
-                </div>
-
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                  <p className="text-xs text-gray-500 mb-1.5">נהגים</p>
-                  <AssignedDriversCell assignedDrivers={truck.assigned_drivers} />
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">רישיון רכב:</span>
-                    <span
-                      className={`font-medium flex items-center gap-1 ${isExpired(truck.license_expiry) ? 'text-red-600' : isExpiringSoon(truck.license_expiry) ? 'text-amber-600' : 'text-gray-700'}`}
-                    >
-                      {formatDate(truck.license_expiry)}
-                      {isExpired(truck.license_expiry) && (
-                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">פג</span>
-                      )}
-                      {truckData.license_photo_url && (
-                        <button
-                          type="button"
-                          title="צפה ברישיון רכב"
-                          onClick={(e) => handleViewDocument(truckData.license_photo_url, e)}
-                          disabled={viewingDocument}
-                          className="inline-flex p-0.5 text-gray-500 hover:text-gray-700 shrink-0 disabled:opacity-50"
-                        >
-                          <Eye size={15} />
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">ביטוח:</span>
-                    <span className={`font-medium ${isExpired(truck.insurance_expiry) ? 'text-red-600' : 'text-gray-700'}`}>
-                      {formatDate(truck.insurance_expiry)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">טכוגרף:</span>
-                    <span
-                      className={`font-medium flex items-center gap-1 ${isExpired(truckData.tachograph_expiry ?? null) ? 'text-red-600' : isExpiringSoon(truckData.tachograph_expiry ?? null) ? 'text-amber-600' : 'text-gray-700'}`}
-                    >
-                      {formatDate(truckData.tachograph_expiry ?? null)}
-                      {truckData.tachograph_photo_url && (
-                        <button
-                          type="button"
-                          title="צפה בתעודת כיול טכוגרף"
-                          onClick={(e) => handleViewDocument(truckData.tachograph_photo_url, e)}
-                          disabled={viewingDocument}
-                          className="inline-flex p-0.5 text-gray-500 hover:text-gray-700 shrink-0 disabled:opacity-50"
-                        >
-                          <Eye size={15} />
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">תסקיר מהנדס:</span>
-                    <span
-                      className={`font-medium flex items-center gap-1 ${isExpired(truckData.engineer_report_expiry ?? null) ? 'text-red-600' : isExpiringSoon(truckData.engineer_report_expiry ?? null) ? 'text-amber-600' : 'text-gray-700'}`}
-                    >
-                      {formatDate(truckData.engineer_report_expiry ?? null)}
-                      {truckData.engineer_report_photo_url && (
-                        <button
-                          type="button"
-                          title="צפה בתסקיר מהנדס"
-                          onClick={(e) => handleViewDocument(truckData.engineer_report_photo_url, e)}
-                          disabled={viewingDocument}
-                          className="inline-flex p-0.5 text-gray-500 hover:text-gray-700 shrink-0 disabled:opacity-50"
-                        >
-                          <Eye size={15} />
-                        </button>
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
-                    <p className="text-xl font-bold text-gray-800">{truck.today_tows_count || 0}</p>
-                    <p className="text-xs text-gray-500">גרירות היום</p>
-                  </div>
-                  <div className="text-center p-3 bg-gray-100 rounded-xl border border-gray-200">
-                    <p className="text-xl font-bold text-gray-800">-</p>
-                    <p className="text-xs text-gray-500">סה״כ גרירות</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-5 py-3 bg-gray-100/80 border-t border-gray-200 flex items-center justify-end gap-1">
-                <button
-                  onClick={() => openEditModal(truck)}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                >
-                  <Edit2 size={18} />
-                </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(truck.id)}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {filteredTrucks.length === 0 && (
+      {filteredTrucks.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">
           <Truck size={48} className="mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-800 mb-2">לא נמצאו גררים</h3>
           <p className="text-gray-500">נסה לשנות את החיפוש או הסינון</p>
         </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {/* Desktop Table */}
+          <div className="hidden lg:block bg-stone-50 p-1.5 overflow-x-auto">
+            <table className="w-full bg-white rounded-lg overflow-hidden">
+              <thead className="bg-stone-100 border-b border-stone-200">
+                <tr>
+                  <th className="text-right px-3.5 py-2.5 text-sm font-medium text-stone-600">רישוי</th>
+                  <th className="text-right px-3.5 py-2.5 text-sm font-medium text-stone-600">רכב</th>
+                  <th className="text-right px-3.5 py-2.5 text-sm font-medium text-stone-600">נהגים</th>
+                  <th className="text-right px-3.5 py-2.5 text-sm font-medium text-stone-600">סטטוס</th>
+                  <th className="text-right px-3.5 py-2.5 text-sm font-medium text-stone-600 min-w-[220px]">תוקפים</th>
+                  <th className="text-center px-3.5 py-2.5 text-sm font-medium text-stone-600">היום</th>
+                  <th className="text-center px-3.5 py-2.5 text-sm font-medium text-stone-600">סה״כ</th>
+                  <th className="text-right px-3.5 py-2.5 text-sm font-medium text-stone-600 w-14">פעולות</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTrucks.map((truck) => {
+                  const status = getTruckStatus(truck)
+                  const truckData = truck as TruckDocFields
+                  const typeLabel =
+                    typeConfig[truck.truck_type as keyof typeof typeConfig]?.label || truck.truck_type
+                  return (
+                    <tr
+                      key={truck.id}
+                      onClick={() => openEditModal(truck)}
+                      className={`border-b border-stone-200 last:border-b-0 hover:bg-stone-50 cursor-pointer transition-colors ${
+                        !truck.is_active ? 'opacity-60' : ''
+                      }`}
+                    >
+                      <td className="px-3.5 py-2.5 text-sm">
+                        <p className="font-mono font-bold text-stone-800 leading-tight">{truck.plate_number}</p>
+                        <p className="text-xs text-stone-500 mt-0.5 leading-tight">{typeLabel}</p>
+                      </td>
+                      <td className="px-3.5 py-2.5 text-sm">
+                        <TableVehicleCell truck={truck} />
+                      </td>
+                      <td className="px-3.5 py-2.5 text-sm">
+                        <TableDriversCell assignedDrivers={truck.assigned_drivers} />
+                      </td>
+                      <td className="px-3.5 py-2.5 text-sm">
+                        <TableStatusPill status={status} />
+                      </td>
+                      <td
+                        className="px-3.5 py-2.5 text-sm min-w-[220px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExpiryPillsRow
+                          truck={truckData}
+                          isExpired={isExpired}
+                          isExpiringSoon={isExpiringSoon}
+                          onViewDocument={handleViewDocument}
+                          viewingDocument={viewingDocument}
+                          compact
+                        />
+                      </td>
+                      <td className="px-3.5 py-2.5 text-sm text-center">
+                        <TowCountCell value={truck.today_tows_count} />
+                      </td>
+                      <td className="px-3.5 py-2.5 text-sm text-center">
+                        <TowCountCell value={truck.total_tows_count} />
+                      </td>
+                      <td className="px-3.5 py-2.5 text-sm" onClick={(e) => e.stopPropagation()}>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === truck.id ? null : truck.id)
+                            }
+                            className="p-1.5 hover:bg-stone-100 rounded-lg"
+                          >
+                            <MoreHorizontal size={18} className="text-stone-400" />
+                          </button>
+                          {openMenuId === truck.id && (
+                            <div className="absolute left-0 top-full mt-1 w-40 bg-white rounded-xl shadow-lg border border-stone-200 py-1 z-10">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  openEditModal(truck)
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full px-4 py-2 text-right text-sm text-stone-700 hover:bg-stone-50 flex items-center gap-2"
+                              >
+                                <Edit2 size={16} />
+                                ערוך
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowDeleteConfirm(truck.id)
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full px-4 py-2 text-right text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <Trash2 size={16} />
+                                מחק
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="lg:hidden">
+            {filteredTrucks.map((truck) => {
+              const status = getTruckStatus(truck)
+              const truckData = truck as TruckDocFields
+              const typeLabel =
+                typeConfig[truck.truck_type as keyof typeof typeConfig]?.label || truck.truck_type
+              return (
+                <div
+                  key={truck.id}
+                  className={`border-b border-gray-100 last:border-b-0 ${!truck.is_active ? 'opacity-60' : ''}`}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openEditModal(truck)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') openEditModal(truck)
+                    }}
+                    className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono font-bold text-lg text-gray-800">{truck.plate_number}</p>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          {typeLabel} · {formatVehicleLine(truck)}
+                        </p>
+                      </div>
+                      <div className="flex items-start gap-2 shrink-0">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-lg ${statusConfig[status]?.color}`}
+                        >
+                          {statusConfig[status]?.label}
+                        </span>
+                        <div className="relative" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMenuId(openMenuId === truck.id ? null : truck.id)
+                            }
+                            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+                          >
+                            <MoreHorizontal size={20} />
+                          </button>
+                          {openMenuId === truck.id && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-10"
+                                onClick={() => setOpenMenuId(null)}
+                              />
+                              <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-200 z-20 overflow-hidden min-w-[140px]">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    openEditModal(truck)
+                                    setOpenMenuId(null)
+                                  }}
+                                  className="flex items-center gap-2 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Edit2 size={16} />
+                                  עריכה
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowDeleteConfirm(truck.id)
+                                    setOpenMenuId(null)
+                                  }}
+                                  className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 size={16} />
+                                  מחיקה
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      <CompactDriversCell assignedDrivers={truck.assigned_drivers} />
+                    </p>
+                    <div className="mb-2" onClick={(e) => e.stopPropagation()}>
+                      <ExpiryPillsRow
+                        truck={truckData}
+                        isExpired={isExpired}
+                        isExpiringSoon={isExpiringSoon}
+                        onViewDocument={handleViewDocument}
+                        viewingDocument={viewingDocument}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      גרירות היום:{' '}
+                      <span className="font-medium text-gray-700">{truck.today_tows_count || 0}</span>
+                      {' · '}
+                      סה״כ:{' '}
+                      <span className="font-medium text-gray-700">{truck.total_tows_count || 0}</span>
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {openMenuId && (
+        <div
+          className="fixed inset-0 z-[5] hidden lg:block"
+          onClick={() => setOpenMenuId(null)}
+        />
       )}
 
       {/* Modal הוספה/עריכה */}
