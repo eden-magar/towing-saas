@@ -880,6 +880,14 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
           isExchange && vehicle.is_working === false
             ? 'נכנס מגרירת חליפין'
             : 'נכנס מגרירה'
+        const isFaulty = !!vehicle.tow_reason?.trim()
+        const parsedDefects =
+          isFaulty && vehicle.tow_reason
+            ? vehicle.tow_reason
+                .split(', ')
+                .map((d) => d.trim())
+                .filter(Boolean)
+            : undefined
         await addVehicleToStorage({
           companyId: tow.company_id,
           customerId: tow.customer_id || undefined,
@@ -888,8 +896,9 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
           towId: tow.id,
           performedBy,
           notes: addNotes,
-          vehicleCondition: vehicle.tow_reason ? 'faulty' : 'operational',
+          vehicleCondition: isFaulty ? 'faulty' : 'operational',
           vehicleCode: vehicle.vehicle_code || undefined,
+          defects: parsedDefects,
         })
       } catch (err) {
         console.error('[storage] add failed for plate', vehicle.plate_number, err)
