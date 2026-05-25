@@ -855,7 +855,14 @@ export default function TowDetailsPage() {
     }
   }
 
-  const renderDriverModal = () => (
+  const renderDriverModal = () => {
+    const assignDriverTrucks = selectedDriverId ? getDriverTrucks(selectedDriverId) : []
+    const assignTruckOptions =
+      assignDriverTrucks.length > 0
+        ? assignDriverTrucks
+        : trucks.filter((t) => t.is_active)
+
+    return (
   <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
     <div className="bg-white w-full lg:max-w-2xl lg:rounded-2xl lg:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
@@ -878,7 +885,11 @@ export default function TowDetailsPage() {
             setSelectedDriverId(driverId)
             setScheduleDate(new Date(date + 'T' + time + ':00'))
             const driverTrucks = getDriverTrucks(driverId)
-            if (driverTrucks.length > 0) setSelectedTruckId(driverTrucks[0].id)
+            if (driverTrucks.length === 1) {
+              setSelectedTruckId(driverTrucks[0].id)
+            } else {
+              setSelectedTruckId(null)
+            }
           }}
           onClose={closeDriverModal}
         />
@@ -912,13 +923,37 @@ export default function TowDetailsPage() {
               </div>
             </div>
 
-            {selectedTruckId && (
+            {assignDriverTrucks.length === 1 ? (
               <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-600 flex items-center gap-2">
                 <Truck size={16} className="text-gray-400" />
-                {(() => {
-                  const truck = getDriverTrucks(selectedDriverId).find(t => t.id === selectedTruckId)
-                  return truck ? `${getTruckTypeLabel(truck.truck_type)} — ${truck.plate_number}` : ''
-                })()}
+                {`${getTruckTypeLabel(assignDriverTrucks[0].truck_type)} — ${assignDriverTrucks[0].plate_number}`}
+              </div>
+            ) : (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  בחירת משאית
+                </label>
+                <select
+                  value={selectedTruckId || ''}
+                  onChange={(e) => setSelectedTruckId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                >
+                  <option value="">בחרי משאית...</option>
+                  {assignTruckOptions.map((truck) => (
+                    <option key={truck.id} value={truck.id}>
+                      {truck.plate_number}
+                      {(truck.manufacturer || truck.model)
+                        ? ` — ${[truck.manufacturer, truck.model].filter(Boolean).join(' ')}`
+                        : ` — ${getTruckTypeLabel(truck.truck_type)}`}
+                    </option>
+                  ))}
+                </select>
+                {assignDriverTrucks.length === 0 && (
+                  <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                    <AlertTriangle size={12} />
+                    לנהג זה אין משאית משויכת — בחרי משאית מהרשימה
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -945,6 +980,7 @@ export default function TowDetailsPage() {
     </div>
   </div>
 )
+  }
 
   if (loading) {
     return (
