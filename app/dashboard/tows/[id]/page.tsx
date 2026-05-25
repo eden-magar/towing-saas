@@ -32,7 +32,8 @@ import {
   RefreshCw,
   Mail,
   Receipt,
-  Eye
+  Eye,
+  Link2,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
@@ -166,6 +167,9 @@ export default function TowDetailsPage() {
   const [scheduleDate, setScheduleDate] = useState(new Date())
 
   const [changeLogs, setChangeLogs] = useState<any[]>([])
+  const [childTows, setChildTows] = useState<
+    { id: string; order_number: string | null; status: string; scheduled_at: string | null; created_at: string }[]
+  >([])
   const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
   const [processingRejection, setProcessingRejection] = useState(false)
   const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
@@ -205,12 +209,19 @@ export default function TowDetailsPage() {
     if (isInitial) setLoading(true)
     else setIsRefreshing(true)
     try {
-      const [towData, rejections] = await Promise.all([
+      const [towData, rejections, childrenRes] = await Promise.all([
         getTowWithPoints(towId),
         getRejectionRequestsForTow(towId),
+        supabase
+          .from('tows')
+          .select('id, order_number, status, scheduled_at, created_at')
+          .eq('linked_tow_id', towId)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: true }),
       ])
       setTow(towData)
       setRejectionRequests(rejections)
+      setChildTows(childrenRes.error ? [] : childrenRes.data || [])
       if (towData) {
         const invoiceExists = await towHasInvoice(towId)
         setHasInvoice(invoiceExists)
@@ -1064,6 +1075,52 @@ export default function TowDetailsPage() {
       )}
 
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6">
+        {tow.linked_tow_id && (
+          <div className="mb-4 bg-gradient-to-l from-purple-50 to-white border border-purple-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="shrink-0 w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Link2 size={20} className="text-purple-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-800">גרירה מקושרת</div>
+              <div className="text-xs text-gray-600 mt-0.5">גרירה זו נוצרה כהמשך לגרירה קודמת</div>
+            </div>
+            <Link
+              href={`/dashboard/tows/${tow.linked_tow_id}`}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-1"
+            >
+              צפה בגרירה
+              <ChevronLeft size={14} />
+            </Link>
+          </div>
+        )}
+
+        {childTows.map((child) => (
+          <div
+            key={child.id}
+            className="mb-4 bg-gradient-to-l from-cyan-50 to-white border border-cyan-200 rounded-xl p-4 flex items-center gap-3"
+          >
+            <div className="shrink-0 w-10 h-10 rounded-lg bg-cyan-100 flex items-center justify-center">
+              <ArrowRight size={20} className="text-cyan-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-800">
+                גרירת המשך
+                {child.order_number && (
+                  <span className="text-gray-400 font-normal mr-2">#{child.order_number}</span>
+                )}
+              </div>
+              <div className="text-xs text-gray-600 mt-0.5">נוצרה גרירה נוספת כהמשך לגרירה זו</div>
+            </div>
+            <Link
+              href={`/dashboard/tows/${child.id}`}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-sm font-medium hover:bg-cyan-700 transition-colors flex items-center gap-1"
+            >
+              צפה בגרירה
+              <ChevronLeft size={14} />
+            </Link>
+          </div>
+        ))}
+
         <div className="flex gap-1 mb-4 sm:mb-6 bg-gray-100 p-1 rounded-xl w-fit overflow-x-auto">
           <button
             onClick={() => handleTabChange('details')}
@@ -1307,18 +1364,6 @@ export default function TowDetailsPage() {
                     className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium"
                   >
                     הוסף נהג לרכב התקול
-                  </button>
-                </div>
-              )}
-
-              {tow.linked_tow_id && (
-                <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-xl">
-                  <p className="text-sm font-medium text-purple-800 mb-1">גרירה מקושרת — רכב התקול</p>
-                  <button
-                    onClick={() => router.push(`/dashboard/tows/${tow.linked_tow_id}`)}
-                    className="text-sm text-purple-600 underline"
-                  >
-                    צפה בגרירה המקושרת ←
                   </button>
                 </div>
               )}
