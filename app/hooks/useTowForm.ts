@@ -22,6 +22,7 @@ import {
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../lib/types'
 import {
   getCustomerStoredVehiclesForDisplay,
+  getStoredVehicleById,
   getVehiclesReservedForTow,
   StoredVehicleWithCustomer,
 } from '../lib/queries/storage'
@@ -170,6 +171,12 @@ export function useTowForm(editTowId?: string) {
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
   const previousTowTypeRef = useRef<TowType>('')
+  const storagePrefillAppliedRef = useRef(false)
+  const deferStorageBaseAddressRef = useRef(false)
+  const deferStorageExchangeAddressRef = useRef(false)
+  const deferStorageWorkingAddressRef = useRef(false)
+  const [pendingStoragePrefill, setPendingStoragePrefill] =
+    useState<StoredVehicleWithCustomer | null>(null)
   const [loadedTowStatus, setLoadedTowStatus] = useState<string | null>(null)
   const [editTowSnapshot, setEditTowSnapshot] = useState<EditTowSnapshot | null>(null)
 
@@ -392,6 +399,83 @@ export function useTowForm(editTowId?: string) {
   useEffect(() => {
     if (companyId) loadData()
   }, [companyId])
+
+  // Load stored vehicle for storage → tow deep link (customer only until towType chosen)
+  useEffect(() => {
+    if (editTowId || isEditMode.current) return
+
+    const storedVehicleId = searchParams.get('storedVehicle')
+    if (!storedVehicleId || !companyId) return
+
+    let cancelled = false
+
+    const loadStoredVehicleForPrefill = async () => {
+      try {
+        const vehicle = await getStoredVehicleById(companyId, storedVehicleId)
+        if (cancelled) return
+        if (!vehicle) {
+          console.error(
+            '[storage prefill] stored vehicle not found:',
+            storedVehicleId
+          )
+          return
+        }
+        if (vehicle.current_status !== 'stored') {
+          console.error(
+            '[storage prefill] vehicle is not in stored status:',
+            vehicle.current_status
+          )
+          return
+        }
+        setPendingStoragePrefill(vehicle)
+        if (vehicle.customer_id) {
+          const customerJoin = (vehicle as { customer?: { phone?: string | null } })
+            .customer
+          handleCustomerSelect(
+            vehicle.customer_id,
+            vehicle.customer_name || '',
+            customerJoin?.phone || ''
+          )
+        }
+      } catch (err) {
+        console.error('[storage prefill] failed to load stored vehicle:', err)
+      }
+    }
+
+    loadStoredVehicleForPrefill()
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, editTowId, searchParams])
+
+  // Defer yard/base address until basePriceList loads
+  useEffect(() => {
+    if (!basePriceList?.base_address) return
+    if (
+      !deferStorageBaseAddressRef.current &&
+      !deferStorageExchangeAddressRef.current &&
+      !deferStorageWorkingAddressRef.current
+    ) {
+      return
+    }
+    const baseAddr: AddressData = {
+      address: basePriceList.base_address,
+      lat: basePriceList.base_lat,
+      lng: basePriceList.base_lng,
+    }
+    if (deferStorageBaseAddressRef.current) {
+      setPickupAddress(baseAddr)
+      deferStorageBaseAddressRef.current = false
+    }
+    if (deferStorageWorkingAddressRef.current) {
+      setWorkingVehicleAddress(baseAddr)
+      deferStorageWorkingAddressRef.current = false
+    }
+    if (deferStorageExchangeAddressRef.current) {
+      setExchangeAddress(baseAddr)
+      deferStorageExchangeAddressRef.current = false
+    }
+  }, [basePriceList])
 
   // Load existing tow for editing
   useEffect(() => {
@@ -779,35 +863,131 @@ export function useTowForm(editTowId?: string) {
     setSelectedWorkingVehicleId(null)
   }
 
-  const handleSelectStoredVehicle = (vehicle: StoredVehicleWithCustomer) => {
-    setSelectedStoredVehicleId(vehicle.id)
-    setVehiclePlate(vehicle.plate_number)
-    
-    if (vehicle.vehicle_data) {
-    const vehicleResult: VehicleLookupResult = {
+  const buildStoredVehicleLookupResult = (
+    vehicle: StoredVehicleWithCustomer
+  ): VehicleLookupResult | null => {
+    if (!vehicle.vehicle_data) return null
+    return {
       found: true,
-      source: (vehicle.vehicle_data?.source as VehicleLookupResult['source']) || 'private',
+      source:
+        (vehicle.vehicle_data?.source as VehicleLookupResult['source']) ||
+        'private',
       sourceLabel: vehicle.vehicle_data?.sourceLabel || 'רכב פרטי',
       data: {
         plateNumber: vehicle.plate_number,
         manufacturer: vehicle.vehicle_data.manufacturer || null,
         model: vehicle.vehicle_data.model || null,
-        year: vehicle.vehicle_data.year ? parseInt(vehicle.vehicle_data.year) : null,
+        year: vehicle.vehicle_data.year
+          ? parseInt(vehicle.vehicle_data.year, 10)
+          : null,
         color: vehicle.vehicle_data.color || null,
         fuelType: null,
-        totalWeight: vehicle.vehicle_data.totalWeight ? parseInt(vehicle.vehicle_data.totalWeight) : null,
+        totalWeight: vehicle.vehicle_data.totalWeight
+          ? parseInt(vehicle.vehicle_data.totalWeight, 10)
+          : null,
         vehicleType: null,
         driveType: vehicle.vehicle_data.driveType || null,
         driveTechnology: null,
         gearType: vehicle.vehicle_data.gearType || null,
         machineryType: null,
         selfWeight: null,
-        totalWeightTon: null
-      }
+        totalWeightTon: null,
+      },
     }
-    setVehicleData(vehicleResult)
-    setVehicleType('private')
   }
+
+  const applyBaseAddressFromPriceList = (
+    onAddress: (addr: AddressData) => void,
+    deferFlag: { current: boolean }
+  ) => {
+    if (basePriceList?.base_address) {
+      onAddress({
+        address: basePriceList.base_address,
+        lat: basePriceList.base_lat,
+        lng: basePriceList.base_lng,
+      })
+    } else {
+      deferFlag.current = true
+    }
+  }
+
+  const applyStoragePrefill = (
+    vehicle: StoredVehicleWithCustomer,
+    type: 'single' | 'exchange' | 'custom'
+  ) => {
+    setSelectedStoredVehicleId(vehicle.id)
+    setStorageVehicleCondition(vehicle.vehicle_condition)
+    setStartFromBase(true)
+
+    applyBaseAddressFromPriceList(setPickupAddress, deferStorageBaseAddressRef)
+
+    const vehicleResult = buildStoredVehicleLookupResult(vehicle)
+
+    if (type === 'single') {
+      setVehiclePlate(vehicle.plate_number)
+      setVehicleCode(vehicle.vehicle_code || '')
+      if (vehicleResult) {
+        setVehicleData(vehicleResult)
+        setVehicleType('private')
+      }
+      if (
+        vehicle.vehicle_condition === 'faulty' &&
+        vehicle.defects &&
+        vehicle.defects.length > 0
+      ) {
+        setSelectedDefects(vehicle.defects)
+      }
+      return
+    }
+
+    if (type === 'exchange') {
+      if (vehicle.vehicle_condition === 'operational') {
+        setSelectedWorkingVehicleId(vehicle.id)
+        setWorkingVehicleSource('storage')
+        setWorkingVehiclePlate(vehicle.plate_number)
+        setWorkingVehicleCode(vehicle.vehicle_code || '')
+        if (vehicleResult) {
+          setWorkingVehicleData(vehicleResult)
+          setWorkingVehicleType('private')
+        }
+        applyBaseAddressFromPriceList(
+          setWorkingVehicleAddress,
+          deferStorageWorkingAddressRef
+        )
+      } else {
+        setDefectiveVehiclePlate(vehicle.plate_number)
+        setDefectiveVehicleCode(vehicle.vehicle_code || '')
+        if (vehicleResult) {
+          setDefectiveVehicleData(vehicleResult)
+          setDefectiveVehicleType('private')
+        }
+        if (vehicle.defects && vehicle.defects.length > 0) {
+          setSelectedDefects(vehicle.defects)
+        }
+        applyBaseAddressFromPriceList(
+          setExchangeAddress,
+          deferStorageExchangeAddressRef
+        )
+      }
+      return
+    }
+
+    if (type === 'custom') {
+      console.info(
+        '[storage prefill] custom route: customer and storage link set; add route points manually'
+      )
+    }
+  }
+
+  const handleSelectStoredVehicle = (vehicle: StoredVehicleWithCustomer) => {
+    setSelectedStoredVehicleId(vehicle.id)
+    setVehiclePlate(vehicle.plate_number)
+
+    const vehicleResult = buildStoredVehicleLookupResult(vehicle)
+    if (vehicleResult) {
+      setVehicleData(vehicleResult)
+      setVehicleType('private')
+    }
   }
 
   const handleClearStoredVehicle = () => {
@@ -1031,6 +1211,21 @@ export function useTowForm(editTowId?: string) {
     previousTowTypeRef.current = towType
   }, [towType])
 
+  // Apply storage deep-link pre-fill after user selects tow type
+  useEffect(() => {
+    if (editTowId || isEditMode.current) return
+    if (!pendingStoragePrefill || !towType || storagePrefillAppliedRef.current) {
+      return
+    }
+    if (towType !== 'single' && towType !== 'exchange' && towType !== 'custom') {
+      return
+    }
+
+    applyStoragePrefill(pendingStoragePrefill, towType)
+    storagePrefillAppliedRef.current = true
+    setPendingStoragePrefill(null)
+  }, [towType, pendingStoragePrefill, basePriceList])
+
   // Reset form function
   const resetForm = (keepCustomer: boolean = false) => {
     // Reset route points
@@ -1240,6 +1435,7 @@ export function useTowForm(editTowId?: string) {
     isToday, setIsToday,
     // Tow type
     towType, setTowType,
+    pendingStoragePrefill,
     routePoints, setRoutePoints,
     customRouteData, setCustomRouteData,
     // Vehicle

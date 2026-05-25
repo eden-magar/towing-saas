@@ -25,6 +25,7 @@ import {
   Minus,
   Calendar,
   Loader2,
+  Info,
 } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
@@ -73,6 +74,8 @@ function CreateTowForm({
   driverParam: string | null
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const storedVehicleParam = searchParams.get('storedVehicle')
   const form = useTowForm(editTowId)
 
   const {
@@ -738,6 +741,15 @@ function CreateTowForm({
             title="סוג גרירה"
             description="בחר את אופי המשימה"
           >
+            {storedVehicleParam && !editTowId && !towType && (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+                <Info size={18} className="shrink-0 mt-0.5 text-cyan-600" />
+                <p>
+                  פותחת גרירה לרכב מהאחסנה — בחרי סוג גרירה כדי לראות את הפרטים
+                  הממולאים אוטומטית
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2.5">
               {[
                 { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B', icon: Truck },

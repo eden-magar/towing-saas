@@ -213,6 +213,37 @@ export async function searchStoredVehicle(
   }
 }
 
+export async function getStoredVehicleById(
+  companyId: string,
+  vehicleId: string
+): Promise<StoredVehicleWithCustomer | null> {
+  const { data, error } = await supabase
+    .from('stored_vehicles')
+    .select(`
+      *,
+      customer:customers!customer_id (
+        id,
+        name,
+        phone
+      )
+    `)
+    .eq('id', vehicleId)
+    .eq('company_id', companyId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching stored vehicle by id:', error)
+    throw error
+  }
+
+  if (!data) return null
+
+  return {
+    ...data,
+    customer_name: (data.customer as { name?: string } | null)?.name || null,
+  }
+}
+
 /** Pickup completion: find vehicle in storage or reserved for this tow */
 export async function findStoredVehicleForRelease(
   companyId: string,
