@@ -337,7 +337,6 @@ function CreateTowForm({
 
   const handleTowTypeSelect = (type: 'single' | 'exchange' | 'custom') => {
     setTowType(type)
-    resetForm(true)
   }
 
   const handlePinDropOpen = (field: string) => {
@@ -661,7 +660,6 @@ function CreateTowForm({
     { value: 'אין חשמל', label: 'אין חשמל', icon: '🔋' },
     { value: 'גיר', label: 'גיר', icon: '⚙️' },
     { value: 'גלגל עקום או שבור', label: 'גלגל עקום או שבור', icon: '⚙️' },
-    { value: 'חניון תת קרקעי', label: 'חניון תת קרקעי', icon: '🏢' },
     { value: 'לא נדלק/לא מניע', label: 'לא נדלק/לא מניע', icon: '🔧' },
     { value: 'מוגבל מהירות', label: 'מוגבל מהירות', icon: '🚗' },
     { value: 'מניע/נדלק ונוסע', label: 'מניע/נדלק ונוסע', icon: '✓' },

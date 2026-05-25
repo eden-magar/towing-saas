@@ -118,12 +118,11 @@ export function useTowForm(editTowId?: string) {
     services: []
   })
 
-  // Reset when tow type changes
-  useEffect(() => {
-    if (towType && !isEditMode.current) {
-      resetForm(true)
-    }
-  }, [towType])
+  const emptyCustomRouteData = (): CustomRouteData => ({
+    totalDistanceKm: 0,
+    vehicles: [],
+    services: [],
+  })
 
   // Reset route points when customer changes
   useEffect(() => {
@@ -170,6 +169,7 @@ export function useTowForm(editTowId?: string) {
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
+  const previousTowTypeRef = useRef<TowType>('')
   const [loadedTowStatus, setLoadedTowStatus] = useState<string | null>(null)
   const [editTowSnapshot, setEditTowSnapshot] = useState<EditTowSnapshot | null>(null)
 
@@ -827,6 +827,209 @@ export function useTowForm(editTowId?: string) {
       setPinDropResult({ pointId: pinDropModal.field, data })
     }
   }
+
+  const resetTypeSpecificFields = (previousType: 'single' | 'exchange' | 'custom') => {
+    if (previousType === 'single') {
+      setDropoffAddress({ address: '' })
+      setDistance(null)
+      setPickupContactName('')
+      setPickupContactPhone('')
+      setDropoffContactName('')
+      setDropoffContactPhone('')
+      setDropoffToStorage(false)
+      setSelectedDefects([])
+      setVehiclePlate('')
+      setVehicleCode('')
+      setVehicleData(null)
+      setVehicleType('')
+      return
+    }
+
+    if (previousType === 'exchange') {
+      setWorkingVehicleSource('address')
+      setSelectedWorkingVehicleId(null)
+      setWorkingVehiclePlate('')
+      setWorkingVehicleData(null)
+      setWorkingVehicleType('')
+      setWorkingVehicleCode('')
+      setWorkingVehicleAddress({ address: '' })
+      setWorkingVehicleContact('')
+      setWorkingVehicleContactPhone('')
+      setExchangeAddress({ address: '' })
+      setWorkingVehicleDestinationAddress({ address: '' })
+      setExchangeContactName('')
+      setExchangeContactPhone('')
+      setWorkingDestinationContact('')
+      setWorkingDestinationContactPhone('')
+      setDefectiveVehiclePlate('')
+      setDefectiveVehicleData(null)
+      setDefectiveVehicleType('')
+      setDefectiveVehicleCode('')
+      setDefectiveDestination('address')
+      setDefectiveDestinationAddress({ address: '' })
+      setDefectiveDestinationContact('')
+      setDefectiveDestinationContactPhone('')
+      setStopsBeforeExchange([])
+      setStopsAfterExchange([])
+      setExchangeTotalDistance(null)
+      setExchangeDistanceLoading(false)
+      setHasSecondTruck(false)
+      setDefectiveTruckTypes([])
+      setWorkingVehicleDestinationIsStorage(false)
+      setWorkingVehicleNotFound(false)
+      setWorkingManualManufacturer('')
+      setWorkingManualColor('')
+      setWorkingManualWeight('')
+      setDefectiveVehicleNotFound(false)
+      setDefectiveManualManufacturer('')
+      setDefectiveManualColor('')
+      setDefectiveManualWeight('')
+      setDefectiveFaultDescription('')
+      setWorkingSelectedServices([])
+      setDefectiveSelectedServices([])
+      return
+    }
+
+    if (previousType === 'custom') {
+      setRoutePoints([])
+      setCustomRouteData(emptyCustomRouteData())
+    }
+  }
+
+  type SingleToExchangeSnapshot = {
+    isDefective: boolean
+    pickupAddress: AddressData
+    pickupContactName: string
+    pickupContactPhone: string
+    vehiclePlate: string
+    vehicleData: VehicleLookupResult | null
+    vehicleType: VehicleType | ''
+    vehicleCode: string
+    dropoffAddress: AddressData
+    dropoffContactName: string
+    dropoffContactPhone: string
+  }
+
+  type ExchangeToSingleSnapshot = {
+    workingVehicleAddress: AddressData
+    workingVehicleContact: string
+    workingVehicleContactPhone: string
+    workingVehiclePlate: string
+    workingVehicleData: VehicleLookupResult | null
+    workingVehicleType: VehicleType | ''
+    workingVehicleCode: string
+    workingVehicleDestinationAddress: AddressData
+    workingDestinationContact: string
+    workingDestinationContactPhone: string
+  }
+
+  const copyFieldsBetweenTypes = (
+    from: 'single' | 'exchange',
+    to: 'single' | 'exchange',
+    captured: SingleToExchangeSnapshot | ExchangeToSingleSnapshot,
+  ) => {
+    if (from === 'single' && to === 'exchange') {
+      const s = captured as SingleToExchangeSnapshot
+      if (s.pickupAddress?.address) setWorkingVehicleAddress(s.pickupAddress)
+      if (s.pickupContactName.trim()) setWorkingVehicleContact(s.pickupContactName)
+      if (s.pickupContactPhone.trim()) setWorkingVehicleContactPhone(s.pickupContactPhone)
+
+      if (s.isDefective) {
+        if (s.vehiclePlate.trim()) setDefectiveVehiclePlate(s.vehiclePlate)
+        if (s.vehicleData != null) setDefectiveVehicleData(s.vehicleData)
+        if (s.vehicleType) setDefectiveVehicleType(s.vehicleType)
+        if (s.vehicleCode.trim()) setDefectiveVehicleCode(s.vehicleCode)
+        if (s.dropoffAddress?.address) setDefectiveDestinationAddress(s.dropoffAddress)
+        if (s.dropoffContactName.trim()) setDefectiveDestinationContact(s.dropoffContactName)
+        if (s.dropoffContactPhone.trim()) setDefectiveDestinationContactPhone(s.dropoffContactPhone)
+      } else {
+        if (s.vehiclePlate.trim()) setWorkingVehiclePlate(s.vehiclePlate)
+        if (s.vehicleData != null) setWorkingVehicleData(s.vehicleData)
+        if (s.vehicleType) setWorkingVehicleType(s.vehicleType)
+        if (s.vehicleCode.trim()) setWorkingVehicleCode(s.vehicleCode)
+        if (s.dropoffAddress?.address) setWorkingVehicleDestinationAddress(s.dropoffAddress)
+        if (s.dropoffContactName.trim()) setWorkingDestinationContact(s.dropoffContactName)
+        if (s.dropoffContactPhone.trim()) setWorkingDestinationContactPhone(s.dropoffContactPhone)
+      }
+      return
+    }
+
+    if (from === 'exchange' && to === 'single') {
+      const e = captured as ExchangeToSingleSnapshot
+      if (e.workingVehicleAddress?.address) setPickupAddress(e.workingVehicleAddress)
+      if (e.workingVehicleContact.trim()) setPickupContactName(e.workingVehicleContact)
+      if (e.workingVehicleContactPhone.trim()) setPickupContactPhone(e.workingVehicleContactPhone)
+      if (e.workingVehiclePlate.trim()) setVehiclePlate(e.workingVehiclePlate)
+      if (e.workingVehicleData != null) setVehicleData(e.workingVehicleData)
+      if (e.workingVehicleType) setVehicleType(e.workingVehicleType)
+      if (e.workingVehicleCode.trim()) setVehicleCode(e.workingVehicleCode)
+      if (e.workingVehicleDestinationAddress?.address) setDropoffAddress(e.workingVehicleDestinationAddress)
+      if (e.workingDestinationContact.trim()) setDropoffContactName(e.workingDestinationContact)
+      if (e.workingDestinationContactPhone.trim()) setDropoffContactPhone(e.workingDestinationContactPhone)
+    }
+  }
+
+  const handleTowTypeChange = (
+    from: 'single' | 'exchange' | 'custom',
+    to: TowType,
+  ) => {
+    if (from === 'single' && to === 'exchange') {
+      const captured: SingleToExchangeSnapshot = {
+        isDefective: selectedDefects.length > 0,
+        pickupAddress,
+        pickupContactName,
+        pickupContactPhone,
+        vehiclePlate,
+        vehicleData,
+        vehicleType,
+        vehicleCode,
+        dropoffAddress,
+        dropoffContactName,
+        dropoffContactPhone,
+      }
+      resetTypeSpecificFields('single')
+      copyFieldsBetweenTypes('single', 'exchange', captured)
+      return
+    }
+
+    if (from === 'exchange' && to === 'single') {
+      const captured: ExchangeToSingleSnapshot = {
+        workingVehicleAddress,
+        workingVehicleContact,
+        workingVehicleContactPhone,
+        workingVehiclePlate,
+        workingVehicleData,
+        workingVehicleType,
+        workingVehicleCode,
+        workingVehicleDestinationAddress,
+        workingDestinationContact,
+        workingDestinationContactPhone,
+      }
+      resetTypeSpecificFields('exchange')
+      copyFieldsBetweenTypes('exchange', 'single', captured)
+      return
+    }
+
+    resetTypeSpecificFields(from)
+  }
+
+  // Clear only the previous tow type's fields when switching types (preserve shared fields)
+  useEffect(() => {
+    if (isEditMode.current) {
+      previousTowTypeRef.current = towType
+      return
+    }
+
+    const previous = previousTowTypeRef.current
+    if (
+      (previous === 'single' || previous === 'exchange' || previous === 'custom') &&
+      previous !== towType
+    ) {
+      handleTowTypeChange(previous, towType)
+    }
+
+    previousTowTypeRef.current = towType
+  }, [towType])
 
   // Reset form function
   const resetForm = (keepCustomer: boolean = false) => {
