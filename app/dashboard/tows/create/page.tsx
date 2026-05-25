@@ -2439,13 +2439,15 @@ function CreateTowForm({
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-medium">איש קשר במוצא</label>
-                          <button
-                            type="button"
-                            onClick={() => copyFromCustomer('pickup')}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
-                          >
-                            כמו לקוח 👤
-                          </button>
+                          {!selectedCustomerId && (
+                            <button
+                              type="button"
+                              onClick={() => copyFromCustomer('pickup')}
+                              className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                            >
+                              כמו לקוח 👤
+                            </button>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input
@@ -2469,13 +2471,15 @@ function CreateTowForm({
                           <label className="text-sm font-medium">
                             איש קשר ביעד
                           </label>
-                          <button
-                            type="button"
-                            onClick={() => copyFromCustomer('dropoff')}
-                            className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
-                          >
-                            כמו לקוח 👤
-                          </button>
+                          {!selectedCustomerId && (
+                            <button
+                              type="button"
+                              onClick={() => copyFromCustomer('dropoff')}
+                              className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                            >
+                              כמו לקוח 👤
+                            </button>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input
