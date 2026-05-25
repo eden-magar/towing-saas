@@ -1,7 +1,13 @@
 import { useRouter } from 'next/navigation'
 import { createCustomer } from '@/app/lib/queries/customers'
 import { prepareTowData } from '../lib/utils/tow-save-handler'
-import { createTow, updateTow, saveTowChangeLogs, type EditTowSnapshot } from '../lib/queries/tows'
+import {
+  createTow,
+  createStorageFollowUpTow,
+  updateTow,
+  saveTowChangeLogs,
+  type EditTowSnapshot,
+} from '../lib/queries/tows'
 import {
   reserveVehicleForTow,
   unreserveVehicleFromTow,
@@ -27,6 +33,10 @@ interface UseTowSaveParams {
   setTruckTypeError: (v: boolean) => void
   truckTypeSectionRef: React.RefObject<HTMLDivElement>
   dropoffToStorage: boolean
+  hasStorageFollowUp?: boolean
+  followUpAddress?: AddressData
+  followUpContactName?: string
+  followUpContactPhone?: string
   storageVehicleCondition?: 'operational' | 'faulty'
   vehiclePlate: string
   // Save state
@@ -133,6 +143,10 @@ export function useTowSave(params: UseTowSaveParams) {
     setTruckTypeError,
     truckTypeSectionRef,
     dropoffToStorage,
+    hasStorageFollowUp,
+    followUpAddress,
+    followUpContactName,
+    followUpContactPhone,
     storageVehicleCondition,
     vehiclePlate,
     setSaving,
@@ -419,6 +433,45 @@ export function useTowSave(params: UseTowSaveParams) {
     router.push(`/dashboard/tows/${editTowId}`)
     } else {
       const result = await createTow(towData)
+
+      if (
+        hasStorageFollowUp &&
+        dropoffToStorage &&
+        towType === 'single' &&
+        !editTowId &&
+        followUpAddress?.address?.trim() &&
+        basePriceList?.base_address
+      ) {
+        try {
+          await createStorageFollowUpTow({
+            parentTowId: result.id,
+            companyId,
+            createdBy: user.id,
+            customerId: finalCustomerId ?? null,
+            vehiclePlate,
+            vehicleData,
+            vehicleType,
+            vehicleCode: vehicleCode || null,
+            vehicleManufacturer:
+              vehicleData?.data?.manufacturer || manualManufacturer || null,
+            vehicleModel: vehicleData?.data?.model || null,
+            vehicleYear: vehicleData?.data?.year ?? null,
+            vehicleColor: vehicleData?.data?.color || manualColor || null,
+            pickupAddress: basePriceList.base_address,
+            pickupLat: basePriceList.base_lat ?? null,
+            pickupLng: basePriceList.base_lng ?? null,
+            dropoffAddress: followUpAddress.address.trim(),
+            dropoffLat: followUpAddress.lat ?? null,
+            dropoffLng: followUpAddress.lng ?? null,
+            dropoffContactName: followUpContactName?.trim() || '',
+            dropoffContactPhone: followUpContactPhone?.trim() || '',
+            requiredTruckTypes,
+          })
+          console.log('[useTowSave] follow-up storage tow created')
+        } catch (followUpError) {
+          console.error('[useTowSave] failed to create follow-up tow:', followUpError)
+        }
+      }
 
       try {
         if (towType === 'single' && selectedStoredVehicleId) {

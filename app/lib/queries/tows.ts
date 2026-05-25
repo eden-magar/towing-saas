@@ -5,7 +5,8 @@ import {
 } from './storage'
 import { getCompanySettings } from './settings'
 import { updatePointStatus } from './driver-tasks'
-import type { TowChangeLog } from '../types'
+import type { TowChangeLog, VehicleLookupResult } from '../types'
+import { normalizePlate } from '../utils/plate-number'
 
 // ==================== טיפוסים ====================
 
@@ -903,6 +904,122 @@ export async function assignDriver(towId: string, driverId: string, truckId?: st
   }
 
   return true
+}
+
+function mapVehicleTypeForTow(
+  vehicleType?: string
+): 'motorcycle' | 'private' | 'heavy' | 'machinery' | undefined {
+  if (!vehicleType) return undefined
+  const valid = ['motorcycle', 'private', 'heavy', 'machinery'] as const
+  return (valid as readonly string[]).includes(vehicleType)
+    ? (vehicleType as 'motorcycle' | 'private' | 'heavy' | 'machinery')
+    : undefined
+}
+
+export interface CreateStorageFollowUpInput {
+  parentTowId: string
+  companyId: string
+  createdBy: string
+  customerId: string | null
+  vehiclePlate: string
+  vehicleData: VehicleLookupResult | null
+  vehicleType: string
+  vehicleCode?: string | null
+  vehicleManufacturer?: string | null
+  vehicleModel?: string | null
+  vehicleYear?: string | number | null
+  vehicleColor?: string | null
+  pickupAddress: string
+  pickupLat: number | null
+  pickupLng: number | null
+  dropoffAddress: string
+  dropoffLat: number | null
+  dropoffLng: number | null
+  dropoffContactName: string
+  dropoffContactPhone: string
+  requiredTruckTypes: string[]
+}
+
+/** Second tow: yard pickup → admin follow-up destination; unassigned, no schedule. */
+export async function createStorageFollowUpTow(
+  input: CreateStorageFollowUpInput
+): Promise<{ id: string }> {
+  const yearRaw = input.vehicleData?.data?.year ?? input.vehicleYear
+  const year =
+    yearRaw != null && yearRaw !== ''
+      ? typeof yearRaw === 'number'
+        ? yearRaw
+        : Number(yearRaw)
+      : undefined
+
+  return createTow({
+    companyId: input.companyId,
+    createdBy: input.createdBy,
+    customerId: input.customerId ?? undefined,
+    towType: 'simple',
+    linkedTowId: input.parentTowId,
+    dropoffToStorage: false,
+    requiredTruckTypes: input.requiredTruckTypes,
+    scheduledAt: undefined,
+    finalPrice: undefined,
+    priceMode: 'recommended',
+    priceBreakdown: null,
+    notes: 'גרירת המשך מאחסנה',
+    vehicles: [
+      {
+        plateNumber: normalizePlate(input.vehiclePlate),
+        vehicleCode: input.vehicleCode || undefined,
+        vehicleType: mapVehicleTypeForTow(input.vehicleType) ?? 'private',
+        manufacturer:
+          input.vehicleData?.data?.manufacturer ||
+          input.vehicleManufacturer ||
+          undefined,
+        model: input.vehicleData?.data?.model || input.vehicleModel || undefined,
+        year: Number.isFinite(year) ? year : undefined,
+        color: input.vehicleData?.data?.color || input.vehicleColor || undefined,
+        isWorking: true,
+        driveType: input.vehicleData?.data?.driveType ?? undefined,
+        fuelType: input.vehicleData?.data?.fuelType ?? undefined,
+        totalWeight: input.vehicleData?.data?.totalWeight ?? undefined,
+        gearType: input.vehicleData?.data?.gearType ?? undefined,
+        driveTechnology: input.vehicleData?.data?.driveTechnology ?? undefined,
+      },
+    ],
+    legs: [
+      {
+        legType: 'pickup',
+        fromAddress: input.pickupAddress,
+        toAddress: input.dropoffAddress,
+        towVehicleIndex: 0,
+      },
+    ],
+    points: [
+      {
+        point_order: 0,
+        point_type: 'pickup',
+        address: input.pickupAddress,
+        lat: input.pickupLat,
+        lng: input.pickupLng,
+        contact_name: null,
+        contact_phone: null,
+        notes: null,
+        vehicleIndices: [0],
+        isStorage: false,
+      },
+      {
+        point_order: 1,
+        point_type: 'dropoff',
+        address: input.dropoffAddress,
+        lat: input.dropoffLat,
+        lng: input.dropoffLng,
+        contact_name: input.dropoffContactName || null,
+        contact_phone: input.dropoffContactPhone || null,
+        notes: null,
+        vehicleIndices: [0],
+        isStorage: false,
+      },
+    ],
+  })
 }
 
 export async function createLinkedTow(
