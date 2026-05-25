@@ -7,6 +7,18 @@ import {
 
 // ==================== העלאת קבצים ====================
 
+const TRUCK_DOCUMENTS_BUCKET = 'truck-documents'
+const TRUCK_DOCUMENT_SIGNED_URL_TTL_SEC = 3600
+
+/** Storage path from a path or legacy public URL stored in DB. */
+export function normalizeTruckDocumentPath(pathOrUrl: string): string {
+  if (pathOrUrl.startsWith('http')) {
+    const extracted = pathOrUrl.split(`/${TRUCK_DOCUMENTS_BUCKET}/`)[1]
+    return extracted ? extracted.split('?')[0] : pathOrUrl
+  }
+  return pathOrUrl
+}
+
 export async function uploadTruckDocument(
   file: File,
   companyId: string,
@@ -17,7 +29,7 @@ export async function uploadTruckDocument(
   const fileName = `${companyId}/${truckPlate}/${docType}_${Date.now()}.${fileExt}`
 
   const { error } = await supabase.storage
-    .from('truck-documents')
+    .from(TRUCK_DOCUMENTS_BUCKET)
     .upload(fileName, file, { upsert: true })
 
   if (error) {
@@ -25,18 +37,38 @@ export async function uploadTruckDocument(
     throw error
   }
 
-  const { data } = supabase.storage
-    .from('truck-documents')
-    .getPublicUrl(fileName)
-
-  return data.publicUrl
+  return fileName
 }
 
-export async function deleteTruckDocument(url: string): Promise<void> {
-  // מחלץ את הנתיב מה-URL
-  const path = url.split('/truck-documents/')[1]
-  if (path) {
-    await supabase.storage.from('truck-documents').remove([path])
+export async function getTruckDocumentSignedUrl(
+  pathOrUrl: string
+): Promise<string | null> {
+  const path = normalizeTruckDocumentPath(pathOrUrl)
+  if (!path) return null
+
+  const { data, error } = await supabase.storage
+    .from(TRUCK_DOCUMENTS_BUCKET)
+    .createSignedUrl(path, TRUCK_DOCUMENT_SIGNED_URL_TTL_SEC)
+
+  if (error) {
+    console.error('Error creating signed URL:', error)
+    return null
+  }
+
+  return data.signedUrl
+}
+
+export async function deleteTruckDocument(pathOrUrl: string): Promise<void> {
+  const path = normalizeTruckDocumentPath(pathOrUrl)
+  if (!path) return
+
+  const { error } = await supabase.storage
+    .from(TRUCK_DOCUMENTS_BUCKET)
+    .remove([path])
+
+  if (error) {
+    console.error('Error deleting truck document:', error)
+    throw error
   }
 }
 

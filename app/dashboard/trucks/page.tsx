@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
-import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument } from '../../lib/queries/trucks'
+import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument, getTruckDocumentSignedUrl } from '../../lib/queries/trucks'
 import { TruckWithDetails, TruckAssignedDriver } from '../../lib/types'
 import { getDrivers } from '../../lib/queries/drivers'
 import { DriverWithDetails } from '../../lib/types'
@@ -62,6 +62,7 @@ export default function TrucksPage() {
   const [showExpiryWarning, setShowExpiryWarning] = useState(false)
   const [expiryWarningMessage, setExpiryWarningMessage] = useState('')
   const [uploading, setUploading] = useState<string | null>(null)
+  const [viewingDocument, setViewingDocument] = useState(false)
 
   // File refs
   const licensePhotoRef = useRef<HTMLInputElement>(null)
@@ -276,17 +277,17 @@ export default function TrucksPage() {
 
     setUploading(docType)
     try {
-      const url = await uploadTruckDocument(file, companyId, formData.plate, docType)
+      const path = await uploadTruckDocument(file, companyId, formData.plate, docType)
       
       switch (docType) {
         case 'license':
-          setFormData(prev => ({ ...prev, licensePhotoUrl: url }))
+          setFormData(prev => ({ ...prev, licensePhotoUrl: path }))
           break
         case 'tachograph':
-          setFormData(prev => ({ ...prev, tachographPhotoUrl: url }))
+          setFormData(prev => ({ ...prev, tachographPhotoUrl: path }))
           break
         case 'engineer_report':
-          setFormData(prev => ({ ...prev, engineerReportPhotoUrl: url }))
+          setFormData(prev => ({ ...prev, engineerReportPhotoUrl: path }))
           break
       }
     } catch (err) {
@@ -294,6 +295,27 @@ export default function TrucksPage() {
       setError('שגיאה בהעלאת הקובץ')
     } finally {
       setUploading(null)
+    }
+  }
+
+  const handleViewDocument = async (
+    pathOrUrl: string | null | undefined,
+    e?: React.MouseEvent
+  ) => {
+    e?.stopPropagation()
+    if (!pathOrUrl || viewingDocument) return
+    setViewingDocument(true)
+    try {
+      const signedUrl = await getTruckDocumentSignedUrl(pathOrUrl)
+      if (!signedUrl) {
+        alert('לא ניתן לטעון את המסמך')
+        return
+      }
+      window.open(signedUrl, '_blank', 'noopener,noreferrer')
+    } catch {
+      alert('לא ניתן לטעון את המסמך')
+    } finally {
+      setViewingDocument(false)
     }
   }
 
@@ -487,15 +509,15 @@ export default function TrucksPage() {
         </button>
         {currentUrl && (
           <>
-            <a
-              href={currentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 text-[#33d4ff] hover:bg-cyan-50 rounded-lg transition-colors"
+            <button
+              type="button"
+              onClick={() => handleViewDocument(currentUrl)}
+              disabled={viewingDocument}
+              className="p-2 text-[#33d4ff] hover:bg-cyan-50 rounded-lg transition-colors disabled:opacity-50"
               title="צפה בקובץ"
             >
               <Eye size={18} />
-            </a>
+            </button>
             <button
               type="button"
               onClick={() => handleFileDelete(docType)}
@@ -624,6 +646,13 @@ export default function TrucksPage() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredTrucks.map((truck) => {
           const status = getTruckStatus(truck)
+          const truckData = truck as TruckWithDetails & {
+            license_photo_url?: string | null
+            tachograph_expiry?: string | null
+            tachograph_photo_url?: string | null
+            engineer_report_expiry?: string | null
+            engineer_report_photo_url?: string | null
+          }
           return (
             <div
               key={truck.id}
@@ -671,10 +700,23 @@ export default function TrucksPage() {
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">רישיון רכב:</span>
-                    <span className={`font-medium ${isExpired(truck.license_expiry) ? 'text-red-600' : isExpiringSoon(truck.license_expiry) ? 'text-amber-600' : 'text-gray-700'}`}>
+                    <span
+                      className={`font-medium flex items-center gap-1 ${isExpired(truck.license_expiry) ? 'text-red-600' : isExpiringSoon(truck.license_expiry) ? 'text-amber-600' : 'text-gray-700'}`}
+                    >
                       {formatDate(truck.license_expiry)}
                       {isExpired(truck.license_expiry) && (
-                        <span className="mr-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">פג</span>
+                        <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">פג</span>
+                      )}
+                      {truckData.license_photo_url && (
+                        <button
+                          type="button"
+                          title="צפה ברישיון רכב"
+                          onClick={(e) => handleViewDocument(truckData.license_photo_url, e)}
+                          disabled={viewingDocument}
+                          className="inline-flex p-0.5 text-gray-500 hover:text-gray-700 shrink-0 disabled:opacity-50"
+                        >
+                          <Eye size={15} />
+                        </button>
                       )}
                     </span>
                   </div>
@@ -682,6 +724,44 @@ export default function TrucksPage() {
                     <span className="text-gray-500">ביטוח:</span>
                     <span className={`font-medium ${isExpired(truck.insurance_expiry) ? 'text-red-600' : 'text-gray-700'}`}>
                       {formatDate(truck.insurance_expiry)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">טכוגרף:</span>
+                    <span
+                      className={`font-medium flex items-center gap-1 ${isExpired(truckData.tachograph_expiry ?? null) ? 'text-red-600' : isExpiringSoon(truckData.tachograph_expiry ?? null) ? 'text-amber-600' : 'text-gray-700'}`}
+                    >
+                      {formatDate(truckData.tachograph_expiry ?? null)}
+                      {truckData.tachograph_photo_url && (
+                        <button
+                          type="button"
+                          title="צפה בתעודת כיול טכוגרף"
+                          onClick={(e) => handleViewDocument(truckData.tachograph_photo_url, e)}
+                          disabled={viewingDocument}
+                          className="inline-flex p-0.5 text-gray-500 hover:text-gray-700 shrink-0 disabled:opacity-50"
+                        >
+                          <Eye size={15} />
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">תסקיר מהנדס:</span>
+                    <span
+                      className={`font-medium flex items-center gap-1 ${isExpired(truckData.engineer_report_expiry ?? null) ? 'text-red-600' : isExpiringSoon(truckData.engineer_report_expiry ?? null) ? 'text-amber-600' : 'text-gray-700'}`}
+                    >
+                      {formatDate(truckData.engineer_report_expiry ?? null)}
+                      {truckData.engineer_report_photo_url && (
+                        <button
+                          type="button"
+                          title="צפה בתסקיר מהנדס"
+                          onClick={(e) => handleViewDocument(truckData.engineer_report_photo_url, e)}
+                          disabled={viewingDocument}
+                          className="inline-flex p-0.5 text-gray-500 hover:text-gray-700 shrink-0 disabled:opacity-50"
+                        >
+                          <Eye size={15} />
+                        </button>
+                      )}
                     </span>
                   </div>
                 </div>
