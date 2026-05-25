@@ -113,11 +113,24 @@ export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> 
     .gte('created_at', `${today}T00:00:00`)
     .lte('created_at', `${today}T23:59:59`)
 
+  // שליפת ספירת גרירות כוללת (ללא סינון תאריך)
+  const { data: allTowCounts } = await supabase
+    .from('tows')
+    .select('truck_id')
+    .eq('company_id', companyId)
+
   // מיפוי ספירות
   const countByTruck: Record<string, number> = {}
   towCounts?.forEach(tow => {
     if (tow.truck_id) {
       countByTruck[tow.truck_id] = (countByTruck[tow.truck_id] || 0) + 1
+    }
+  })
+
+  const totalCountByTruck: Record<string, number> = {}
+  allTowCounts?.forEach(tow => {
+    if (tow.truck_id) {
+      totalCountByTruck[tow.truck_id] = (totalCountByTruck[tow.truck_id] || 0) + 1
     }
   })
 
@@ -143,6 +156,7 @@ export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> 
     ...truck,
     assigned_drivers: assignmentsByTruck[truck.id] || [],
     today_tows_count: countByTruck[truck.id] || 0,
+    total_tows_count: totalCountByTruck[truck.id] || 0,
   }))
 }
 

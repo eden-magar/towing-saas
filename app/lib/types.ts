@@ -365,6 +365,7 @@ export interface CustomerWithCompanyDetails extends Customer {
 export interface TruckWithDetails extends TowTruck {
   assigned_drivers: TruckAssignedDriver[]
   today_tows_count: number
+  total_tows_count: number
 }
 
 // =====================================================
