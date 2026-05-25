@@ -39,6 +39,7 @@ import { CreateCustomerSection } from '../../../components/tow-forms/sections/Cr
 import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow, updateTow } from '../../../lib/queries/tows'
@@ -654,20 +655,6 @@ function CreateTowForm({
     { value: 'wheel_lift_cradle', label: 'משקפיים' },
     { value: 'flatbed', label: 'רמסע' },
     { value: 'carrier', label: 'מובילית' },
-  ] as const
-
-  const DEFECT_OPTIONS = [
-    { value: 'אין חשמל', label: 'אין חשמל', icon: '🔋' },
-    { value: 'גיר', label: 'גיר', icon: '⚙️' },
-    { value: 'גלגל עקום או שבור', label: 'גלגל עקום או שבור', icon: '⚙️' },
-    { value: 'לא נדלק/לא מניע', label: 'לא נדלק/לא מניע', icon: '🔧' },
-    { value: 'מוגבל מהירות', label: 'מוגבל מהירות', icon: '🚗' },
-    { value: 'מניע/נדלק ונוסע', label: 'מניע/נדלק ונוסע', icon: '✓' },
-    { value: 'נילת מים/שמן', label: 'נילת מים/שמן', icon: '💧' },
-    { value: "פנצ'ר", label: "פנצ'ר", icon: '⚫' },
-    { value: 'תאונה', label: 'תאונה', icon: '🚨' },
-    { value: 'תקר', label: 'תקר', icon: '🚗' },
-    { value: 'אחר', label: 'אחר', icon: '✏️' },
   ] as const
 
   const openDefectsModal = () => {

@@ -26,6 +26,7 @@ export interface StoredVehicle {
   created_at: string
   vehicle_condition: 'operational' | 'faulty'
   vehicle_code: string | null
+  defects: string[] | null
   updated_at: string
 }
 
@@ -257,6 +258,7 @@ interface AddToStorageInput {
   notes?: string
   vehicleCondition?: 'operational' | 'faulty'
   vehicleCode?: string
+  defects?: string[]
 }
 
 export async function addVehicleToStorage(input: AddToStorageInput): Promise<string> {
@@ -283,7 +285,8 @@ export async function addVehicleToStorage(input: AddToStorageInput): Promise<str
     p_performed_by: input.performedBy || null,
     p_notes: input.notes || null,
     p_vehicle_condition: input.vehicleCondition || 'operational',
-    p_vehicle_code: input.vehicleCode || null
+    p_vehicle_code: input.vehicleCode || null,
+    p_defects: input.defects ?? null,
   })
 
   if (error) {
@@ -330,6 +333,7 @@ interface UpdateStoredVehicleInput {
   notes?: string | null
   vehicleCondition?: string | null
   vehicleCode?: string | null
+  defects?: string[] | null
 }
 export async function updateStoredVehicle(input: UpdateStoredVehicleInput): Promise<boolean> {
   const { error } = await supabase
@@ -339,7 +343,8 @@ export async function updateStoredVehicle(input: UpdateStoredVehicleInput): Prom
       location: input.location,
       notes: input.notes,
       vehicle_condition: input.vehicleCondition,
-      vehicle_code: input.vehicleCode
+      vehicle_code: input.vehicleCode,
+      ...(input.defects !== undefined ? { defects: input.defects } : {}),
     })
     .eq('id', input.id)
 
