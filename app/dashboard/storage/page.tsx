@@ -35,6 +35,7 @@ import {
 } from '../../lib/queries/storage'
 import { supabase } from '../../lib/supabase'
 import { lookupVehicle } from '../../lib/vehicle-lookup'
+import { DEFECT_OPTIONS } from '../../lib/constants/defects'
 
 interface Customer {
   id: string
@@ -82,7 +83,8 @@ export default function StoragePage() {
     notes: '',
     vehicleData: null as any,
     vehicleCondition: 'operational' as 'operational' | 'faulty',
-    vehicleCode: ''
+    vehicleCode: '',
+    defects: [] as string[],
   })
   const [vehicleLookupLoading, setVehicleLookupLoading] = useState(false)
 
@@ -157,7 +159,8 @@ export default function StoragePage() {
       notes: '',
       vehicleData: null,
       vehicleCondition: 'operational',
-      vehicleCode: ''
+      vehicleCode: '',
+      defects: [],
     })
     setError('')
   }
@@ -178,8 +181,9 @@ export default function StoragePage() {
       location: vehicle.location || '',
       notes: vehicle.notes || '',
       vehicleData: vehicle.vehicle_data,
-      vehicleCondition: (vehicle as any).vehicle_condition || 'operational',
-      vehicleCode: (vehicle as any).vehicle_code || ''
+      vehicleCondition: vehicle.vehicle_condition || 'operational',
+      vehicleCode: vehicle.vehicle_code || '',
+      defects: vehicle.defects || [],
     })
     setShowModal(true)
     setOpenMenuId(null)
@@ -250,7 +254,8 @@ export default function StoragePage() {
           performedBy: user?.id,
           notes: formData.notes || undefined,
           vehicleCondition: formData.vehicleCondition,
-          vehicleCode: formData.vehicleCode || undefined
+          vehicleCode: formData.vehicleCode || undefined,
+          defects: formData.defects.length > 0 ? formData.defects : undefined,
         })
       } else if (modalMode === 'edit' && selectedVehicle) {
         await updateStoredVehicle({
@@ -259,7 +264,8 @@ export default function StoragePage() {
         location: formData.location || null,
         notes: formData.notes || null,
         vehicleCondition: formData.vehicleCondition,
-        vehicleCode: formData.vehicleCode || null
+        vehicleCode: formData.vehicleCode || null,
+        defects: formData.defects,
       })
       } else if (modalMode === 'release' && selectedVehicle) {
         await releaseVehicleFromStorage({
@@ -790,7 +796,13 @@ export default function StoragePage() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, vehicleCondition: 'operational' })}
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            vehicleCondition: 'operational',
+                            defects: [],
+                          }))
+                        }
                         className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
                           formData.vehicleCondition === 'operational'
                             ? 'bg-emerald-500 text-white'
@@ -801,7 +813,12 @@ export default function StoragePage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, vehicleCondition: 'faulty' })}
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            vehicleCondition: 'faulty',
+                          }))
+                        }
                         className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
                           formData.vehicleCondition === 'faulty'
                             ? 'bg-red-500 text-white'
@@ -812,6 +829,41 @@ export default function StoragePage() {
                       </button>
                     </div>
                   </div>
+
+                  {formData.vehicleCondition === 'faulty' && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        תקלות
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {DEFECT_OPTIONS.map((option) => {
+                          const isSelected = formData.defects.includes(option.value)
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  defects: isSelected
+                                    ? prev.defects.filter((d) => d !== option.value)
+                                    : [...prev.defects, option.value],
+                                }))
+                              }}
+                              className={`p-3 rounded-lg border-2 text-center transition ${
+                                isSelected
+                                  ? 'border-[#33d4ff] bg-cyan-50'
+                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-2xl mb-1">{option.icon}</div>
+                              <div className="text-xs text-gray-700">{option.label}</div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* הערות */}
                   <div>
