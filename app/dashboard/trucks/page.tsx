@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertTriangle, Wrench, XCircle, Upload, Eye } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument } from '../../lib/queries/trucks'
@@ -40,6 +41,8 @@ function AssignedDriversCell({ assignedDrivers }: { assignedDrivers: TruckAssign
 
 export default function TrucksPage() {
   const { companyId } = useAuth()
+  const searchParams = useSearchParams()
+  const editFromQueryHandled = useRef<string | null>(null)
 
   // Data states
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
@@ -249,6 +252,21 @@ export default function TrucksPage() {
     })
     setShowModal(true)
   }
+
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    if (!editId) {
+      editFromQueryHandled.current = null
+      return
+    }
+    if (pageLoading || trucks.length === 0) return
+    if (editFromQueryHandled.current === editId) return
+    const truck = trucks.find((t) => t.id === editId)
+    if (truck) {
+      editFromQueryHandled.current = editId
+      openEditModal(truck)
+    }
+  }, [searchParams, pageLoading, trucks])
 
   const handleFileUpload = async (file: File, docType: string) => {
     if (!companyId || !formData.plate) {

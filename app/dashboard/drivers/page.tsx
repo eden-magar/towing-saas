@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Plus, Search, Phone, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, XCircle, MoreHorizontal, AlertTriangle, MapPin, BarChart2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
@@ -108,6 +109,8 @@ function AssignedTrucksCell({ trucks }: { trucks: TowTruck[] }) {
 
 export default function DriversPage() {
   const { companyId } = useAuth()
+  const searchParams = useSearchParams()
+  const editFromQueryHandled = useRef<string | null>(null)
   
   const [activeTab, setActiveTab] = useState<'list' | 'map' | 'hours'>('list')
   const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
@@ -311,6 +314,21 @@ export default function DriversPage() {
     setShowModal(true)
     setOpenMenuId(null)
   }
+
+  useEffect(() => {
+    const editId = searchParams.get('edit')
+    if (!editId) {
+      editFromQueryHandled.current = null
+      return
+    }
+    if (pageLoading || drivers.length === 0) return
+    if (editFromQueryHandled.current === editId) return
+    const driver = drivers.find((d) => d.id === editId)
+    if (driver) {
+      editFromQueryHandled.current = editId
+      openEditModal(driver)
+    }
+  }, [searchParams, pageLoading, drivers])
 
   const checkLicenseExpiry = () => {
     if (!formData.licenseExpiry) return false

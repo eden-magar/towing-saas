@@ -1152,12 +1152,13 @@
                     const config = alertTypeConfig[alert.type]
                     const Icon = config?.icon || AlertTriangle
                     return (
-                      <Link key={alert.id} href={config?.link || '/dashboard/trucks'} className="px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50">
+                      <Link key={alert.id} href={`${config?.link || '/dashboard/trucks'}?edit=${alert.entityId}`} className="px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50">
                         <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${alert.severity === 'expired' ? 'bg-red-100' : 'bg-amber-100'}`}>
                           <Icon size={10} className={alert.severity === 'expired' ? 'text-red-600' : 'text-amber-600'} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-xs font-medium text-gray-700 truncate">{alert.entityName}</div>
+                          <div className="text-xs text-gray-500 truncate">{config?.label || ''}</div>
                           <div className="text-xs text-gray-400">{getDaysText(alert.daysLeft)}</div>
                         </div>
                         <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${alert.severity === 'expired' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
