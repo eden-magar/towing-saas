@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { 
   Plus, 
   Search, 
@@ -18,7 +19,8 @@ import {
   ArrowUpFromLine,
   ArrowDownToLine,
   Calendar,
-  Building2
+  Building2,
+  Truck,
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { normalizePlate } from '../../lib/utils/plate-number'
@@ -43,6 +45,7 @@ interface Customer {
 }
 
 export default function StoragePage() {
+  const router = useRouter()
   const { companyId, user } = useAuth()
   
   // Data states
@@ -531,6 +534,18 @@ export default function StoragePage() {
                     <div className="flex items-center gap-2">
                       {vehicle.current_status === 'stored' && (
                         <button
+                          type="button"
+                          onClick={() =>
+                            router.push(`/dashboard/tows/create?storedVehicle=${vehicle.id}`)
+                          }
+                          className="p-2 text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"
+                          title="פתח גרירה לרכב זה"
+                        >
+                          <Truck size={18} />
+                        </button>
+                      )}
+                      {vehicle.current_status === 'stored' && (
+                        <button
                           onClick={() => openReleaseModal(vehicle)}
                           className="p-2 text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                           title="שחרר מאחסנה"
@@ -607,6 +622,19 @@ export default function StoragePage() {
                         onClick={() => setOpenMenuId(null)}
                       />
                       <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-200 z-20 overflow-hidden min-w-[140px]">
+                        {vehicle.current_status === 'stored' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenuId(null)
+                              router.push(`/dashboard/tows/create?storedVehicle=${vehicle.id}`)
+                            }}
+                            className="flex items-center gap-2 w-full px-4 py-3 text-sm text-cyan-600 hover:bg-cyan-50"
+                          >
+                            <Truck size={16} />
+                            פתח גרירה
+                          </button>
+                        )}
                         {vehicle.current_status === 'stored' && (
                           <button
                             onClick={() => openReleaseModal(vehicle)}
