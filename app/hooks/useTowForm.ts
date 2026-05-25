@@ -184,6 +184,10 @@ export function useTowForm(editTowId?: string) {
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
   const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
+  const [hasStorageFollowUp, setHasStorageFollowUp] = useState(false)
+  const [followUpAddress, setFollowUpAddress] = useState<AddressData>({ address: '' })
+  const [followUpContactName, setFollowUpContactName] = useState('')
+  const [followUpContactPhone, setFollowUpContactPhone] = useState('')
   const [storageVehicleCondition, setStorageVehicleCondition] = useState<'operational' | 'faulty'>('operational')
   const [storageLoading, setStorageLoading] = useState(false)
 
@@ -1017,6 +1021,10 @@ export function useTowForm(editTowId?: string) {
       setDropoffContactName('')
       setDropoffContactPhone('')
       setDropoffToStorage(false)
+      setHasStorageFollowUp(false)
+      setFollowUpAddress({ address: '' })
+      setFollowUpContactName('')
+      setFollowUpContactPhone('')
       setSelectedDefects([])
       setVehiclePlate('')
       setVehicleCode('')
@@ -1454,6 +1462,10 @@ export function useTowForm(editTowId?: string) {
     customerStoredVehicles,
     selectedStoredVehicleId, setSelectedStoredVehicleId,
     dropoffToStorage, setDropoffToStorage,
+    hasStorageFollowUp, setHasStorageFollowUp,
+    followUpAddress, setFollowUpAddress,
+    followUpContactName, setFollowUpContactName,
+    followUpContactPhone, setFollowUpContactPhone,
     storageVehicleCondition, setStorageVehicleCondition,
     storageLoading,
     // Exchange
