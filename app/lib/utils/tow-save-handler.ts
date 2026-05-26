@@ -42,6 +42,7 @@ export interface SaveTowInput {
   
   // Driver (pre-selected)
   preSelectedDriverId: string | null
+  preSelectedTruckId?: string | null
   secondDriverId?: string | null
   secondDriverScheduledAt?: string | null
   
@@ -151,6 +152,7 @@ export interface PreparedTowData {
   customerOrderNumber?: string
   customerId?: string
   driverId?: string
+  truckId?: string
   secondDriverId?: string
   secondDriverScheduledAt?: string
   towType: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
@@ -864,6 +866,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       customerOrderNumber: input.customerOrderNumber,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
+      truckId: input.preSelectedTruckId || undefined,
       towType: 'simple',
       requiredTruckTypes: input.requiredTruckTypes || [],
       scheduledAt,
@@ -910,6 +913,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       customerOrderNumber: input.customerOrderNumber,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
+      truckId: input.preSelectedTruckId || undefined,
       towType: 'multi_vehicle',
       requiredTruckTypes: input.requiredTruckTypes || [],
       scheduledAt,
@@ -1161,6 +1165,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     customerOrderNumber: input.customerOrderNumber,
     customerId: input.customerId || undefined,
     driverId: input.preSelectedDriverId || undefined,
+    truckId: input.preSelectedTruckId || undefined,
     secondDriverId: input.secondDriverId || undefined,
     secondDriverScheduledAt: input.secondDriverScheduledAt || undefined,
     towType: 'exchange',

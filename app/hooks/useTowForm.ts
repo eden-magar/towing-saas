@@ -65,6 +65,7 @@ export function useTowForm(editTowId?: string) {
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [preSelectedDriverId, setPreSelectedDriverId] = useState<string | null>(null)
+  const [preSelectedTruckId, setPreSelectedTruckId] = useState<string | null>(null)
   const [secondDriverId, setSecondDriverId] = useState<string | null>(null)
   const [secondDriverScheduledAt, setSecondDriverScheduledAt] = useState<string | null>(null)
   
@@ -507,6 +508,12 @@ export function useTowForm(editTowId?: string) {
           const d = new Date(tow.scheduled_at)
           setTowDate(d.toISOString().split('T')[0])
           setTowTime(d.toTimeString().slice(0, 5))
+        }
+        if (tow.driver_id) {
+          setPreSelectedDriverId(tow.driver_id)
+        }
+        if (tow.truck_id) {
+          setPreSelectedTruckId(tow.truck_id)
         }
         // Type
         const towTypeMap: Record<string, TowType> = {
@@ -1268,6 +1275,7 @@ export function useTowForm(editTowId?: string) {
     setStartFromBase(false)
     setSelectedStoredVehicleId(null)
     setDropoffToStorage(false)
+    setPreSelectedTruckId(null)
     
     if (!keepCustomer) {
       setSelectedCustomerId(null)
@@ -1367,6 +1375,7 @@ export function useTowForm(editTowId?: string) {
     paymentMethod,
     invoiceName,
     preSelectedDriverId,
+    preSelectedTruckId,
     secondDriverId,
     secondDriverScheduledAt,
     workingVehiclePlate,
@@ -1419,6 +1428,7 @@ export function useTowForm(editTowId?: string) {
     trucks,
     selectedCustomerId, setSelectedCustomerId,
     preSelectedDriverId, setPreSelectedDriverId,
+    preSelectedTruckId, setPreSelectedTruckId,
     secondDriverId, setSecondDriverId,
     secondDriverScheduledAt, setSecondDriverScheduledAt,
     // Price list
