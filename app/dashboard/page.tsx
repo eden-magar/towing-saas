@@ -1366,15 +1366,15 @@
               {/* Left column (RTL) */}
               <div className="flex flex-col gap-3 flex-1">
               {/* לא סיימו משמרת */}
-              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
+                <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-b border-gray-100">
                   <div className="flex items-center gap-2 text-xs font-medium text-gray-700">
                     <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
                     לא סיימו משמרת
                   </div>
                   {overtimeDrivers.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">{overtimeDrivers.length}</span>}
                 </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-52">
+                <div className="min-h-0 max-h-52 overflow-y-auto overscroll-y-contain divide-y divide-gray-50">
                   {overtimeDrivers.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
                   ) : overtimeDrivers.map((shift: any) => {
