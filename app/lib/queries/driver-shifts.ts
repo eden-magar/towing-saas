@@ -179,12 +179,6 @@ export async function editShift(params: {
     throw new Error('המשמרת לא נמצאה')
   }
 
-  if (shift.ended_at !== null) {
-    // TODO: remove debug logs once cause confirmed
-    console.error('[editShift] shift already closed:', { id: shift.id, ended_at: shift.ended_at })
-    throw new Error('המשמרת כבר נסגרה')
-  }
-
   const updates: { started_at?: string; ended_at?: string } = {}
   const edits: {
     field_name: 'started_at' | 'ended_at'
@@ -252,8 +246,9 @@ export async function editShift(params: {
     if (insertError) throw insertError
   }
 
-  const closedShift = edits.some(e => e.field_name === 'ended_at')
-  if (closedShift) {
+  const isClosingOpenShift =
+    shift.ended_at === null && edits.some(e => e.field_name === 'ended_at')
+  if (isClosingOpenShift) {
     const { error: driverError } = await supabase
       .from('drivers')
       .update({ status: 'unavailable' })
@@ -262,6 +257,132 @@ export async function editShift(params: {
   }
 
   return true
+}
+
+export interface ShiftEdit {
+  id: string
+  shift_id: string
+  edited_at: string
+  edited_by_name: string
+  field_name: 'started_at' | 'ended_at'
+  old_value: string | null
+  new_value: string
+  reason: string
+}
+
+export interface ShiftEditSummary {
+  shift_id: string
+  last_edited_at: string
+  last_edited_by_name: string
+  edit_count: number
+}
+
+const SHIFT_EDIT_USER_SELECT = `
+  editor:users!shift_edits_edited_by_fkey (
+    full_name
+  )
+`
+
+type ShiftEditUserJoin = { full_name?: string } | { full_name?: string }[] | null
+
+function editorNameFromJoin(editor: ShiftEditUserJoin | undefined): string {
+  if (!editor) return '—'
+  if (Array.isArray(editor)) return editor[0]?.full_name || '—'
+  return editor.full_name || '—'
+}
+
+function mapShiftEditRow(row: {
+  id: string
+  shift_id: string
+  edited_at: string
+  field_name: string
+  old_value: string | null
+  new_value: string
+  reason: string
+  editor?: ShiftEditUserJoin
+}): ShiftEdit {
+  return {
+    id: row.id,
+    shift_id: row.shift_id,
+    edited_at: row.edited_at,
+    edited_by_name: editorNameFromJoin(row.editor),
+    field_name: row.field_name as ShiftEdit['field_name'],
+    old_value: row.old_value,
+    new_value: row.new_value,
+    reason: row.reason,
+  }
+}
+
+export async function getShiftEdits(shiftId: string): Promise<ShiftEdit[]> {
+  const { data, error } = await supabase
+    .from('shift_edits')
+    .select(`
+      id,
+      shift_id,
+      edited_at,
+      field_name,
+      old_value,
+      new_value,
+      reason,
+      ${SHIFT_EDIT_USER_SELECT}
+    `)
+    .eq('shift_id', shiftId)
+    .order('edited_at', { ascending: false })
+
+  if (error) throw error
+  if (!data || data.length === 0) return []
+
+  return data.map(row => mapShiftEditRow(row as {
+    id: string
+    shift_id: string
+    edited_at: string
+    field_name: string
+    old_value: string | null
+    new_value: string
+    reason: string
+    editor?: ShiftEditUserJoin
+  }))
+}
+
+export async function getShiftEditSummaries(
+  shiftIds: string[]
+): Promise<Map<string, ShiftEditSummary>> {
+  if (shiftIds.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('shift_edits')
+    .select(`
+      shift_id,
+      edited_at,
+      ${SHIFT_EDIT_USER_SELECT}
+    `)
+    .in('shift_id', shiftIds)
+    .order('edited_at', { ascending: false })
+
+  if (error) throw error
+  if (!data || data.length === 0) return new Map()
+
+  const summaries = new Map<string, ShiftEditSummary>()
+  for (const row of data) {
+    const r = row as {
+      shift_id: string
+      edited_at: string
+      editor?: ShiftEditUserJoin
+    }
+    const existing = summaries.get(r.shift_id)
+    if (!existing) {
+      summaries.set(r.shift_id, {
+        shift_id: r.shift_id,
+        last_edited_at: r.edited_at,
+        last_edited_by_name: editorNameFromJoin(r.editor),
+        edit_count: 1,
+      })
+    } else {
+      existing.edit_count += 1
+    }
+  }
+
+  return summaries
 }
 
 export async function getDriversOvertime(companyId: string) {
