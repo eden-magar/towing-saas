@@ -20,6 +20,7 @@ import { VehicleLookupResult, VehicleType } from '../lib/types'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
 import { supabase } from '../lib/supabase'
+import { insertDriverTruckAssignments } from '../lib/queries/driver-truck-assignments'
 
 interface UseTowSaveParams {
   companyId: string | null
@@ -93,6 +94,7 @@ interface UseTowSaveParams {
   invoiceName: string
   // Driver
   preSelectedDriverId: string | null
+  preSelectedTruckId?: string | null
   secondDriverId?: string | null
   secondDriverScheduledAt?: string | null
   // Exchange specific
@@ -197,6 +199,7 @@ export function useTowSave(params: UseTowSaveParams) {
     paymentMethod,
     invoiceName,
     preSelectedDriverId,
+    preSelectedTruckId,
     secondDriverId,
     secondDriverScheduledAt,
     workingVehiclePlate,
@@ -302,6 +305,7 @@ export function useTowSave(params: UseTowSaveParams) {
       towDate,
       towTime,
       preSelectedDriverId,
+      preSelectedTruckId,
       secondDriverId,
       secondDriverScheduledAt,
       // Single tow
@@ -439,6 +443,23 @@ export function useTowSave(params: UseTowSaveParams) {
     router.push(`/dashboard/tows/${editTowId}`)
     } else {
       const result = await createTow(towData)
+
+      if (preSelectedDriverId && preSelectedTruckId) {
+        try {
+          const { data: existing } = await supabase
+            .from('driver_truck_assignments')
+            .select('id')
+            .eq('driver_id', preSelectedDriverId)
+            .eq('is_current', true)
+            .limit(1)
+
+          if (!existing || existing.length === 0) {
+            await insertDriverTruckAssignments(preSelectedDriverId, [preSelectedTruckId])
+          }
+        } catch (err) {
+          console.error('Failed to create permanent driver-truck assignment:', err)
+        }
+      }
 
       const shouldCreateFollowUp =
         hasStorageFollowUp &&

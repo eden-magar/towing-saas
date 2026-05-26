@@ -1004,7 +1004,7 @@ export async function createStorageFollowUpTow(
         contact_phone: null,
         notes: null,
         vehicleIndices: [0],
-        isStorage: false,
+        isStorage: true,
       },
       {
         point_order: 1,
