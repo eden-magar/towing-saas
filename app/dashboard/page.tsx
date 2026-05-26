@@ -129,6 +129,8 @@
       const n = new Date()
       return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`
     })
+    const [endShiftSubmitting, setEndShiftSubmitting] = useState(false)
+    const [endShiftError, setEndShiftError] = useState<string | null>(null)
 
     const searchWrapRef = useRef<HTMLDivElement>(null)
     const calendarScrollRef = useRef<HTMLDivElement>(null)
@@ -1243,6 +1245,9 @@
                 <h3 className="text-lg font-bold text-gray-800">סיום משמרת — {endShiftTarget.driverName}</h3>
               </div>
               <div className="space-y-4 p-5">
+                {endShiftError && (
+                  <p className="text-sm text-red-600 text-right" role="alert">{endShiftError}</p>
+                )}
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">תאריך סיום</label>
                   <input
@@ -1268,25 +1273,37 @@
                   onClick={() => {
                     setShowEndShiftModal(false)
                     setEndShiftTarget(null)
+                    setEndShiftError(null)
                   }}
-                  className="flex-1 rounded-xl border border-gray-200 bg-white py-3 font-medium text-gray-600"
+                  disabled={endShiftSubmitting}
+                  className="flex-1 rounded-xl border border-gray-200 bg-white py-3 font-medium text-gray-600 disabled:opacity-50"
                 >
                   ביטול
                 </button>
                 <button
                   type="button"
+                  disabled={endShiftSubmitting}
                   onClick={async () => {
-                    console.log('endShift:', endShiftTarget?.shiftId, endShiftDate, endShiftTime)
-                    const endedAt = new Date(`${endShiftDate}T${endShiftTime}:00`).toISOString()
-                    await endShiftManually(endShiftTarget.shiftId, endedAt)
-                    await refreshShiftsAndOvertime()
-                    await refreshDriversAndMap()
-                    setShowEndShiftModal(false)
-                    setEndShiftTarget(null)
+                    if (!endShiftTarget) return
+                    setEndShiftSubmitting(true)
+                    setEndShiftError(null)
+                    try {
+                      const endedAt = new Date(`${endShiftDate}T${endShiftTime}:00`).toISOString()
+                      await endShiftManually(endShiftTarget.shiftId, endedAt)
+                      await refreshShiftsAndOvertime()
+                      await refreshDriversAndMap()
+                      setShowEndShiftModal(false)
+                      setEndShiftTarget(null)
+                    } catch (err) {
+                      const message = err instanceof Error ? err.message : 'שגיאה בסיום המשמרת'
+                      setEndShiftError(message)
+                    } finally {
+                      setEndShiftSubmitting(false)
+                    }
                   }}
-                  className="flex-1 rounded-xl bg-[#33d4ff] py-3 font-medium text-white hover:bg-[#21b8e6]"
+                  className="flex-1 rounded-xl bg-[#33d4ff] py-3 font-medium text-white hover:bg-[#21b8e6] disabled:opacity-50"
                 >
-                  סיים משמרת
+                  {endShiftSubmitting ? 'מסיים...' : 'סיים משמרת'}
                 </button>
               </div>
             </div>

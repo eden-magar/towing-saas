@@ -73,11 +73,24 @@ export async function endShiftManually(shiftId: string, endedAt: string, lat?: n
     }
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('driver_shifts')
     .update(updateData)
     .eq('id', shiftId)
+    .select('id, driver_id')
+
   if (error) throw error
+  if (!data || data.length === 0) {
+    throw new Error('לא נמצאה משמרת לעדכון (ייתכן שאין הרשאה או שהמשמרת כבר סגורה)')
+  }
+
+  const { error: driverError } = await supabase
+    .from('drivers')
+    .update({ status: 'unavailable' })
+    .eq('id', data[0].driver_id)
+
+  if (driverError) throw driverError
+
   return true
 }
 
