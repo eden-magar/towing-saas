@@ -96,3 +96,35 @@ export function formatOpenShiftDuration(startedAt: string): string {
 export function buildLocalDateTime(date: string, hour: number, minute: number): Date {
   return new Date(`${date}T${formatEndShiftTime(hour, minute)}:00`)
 }
+
+export function formatJerusalemDateTime(iso: string | null | undefined): string {
+  if (!iso) return 'לא הוגדרה'
+  const d = new Date(iso)
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: JERUSALEM_TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const day = parts.find(p => p.type === 'day')!.value
+  const month = parts.find(p => p.type === 'month')!.value
+  const year = parts.find(p => p.type === 'year')!.value
+  const hour = parts.find(p => p.type === 'hour')!.value
+  const minute = parts.find(p => p.type === 'minute')!.value
+  return `${day}/${month}/${year} ${hour}:${minute}`
+}
+
+export function formatJerusalemDateShort(iso: string): string {
+  const d = new Date(iso)
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: JERUSALEM_TZ,
+    day: '2-digit',
+    month: '2-digit',
+  }).formatToParts(d)
+  const day = parts.find(p => p.type === 'day')!.value
+  const month = parts.find(p => p.type === 'month')!.value
+  return `${day}/${month}`
+}

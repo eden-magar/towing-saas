@@ -514,8 +514,10 @@ export async function getDriverHoursReport(
       end_address,
       end_lat,
       end_lng,
+      driver_id,
       driver:drivers!inner (
         id,
+        work_hours_end,
         user:users!user_id (full_name, phone)
       )
     `)

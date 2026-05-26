@@ -181,14 +181,16 @@ export default function EditShiftModal({ open, target, onClose, onSaved }: EditS
     if (!open || !target) return
 
     const startParts = dateTimeToJerusalemParts(target.startedAt)
-    const endDefaults = computeEndShiftDefaults(target.startedAt, target.workHoursEnd)
+    const endParts = target.endedAt
+      ? dateTimeToJerusalemParts(target.endedAt)
+      : computeEndShiftDefaults(target.startedAt, target.workHoursEnd)
 
     setStartShiftDate(startParts.date)
     setStartShiftHour(startParts.hour)
     setStartShiftMinute(startParts.minute)
-    setEndShiftDate(endDefaults.date)
-    setEndShiftHour(endDefaults.hour)
-    setEndShiftMinute(endDefaults.minute)
+    setEndShiftDate(endParts.date)
+    setEndShiftHour(endParts.hour)
+    setEndShiftMinute(endParts.minute)
     setEditShiftReason('')
     setIsEditingStart(false)
     setEndShiftError(null)

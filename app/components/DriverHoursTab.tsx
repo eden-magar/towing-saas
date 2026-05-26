@@ -4,10 +4,15 @@ import { useState, useEffect } from 'react'
 import {
   getDriverHoursReport,
   getDriverHourlyLocations,
+  getShiftEditSummaries,
   type DriverHourlyLocationRow,
+  type ShiftEditSummary,
 } from '../lib/queries/driver-shifts'
 import { getDrivers } from '../lib/queries/drivers'
-import { Clock, MapPin, Users, Activity, ChevronDown } from 'lucide-react'
+import EditShiftModal, { type EditShiftModalTarget } from './EditShiftModal'
+import ShiftEditHistoryModal from './ShiftEditHistoryModal'
+import { formatJerusalemDateShort } from '../lib/shift-datetime'
+import { Clock, MapPin, Users, Activity, ChevronDown, Edit2 } from 'lucide-react'
 
 interface Props {
   companyId: string
@@ -15,6 +20,7 @@ interface Props {
 
 export default function DriverHoursTab({ companyId }: Props) {
   const [shifts, setShifts] = useState<any[]>([])
+  const [editSummaries, setEditSummaries] = useState<Map<string, ShiftEditSummary>>(new Map())
   const [locations, setLocations] = useState<DriverHourlyLocationRow[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,6 +32,9 @@ export default function DriverHoursTab({ companyId }: Props) {
     return d.toISOString().split('T')[0]
   })
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [editTarget, setEditTarget] = useState<EditShiftModalTarget | null>(null)
+  const [historyShiftId, setHistoryShiftId] = useState<string | null>(null)
+  const [historyDriverName, setHistoryDriverName] = useState('')
 
   useEffect(() => {
     if (!companyId) return
@@ -65,7 +74,10 @@ export default function DriverHoursTab({ companyId }: Props) {
         ),
         getDrivers(companyId)
       ])
+      const shiftIds = shiftsData.map((s: { id: string }) => s.id)
+      const summaries = await getShiftEditSummaries(shiftIds)
       setShifts(shiftsData)
+      setEditSummaries(summaries)
       setLocations(locationsData)
       setDrivers(driversData)
     } catch (err) {
@@ -73,6 +85,22 @@ export default function DriverHoursTab({ companyId }: Props) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const openEditModal = (shift: any) => {
+    setEditTarget({
+      shiftId: shift.id,
+      driverName: shift.driver?.user?.full_name || 'נהג',
+      driverId: shift.driver?.id || shift.driver_id,
+      startedAt: shift.started_at,
+      endedAt: shift.ended_at ?? null,
+      workHoursEnd: shift.driver?.work_hours_end ?? null,
+    })
+  }
+
+  const openHistoryModal = (shift: any) => {
+    setHistoryShiftId(shift.id)
+    setHistoryDriverName(shift.driver?.user?.full_name || 'נהג')
   }
 
   const calcHours = (start: string, end: string | null) => {
@@ -210,55 +238,84 @@ export default function DriverHoursTab({ companyId }: Props) {
                     <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">מיקום סיום</th>
                     <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">גרירה אחרונה</th>
                     <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">סטטוס</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">עריכה</th>
+                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">פעולות</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-gray-400">
+                    <tr><td colSpan={11} className="text-center py-12 text-gray-400">
                       <Clock size={24} className="mx-auto mb-2 opacity-30" />
                       טוען...
                     </td></tr>
                   ) : shifts.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-12 text-gray-400">
+                    <tr><td colSpan={11} className="text-center py-12 text-gray-400">
                       <Users size={24} className="mx-auto mb-2 opacity-30" />
                       אין נתונים לתקופה זו
                     </td></tr>
-                  ) : shifts.map((shift: any) => (
-                    <tr key={shift.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-5 py-3.5 font-medium text-gray-800">{shift.driver?.user?.full_name || '—'}</td>
-                      <td className="px-5 py-3.5 text-gray-500">{new Date(shift.started_at).toLocaleDateString('he-IL')}</td>
-                      <td className="px-5 py-3.5 text-gray-700 font-medium">{new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td>
-                      <td className="px-5 py-3.5 text-gray-700">
-                        {shift.ended_at
-                          ? new Date(shift.ended_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {calcHours(shift.started_at, shift.ended_at)
-                          ? <span className="font-semibold text-[#33d4ff]">{calcHours(shift.started_at, shift.ended_at)}</span>
-                          : <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-5 py-3.5 text-gray-500 text-xs max-w-[140px] truncate">
-                        {shift.start_address || (shift.start_lat ? `${shift.start_lat.toFixed(4)}, ${shift.start_lng.toFixed(4)}` : <span className="text-gray-300">—</span>)}
-                      </td>
-                      <td className="px-5 py-3.5 text-gray-500 text-xs max-w-[140px] truncate">
-                        {shift.end_address || (shift.end_lat ? `${shift.end_lat.toFixed(4)}, ${shift.end_lng.toFixed(4)}` : <span className="text-gray-300">—</span>)}
-                      </td>
-                      <td className="px-5 py-3.5 text-xs">
-                        {shift.last_tow
-                          ? <span className="font-medium text-gray-700">{new Date(shift.last_tow.updated_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
-                          : <span className="text-gray-400">טרם בוצעה גרירה</span>}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {shift.ended_at
-                          ? <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600">הסתיימה</span>
-                          : <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700">
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                              פעילה
-                            </span>}
-                      </td>
-                    </tr>
-                  ))}
+                  ) : shifts.map((shift: any) => {
+                    const summary = editSummaries.get(shift.id)
+                    return (
+                      <tr key={shift.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5 font-medium text-gray-800">{shift.driver?.user?.full_name || '—'}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{new Date(shift.started_at).toLocaleDateString('he-IL')}</td>
+                        <td className="px-5 py-3.5 text-gray-700 font-medium">{new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="px-5 py-3.5 text-gray-700">
+                          {shift.ended_at
+                            ? new Date(shift.ended_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {calcHours(shift.started_at, shift.ended_at)
+                            ? <span className="font-semibold text-[#33d4ff]">{calcHours(shift.started_at, shift.ended_at)}</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-500 text-xs max-w-[140px] truncate">
+                          {shift.start_address || (shift.start_lat ? `${shift.start_lat.toFixed(4)}, ${shift.start_lng.toFixed(4)}` : <span className="text-gray-300">—</span>)}
+                        </td>
+                        <td className="px-5 py-3.5 text-gray-500 text-xs max-w-[140px] truncate">
+                          {shift.end_address || (shift.end_lat ? `${shift.end_lat.toFixed(4)}, ${shift.end_lng.toFixed(4)}` : <span className="text-gray-300">—</span>)}
+                        </td>
+                        <td className="px-5 py-3.5 text-xs">
+                          {shift.last_tow
+                            ? <span className="font-medium text-gray-700">{new Date(shift.last_tow.updated_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+                            : <span className="text-gray-400">טרם בוצעה גרירה</span>}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {shift.ended_at
+                            ? <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-600">הסתיימה</span>
+                            : <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-700">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                פעילה
+                              </span>}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {summary ? (
+                            <button
+                              type="button"
+                              onClick={() => openHistoryModal(shift)}
+                              className="text-xs text-blue-700 hover:underline text-right"
+                            >
+                              נערך {formatJerusalemDateShort(summary.last_edited_at)} ע&quot;י {summary.last_edited_by_name}
+                              {summary.edit_count > 1 ? ` (${summary.edit_count}x)` : ''}
+                            </button>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(shift)}
+                            aria-label="עריכת משמרת"
+                            className="rounded-lg p-1.5 hover:bg-gray-100 text-gray-500"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -323,6 +380,25 @@ export default function DriverHoursTab({ companyId }: Props) {
           </div>
         </div>
       )}
+
+      <EditShiftModal
+        open={!!editTarget}
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSaved={async () => {
+          setEditTarget(null)
+          await loadData()
+        }}
+      />
+      <ShiftEditHistoryModal
+        open={!!historyShiftId}
+        shiftId={historyShiftId}
+        driverName={historyDriverName}
+        onClose={() => {
+          setHistoryShiftId(null)
+          setHistoryDriverName('')
+        }}
+      />
     </div>
   )
 }
