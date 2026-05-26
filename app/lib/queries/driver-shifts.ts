@@ -94,6 +94,113 @@ export async function endShiftManually(shiftId: string, endedAt: string, lat?: n
   return true
 }
 
+export async function editShift(params: {
+  shiftId: string
+  newStartedAt: string | null
+  newEndedAt: string | null
+  reason: string
+}): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('משתמש לא מחובר')
+
+  const { data: shift, error: fetchError } = await supabase
+    .from('driver_shifts')
+    .select('id, company_id, driver_id, started_at, ended_at')
+    .eq('id', params.shiftId)
+    .maybeSingle()
+
+  if (fetchError) throw fetchError
+  if (!shift) {
+    // TODO: remove debug logs once cause confirmed
+    console.error('[editShift] shift not found:', { shiftId: params.shiftId })
+    throw new Error('המשמרת לא נמצאה')
+  }
+
+  if (shift.ended_at !== null) {
+    // TODO: remove debug logs once cause confirmed
+    console.error('[editShift] shift already closed:', { id: shift.id, ended_at: shift.ended_at })
+    throw new Error('המשמרת כבר נסגרה')
+  }
+
+  const updates: { started_at?: string; ended_at?: string } = {}
+  const edits: {
+    field_name: 'started_at' | 'ended_at'
+    old_value: string | null
+    new_value: string
+  }[] = []
+
+  if (params.newStartedAt !== null) {
+    const oldMs = new Date(shift.started_at).getTime()
+    const newMs = new Date(params.newStartedAt).getTime()
+    if (oldMs !== newMs) {
+      updates.started_at = params.newStartedAt
+      edits.push({
+        field_name: 'started_at',
+        old_value: shift.started_at,
+        new_value: params.newStartedAt,
+      })
+    }
+  }
+
+  if (params.newEndedAt !== null) {
+    const oldEnded = shift.ended_at
+    const oldMs = oldEnded ? new Date(oldEnded).getTime() : null
+    const newMs = new Date(params.newEndedAt).getTime()
+    if (oldMs !== newMs) {
+      updates.ended_at = params.newEndedAt
+      edits.push({
+        field_name: 'ended_at',
+        old_value: oldEnded,
+        new_value: params.newEndedAt,
+      })
+    }
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new Error('לא בוצעו שינויים')
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from('driver_shifts')
+    .update(updates)
+    .eq('id', params.shiftId)
+    .select('id, driver_id')
+
+  if (updateError) throw updateError
+  if (!updated || updated.length === 0) {
+    // TODO: remove debug logs once cause confirmed
+    console.error('[editShift] update returned 0 rows:', {
+      shiftId: params.shiftId,
+      ended_at: shift.ended_at,
+    })
+    throw new Error('לא נמצאה משמרת לעדכון (ייתכן שאין הרשאה או שהמשמרת כבר סגורה)')
+  }
+
+  for (const edit of edits) {
+    const { error: insertError } = await supabase.from('shift_edits').insert({
+      shift_id: params.shiftId,
+      company_id: shift.company_id,
+      edited_by: user.id,
+      field_name: edit.field_name,
+      old_value: edit.old_value,
+      new_value: edit.new_value,
+      reason: params.reason,
+    })
+    if (insertError) throw insertError
+  }
+
+  const closedShift = edits.some(e => e.field_name === 'ended_at')
+  if (closedShift) {
+    const { error: driverError } = await supabase
+      .from('drivers')
+      .update({ status: 'unavailable' })
+      .eq('id', shift.driver_id)
+    if (driverError) throw driverError
+  }
+
+  return true
+}
+
 export async function getDriversOvertime(companyId: string) {
   const { data, error } = await supabase
     .from('driver_shifts')

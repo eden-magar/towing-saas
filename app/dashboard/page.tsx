@@ -8,7 +8,7 @@
   import { getTows, TowWithDetails, searchTows, recalculateTowPrice, updateTow } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
-  import { getDriversOvertime, endShiftManually, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
+  import { getDriversOvertime, editShift, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTows, updateTowSchedule } from '../lib/queries/calendar'
   import { supabase } from '../lib/supabase'
   import DriversMap from '../components/DriversMap'
@@ -88,6 +88,41 @@
 
   function formatEndShiftTime(hour: number, minute: number): string {
     return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  }
+
+  function dateTimeToJerusalemParts(iso: string): { date: string; hour: number; minute: number } {
+    const d = new Date(iso)
+    const { hour, minute } = getJerusalemTimeParts(d)
+    return { date: getJerusalemDateStr(d), hour, minute: snapMinuteToFive(minute) }
+  }
+
+  function formatShiftStartJerusalem(startedAt: string): string {
+    const d = new Date(startedAt)
+    const weekday = d.toLocaleDateString('he-IL', { weekday: 'short', timeZone: JERUSALEM_TZ })
+    const date = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', timeZone: JERUSALEM_TZ })
+    const time = d.toLocaleTimeString('he-IL', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: JERUSALEM_TZ,
+      hour12: false,
+    })
+    return `${weekday} ${date} ${time}`
+  }
+
+  function formatOpenShiftDuration(startedAt: string): string {
+    const diffMs = Math.max(0, Date.now() - new Date(startedAt).getTime())
+    const totalHours = Math.floor(diffMs / 3600000)
+    if (totalHours < 24) {
+      return `פתוחה ${totalHours} שעות`
+    }
+    const days = Math.floor(totalHours / 24)
+    const hours = totalHours % 24
+    if (hours === 0) return `פתוחה ${days} ימים`
+    return `פתוחה ${days} ימים, ${hours} שעות`
+  }
+
+  function buildLocalDateTime(date: string, hour: number, minute: number): Date {
+    return new Date(`${date}T${formatEndShiftTime(hour, minute)}:00`)
   }
 
   function TimeWheelColumn({
@@ -328,9 +363,14 @@
 
     const [showEndShiftModal, setShowEndShiftModal] = useState(false)
     const [endShiftTarget, setEndShiftTarget] = useState<EndShiftModalTarget | null>(null)
+    const [startShiftDate, setStartShiftDate] = useState(() => getJerusalemDateStr(new Date()))
+    const [startShiftHour, setStartShiftHour] = useState(0)
+    const [startShiftMinute, setStartShiftMinute] = useState(0)
     const [endShiftDate, setEndShiftDate] = useState(() => getJerusalemDateStr(new Date()))
     const [endShiftHour, setEndShiftHour] = useState(0)
     const [endShiftMinute, setEndShiftMinute] = useState(0)
+    const [editShiftReason, setEditShiftReason] = useState('')
+    const [isEditingStart, setIsEditingStart] = useState(false)
     const [endShiftSubmitting, setEndShiftSubmitting] = useState(false)
     const [endShiftError, setEndShiftError] = useState<string | null>(null)
     const [endShiftWarnings, setEndShiftWarnings] = useState<{ openTows: number; cashBalance: number } | null>(null)
@@ -1339,36 +1379,58 @@
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
                   ) : overtimeDrivers.map((shift: any) => {
                     const driver = shift.driver as any
+                    const openTowsCount = companyTows.filter(
+                      t =>
+                        t.driver_id === driver?.id &&
+                        (t.status === 'assigned' || t.status === 'in_progress')
+                    ).length
+                    const metaParts = [
+                      formatShiftStartJerusalem(shift.started_at),
+                      formatOpenShiftDuration(shift.started_at),
+                      openTowsCount > 0 ? `${openTowsCount} גרירות פתוחות` : null,
+                    ].filter(Boolean)
                     return (
-                      <div key={shift.id} className="px-3 py-1.5 flex items-center gap-2">
+                      <div key={shift.id} className="px-3 py-2 flex items-start gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700">{driver?.user?.full_name}</div>
-                          <div className="text-xs text-gray-400">החל {new Date(shift.started_at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} · עד {driver?.work_hours_end?.slice(0, 5)}</div>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-xs font-medium text-gray-700 truncate">
+                              {driver?.user?.full_name}
+                            </div>
+                            <button
+                              onClick={() => {
+                                const startParts = dateTimeToJerusalemParts(shift.started_at)
+                                const endDefaults = computeEndShiftDefaults(
+                                  shift.started_at,
+                                  driver?.work_hours_end ?? null
+                                )
+                                setEndShiftTarget({
+                                  shiftId: shift.id,
+                                  driverName: driver?.user?.full_name || 'נהג',
+                                  driverId: driver?.id,
+                                  startedAt: shift.started_at,
+                                  workHoursEnd: driver?.work_hours_end ?? null,
+                                })
+                                setStartShiftDate(startParts.date)
+                                setStartShiftHour(startParts.hour)
+                                setStartShiftMinute(startParts.minute)
+                                setEndShiftDate(endDefaults.date)
+                                setEndShiftHour(endDefaults.hour)
+                                setEndShiftMinute(endDefaults.minute)
+                                setEditShiftReason('')
+                                setIsEditingStart(false)
+                                setEndShiftError(null)
+                                setEndShiftWarnings(null)
+                                setShowEndShiftModal(true)
+                              }}
+                              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 flex-shrink-0"
+                            >
+                              סיים
+                            </button>
+                          </div>
+                          <div className="mt-0.5 text-[11px] leading-snug text-gray-400">
+                            {metaParts.join(' · ')}
+                          </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            const defaults = computeEndShiftDefaults(
-                              shift.started_at,
-                              driver?.work_hours_end ?? null
-                            )
-                            setEndShiftTarget({
-                              shiftId: shift.id,
-                              driverName: driver?.user?.full_name || 'נהג',
-                              driverId: driver?.id,
-                              startedAt: shift.started_at,
-                              workHoursEnd: driver?.work_hours_end ?? null,
-                            })
-                            setEndShiftDate(defaults.date)
-                            setEndShiftHour(defaults.hour)
-                            setEndShiftMinute(defaults.minute)
-                            setEndShiftError(null)
-                            setEndShiftWarnings(null)
-                            setShowEndShiftModal(true)
-                          }}
-                          className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 flex-shrink-0"
-                        >
-                          סיים
-                        </button>
                       </div>
                     )
                   })}
@@ -1474,69 +1536,134 @@
           </div>
         )}
 
-        {/* מודל סיום משמרת */}
+        {/* מודל עריכת משמרת */}
         {showEndShiftModal && endShiftTarget && (() => {
-          const shiftMinDate = getJerusalemDateStr(new Date(endShiftTarget.startedAt))
-          const shiftMaxDate = getJerusalemDateStr(new Date())
-          const endedAtLocal = new Date(
-            `${endShiftDate}T${formatEndShiftTime(endShiftHour, endShiftMinute)}:00`
-          )
-          const startedAt = new Date(endShiftTarget.startedAt)
-          const endsBeforeStart = endedAtLocal.getTime() < startedAt.getTime()
-          const previewDateLabel = new Date(`${endShiftDate}T12:00:00`).toLocaleDateString('he-IL', {
-            weekday: 'long',
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-          })
+          const todayStr = getJerusalemDateStr(new Date())
+          const startedAtLocal = buildLocalDateTime(startShiftDate, startShiftHour, startShiftMinute)
+          const endedAtLocal = buildLocalDateTime(endShiftDate, endShiftHour, endShiftMinute)
+          const endMinDate = getJerusalemDateStr(startedAtLocal)
+          const endsBeforeStart = endedAtLocal.getTime() <= startedAtLocal.getTime()
+          const reasonTooShort = editShiftReason.trim().length < 3
           const showCashWarning = endShiftWarnings && endShiftWarnings.cashBalance > 0
           const showTowsWarning = endShiftWarnings && endShiftWarnings.openTows > 0
           const showWarningsBlock = showCashWarning || showTowsWarning
+          const originalStartedMs = new Date(endShiftTarget.startedAt).getTime()
+          const startedChanged = isEditingStart && startedAtLocal.getTime() !== originalStartedMs
+
+          const resetStartToOriginal = () => {
+            const startParts = dateTimeToJerusalemParts(endShiftTarget.startedAt)
+            setStartShiftDate(startParts.date)
+            setStartShiftHour(startParts.hour)
+            setStartShiftMinute(startParts.minute)
+            setIsEditingStart(false)
+          }
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" dir="rtl">
               <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white">
                 <div className="border-b border-gray-100 p-5">
-                  <h3 className="text-lg font-bold text-gray-800">סיום משמרת — {endShiftTarget.driverName}</h3>
+                  <h3 className="text-lg font-bold text-gray-800">עריכת משמרת — {endShiftTarget.driverName}</h3>
                 </div>
                 <div className="space-y-5 p-5">
                   {endShiftError && (
                     <p className="text-right text-sm text-red-600" role="alert">{endShiftError}</p>
                   )}
 
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
-                    <p className="text-xs text-gray-500">מועד סיום נבחר</p>
-                    <p className="mt-1 text-base font-semibold text-gray-800">
-                      {previewDateLabel} — {formatEndShiftTime(endShiftHour, endShiftMinute)}
-                    </p>
+                  <div className="rounded-xl border border-gray-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-700">
+                      <span>
+                        תחילת משמרת:{' '}
+                        <span className="font-medium text-gray-800">
+                          {formatShiftStartJerusalem(endShiftTarget.startedAt)}
+                        </span>
+                      </span>
+                      {!isEditingStart && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingStart(true)}
+                          className="text-xs font-medium text-[#33d4ff] hover:underline"
+                        >
+                          ✏ ערוך
+                        </button>
+                      )}
+                    </div>
+                    {isEditingStart && (
+                      <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-gray-800">עריכת תחילת משמרת</p>
+                          <button
+                            type="button"
+                            onClick={resetStartToOriginal}
+                            className="text-xs font-medium text-gray-500 hover:text-gray-700 hover:underline"
+                          >
+                            ביטול עריכה
+                          </button>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-600">תאריך התחלה</label>
+                          <input
+                            type="date"
+                            value={startShiftDate}
+                            max={todayStr}
+                            onChange={e => setStartShiftDate(e.target.value)}
+                            className="w-full rounded-xl border border-gray-200 p-3 text-right focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-xs font-medium text-gray-600">שעת התחלה</label>
+                          <EndShiftTimePicker
+                            hour={startShiftHour}
+                            minute={startShiftMinute}
+                            onHourChange={setStartShiftHour}
+                            onMinuteChange={setStartShiftMinute}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-gray-200 p-4">
+                    <p className="text-sm font-medium text-gray-800">סיום משמרת</p>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-600">תאריך סיום</label>
+                      <input
+                        type="date"
+                        value={endShiftDate}
+                        min={endMinDate}
+                        max={todayStr}
+                        onChange={e => setEndShiftDate(e.target.value)}
+                        className="w-full rounded-xl border border-gray-200 p-3 text-right focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-xs font-medium text-gray-600">שעת סיום</label>
+                      <EndShiftTimePicker
+                        hour={endShiftHour}
+                        minute={endShiftMinute}
+                        onHourChange={setEndShiftHour}
+                        onMinuteChange={setEndShiftMinute}
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-700">תאריך סיום</label>
-                    <input
-                      type="date"
-                      value={endShiftDate}
-                      min={shiftMinDate}
-                      max={shiftMaxDate}
-                      onChange={e => setEndShiftDate(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 p-3 text-right focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                    <label className="mb-1 block text-sm font-medium text-gray-700">סיבת העריכה</label>
+                    <textarea
+                      value={editShiftReason}
+                      onChange={e => setEditShiftReason(e.target.value)}
+                      placeholder="למשל: שכחת לסגור משמרת"
+                      rows={3}
+                      className="w-full resize-none rounded-xl border border-gray-200 p-3 text-right focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
                     />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">שעת סיום</label>
-                    <EndShiftTimePicker
-                      hour={endShiftHour}
-                      minute={endShiftMinute}
-                      onHourChange={setEndShiftHour}
-                      onMinuteChange={setEndShiftMinute}
-                    />
+                    {reasonTooShort && editShiftReason.length > 0 && (
+                      <p className="mt-1 text-right text-xs text-red-600">יש להזין לפחות 3 תווים</p>
+                    )}
                   </div>
 
                   {endsBeforeStart && (
                     <p className="text-right text-xs text-red-600">
                       שעת הסיום חייבת להיות אחרי תחילת המשמרת (
-                      {startedAt.toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}
+                      {startedAtLocal.toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}
                       )
                     </p>
                   )}
@@ -1560,6 +1687,8 @@
                     onClick={() => {
                       setShowEndShiftModal(false)
                       setEndShiftTarget(null)
+                      setEditShiftReason('')
+                      setIsEditingStart(false)
                       setEndShiftError(null)
                       setEndShiftWarnings(null)
                     }}
@@ -1570,20 +1699,26 @@
                   </button>
                   <button
                     type="button"
-                    disabled={endShiftSubmitting || endsBeforeStart}
+                    disabled={endShiftSubmitting || endsBeforeStart || reasonTooShort}
                     onClick={async () => {
                       setEndShiftSubmitting(true)
                       setEndShiftError(null)
                       try {
-                        const endedAt = endedAtLocal.toISOString()
-                        await endShiftManually(endShiftTarget.shiftId, endedAt)
+                        await editShift({
+                          shiftId: endShiftTarget.shiftId,
+                          newStartedAt: startedChanged ? startedAtLocal.toISOString() : null,
+                          newEndedAt: endedAtLocal.toISOString(),
+                          reason: editShiftReason.trim(),
+                        })
                         await refreshShiftsAndOvertime()
                         await refreshDriversAndMap()
                         setShowEndShiftModal(false)
                         setEndShiftTarget(null)
+                        setEditShiftReason('')
+                        setIsEditingStart(false)
                         setEndShiftWarnings(null)
                       } catch (err) {
-                        const message = err instanceof Error ? err.message : 'שגיאה בסיום המשמרת'
+                        const message = err instanceof Error ? err.message : 'שגיאה בשמירת המשמרת'
                         setEndShiftError(message)
                       } finally {
                         setEndShiftSubmitting(false)
@@ -1591,7 +1726,7 @@
                     }}
                     className="flex-1 rounded-xl bg-[#33d4ff] py-3 font-medium text-white hover:bg-[#21b8e6] disabled:opacity-50"
                   >
-                    {endShiftSubmitting ? 'מסיים...' : 'סיים משמרת'}
+                    {endShiftSubmitting ? 'שומר...' : 'שמור שינויים'}
                   </button>
                 </div>
               </div>
