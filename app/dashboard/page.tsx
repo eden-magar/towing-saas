@@ -1374,7 +1374,7 @@
                   </div>
                   {overtimeDrivers.length > 0 && <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full">{overtimeDrivers.length}</span>}
                 </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40">
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-52">
                   {overtimeDrivers.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
                   ) : overtimeDrivers.map((shift: any) => {
