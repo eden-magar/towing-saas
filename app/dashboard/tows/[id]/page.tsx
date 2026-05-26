@@ -41,6 +41,7 @@ import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionReque
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
+import { insertDriverTruckAssignments } from '../../../lib/queries/driver-truck-assignments'
 import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
 import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
 import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
@@ -685,7 +686,15 @@ export default function TowDetailsPage() {
     if (!selectedDriverId || !selectedTruckId || !tow) return
     setAssigning(true)
     try {
+      const hadNoTruckAssignments = getDriverTrucks(selectedDriverId).length === 0
       await assignDriver(tow.id, selectedDriverId, selectedTruckId, scheduleDate?.toISOString())
+      if (hadNoTruckAssignments) {
+        try {
+          await insertDriverTruckAssignments(selectedDriverId, [selectedTruckId])
+        } catch (err) {
+          console.error('Failed to create permanent driver-truck assignment:', err)
+        }
+      }
       if (useNewPrice && priceChangeModal) {
         await updateTow({
           towId: tow.id,
