@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-import { Suspense, useState, useCallback, useEffect } from 'react'
+import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getDayTows } from '../../../lib/queries/calendar'
@@ -26,6 +26,9 @@ import {
   Calendar,
   Loader2,
   Info,
+  X,
+  User,
+  AlertTriangle,
 } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
@@ -42,6 +45,7 @@ import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
+import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
 import { createTow, updateTow } from '../../../lib/queries/tows'
 import {
@@ -93,6 +97,9 @@ function CreateTowForm({
     selectedCustomerId,
     preSelectedDriverId,
     setPreSelectedDriverId,
+    preSelectedTruckId,
+    setPreSelectedTruckId,
+    trucks,
     basePriceList,
     fixedPriceItems,
     selectedCustomerPricing,
@@ -306,6 +313,37 @@ function CreateTowForm({
   const [defectiveLookupLoading, setDefectiveLookupLoading] = useState(false)
   const [workingLookupLoading, setWorkingLookupLoading] = useState(false)
   const [showDriverPicker, setShowDriverPicker] = useState(false)
+  const [pendingPickerDriverId, setPendingPickerDriverId] = useState<string | null>(null)
+  const [pendingPickerDate, setPendingPickerDate] = useState<string | null>(null)
+  const [pendingPickerTime, setPendingPickerTime] = useState<string | null>(null)
+  const [pendingPickerTruckId, setPendingPickerTruckId] = useState<string | null>(null)
+
+  const getDriverTrucks = (driverId: string) =>
+    trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
+
+  const truckPickerFromUrlAppliedRef = useRef(false)
+  const openedTruckPickerFromUrlRef = useRef(false)
+
+  const closeDriverPicker = () => {
+    if (openedTruckPickerFromUrlRef.current) {
+      setPreSelectedDriverId(null)
+      setPreSelectedTruckId(null)
+      openedTruckPickerFromUrlRef.current = false
+    }
+    setShowDriverPicker(false)
+    setPendingPickerDriverId(null)
+    setPendingPickerDate(null)
+    setPendingPickerTime(null)
+    setPendingPickerTruckId(null)
+  }
+
+  const openDriverPicker = () => {
+    setPendingPickerDriverId(null)
+    setPendingPickerDate(null)
+    setPendingPickerTime(null)
+    setPendingPickerTruckId(null)
+    setShowDriverPicker(true)
+  }
   const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
   const [vehicleNotFound, setVehicleNotFound] = useState(false)
   const [showTruckModal, setShowTruckModal] = useState(false)
@@ -317,12 +355,36 @@ function CreateTowForm({
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
 
-  // URL params
+  // URL params (date/time only — driver goes through truck step when ?driver= is present)
   useEffect(() => {
     if (dateParam) setTowDate(dateParam)
     if (timeParam) setTowTime(timeParam)
-    if (driverParam) setPreSelectedDriverId(driverParam)
-  }, [dateParam, timeParam, driverParam])
+  }, [dateParam, timeParam])
+
+  useEffect(() => {
+    if (truckPickerFromUrlAppliedRef.current) return
+    if (editTowId) return
+
+    const driverFromUrl = searchParams.get('driver')
+    if (!driverFromUrl) return
+
+    if (!trucks.length && !drivers.length) return
+
+    const dateFromUrl = searchParams.get('date')
+    const timeFromUrl = searchParams.get('time')
+
+    setPreSelectedDriverId(null)
+    setPreSelectedTruckId(null)
+
+    const driverTrucks = getDriverTrucks(driverFromUrl)
+    setPendingPickerDriverId(driverFromUrl)
+    setPendingPickerDate(dateFromUrl || towDate || '')
+    setPendingPickerTime(timeFromUrl || towTime || '')
+    setPendingPickerTruckId(driverTrucks.length === 1 ? driverTrucks[0].id : null)
+    setShowDriverPicker(true)
+    truckPickerFromUrlAppliedRef.current = true
+    openedTruckPickerFromUrlRef.current = true
+  }, [searchParams, trucks, drivers, editTowId, towDate, towTime])
 
   useEffect(() => {
     if (loadedTowStatus !== null && loadedTowStatus !== 'quote') {
@@ -2493,24 +2555,35 @@ function CreateTowForm({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setShowDriverPicker(true)}
+                    onClick={openDriverPicker}
                     className="px-4 py-2 bg-cyan-500 text-white rounded-xl text-sm"
                   >
                     פתח יומן לבחירת נהג ↗
                   </button>
                   {preSelectedDriverId && (() => {
                     const selectedDriver = drivers.find((d) => d.id === preSelectedDriverId)
+                    const selectedTruck = preSelectedTruckId
+                      ? trucks.find((t) => t.id === preSelectedTruckId)
+                      : null
                     return selectedDriver ? (
                       <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-sm font-medium text-blue-800">
                           נהג מיועד: {selectedDriver.user?.full_name || 'נהג'}
                         </p>
+                        {selectedTruck && (
+                          <p className="text-sm text-blue-700 mt-0.5">
+                            משאית: {getTruckTypeLabel(selectedTruck.truck_type)} — {selectedTruck.plate_number}
+                          </p>
+                        )}
                         <p className="text-xs text-blue-600">
                           {towDate} · {towTime}
                         </p>
                         <button
                           type="button"
-                          onClick={() => setPreSelectedDriverId(null)}
+                          onClick={() => {
+                            setPreSelectedDriverId(null)
+                            setPreSelectedTruckId(null)
+                          }}
                           className="text-xs text-red-500 mt-1"
                         >
                           הסר שיבוץ
@@ -2888,7 +2961,7 @@ function CreateTowForm({
         </div>
       )}
 
-        {showDriverPicker && (
+        {showDriverPicker && !pendingPickerDriverId && (
           <DriverCalendarPicker
             companyId={companyId || ''}
             drivers={drivers}
@@ -2896,14 +2969,126 @@ function CreateTowForm({
             initialDate={towDate as string}
             initialTime={towTime}
             onConfirm={(driverId, date, time) => {
-              setPreSelectedDriverId(driverId)
-              setTowDate(date)
-              setTowTime(time)
-              setShowDriverPicker(false)
+              const driverTrucks = getDriverTrucks(driverId)
+              setPendingPickerDriverId(driverId)
+              setPendingPickerDate(date)
+              setPendingPickerTime(time)
+              setPendingPickerTruckId(driverTrucks.length === 1 ? driverTrucks[0].id : null)
             }}
-            onClose={() => setShowDriverPicker(false)}
+            onClose={closeDriverPicker}
           />
         )}
+
+        {showDriverPicker && pendingPickerDriverId && (() => {
+          const assignDriverTrucks = getDriverTrucks(pendingPickerDriverId)
+          const assignTruckOptions =
+            assignDriverTrucks.length > 0
+              ? assignDriverTrucks
+              : trucks.filter((t) => t.is_active)
+          return (
+            <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+              <div className="bg-white w-full lg:max-w-2xl lg:rounded-2xl lg:mx-4 overflow-hidden max-h-[90vh] flex flex-col rounded-t-2xl">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white flex-shrink-0">
+                  <h2 className="font-bold text-lg">בחירת משאית</h2>
+                  <button type="button" onClick={closeDriverPicker} className="p-2 hover:bg-white/20 rounded-lg">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPendingPickerDriverId(null)
+                        setPendingPickerTruckId(null)
+                      }}
+                      className="flex items-center gap-2 text-[#33d4ff] text-sm font-medium"
+                    >
+                      <ArrowRight size={18} />
+                      חזור לרשימת נהגים
+                    </button>
+
+                    <div className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                          <User size={24} className="text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-800">
+                            {drivers.find((d) => d.id === pendingPickerDriverId)?.user?.full_name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {pendingPickerDate} · {pendingPickerTime}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {assignDriverTrucks.length === 1 ? (
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-600 flex items-center gap-2">
+                        <Truck size={16} className="text-gray-400" />
+                        {`${getTruckTypeLabel(assignDriverTrucks[0].truck_type)} — ${assignDriverTrucks[0].plate_number}`}
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          בחירת משאית
+                        </label>
+                        <select
+                          value={pendingPickerTruckId || ''}
+                          onChange={(e) => setPendingPickerTruckId(e.target.value || null)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        >
+                          <option value="">בחרי משאית...</option>
+                          {assignTruckOptions.map((truck) => (
+                            <option key={truck.id} value={truck.id}>
+                              {truck.plate_number}
+                              {(truck.manufacturer || truck.model)
+                                ? ` — ${[truck.manufacturer, truck.model].filter(Boolean).join(' ')}`
+                                : ` — ${getTruckTypeLabel(truck.truck_type)}`}
+                            </option>
+                          ))}
+                        </select>
+                        {assignDriverTrucks.length === 0 && (
+                          <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                            <AlertTriangle size={12} />
+                            לנהג זה אין משאית משויכת — בחרי משאית מהרשימה
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={closeDriverPicker}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    ביטול
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!pendingPickerTruckId}
+                    onClick={() => {
+                      setPreSelectedDriverId(pendingPickerDriverId)
+                      setPreSelectedTruckId(pendingPickerTruckId)
+                      setTowDate(pendingPickerDate!)
+                      setTowTime(pendingPickerTime!)
+                      openedTruckPickerFromUrlRef.current = false
+                      closeDriverPicker()
+                    }}
+                    className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium"
+                  >
+                    שבץ נהג
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
       {showAssignNowModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
