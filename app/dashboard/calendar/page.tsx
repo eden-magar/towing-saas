@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
 import { getDrivers } from '../../lib/queries/drivers'
+import { getTrucks } from '../../lib/queries/trucks'
 import { TowWithDetails } from '../../lib/queries/tows'
-import { DriverWithDetails } from '../../lib/types'
+import { DriverWithDetails, TruckWithDetails } from '../../lib/types'
+import { getTruckTypeLabel } from '../../lib/utils/truck-type-labels'
 import { recalculateTowPrice, updateTow } from '../../lib/queries/tows'
 import { supabase } from '../../lib/supabase'
 import { 
@@ -19,7 +21,10 @@ import {
   GripVertical,
   Check,
   RefreshCw,
-  Calendar
+  Calendar,
+  ArrowRight,
+  User,
+  AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -102,6 +107,7 @@ export default function CalendarPage() {
   })
   
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
+  const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [tows, setTows] = useState<TowWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -113,6 +119,9 @@ export default function CalendarPage() {
   const [showDriverModal, setShowDriverModal] = useState(false)
   const [pendingSlot, setPendingSlot] = useState<{ date: Date; hour: number } | null>(null)
   const [towToAssign, setTowToAssign] = useState<TowWithDetails | null>(null)
+  const [selectedAssignDriverId, setSelectedAssignDriverId] = useState<string | null>(null)
+  const [selectedAssignTruckId, setSelectedAssignTruckId] = useState<string | null>(null)
+  const [assigningTow, setAssigningTow] = useState(false)
 
   // מודל עדכון מחיר
   const [showPriceUpdateModal, setShowPriceUpdateModal] = useState(false)
@@ -158,12 +167,14 @@ export default function CalendarPage() {
     if (!companyId) return
     
     try {
-      const [driversData, towsData] = await Promise.all([
+      const [driversData, trucksData, towsData] = await Promise.all([
         getDrivers(companyId),
+        getTrucks(companyId),
         getWeekTows(companyId, currentWeekStart)
       ])
       
       setDrivers(driversData)
+      setTrucks(trucksData)
       setTows(towsData)
     } catch (error) {
       console.error('Error loading calendar data:', error)
@@ -206,6 +217,9 @@ export default function CalendarPage() {
   const getDriverName = (driverId: string) => {
     return drivers.find(d => d.id === driverId)?.user?.full_name || ''
   }
+
+  const getDriverTrucks = (driverId: string) =>
+    trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
 
   // יצירת ימי השבוע
   const weekDays = useMemo(() => {
@@ -563,6 +577,8 @@ const handleSkipPriceUpdate = () => {
     slotDate.setHours(hour, 0, 0, 0)
     setPendingSlot({ date: slotDate, hour })
     setTowToAssign(null)
+    setSelectedAssignDriverId(null)
+    setSelectedAssignTruckId(null)
     setShowDriverModal(true)
   }
 
@@ -570,14 +586,14 @@ const handleSkipPriceUpdate = () => {
   const handleAssignDriver = (tow: TowWithDetails) => {
     setTowToAssign(tow)
     setPendingSlot(null)
+    setSelectedAssignDriverId(null)
+    setSelectedAssignTruckId(null)
     setShowDriverModal(true)
   }
 
-  // בחירת נהג - מעביר לטופס או משבץ לגרירה קיימת
-  const handleDriverSelect = async (driverId: string) => {
+  // בחירת נהג - מעביר לטופס או עובר לשלב בחירת משאית
+  const handleDriverSelect = (driverId: string) => {
     if (pendingSlot) {
-      // יצירת גרירה חדשה - מעביר לטופס עם הפרמטרים
-      // שימוש בתאריך מקומי במקום UTC
       const year = pendingSlot.date.getFullYear()
       const month = (pendingSlot.date.getMonth() + 1).toString().padStart(2, '0')
       const day = pendingSlot.date.getDate().toString().padStart(2, '0')
@@ -585,17 +601,32 @@ const handleSkipPriceUpdate = () => {
       const timeStr = `${pendingSlot.hour.toString().padStart(2, '0')}:00`
       window.location.href = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}&driver=${driverId}`
     } else if (towToAssign) {
-      // שיבוץ נהג לגרירה קיימת
-      try {
-        await updateTowSchedule(towToAssign.id, new Date(towToAssign.scheduled_at || towToAssign.created_at), driverId)
-        setTows(tows.map(t => 
-          t.id === towToAssign.id ? { ...t, driver_id: driverId } : t
-        ))
-        setShowDriverModal(false)
-        setTowToAssign(null)
-      } catch (error) {
-        console.error('Error assigning driver:', error)
-      }
+      const driverTrucks = getDriverTrucks(driverId)
+      setSelectedAssignDriverId(driverId)
+      setSelectedAssignTruckId(driverTrucks.length === 1 ? driverTrucks[0].id : null)
+    }
+  }
+
+  const handleConfirmTowAssign = async () => {
+    if (!towToAssign || !selectedAssignDriverId || !selectedAssignTruckId) return
+    setAssigningTow(true)
+    try {
+      await updateTowSchedule(
+        towToAssign.id,
+        new Date(towToAssign.scheduled_at || towToAssign.created_at),
+        selectedAssignDriverId,
+        selectedAssignTruckId
+      )
+      setTows(tows.map(t =>
+        t.id === towToAssign.id
+          ? { ...t, driver_id: selectedAssignDriverId, truck_id: selectedAssignTruckId }
+          : t
+      ))
+      closeDriverModal()
+    } catch (error) {
+      console.error('Error assigning driver:', error)
+    } finally {
+      setAssigningTow(false)
     }
   }
 
@@ -604,6 +635,8 @@ const handleSkipPriceUpdate = () => {
     setShowDriverModal(false)
     setPendingSlot(null)
     setTowToAssign(null)
+    setSelectedAssignDriverId(null)
+    setSelectedAssignTruckId(null)
   }
 
   // בחירת יום לתצוגה יומית
@@ -1345,7 +1378,78 @@ const handleSkipPriceUpdate = () => {
             </div>
 
             <div className="p-4 space-y-2">
-              {drivers.length === 0 ? (
+              {towToAssign && selectedAssignDriverId ? (() => {
+                const assignDriverTrucks = getDriverTrucks(selectedAssignDriverId)
+                const assignTruckOptions =
+                  assignDriverTrucks.length > 0
+                    ? assignDriverTrucks
+                    : trucks.filter((t) => t.is_active)
+                return (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAssignDriverId(null)
+                        setSelectedAssignTruckId(null)
+                      }}
+                      className="flex items-center gap-2 text-[#33d4ff] text-sm font-medium"
+                    >
+                      <ArrowRight size={18} />
+                      חזור לרשימת נהגים
+                    </button>
+
+                    <div className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                          <User size={24} className="text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-800">
+                            {drivers.find(d => d.id === selectedAssignDriverId)?.user?.full_name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {drivers.find(d => d.id === selectedAssignDriverId)?.user?.phone}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {assignDriverTrucks.length === 1 ? (
+                      <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-600 flex items-center gap-2">
+                        <Truck size={16} className="text-gray-400" />
+                        {`${getTruckTypeLabel(assignDriverTrucks[0].truck_type)} — ${assignDriverTrucks[0].plate_number}`}
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          בחירת משאית
+                        </label>
+                        <select
+                          value={selectedAssignTruckId || ''}
+                          onChange={(e) => setSelectedAssignTruckId(e.target.value || null)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        >
+                          <option value="">בחרי משאית...</option>
+                          {assignTruckOptions.map((truck) => (
+                            <option key={truck.id} value={truck.id}>
+                              {truck.plate_number}
+                              {(truck.manufacturer || truck.model)
+                                ? ` — ${[truck.manufacturer, truck.model].filter(Boolean).join(' ')}`
+                                : ` — ${getTruckTypeLabel(truck.truck_type)}`}
+                            </option>
+                          ))}
+                        </select>
+                        {assignDriverTrucks.length === 0 && (
+                          <p className="text-xs text-amber-700 mt-1.5 flex items-center gap-1">
+                            <AlertTriangle size={12} />
+                            לנהג זה אין משאית משויכת — בחרי משאית מהרשימה
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })() : drivers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Truck size={40} className="mx-auto mb-3 text-gray-300" />
                   <p>אין נהגים במערכת</p>
@@ -1429,12 +1533,33 @@ const handleSkipPriceUpdate = () => {
             </div>
 
             <div className="px-5 py-4 border-t border-gray-200 bg-gray-50">
-              <button
-                onClick={closeDriverModal}
-                className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
-              >
-                ביטול
-              </button>
+              {towToAssign && selectedAssignDriverId ? (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={closeDriverModal}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
+                  >
+                    ביטול
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmTowAssign}
+                    disabled={!selectedAssignTruckId || assigningTow}
+                    className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {assigningTow ? 'משבץ...' : 'שבץ נהג'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={closeDriverModal}
+                  className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
+                >
+                  ביטול
+                </button>
+              )}
             </div>
           </div>
         </div>
