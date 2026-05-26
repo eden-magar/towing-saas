@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getDriverHoursReport, getDriverHourlyLocations } from '../lib/queries/driver-shifts'
+import {
+  getDriverHoursReport,
+  getDriverHourlyLocations,
+  type DriverHourlyLocationRow,
+} from '../lib/queries/driver-shifts'
 import { getDrivers } from '../lib/queries/drivers'
 import { Clock, MapPin, Users, Activity, ChevronDown } from 'lucide-react'
 
@@ -11,7 +15,7 @@ interface Props {
 
 export default function DriverHoursTab({ companyId }: Props) {
   const [shifts, setShifts] = useState<any[]>([])
-  const [locations, setLocations] = useState<any[]>([])
+  const [locations, setLocations] = useState<DriverHourlyLocationRow[]>([])
   const [drivers, setDrivers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeSubTab, setActiveSubTab] = useState<'shifts' | 'locations'>('shifts')
@@ -285,17 +289,20 @@ export default function DriverHoursTab({ companyId }: Props) {
                     <MapPin size={24} className="mx-auto mb-2 opacity-30" />
                     אין נתוני מיקום לתקופה זו
                   </td></tr>
-                ) : locations.map((loc: any) => {
-                  const d = new Date(loc.timestamp)
-                  d.setMinutes(0, 0, 0)
+                ) : locations.map((loc) => {
+                  const hourLabel = `${String(loc.hour).padStart(2, '0')}:00`
+                  const dateLabel = new Date(`${loc.date}T12:00:00`).toLocaleDateString('he-IL')
                   return (
-                    <tr key={loc.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-5 py-3.5 font-medium text-gray-800">{loc.driver?.user?.full_name || '—'}</td>
-                      <td className="px-5 py-3.5 text-gray-500">{d.toLocaleDateString('he-IL')}</td>
+                    <tr
+                      key={`${loc.driver_id}-${loc.date}-${loc.hour}`}
+                      className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                    >
+                      <td className="px-5 py-3.5 font-medium text-gray-800">{loc.driver_name}</td>
+                      <td className="px-5 py-3.5 text-gray-500">{dateLabel}</td>
                       <td className="px-5 py-3.5">
                         <span className="inline-flex items-center gap-1.5 font-medium text-gray-700">
                           <Clock size={13} className="text-[#33d4ff]" />
-                          {d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                          {hourLabel}
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
@@ -304,7 +311,7 @@ export default function DriverHoursTab({ companyId }: Props) {
                               <MapPin size={13} className="text-gray-400 flex-shrink-0" />
                               {loc.address}
                             </span>
-                          : loc.lat
+                          : loc.lat != null && loc.lng != null
                             ? <span className="text-gray-400 text-xs">{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
                             : <span className="text-gray-300">—</span>}
                       </td>

@@ -1,5 +1,68 @@
 import { supabase } from '../supabase'
 
+const JERUSALEM_TZ = 'Asia/Jerusalem'
+
+export type DriverHourlyLocationRow = {
+  driver_id: string
+  driver_name: string
+  date: string
+  hour: number
+  timestamp: string
+  lat: number | null
+  lng: number | null
+  address: string | null
+  shift_id: string | null
+}
+
+function getJerusalemDateAndHour(isoTimestamp: string): { date: string; hour: number } {
+  const d = new Date(isoTimestamp)
+  const date = d.toLocaleDateString('sv-SE', { timeZone: JERUSALEM_TZ })
+  const hour = parseInt(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: JERUSALEM_TZ,
+      hour: '2-digit',
+      hour12: false,
+    }).format(d),
+    10
+  )
+  return { date, hour }
+}
+
+function aggregateDriverHourlyLocations(rows: any[]): DriverHourlyLocationRow[] {
+  const byBucket = new Map<string, DriverHourlyLocationRow>()
+
+  for (const row of rows) {
+    if (!row.timestamp || !row.driver_id) continue
+
+    const { date, hour } = getJerusalemDateAndHour(row.timestamp)
+    const key = `${row.driver_id}|${date}|${hour}`
+    const driver = row.driver as { user?: { full_name?: string } } | null
+    const driverName = driver?.user?.full_name || '—'
+    const rowMs = new Date(row.timestamp).getTime()
+
+    const existing = byBucket.get(key)
+    if (!existing || rowMs > new Date(existing.timestamp).getTime()) {
+      byBucket.set(key, {
+        driver_id: row.driver_id,
+        driver_name: driverName,
+        date,
+        hour,
+        timestamp: row.timestamp,
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+        address: row.address ?? null,
+        shift_id: row.shift_id ?? null,
+      })
+    }
+  }
+
+  return Array.from(byBucket.values()).sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date)
+    if (a.hour !== b.hour) return b.hour - a.hour
+    return a.driver_name.localeCompare(b.driver_name, 'he')
+  })
+}
+
 export async function startShift(driverId: string, companyId: string, lat?: number, lng?: number) {
   const { data: existingShift } = await supabase
     .from('driver_shifts')
@@ -392,7 +455,7 @@ export async function getDriverHourlyLocations(
   startDate: string,
   endDate: string,
   driverId?: string
-) {
+): Promise<DriverHourlyLocationRow[]> {
   let query = supabase
     .from('driver_locations')
     .select(`
@@ -419,5 +482,7 @@ export async function getDriverHourlyLocations(
 
   const { data, error } = await query
   if (error) throw error
-  return data || []
+  if (!data || data.length === 0) return []
+
+  return aggregateDriverHourlyLocations(data)
 }
