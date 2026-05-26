@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { TowWithDetails, TowVehicle, TowLeg } from './tows'
+import { insertDriverTruckAssignments } from './driver-truck-assignments'
 
 // ==================== שליפת גרירות ליומן ====================
 
@@ -119,7 +120,8 @@ export async function getDayTows(companyId: string, date: Date): Promise<TowWith
 export async function updateTowSchedule(
   towId: string,
   scheduledAt: Date,
-  driverId?: string
+  driverId?: string,
+  truckId?: string
 ) {
   const updates: Record<string, any> = {
     scheduled_at: scheduledAt.toISOString()
@@ -128,6 +130,9 @@ export async function updateTowSchedule(
   if (driverId) {
     updates.driver_id = driverId
     updates.status = 'assigned'
+    if (truckId) {
+      updates.truck_id = truckId
+    }
   }
 
   const { error } = await supabase
@@ -138,6 +143,23 @@ export async function updateTowSchedule(
   if (error) {
     console.error('Error updating tow schedule:', error)
     throw error
+  }
+
+  if (driverId && truckId) {
+    try {
+      const { data: existing } = await supabase
+        .from('driver_truck_assignments')
+        .select('id')
+        .eq('driver_id', driverId)
+        .eq('is_current', true)
+        .limit(1)
+
+      if (!existing || existing.length === 0) {
+        await insertDriverTruckAssignments(driverId, [truckId])
+      }
+    } catch (err) {
+      console.error('Failed to check/create driver-truck assignment:', err)
+    }
   }
 
   return true
