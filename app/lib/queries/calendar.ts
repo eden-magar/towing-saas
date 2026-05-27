@@ -9,8 +9,10 @@ export async function getCalendarTows(
   startDate: Date,
   endDate: Date
 ): Promise<TowWithDetails[]> {
-  // שאילתה פשוטה - מביאה את כל הגרירות של החברה
-  const { data: allTows, error } = await supabase
+  const startIso = startDate.toISOString()
+  const endIso = endDate.toISOString()
+
+  const { data: tows, error } = await supabase
     .from('tows')
     .select(`
       *,
@@ -33,6 +35,10 @@ export async function getCalendarTows(
     `)
     .eq('company_id', companyId)
     .neq('status', 'cancelled')
+    .or(
+      `and(scheduled_at.gte.${startIso},scheduled_at.lte.${endIso}),` +
+        `and(scheduled_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`
+    )
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -40,16 +46,7 @@ export async function getCalendarTows(
     throw error
   }
 
-  if (!allTows || allTows.length === 0) return []
-
-  // סינון בצד הקליינט
-  const tows = allTows.filter(tow => {
-    const towDate = new Date(tow.scheduled_at || tow.created_at)
-    const inRange = towDate >= startDate && towDate <= endDate
-    return inRange
-  })
-
-  if (tows.length === 0) return []
+  if (!tows || tows.length === 0) return []
 
   // שליפת כלי רכב
   const towIds = tows.map(t => t.id)
