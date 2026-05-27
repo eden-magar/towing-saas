@@ -11,6 +11,7 @@
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTows, updateTowSchedule } from '../lib/queries/calendar'
   import { supabase } from '../lib/supabase'
+  import { getVehicleTypeLabel, isKnownVehicleType } from '../lib/vehicle-lookup'
   import DriversMap from '../components/DriversMap'
   import EditShiftModal from '../components/EditShiftModal'
   import { formatOpenShiftDuration, formatShiftStartJerusalem } from '../lib/shift-datetime'
@@ -722,7 +723,7 @@
                       <span className="text-gray-400">|</span>
                       <span className="text-gray-700">{v?.plate_number ?? '—'}</span>
                       <span className="text-gray-400">|</span>
-                      <span className="text-gray-600">{v?.vehicle_type ?? '—'}</span>
+                      <span className="text-gray-600">{v?.vehicle_type && isKnownVehicleType(v.vehicle_type) ? getVehicleTypeLabel(v.vehicle_type) : '—'}</span>
                     </button>
                   )
                 })

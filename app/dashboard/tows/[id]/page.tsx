@@ -9,6 +9,7 @@ import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
+import { getVehicleTypeLabel, isKnownVehicleType } from '../../../lib/vehicle-lookup'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
@@ -1520,7 +1521,9 @@ export default function TowDetailsPage() {
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {vehicle.vehicle_type && (
-                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.vehicle_type}</span>
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
+                                {isKnownVehicleType(vehicle.vehicle_type) ? getVehicleTypeLabel(vehicle.vehicle_type) : '—'}
+                              </span>
                             )}
                             {vehicle.color && (
                               <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.color}</span>
@@ -1879,7 +1882,7 @@ export default function TowDetailsPage() {
                     <div className="space-y-2 text-sm">
                       {/* מחיר בסיס */}
                       <div className="flex justify-between">
-                        <span className="text-gray-600">מחיר בסיס ({tow.price_breakdown.vehicle_type === 'private' ? 'פרטי' : tow.price_breakdown.vehicle_type})</span>
+                        <span className="text-gray-600">מחיר בסיס ({isKnownVehicleType(tow.price_breakdown.vehicle_type) ? getVehicleTypeLabel(tow.price_breakdown.vehicle_type) : '—'})</span>
                         <span className="font-medium text-gray-800">₪{tow.price_breakdown.base_price}</span>
                       </div>
                       

@@ -406,6 +406,10 @@ export function getVehicleTypeLabel(type: VehicleType): string {
   return labels[type] || 'רכב פרטי'
 }
 
+export function isKnownVehicleType(value: unknown): value is VehicleType {
+  return value === 'private' || value === 'motorcycle' || value === 'heavy' || value === 'machinery'
+}
+
 /**
  * אייקון לסוג רכב
  */
