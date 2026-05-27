@@ -470,28 +470,33 @@ export async function towHasInvoice(towId: string): Promise<boolean> {
 
 // ==================== גרירות ללא חשבונית ====================
 
+/**
+ * TODO [Stage 1 / Task 1.3 - deferred]:
+ *
+ * This function currently has a known bug: the filter `.is('id', null)` is
+ * always false (tows.id is the primary key), so it always returns an empty
+ * array. The intent is to return completed tows that do NOT yet have an
+ * associated invoice.
+ *
+ * Deferred reason: function has zero callers in the codebase as of 2026-05-27.
+ * Fix should happen alongside the future invoice generation UI, so the exact
+ * semantics ("no invoice" = no row in `invoices.tow_id`? also check
+ * `invoice_items.tow_id`? exclude cancelled invoices?) can be decided in
+ * product context rather than in a vacuum.
+ *
+ * When implementing:
+ *   1. Decide whether "has invoice" means a row in `invoices` only, or also
+ *      includes `invoice_items`.
+ *   2. Decide whether cancelled invoices count as "has invoice".
+ *   3. Implement the exclusion via `.not('id', 'in', '(...)')` after fetching
+ *      invoiced tow_ids for the company.
+ *   4. Add pagination if the result set could grow large.
+ *   5. Tighten the return type from `any[]` to a proper interface.
+ */
 export async function getTowsWithoutInvoice(companyId: string): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('tows')
-    .select(`
-      id,
-      created_at,
-      status,
-      final_price,
-      customer:customers (
-        id,
-        name
-      )
-    `)
-    .eq('company_id', companyId)
-    .eq('status', 'completed')
-    .is('id', null) // לא קיים בחשבוניות - נצטרך לבדוק אחרת
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error('Error fetching tows without invoice:', error)
-    throw error
-  }
-
-  return data || []
+  console.warn(
+    '[getTowsWithoutInvoice] Called but not implemented. ' +
+    'See TODO in app/lib/queries/invoices.ts. Returning empty array.'
+  )
+  return []
 }
