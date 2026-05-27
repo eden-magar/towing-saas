@@ -5,16 +5,9 @@ import { SelectedService } from '../../components/tow-forms/shared'
 import { calculateTowPrice, extractBasePrices } from './price-calculator'
 import { VehicleType } from '../types'
 import { normalizePlate } from './plate-number'
+import type { AddressData } from '../google-maps'
 
 // ==================== Types ====================
-
-export interface AddressData {
-  address: string
-  placeId?: string
-  lat?: number
-  lng?: number
-  isPinDropped?: boolean
-}
 
 export interface DistanceResult {
   distanceKm: number

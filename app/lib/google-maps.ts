@@ -46,9 +46,25 @@ export function loadGoogleMaps(): Promise<void> {
 export async function calculateDistance(origin: AddressData, destination: AddressData): Promise<DistanceResult | null> {
   if (!window.google?.maps) return null
   const service = new window.google.maps.DistanceMatrixService()
-  // תמיד להשתמש בכתובת הטקסטואלית לחישוב מדויק יותר
-  const originLocation = origin.address
-  const destLocation = destination.address
+
+  // Prefer LatLng coordinates when available.
+  // Address strings can be ambiguous (same street name in different cities in Israel),
+  // and reverse-geocoded addresses from pin drops may not match the actual pin location.
+  const hasOriginCoords = origin.lat != null && origin.lng != null
+  const hasDestCoords = destination.lat != null && destination.lng != null
+
+  const originLocation = hasOriginCoords
+    ? new window.google.maps.LatLng(origin.lat!, origin.lng!)
+    : origin.address
+  const destLocation = hasDestCoords
+    ? new window.google.maps.LatLng(destination.lat!, destination.lng!)
+    : destination.address
+
+  // TODO: remove after distance bug verified in production
+  console.log('[calculateDistance] input', {
+    origin: { hasCoords: hasOriginCoords, lat: origin.lat, lng: origin.lng, address: origin.address, isPinDropped: origin.isPinDropped },
+    destination: { hasCoords: hasDestCoords, lat: destination.lat, lng: destination.lng, address: destination.address, isPinDropped: destination.isPinDropped }
+  })
 
   return new Promise((resolve) => {
     service.getDistanceMatrix({
@@ -58,11 +74,19 @@ export async function calculateDistance(origin: AddressData, destination: Addres
       unitSystem: window.google.maps.UnitSystem.METRIC,
       region: 'IL'
     }, (response: google.maps.DistanceMatrixResponse | null, status: google.maps.DistanceMatrixStatus) => {
-      if (status !== 'OK' || !response) { resolve(null); return }
+      if (status !== 'OK' || !response) {
+        // TODO: remove after distance bug verified in production
+        console.log('[calculateDistance] FAILED', status)
+        resolve(null)
+        return
+      }
       const result = response.rows[0]?.elements[0]
       if (result?.status !== 'OK') { resolve(null); return }
+      const km = Math.round(result.distance.value / 1000 * 10) / 10
+      // TODO: remove after distance bug verified in production
+      console.log('[calculateDistance] result', km, 'km')
       resolve({
-        distanceKm: Math.round(result.distance.value / 1000 * 10) / 10,
+        distanceKm: km,
         durationMinutes: Math.round(result.duration.value / 60)
       })
     })

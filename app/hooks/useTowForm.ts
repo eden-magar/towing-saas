@@ -298,7 +298,7 @@ export function useTowForm(editTowId?: string) {
     }
     const timeout = setTimeout(calc, 500)
     return () => clearTimeout(timeout)
-  }, [pickupAddress.address, pickupAddress.lat, dropoffAddress.address, dropoffAddress.lat])
+  }, [pickupAddress.address, pickupAddress.lat, pickupAddress.lng, dropoffAddress.address, dropoffAddress.lat, dropoffAddress.lng])
 
   // Calculate base to pickup distance
   useEffect(() => {
@@ -325,7 +325,7 @@ export function useTowForm(editTowId?: string) {
     }
     const timeout = setTimeout(calcBaseDistance, 500)
     return () => clearTimeout(timeout)
-  }, [startFromBase, pickupAddress.address, pickupAddress.lat, basePriceList?.base_lat, basePriceList?.base_lng])
+  }, [startFromBase, pickupAddress.address, pickupAddress.lat, pickupAddress.lng, basePriceList?.base_lat, basePriceList?.base_lng])
 
 
   // Calculate exchange total distance
@@ -365,9 +365,9 @@ export function useTowForm(editTowId?: string) {
     const timeout = setTimeout(calcExchangeDistance, 500)
     return () => clearTimeout(timeout)
   }, [
-    workingVehicleAddress.address, workingVehicleAddress.lat,
-    exchangeAddress.address, exchangeAddress.lat,
-    defectiveDestinationAddress.address, defectiveDestinationAddress.lat,
+    workingVehicleAddress.address, workingVehicleAddress.lat, workingVehicleAddress.lng,
+    exchangeAddress.address, exchangeAddress.lat, exchangeAddress.lng,
+    defectiveDestinationAddress.address, defectiveDestinationAddress.lat, defectiveDestinationAddress.lng,
     stopsBeforeExchange,
     stopsAfterExchange,
   ])

@@ -1,7 +1,11 @@
 // ==================== useGoogleMaps Hook ====================
 // Hook לטעינת Google Maps API
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import { AddressData, calculateDistance, DistanceResult } from '../../lib/google-maps'
+
+export type { AddressData, DistanceResult }
+export { calculateDistance }
 
 declare global {
   interface Window {
@@ -94,79 +98,6 @@ export function useGoogleMaps(apiKey: string): UseGoogleMapsReturn {
     loadError,
     google: isLoaded ? window.google : null
   }
-}
-
-// ==================== Address Types ====================
-
-export interface AddressData {
-  address: string
-  placeId?: string
-  lat?: number
-  lng?: number
-  isPinDropped?: boolean
-}
-
-export interface DistanceResult {
-  distanceKm: number
-  durationMinutes: number
-  distanceText: string
-  durationText: string
-}
-
-// ==================== Distance Calculation ====================
-
-export async function calculateDistance(
-  origin: AddressData,
-  destination: AddressData
-): Promise<DistanceResult | null> {
-  if (!window.google?.maps) {
-    console.error('Google Maps not loaded')
-    return null
-  }
-
-  const service = new window.google.maps.DistanceMatrixService()
-
-  // הכנת מקור ויעד
-  const originLocation = origin.lat && origin.lng
-    ? new window.google.maps.LatLng(origin.lat, origin.lng)
-    : origin.address
-
-  const destLocation = destination.lat && destination.lng
-    ? new window.google.maps.LatLng(destination.lat, destination.lng)
-    : destination.address
-
-  return new Promise((resolve) => {
-    service.getDistanceMatrix(
-      {
-        origins: [originLocation],
-        destinations: [destLocation],
-        travelMode: window.google.maps.TravelMode.DRIVING,
-        unitSystem: window.google.maps.UnitSystem.METRIC,
-        region: 'IL'
-      },
-      (response, status) => {
-        if (status !== 'OK' || !response) {
-          console.error('Distance Matrix error:', status)
-          resolve(null)
-          return
-        }
-
-        const result = response.rows[0]?.elements[0]
-        if (result?.status !== 'OK') {
-          console.error('Route not found')
-          resolve(null)
-          return
-        }
-
-        resolve({
-          distanceKm: Math.round(result.distance.value / 1000 * 10) / 10,
-          durationMinutes: Math.round(result.duration.value / 60),
-          distanceText: result.distance.text,
-          durationText: result.duration.text
-        })
-      }
-    )
-  })
 }
 
 // ==================== Reverse Geocoding ====================
