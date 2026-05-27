@@ -1,6 +1,7 @@
   'use client'
 
   import React, { useCallback, useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
+  import { useDebouncedCallback } from '../hooks/useDebouncedCallback'
   import { useRouter } from 'next/navigation'
   import { useAuth } from '../lib/AuthContext'
   import { getDashboardStats, getPendingUnassignedTows, getQuoteTows, getOpenTowsCountByDriver, DashboardStats } from '../lib/queries/dashboard'
@@ -248,6 +249,10 @@
       await loadEssential()
     }, [loadEssential])
 
+    const debouncedRefreshEssential = useDebouncedCallback(() => {
+      void refreshEssential()
+    }, 300)
+
     const refreshRejections = useCallback(async () => {
       if (!companyId) return
       try {
@@ -446,19 +451,19 @@
 
       const channel = supabase
         .channel(`dashboard-realtime-${companyId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => { void refreshEssential() })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => { debouncedRefreshEssential() })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => { void refreshRejections() })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => {
           void refreshShiftsAndOvertime()
           void refreshDriversAndMap()
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => { void refreshEssential() })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => { debouncedRefreshEssential() })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
         .subscribe()
 
       return () => { supabase.removeChannel(channel) }
-    }, [companyId, refreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime])
+    }, [companyId, debouncedRefreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime])
 
     const prevDay = () => {
       const d = new Date(calendarDate)
