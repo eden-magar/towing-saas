@@ -1730,6 +1730,15 @@ function CreateTowForm({
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
                             <div className="flex flex-col">
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                                <span className="text-xs font-medium text-green-700">נמצא במאגר הרשמי</span>
+                                {workingVehicleData.sourceLabel && (
+                                  <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
+                                    {workingVehicleData.sourceLabel}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl content-start">
                                 {[
                                   { label: 'יצרן', value: workingVehicleData.data.manufacturer },
@@ -1934,6 +1943,15 @@ function CreateTowForm({
                               </div>
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
                                 <div className="flex flex-col">
+                                  <div className="flex items-center gap-1.5 mb-2">
+                                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                                    <span className="text-xs font-medium text-green-700">נמצא במאגר הרשמי</span>
+                                    {defectiveVehicleData.sourceLabel && (
+                                      <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">
+                                        {defectiveVehicleData.sourceLabel}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl content-start">
                                     {[
                                       { label: 'יצרן', value: defectiveVehicleData.data.manufacturer },
