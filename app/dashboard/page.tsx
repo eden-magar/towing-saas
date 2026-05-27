@@ -333,12 +333,8 @@
     }, [companyId, calendarDate])
 
     const loadCalendarTows = useCallback(async () => {
-      if (companyTows.length > 0) {
-        setCalendarTows(filterTowsForDay(companyTows, calendarDate))
-        return
-      }
       await loadCalendarFromApi()
-    }, [companyTows, calendarDate, loadCalendarFromApi])
+    }, [loadCalendarFromApi])
 
     const handleDragStart = (e: React.DragEvent, tow: any) => {
       setDraggedTow(tow)
@@ -457,13 +453,9 @@
     }, [companyId, authLoading, loadEssential, loadDeferred])
 
     useEffect(() => {
-      if (companyTows.length > 0) {
-        setCalendarTows(filterTowsForDay(companyTows, calendarDate))
-        return
-      }
       if (!companyId || authLoading || loading) return
       void loadCalendarFromApi()
-    }, [companyId, calendarDate, companyTows, authLoading, loading, loadCalendarFromApi])
+    }, [companyId, calendarDate, authLoading, loading, loadCalendarFromApi])
 
     // Realtime — scoped refreshes (no full dashboard reload)
     useEffect(() => {
