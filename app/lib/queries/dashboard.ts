@@ -153,3 +153,78 @@ export async function getRecentTows(companyId: string, limit: number = 5): Promi
     legs: legsByTow[tow.id] || []
   }))
 }
+
+/**
+ * Pending tows that have not been assigned to a driver yet.
+ * Used by the dashboard "ממתינות לשיבוץ" panel.
+ */
+export async function getPendingUnassignedTows(companyId: string): Promise<TowWithDetails[]> {
+  const { data: tows, error } = await supabase
+    .from('tows')
+    .select(`
+      *,
+      customer:customers (
+        id,
+        name,
+        phone
+      ),
+      driver:drivers!tows_driver_id_fkey (
+        id,
+        user:users!drivers_user_id_fkey (
+          full_name,
+          phone
+        )
+      ),
+      truck:tow_trucks (
+        id,
+        plate_number
+      )
+    `)
+    .eq('company_id', companyId)
+    .eq('status', 'pending')
+    .is('driver_id', null)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching pending unassigned tows:', error)
+    return []
+  }
+
+  if (!tows || tows.length === 0) return []
+
+  const towIds = tows.map(t => t.id)
+
+  const [vehiclesRes, legsRes] = await Promise.all([
+    supabase
+      .from('tow_vehicles')
+      .select('*')
+      .in('tow_id', towIds)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('tow_legs')
+      .select('*')
+      .in('tow_id', towIds)
+      .order('leg_order', { ascending: true }),
+  ])
+
+  const vehiclesByTow: Record<string, TowVehicle[]> = {}
+  vehiclesRes.data?.forEach(v => {
+    if (!vehiclesByTow[v.tow_id]) vehiclesByTow[v.tow_id] = []
+    vehiclesByTow[v.tow_id].push(v)
+  })
+
+  const legsByTow: Record<string, TowLeg[]> = {}
+  legsRes.data?.forEach(l => {
+    if (!legsByTow[l.tow_id]) legsByTow[l.tow_id] = []
+    legsByTow[l.tow_id].push(l)
+  })
+
+  return tows.map(tow => ({
+    ...tow,
+    customer: tow.customer as any,
+    driver: tow.driver as any,
+    truck: tow.truck as any,
+    vehicles: vehiclesByTow[tow.id] || [],
+    legs: legsByTow[tow.id] || [],
+  }))
+}
