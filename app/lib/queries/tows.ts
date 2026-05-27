@@ -151,8 +151,27 @@ export interface TowWithDetails {
 
 // ==================== שליפת גרירות ====================
 
-export async function getTows(companyId: string): Promise<TowWithDetails[]> {
-  const { data: tows, error } = await supabase
+export interface GetTowsOptions {
+  /** ISO date string. If null, no date filter. Default: 90 days ago. */
+  since?: string | null
+  /** Max rows. If null, no limit. Default: 100. */
+  limit?: number | null
+}
+
+export async function getTows(
+  companyId: string,
+  options: GetTowsOptions = {}
+): Promise<TowWithDetails[]> {
+  const defaultSince = new Date()
+  defaultSince.setDate(defaultSince.getDate() - 90)
+  const sinceIso =
+    options.since === null
+      ? null
+      : (options.since ?? defaultSince.toISOString())
+  const limitValue =
+    options.limit === null ? null : (options.limit ?? 100)
+
+  let query = supabase
     .from('tows')
     .select(`
       *,
@@ -182,6 +201,15 @@ export async function getTows(companyId: string): Promise<TowWithDetails[]> {
     `)
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
+
+  if (sinceIso) {
+    query = query.gte('created_at', sinceIso)
+  }
+  if (limitValue !== null) {
+    query = query.limit(limitValue)
+  }
+
+  const { data: tows, error } = await query
 
   if (error) {
     console.error('Error fetching tows:', error)

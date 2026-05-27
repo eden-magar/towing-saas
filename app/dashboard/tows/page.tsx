@@ -17,19 +17,20 @@ export default function TowsPage() {
   
   const [searchTerm, setSearchTerm] = useState('')
   const [activeStatus, setActiveStatus] = useState('all')
+  const [showAll, setShowAll] = useState(false)
 
   useEffect(() => {
     if (companyId) {
       loadData()
     }
-  }, [companyId])
+  }, [companyId, showAll])
 
   const loadData = async () => {
     if (!companyId) return
     
     setPageLoading(true)
     try {
-      const data = await getTows(companyId)
+      const data = await getTows(companyId, showAll ? { since: null, limit: null } : {})
       setTows(data)
     } catch (err) {
       console.error('Error loading tows:', err)
@@ -204,6 +205,21 @@ export default function TowsPage() {
               {status.label}
             </button>
           ))}
+        </div>
+
+        <div className="mt-3 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between text-xs">
+          <span className="text-blue-800">
+            {showAll
+              ? `מציג את כל ההיסטוריה (${tows.length} גרירות)`
+              : 'מציג גרירות מ-90 הימים האחרונים (עד 100 גרירות)'}
+          </span>
+          <button
+            onClick={() => setShowAll(prev => !prev)}
+            className="text-blue-600 hover:text-blue-800 font-medium underline-offset-2 hover:underline"
+            disabled={pageLoading}
+          >
+            {showAll ? 'חזור לטעינה מהירה' : 'הצג את כל ההיסטוריה'}
+          </button>
         </div>
       </div>
 
