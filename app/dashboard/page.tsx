@@ -3,7 +3,7 @@
   import React, { useCallback, useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
   import { useRouter } from 'next/navigation'
   import { useAuth } from '../lib/AuthContext'
-  import { getDashboardStats, getPendingUnassignedTows, DashboardStats } from '../lib/queries/dashboard'
+  import { getDashboardStats, getPendingUnassignedTows, getQuoteTows, DashboardStats } from '../lib/queries/dashboard'
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
   import { getTows, TowWithDetails, searchTows, recalculateTowPrice, updateTow } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
@@ -197,20 +197,21 @@
 
     const applyCompanyTows = useCallback((tows: TowWithDetails[]) => {
       setCompanyTows(tows)
-      setQuoteTows(tows.filter((t) => t.status === 'quote'))
     }, [])
 
     const loadEssential = useCallback(async () => {
       if (!companyId) return
       try {
-        const [statsData, towsData, pendingData] = await Promise.all([
+        const [statsData, towsData, pendingData, quoteData] = await Promise.all([
           getDashboardStats(companyId),
           getTows(companyId),
           getPendingUnassignedTows(companyId),
+          getQuoteTows(companyId),
         ])
         setStats(statsData)
         applyCompanyTows(towsData)
         setPendingTows(pendingData)
+        setQuoteTows(quoteData)
       } catch (err) {
         console.error('Dashboard essential load error:', err)
       }
