@@ -70,7 +70,14 @@
     const { user, companyId, loading: authLoading } = useAuth()
     const router = useRouter()
 
-    const [stats, setStats] = useState<DashboardStats>({ towsToday: 0, pendingTows: 0, completedToday: 0, availableDrivers: 0 })
+    const [stats, setStats] = useState<DashboardStats>({
+      towsToday: 0,
+      pendingTows: 0,
+      completedToday: 0,
+      availableDrivers: 0,
+      inProgressTows: 0,
+      todayRevenue: 0,
+    })
     const [pendingTows, setPendingTows] = useState<TowWithDetails[]>([])
     const [quoteTows, setQuoteTows] = useState<TowWithDetails[]>([])
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
@@ -85,11 +92,9 @@
     const calendarOverlayLayoutRef = useRef<HTMLDivElement>(null)
     const [calendarTheadHeightPx, setCalendarTheadHeightPx] = useState(33)
     const [driverColumnRects, setDriverColumnRects] = useState<{ left: number; width: number }[]>([])
-    const [todayTows, setTodayTows] = useState<any[]>([])
     const [activeDrivers, setActiveDrivers] = useState<any[]>([])
     const [allDrivers, setAllDrivers] = useState<any[]>([])
     const [activeTasks, setActiveTasks] = useState<number>(0)
-    const [inProgressTows, setInProgressTows] = useState<number>(0)
     const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
     const [draggedTow, setDraggedTow] = useState<any>(null)
     const [showPriceUpdateModal, setShowPriceUpdateModal] = useState(false)
@@ -194,8 +199,6 @@
       setCompanyTows(tows)
       setPendingTows(tows.filter((t) => t.status === 'pending' && !t.driver_id))
       setQuoteTows(tows.filter((t) => t.status === 'quote'))
-      setInProgressTows(tows.filter((t) => t.status === 'in_progress').length)
-      setTodayTows(filterTowsForDay(tows, new Date()))
     }, [])
 
     const loadEssential = useCallback(async () => {
@@ -625,7 +628,7 @@
             <div className="text-xs text-gray-400">הושלמו</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[80px]">
-            <div className="text-xl font-semibold text-indigo-500">{inProgressTows}</div>
+            <div className="text-xl font-semibold text-indigo-500">{stats?.inProgressTows ?? 0}</div>
             <div className="text-xs text-gray-400">בביצוע</div>
           </div>
         </div>
@@ -649,7 +652,7 @@
         {/* קבוצה 3: כספי */}
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-2 min-w-[100px]">
           <div className="text-xl font-semibold text-gray-800">
-            ₪{todayTows.filter((t: any) => t.status === 'completed').reduce((s: number, t: any) => s + (t.final_price || 0), 0).toLocaleString()}
+            ₪{(stats?.todayRevenue ?? 0).toLocaleString()}
           </div>
           <div className="text-xs text-gray-400">הכנסות היום</div>
         </div>

@@ -8,48 +8,75 @@ export interface DashboardStats {
   pendingTows: number
   completedToday: number
   availableDrivers: number
+  inProgressTows: number
+  todayRevenue: number
 }
 
 // ==================== סטטיסטיקות ====================
 
 export async function getDashboardStats(companyId: string): Promise<DashboardStats> {
   const today = new Date().toISOString().split('T')[0]
-  
-  // גרירות היום (כל הסטטוסים מלבד cancelled)
-  const { count: towsToday } = await supabase
-    .from('tows')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', companyId)
-    .gte('created_at', `${today}T00:00:00`)
-    .neq('status', 'cancelled')
 
-  // ממתינות לשיבוץ
-  const { count: pendingTows } = await supabase
-    .from('tows')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', companyId)
-    .eq('status', 'pending')
+  const [
+    towsTodayRes,
+    pendingTowsRes,
+    completedTodayRes,
+    availableDriversRes,
+    inProgressTowsRes,
+    todayRevenueRes,
+  ] = await Promise.all([
+    // גרירות היום (כל הסטטוסים מלבד cancelled)
+    supabase
+      .from('tows')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .gte('created_at', `${today}T00:00:00`)
+      .neq('status', 'cancelled'),
+    // ממתינות לשיבוץ
+    supabase
+      .from('tows')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'pending'),
+    // הושלמו היום
+    supabase
+      .from('tows')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'completed')
+      .gte('completed_at', `${today}T00:00:00`),
+    // נהגים זמינים
+    supabase
+      .from('drivers')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'available'),
+    // בביצוע
+    supabase
+      .from('tows')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'in_progress'),
+    // הכנסות היום
+    supabase
+      .from('tows')
+      .select('final_price')
+      .eq('company_id', companyId)
+      .eq('status', 'completed')
+      .gte('completed_at', `${today}T00:00:00Z`)
+      .lt('completed_at', `${today}T23:59:59Z`),
+  ])
 
-  // הושלמו היום
-  const { count: completedToday } = await supabase
-    .from('tows')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', companyId)
-    .eq('status', 'completed')
-    .gte('completed_at', `${today}T00:00:00`)
-
-  // נהגים זמינים
-  const { count: availableDrivers } = await supabase
-    .from('drivers')
-    .select('*', { count: 'exact', head: true })
-    .eq('company_id', companyId)
-    .eq('status', 'available')
+  const todayRevenue =
+    todayRevenueRes.data?.reduce((sum, row) => sum + (row.final_price || 0), 0) ?? 0
 
   return {
-    towsToday: towsToday || 0,
-    pendingTows: pendingTows || 0,
-    completedToday: completedToday || 0,
-    availableDrivers: availableDrivers || 0
+    towsToday: towsTodayRes.count || 0,
+    pendingTows: pendingTowsRes.count || 0,
+    completedToday: completedTodayRes.count || 0,
+    availableDrivers: availableDriversRes.count || 0,
+    inProgressTows: inProgressTowsRes.count || 0,
+    todayRevenue,
   }
 }
 
