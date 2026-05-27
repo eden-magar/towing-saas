@@ -174,7 +174,18 @@ export async function getTows(
   let query = supabase
     .from('tows')
     .select(`
-      *,
+      id,
+      company_id,
+      customer_id,
+      driver_id,
+      second_driver_id,
+      truck_id,
+      status,
+      created_at,
+      scheduled_at,
+      order_number,
+      customer_order_number,
+      final_price,
       customer:customers (
         id,
         name,
@@ -247,6 +258,10 @@ export async function getTows(
     legsByTow[l.tow_id].push(l)
   })
 
+  // Cast: Task 1.9 dropped heavy columns from the SELECT (price_breakdown,
+  // notes, visibility_overrides, etc.). The tow list page (the only caller)
+  // doesn't access those fields. If a future caller needs them, use getTow
+  // or getTowWithPoints instead, or add the columns back to the SELECT here.
   return tows.map(tow => ({
     ...tow,
     customer: tow.customer as any,
@@ -254,7 +269,7 @@ export async function getTows(
     truck: tow.truck as any,
     vehicles: vehiclesByTow[tow.id] || [],
     legs: legsByTow[tow.id] || []
-  }))
+  })) as unknown as TowWithDetails[]
 }
 
 export async function searchTows(companyId: string, query: string): Promise<TowWithDetails[]> {
