@@ -970,7 +970,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     vehicles.push({
       plateNumber: normalizePlate(input.defectiveVehiclePlate),
       vehicleCode: input.defectiveVehicleCode || undefined,
-      vehicleType: mapVehicleType(input.vehicleType || ''),
+      vehicleType: mapVehicleType(input.defectiveVehicleType || ''),
       manufacturer: input.defectiveVehicleData?.data?.manufacturer,
       model: input.defectiveVehicleData?.data?.model,
       year: input.defectiveVehicleData?.data?.year,
