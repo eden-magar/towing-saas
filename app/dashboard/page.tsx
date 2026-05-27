@@ -3,9 +3,9 @@
   import React, { useCallback, useEffect, useLayoutEffect, useState, useRef, useMemo } from 'react'
   import { useRouter } from 'next/navigation'
   import { useAuth } from '../lib/AuthContext'
-  import { getDashboardStats, getPendingUnassignedTows, getQuoteTows, DashboardStats } from '../lib/queries/dashboard'
+  import { getDashboardStats, getPendingUnassignedTows, getQuoteTows, getOpenTowsCountByDriver, DashboardStats } from '../lib/queries/dashboard'
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
-  import { getTows, TowWithDetails, searchTows, recalculateTowPrice, updateTow } from '../lib/queries/tows'
+  import { TowWithDetails, searchTows, recalculateTowPrice, updateTow } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
@@ -53,19 +53,6 @@
     return d.getHours() + d.getMinutes() / 60
   }
 
-  /** Client-side day filter — matches `getCalendarTows` / `getDayTows` behavior. */
-  function filterTowsForDay(tows: TowWithDetails[], date: Date): TowWithDetails[] {
-    const startOfDay = new Date(date)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(date)
-    endOfDay.setHours(23, 59, 59, 999)
-    return tows.filter(tow => {
-      if (tow.status === 'cancelled') return false
-      const towDate = new Date(tow.scheduled_at || tow.created_at)
-      return towDate >= startOfDay && towDate <= endOfDay
-    })
-  }
-
   export default function DashboardPage() {
     const { user, companyId, loading: authLoading } = useAuth()
     const router = useRouter()
@@ -80,6 +67,7 @@
     })
     const [pendingTows, setPendingTows] = useState<TowWithDetails[]>([])
     const [quoteTows, setQuoteTows] = useState<TowWithDetails[]>([])
+    const [openTowsByDriver, setOpenTowsByDriver] = useState<Record<string, number>>({})
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
     const [denyConfirmRequest, setDenyConfirmRequest] = useState<typeof rejectionRequests[0] | null>(null)
@@ -127,7 +115,6 @@
     }
   }
     const [loading, setLoading] = useState(true)
-    const [companyTows, setCompanyTows] = useState<TowWithDetails[]>([])
     const [deferredLoaded, setDeferredLoaded] = useState(false)
     const deferredLoadedRef = useRef(false)
 
@@ -195,27 +182,23 @@
       return () => document.removeEventListener('mousedown', onDoc)
     }, [])
 
-    const applyCompanyTows = useCallback((tows: TowWithDetails[]) => {
-      setCompanyTows(tows)
-    }, [])
-
     const loadEssential = useCallback(async () => {
       if (!companyId) return
       try {
-        const [statsData, towsData, pendingData, quoteData] = await Promise.all([
+        const [statsData, pendingData, quoteData, openCountsData] = await Promise.all([
           getDashboardStats(companyId),
-          getTows(companyId),
           getPendingUnassignedTows(companyId),
           getQuoteTows(companyId),
+          getOpenTowsCountByDriver(companyId),
         ])
         setStats(statsData)
-        applyCompanyTows(towsData)
         setPendingTows(pendingData)
         setQuoteTows(quoteData)
+        setOpenTowsByDriver(openCountsData)
       } catch (err) {
         console.error('Dashboard essential load error:', err)
       }
-    }, [companyId, applyCompanyTows])
+    }, [companyId])
 
     const loadDeferred = useCallback(async () => {
       if (!companyId || deferredLoadedRef.current) return
@@ -1112,11 +1095,7 @@
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
                   ) : overtimeDrivers.map((shift: any) => {
                     const driver = shift.driver as any
-                    const openTowsCount = companyTows.filter(
-                      t =>
-                        t.driver_id === driver?.id &&
-                        (t.status === 'assigned' || t.status === 'in_progress')
-                    ).length
+                    const openTowsCount = driver?.id ? (openTowsByDriver[driver.id] ?? 0) : 0
                     const metaParts = [
                       formatShiftStartJerusalem(shift.started_at),
                       formatOpenShiftDuration(shift.started_at),

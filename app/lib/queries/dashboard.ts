@@ -303,3 +303,30 @@ export async function getQuoteTows(companyId: string): Promise<TowWithDetails[]>
     legs: legsByTow[tow.id] || [],
   }))
 }
+
+/**
+ * Count of open tows (assigned + in_progress) per driver, for a company.
+ * Used by the dashboard overtime panel.
+ * Returns a map: driver_id -> count.
+ */
+export async function getOpenTowsCountByDriver(companyId: string): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('tows')
+    .select('driver_id')
+    .eq('company_id', companyId)
+    .in('status', ['assigned', 'in_progress'])
+    .not('driver_id', 'is', null)
+
+  if (error) {
+    console.error('Error fetching open tows count by driver:', error)
+    return {}
+  }
+
+  const counts: Record<string, number> = {}
+  for (const row of data || []) {
+    if (row.driver_id) {
+      counts[row.driver_id] = (counts[row.driver_id] || 0) + 1
+    }
+  }
+  return counts
+}
