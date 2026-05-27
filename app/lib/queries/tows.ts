@@ -5,7 +5,14 @@ import {
 } from './storage'
 import { getCompanySettings } from './settings'
 import { updatePointStatus } from './driver-tasks'
-import type { TowChangeLog, VehicleLookupResult } from '../types'
+import type {
+  TowChangeLog,
+  VehicleLookupResult,
+  TowPoint,
+  TowPointWithDetails,
+  PointStatus,
+  PointType,
+} from '../types'
 import { normalizePlate } from '../utils/plate-number'
 
 // ==================== טיפוסים ====================
@@ -70,41 +77,7 @@ export interface TowLeg {
   created_at: string
 }
 
-// NEW: טייפ לנקודת גרירה (tow_point)
-export interface TowPoint {
-  id: string
-  tow_id: string
-  point_order: number
-  point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
-  address: string | null
-  lat: number | null
-  lng: number | null
-  contact_name: string | null
-  contact_phone: string | null
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
-  arrived_at: string | null
-  completed_at: string | null
-  recipient_name: string | null
-  recipient_phone: string | null
-  notes: string | null
-  is_storage: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface TowPointWithDetails extends TowPoint {
-  vehicles: {
-    id: string
-    action: 'pickup' | 'dropoff'
-    vehicle: TowVehicle
-  }[]
-  images: {
-    id: string
-    image_url: string
-    image_type: string
-    created_at: string
-  }[]
-}
+export type { TowPoint, TowPointWithDetails, PointStatus, PointType }
 
 export interface TowWithDetails {
   id: string

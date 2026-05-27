@@ -376,6 +376,17 @@ export interface TruckWithDetails extends TowTruck {
 
 export type PointType = 'pickup' | 'dropoff' | 'exchange' | 'stop'
 
+/**
+ * Tow point lifecycle status.
+ *
+ * Runtime values written by `updatePointStatus`:
+ *   pending → arrived → completed (or skipped)
+ *
+ * `en_route` is reserved: the customer portal already renders a label and
+ * styling for it ("נהג בדרך"), but the driver flow currently goes directly
+ * from `pending` to `arrived` without writing `en_route`. Kept in the type
+ * so a future "driver en route" feature can be wired without re-adding it.
+ */
 export type PointStatus = 'pending' | 'en_route' | 'arrived' | 'completed' | 'skipped'
 
 export type PointVehicleAction = 'pickup' | 'dropoff'
