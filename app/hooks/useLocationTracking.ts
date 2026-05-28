@@ -8,15 +8,49 @@ export function useLocationTracking(
   isActive: boolean
 ) {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const wakeLockRef = useRef<any>(null)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
 
   useEffect(() => {
     console.log('[LocationTracking] effect ran:', { isActive, driverId, companyId, shiftId })
+
+    const onWakeLockReleased = () => {
+      console.debug('[LocationTracking] Wake Lock released by OS')
+      wakeLockRef.current = null
+    }
+
+    const releaseWakeLock = () => {
+      const lock = wakeLockRef.current
+      if (!lock) return
+      wakeLockRef.current = null
+      try {
+        lock.removeEventListener('release', onWakeLockReleased)
+        lock.release().catch(() => {})
+      } catch {
+        // ignore release errors
+      }
+    }
+
+    const acquireWakeLock = () => {
+      if (!isActive || !driverId || !companyId || !shiftId) return
+      if (!('wakeLock' in navigator)) return
+      if (document.visibilityState !== 'visible') return
+      if (wakeLockRef.current) return
+
+      navigator.wakeLock
+        .request('screen')
+        .then((lock) => {
+          wakeLockRef.current = lock
+          lock.addEventListener('release', onWakeLockReleased)
+        })
+        .catch((err) => console.warn('Wake Lock failed:', err))
+    }
+
     if (!isActive || !driverId || !companyId || !shiftId) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
+      releaseWakeLock()
       return
     }
 
@@ -38,23 +72,23 @@ export function useLocationTracking(
     }
 
     sendLocation()
-    // Wake Lock — keep screen on
-    if ('wakeLock' in navigator) {
-      navigator.wakeLock.request('screen')
-        .then(lock => { wakeLockRef.current = lock })
-        .catch(err => console.warn('Wake Lock failed:', err))
-    }
+    acquireWakeLock()
     intervalRef.current = setInterval(sendLocation, 60000)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        acquireWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release()
-        wakeLockRef.current = null
-      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      releaseWakeLock()
     }
   }, [isActive, driverId, companyId, shiftId])
 }
