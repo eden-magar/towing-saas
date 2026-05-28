@@ -88,16 +88,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     }
   }
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadTask()
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [])
-
   const sortedPoints = task
     ? [...task.points].sort((a, b) => a.point_order - b.point_order)
     : []
