@@ -153,27 +153,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
 
   const navData = getNavigationData()
 
-  // Calculate ETA and distance
-  const getRouteInfo = () => {
-    if (!task) return { eta: '-- דק\'', distance: '-- ק"מ' }
-    
-    const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
-    const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
-    
-    const leg = navigatingTo === 'source' ? pickupLeg : deliveryLeg
-    const distanceKm = leg?.distance_km || 0
-    
-    // הערכת זמן: 2 דקות לק"מ בעיר
-    const estimatedMinutes = Math.round(distanceKm * 2)
-    
-    return {
-      eta: `${estimatedMinutes || 15} דק'`,
-      distance: `${distanceKm.toFixed(1)} ק"מ`
-    }
-  }
-
-  const routeInfo = getRouteInfo()
-
   // External navigation
   const openWaze = () => {
   const encoded = encodeURIComponent(navData.address)
@@ -213,8 +192,8 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     if (!waNumber) return
     const vehicle = task.vehicles[0]?.plate_number || ''
     const message = navigatingTo === 'source' 
-      ? `שלום, אני בדרך לאסוף את הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
-      : `שלום, אני בדרך עם הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
+      ? `שלום, אני בדרך לאסוף את הרכב ${vehicle}.`
+      : `שלום, אני בדרך עם הרכב ${vehicle}.`
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
@@ -329,29 +308,8 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
         </button>
       </div>
 
-      {/* ETA Card */}
-      <div className="absolute top-20 left-4 right-4 z-10">
-        <div className="bg-white rounded-2xl shadow-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">זמן הגעה משוער</p>
-              <p className="text-3xl font-bold text-slate-800">{routeInfo.eta}</p>
-            </div>
-            <div className="text-left">
-              <p className="text-sm text-slate-500">מרחק</p>
-              <p className="text-xl font-bold text-slate-800">{routeInfo.distance}</p>
-            </div>
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
-              navigatingTo === 'source' ? 'bg-emerald-100' : 'bg-red-100'
-            }`}>
-              <MapPin size={28} className={navigatingTo === 'source' ? 'text-emerald-600' : 'text-red-600'} />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Toggle Source/Destination */}
-      <div className="absolute top-44 left-4 right-4 z-10">
+      <div className="absolute top-20 left-4 right-4 z-10">
         <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg p-1.5 flex gap-1">
           <button
             onClick={() => setNavigatingTo('source')}
