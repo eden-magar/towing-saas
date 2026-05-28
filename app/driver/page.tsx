@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { useDebouncedCallback } from '@/app/hooks/useDebouncedCallback'
 import { getDriverTasksForDriver } from '@/app/lib/queries/driver-tasks-admin'
 import { DriverTaskWithDetails } from '@/app/lib/types'
 import { 
@@ -67,42 +68,11 @@ export default function DriverHomePage() {
 
   const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
 
-  // טעינת נתונים
-  useEffect(() => {
-    if (!authLoading && user) {
-      loadData()
-    }
-  }, [authLoading, user])
-
-  // Realtime - גרירות חדשות/עדכונים בזמן אמת
-  useEffect(() => {
-    if (!driverInfo?.id) return
-
-    const channel = supabase
-      .channel(`driver-realtime-${driverInfo.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'tows',
-        filter: `driver_id=eq.${driverInfo.id}`
-      }, () => loadData())
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'tow_rejection_requests',
-        filter: `driver_id=eq.${driverInfo.id}`
-      }, () => loadData())
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [driverInfo?.id])
-
-  const loadData = async () => {
+  const loadData = async (options?: { silent?: boolean }) => {
     if (!user) return
-    
-    setLoading(true)
+
+    const silent = options?.silent ?? false
+    if (!silent) setLoading(true)
     setError(null)
 
     try {
@@ -110,7 +80,7 @@ export default function DriverHomePage() {
       
       if (!driver) {
         setError('לא נמצא פרופיל נהג עבור המשתמש')
-        setLoading(false)
+        if (!silent) setLoading(false)
         return
       }
       setDriverInfo(driver)
@@ -135,9 +105,45 @@ export default function DriverHomePage() {
       console.error('Error loading data:', err)
       setError('שגיאה בטעינת הנתונים')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
+
+  const debouncedRefresh = useDebouncedCallback(() => {
+    void loadData({ silent: true })
+  }, 2000)
+
+  // טעינת נתונים
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadData()
+    }
+  }, [authLoading, user])
+
+  // Realtime - גרירות חדשות/עדכונים בזמן אמת
+  useEffect(() => {
+    if (!driverInfo?.id) return
+
+    const channel = supabase
+      .channel(`driver-realtime-${driverInfo.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tows',
+        filter: `driver_id=eq.${driverInfo.id}`
+      }, () => debouncedRefresh())
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tow_rejection_requests',
+        filter: `driver_id=eq.${driverInfo.id}`
+      }, () => debouncedRefresh())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [driverInfo?.id, debouncedRefresh])
 
   // פילטור משימות
   const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
@@ -268,7 +274,7 @@ export default function DriverHomePage() {
         <AlertCircle size={48} className="text-red-400 mb-4" />
         <p className="text-gray-700 text-lg mb-4">{error}</p>
         <button 
-          onClick={loadData}
+          onClick={() => loadData()}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl"
         >
           <RefreshCw size={18} />
@@ -553,7 +559,7 @@ export default function DriverHomePage() {
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-800">📅 הלו"ז שלי</h2>
-          <button onClick={loadData} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => loadData()} className="text-gray-400 hover:text-gray-600">
             <RefreshCw size={20} />
           </button>
         </div>
