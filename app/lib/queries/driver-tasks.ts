@@ -752,7 +752,11 @@ function vehicleToStorageData(vehicle: PointLinkedVehicle) {
   }
 }
 
-async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
+async function handleStorageOnPointCompleted(
+  pointId: string
+): Promise<{ ok: boolean; failures: string[] }> {
+  const failures: string[] = []
+
   const { data: point, error: pointError } = await supabase
     .from('tow_points')
     .select('id, point_type, is_storage, tow_id')
@@ -761,10 +765,10 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
 
   if (pointError || !point) {
     console.error('[storage] failed to load point for storage side effect:', pointError)
-    return
+    return { ok: false, failures: ['לא ניתן לטעון את פרטי הנקודה למחסן'] }
   }
 
-  if (!point.is_storage) return
+  if (!point.is_storage) return { ok: true, failures: [] }
 
   const { data: tow, error: towError } = await supabase
     .from('tows')
@@ -774,7 +778,7 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
 
   if (towError || !tow) {
     console.error('[storage] failed to load tow for storage side effect:', towError)
-    return
+    return { ok: false, failures: ['לא ניתן לטעון את פרטי הגרירה למחסן'] }
   }
 
   let performedBy: string | undefined
@@ -812,7 +816,7 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
 
   if (pvError) {
     console.error('[storage] failed to load point vehicles:', pvError)
-    return
+    return { ok: false, failures: ['לא ניתן לטעון רכבים לנקודה'] }
   }
 
   let vehicles: PointLinkedVehicle[] = (pointVehicleRows ?? [])
@@ -837,7 +841,7 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
 
   if (vehicles.length === 0) {
     console.error('[storage] no vehicles found for point', pointId)
-    return
+    return { ok: true, failures: [] }
   }
 
   const isExchange = tow.tow_type === 'exchange'
@@ -854,6 +858,7 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
             '[storage] no stored vehicle found for release:',
             vehicle.plate_number
           )
+          failures.push(`${vehicle.plate_number} release`)
           continue
         }
         const releaseNotes =
@@ -868,9 +873,10 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
         })
       } catch (err) {
         console.error('[storage] release failed for plate', vehicle.plate_number, err)
+        failures.push(`${vehicle.plate_number} release`)
       }
     }
-    return
+    return { ok: failures.length === 0, failures }
   }
 
   if (point.point_type === 'dropoff') {
@@ -902,9 +908,19 @@ async function handleStorageOnPointCompleted(pointId: string): Promise<void> {
         })
       } catch (err) {
         console.error('[storage] add failed for plate', vehicle.plate_number, err)
+        failures.push(`${vehicle.plate_number} add`)
       }
     }
+    return { ok: failures.length === 0, failures }
   }
+
+  return { ok: true, failures: [] }
+}
+
+export type UpdatePointStatusResult = {
+  success: true
+  storageOk: boolean
+  storageFailures: string[]
 }
 
 export async function updatePointStatus(
@@ -940,14 +956,15 @@ export async function updatePointStatus(
   }
 
   if (status === 'completed') {
-    try {
-      await handleStorageOnPointCompleted(pointId)
-    } catch (storageErr) {
-      console.error('[storage] point completion storage side effect failed:', storageErr)
+    const storage = await handleStorageOnPointCompleted(pointId)
+    return {
+      success: true,
+      storageOk: storage.ok,
+      storageFailures: storage.failures,
     }
   }
 
-  return true
+  return { success: true, storageOk: true, storageFailures: [] }
 }
 
 // ==================== העלאת תמונה ====================

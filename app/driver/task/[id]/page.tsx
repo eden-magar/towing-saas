@@ -229,7 +229,10 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     if (!currentPoint || !user || !task) return
     
     try {
-      await updatePointStatus(currentPoint.id, 'completed', recipientName, recipientPhone, notes)
+      const result = await updatePointStatus(currentPoint.id, 'completed', recipientName, recipientPhone, notes)
+      if (!result.storageOk || result.storageFailures.length > 0) {
+        alert('הנקודה הושלמה, אך עדכון המחסן נכשל. נא להודיע למשרד.')
+      }
       
       // בדיקה אם זו הנקודה האחרונה
       const nextIndex = currentPointIndex + 1
