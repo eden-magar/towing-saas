@@ -11,6 +11,7 @@ import {
   type DriverTaskPoint,
 } from '../../../lib/queries/driver-tasks'
 import { resolveDriverContact } from '../../../lib/utils/driver-contact'
+import { toWhatsApp } from '../../../lib/utils/phone'
 import { 
   ArrowRight,
   MapPin, 
@@ -191,12 +192,13 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
   const openWhatsApp = () => {
     if (!navData.phone || !task) return
     
-    const phoneClean = navData.phone.replace(/^0/, '972').replace(/-/g, '')
+    const waNumber = toWhatsApp(navData.phone).replace(/^\+/, '')
+    if (!waNumber) return
     const vehicle = task.vehicles[0]?.plate_number || ''
     const message = navigatingTo === 'source' 
       ? `שלום, אני בדרך לאסוף את הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
       : `שלום, אני בדרך עם הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
-    window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank')
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   const shareLocation = () => {

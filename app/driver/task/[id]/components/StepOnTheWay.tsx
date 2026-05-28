@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { DriverTaskPoint, DriverTaskVehicle, getTaskDetail, type TaskDetailFull } from '@/app/lib/queries/driver-tasks'
 import { resolveDriverContact } from '@/app/lib/utils/driver-contact'
+import { toWhatsApp } from '@/app/lib/utils/phone'
 
 function StoragePointBadge({
   pointType,
@@ -95,12 +96,13 @@ export default function StepOnTheWay({
 
   // פתיחת WhatsApp
   const openWhatsApp = (phone: string) => {
-    const phoneClean = phone.replace(/^0/, '972').replace(/-/g, '')
+    const waNumber = toWhatsApp(phone).replace(/^\+/, '')
+    if (!waNumber) return
     const vehicleInfo = vehicles.length > 0 ? vehicles.map(v => v.plate_number).join(', ') : ''
     const message = isPickup 
       ? `שלום, אני הגררסיט בדרך לאסוף את הרכב ${vehicleInfo}`
       : `שלום, אני הגררסיט בדרך למסור את הרכב ${vehicleInfo}`
-    window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank')
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   // הגעתי
