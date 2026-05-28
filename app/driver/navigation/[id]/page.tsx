@@ -14,12 +14,8 @@ import {
   ArrowRight,
   MapPin, 
   Phone,
-  Navigation,
   MessageCircle,
   AlertCircle,
-  Locate,
-  Plus,
-  Minus,
   Loader2
 } from 'lucide-react'
 
@@ -215,67 +211,9 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
   const vehicle = task.vehicles[0]
 
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-800 relative">
-      {/* Map Placeholder */}
-      <div className="absolute inset-0 bg-slate-700">
-        <div className="w-full h-full relative overflow-hidden">
-          <svg className="w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#64748b" strokeWidth="1"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-
-          {/* Route Line Simulation */}
-          <svg className="absolute inset-0" viewBox="0 0 400 800" preserveAspectRatio="none">
-            <path
-              d="M 200 650 Q 180 550 200 450 Q 220 350 200 280"
-              stroke="#3b82f6"
-              strokeWidth="6"
-              fill="none"
-              strokeLinecap="round"
-            />
-            <circle r="8" fill="#3b82f6">
-              <animateMotion
-                dur="3s"
-                repeatCount="indefinite"
-                path="M 200 650 Q 180 550 200 450 Q 220 350 200 280"
-              />
-            </circle>
-          </svg>
-
-          {/* Current Location Marker */}
-          <div className="absolute bottom-52 left-1/2 -translate-x-1/2">
-            <div className="relative">
-              <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center shadow-lg border-4 border-white">
-                <Navigation size={24} className="text-white" />
-              </div>
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-4 bg-blue-600 rotate-45 -z-10"></div>
-            </div>
-            <p className="text-center text-white text-xs mt-2 bg-slate-800/80 px-3 py-1 rounded-full">
-              המיקום שלך
-            </p>
-          </div>
-
-          {/* Destination Marker */}
-          <div className="absolute top-52 left-1/2 -translate-x-1/2">
-            <div className="relative">
-              <div className={`w-14 h-14 ${navigatingTo === 'source' ? 'bg-emerald-500' : 'bg-red-500'} rounded-full flex items-center justify-center shadow-lg border-4 border-white`}>
-                <MapPin size={24} className="text-white" />
-              </div>
-              <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-4 ${navigatingTo === 'source' ? 'bg-emerald-500' : 'bg-red-500'} rotate-45 -z-10`}></div>
-            </div>
-            <p className="text-center text-white text-xs mt-2 bg-slate-800/80 px-3 py-1 rounded-full">
-              {navigatingTo === 'source' ? 'איסוף' : 'יעד'}
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <div dir="rtl" className="min-h-screen bg-slate-800 flex flex-col">
       {/* Top Bar */}
-      <div className="absolute top-4 left-4 right-4 z-10 flex items-center justify-between">
+      <div className="px-4 pt-4 flex items-center justify-between">
         <button 
           onClick={() => router.back()}
           className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center"
@@ -293,13 +231,11 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
           )}
         </div>
 
-        <button className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center">
-          <Locate size={22} className="text-slate-700" />
-        </button>
+        <div className="w-12" aria-hidden="true" />
       </div>
 
       {/* Toggle Source/Destination */}
-      <div className="absolute top-20 left-4 right-4 z-10">
+      <div className="px-4 pt-3">
         <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg p-1.5 flex gap-1">
           <button
             onClick={() => setNavigatingTo('source')}
@@ -326,50 +262,41 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
-      {/* Zoom Buttons */}
-      <div className="absolute bottom-80 left-4 z-10 flex flex-col gap-2">
-        <button className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center">
-          <Plus size={22} className="text-slate-700" />
-        </button>
-        <button className="w-12 h-12 bg-white rounded-2xl shadow-lg flex items-center justify-center">
-          <Minus size={22} className="text-slate-700" />
-        </button>
+      {/* Destination address */}
+      <div className="flex-1 px-5 py-6 flex flex-col justify-center min-h-0">
+        <div className="flex items-start gap-4">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            navigatingTo === 'source' ? 'bg-emerald-500/20' : 'bg-red-500/20'
+          }`}>
+            <MapPin
+              size={24}
+              className={navigatingTo === 'source' ? 'text-emerald-400' : 'text-red-400'}
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-bold mb-1 ${
+              navigatingTo === 'source' ? 'text-emerald-400' : 'text-red-400'
+            }`}>
+              {navigatingTo === 'source' ? 'איסוף' : 'יעד'}
+            </p>
+            <p className="font-bold text-white text-xl leading-snug">{navData.address}</p>
+            <p className="text-sm text-slate-400 mt-2">
+              {navData.canCall && navData.phone
+                ? `${navData.contact} • ${navData.phone}`
+                : navData.contact}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Bottom Sheet */}
-      <div className="absolute bottom-0 left-0 right-0 z-10">
+      {/* Actions */}
+      <div className="mt-auto">
         <div className="bg-white rounded-t-3xl shadow-2xl">
-          {/* Handle */}
           <div className="flex justify-center pt-3 pb-2">
             <div className="w-12 h-1.5 bg-slate-300 rounded-full"></div>
           </div>
 
-          {/* Destination Info */}
           <div className="px-5 pb-5">
-            <div className="flex items-start gap-4 mb-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                navigatingTo === 'source' ? 'bg-emerald-100' : 'bg-red-100'
-              }`}>
-                <div className={`w-4 h-4 rounded-full ${
-                  navigatingTo === 'source' ? 'bg-emerald-500' : 'bg-red-500'
-                }`}></div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs font-bold ${
-                  navigatingTo === 'source' ? 'text-emerald-600' : 'text-red-600'
-                }`}>
-                  {navigatingTo === 'source' ? 'איסוף' : 'יעד'}
-                </p>
-                <p className="font-bold text-slate-800 text-lg">{navData.address}</p>
-                <p className="text-sm text-slate-500">
-                  {navData.canCall && navData.phone
-                    ? `${navData.contact} • ${navData.phone}`
-                    : navData.contact}
-                </p>
-              </div>
-            </div>
-
-            {/* Notes Alert */}
             {navData.notes && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-4">
                 <div className="flex items-start gap-2">
@@ -379,7 +306,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
               </div>
             )}
 
-            {/* Quick Actions */}
             <div className="grid grid-cols-3 gap-3 mb-4">
               <button 
                 onClick={openPhone}
@@ -412,7 +338,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
               </button>
             </div>
 
-            {/* Open in External App */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <button 
                 onClick={openWaze}
@@ -441,7 +366,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
             </button>
           </div>
 
-          {/* Safe Area */}
           <div className="h-6 bg-white"></div>
         </div>
       </div>
