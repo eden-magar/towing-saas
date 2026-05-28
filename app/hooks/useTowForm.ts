@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
 import { getTowWithPoints, type EditTowSnapshot } from '../lib/queries/tows'
-import { getCustomers, CustomerWithDetails } from '../lib/queries/customers'
+import { getCustomersLite, CustomerListItem } from '../lib/queries/customers'
 import { getDrivers } from '../lib/queries/drivers'
 import { getCompanySettings } from '../lib/queries/settings'
 import { getTrucks } from '../lib/queries/trucks'
@@ -60,7 +60,7 @@ export function useTowForm(editTowId?: string) {
   const [error, setError] = useState('')
   
   // Data from database
-  const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
@@ -777,7 +777,7 @@ export function useTowForm(editTowId?: string) {
     if (!companyId) return
     try {
       const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData, timeSurchargesRes, locationSurchargesRes, serviceSurchargesRes, companySettingsData] = await Promise.all([
-        getCustomers(companyId),
+        getCustomersLite(companyId),
         getDrivers(companyId),
         getTrucks(companyId),
         getBasePriceList(companyId),

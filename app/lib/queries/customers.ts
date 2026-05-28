@@ -24,7 +24,44 @@ export interface CustomerWithDetails {
   open_balance: number
 }
 
+export interface CustomerListItem {
+  id: string
+  customer_type: 'private' | 'business'
+  name: string
+  id_number: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+}
+
 // ==================== שליפת לקוחות ====================
+
+export async function getCustomersLite(companyId: string): Promise<CustomerListItem[]> {
+  const { data: customerCompanies, error } = await supabase
+    .from('customer_company')
+    .select(`
+      customer:customers (
+        id,
+        customer_type,
+        name,
+        id_number,
+        phone,
+        email,
+        address
+      )
+    `)
+    .eq('company_id', companyId)
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('Error fetching customers (lite):', error)
+    throw error
+  }
+
+  if (!customerCompanies || customerCompanies.length === 0) return []
+
+  return customerCompanies.map((cc) => cc.customer as any as CustomerListItem)
+}
 
 export async function getCustomers(companyId: string): Promise<CustomerWithDetails[]> {
   // שליפת לקוחות עם הקשר לחברה

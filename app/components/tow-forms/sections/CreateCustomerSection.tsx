@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Search, User, ArrowLeftRight } from 'lucide-react'
-import type { CustomerWithDetails } from '../../../lib/queries/customers'
+import type { CustomerListItem } from '../../../lib/queries/customers'
 import type { CustomerWithPricing } from '../../../lib/queries/price-lists'
 import {
   getStoredVehicleStatusDisplay,
@@ -14,7 +14,7 @@ import { PhoneInput } from '../../ui/PhoneInput'
 export type CreateCustomerTab = 'existing' | 'casual'
 
 export interface CreateCustomerSectionProps {
-  customers: CustomerWithDetails[]
+  customers: CustomerListItem[]
   customersWithPricing: CustomerWithPricing[]
   selectedCustomerId: string | null
   customerTab: CreateCustomerTab

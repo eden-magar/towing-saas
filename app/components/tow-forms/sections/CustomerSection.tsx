@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { Search, User, ArrowLeftRight } from 'lucide-react'
-import { CustomerWithDetails } from '../../../lib/queries/customers'
+import { CustomerListItem } from '../../../lib/queries/customers'
 import { CustomerWithPricing } from '../../../lib/queries/price-lists'
 import { PhoneInput } from '../../ui/PhoneInput'
 
 interface CustomerSectionProps {
-  customers: CustomerWithDetails[]
+  customers: CustomerListItem[]
   customersWithPricing: CustomerWithPricing[]
   selectedCustomerId: string | null
   onCustomerSelect: (customerId: string | null, name: string, phone: string) => void
@@ -84,7 +84,7 @@ export function CustomerSection({
     (selectedCustomerPricing.discount_percent > 0 ||
       selectedCustomerPricing.price_items.length > 0)
 
-  const selectCustomerFromList = (customer: CustomerWithDetails) => {
+  const selectCustomerFromList = (customer: CustomerListItem) => {
     onCustomerSelect(customer.id, customer.name, customer.phone || '')
     onCustomerEmailChange(customer.email || '')
     onCustomerAddressChange(customer.address || '')
