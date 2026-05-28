@@ -9,6 +9,7 @@ import {
   type StoredVehicleWithCustomer,
 } from '../../../lib/queries/storage'
 import { Input, Button, FormCard } from '../../ui'
+import { PhoneInput } from '../../ui/PhoneInput'
 
 export type CreateCustomerTab = 'existing' | 'casual'
 
@@ -159,10 +160,9 @@ export function CreateCustomerSection({
             onChange={(e) => onCustomerNameChange(e.target.value)}
             placeholder="שם הלקוח *"
           />
-          <Input
-            type="tel"
+          <PhoneInput
             value={customerPhone}
-            onChange={(e) => onCustomerPhoneChange(e.target.value)}
+            onChange={onCustomerPhoneChange}
             placeholder="טלפון"
           />
         </div>

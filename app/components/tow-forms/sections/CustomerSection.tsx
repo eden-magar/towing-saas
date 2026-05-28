@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Search, User, ArrowLeftRight } from 'lucide-react'
 import { CustomerWithDetails } from '../../../lib/queries/customers'
 import { CustomerWithPricing } from '../../../lib/queries/price-lists'
+import { PhoneInput } from '../../ui/PhoneInput'
 
 interface CustomerSectionProps {
   customers: CustomerWithDetails[]
@@ -209,10 +210,9 @@ export function CustomerSection({
                 placeholder="שם הלקוח *"
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
               />
-              <input
-                type="tel"
+              <PhoneInput
                 value={customerPhone}
-                onChange={(e) => onCustomerPhoneChange(e.target.value)}
+                onChange={onCustomerPhoneChange}
                 placeholder="טלפון"
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
               />

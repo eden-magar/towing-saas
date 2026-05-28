@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
+import { PhoneInput } from '../../components/ui/PhoneInput'
 import DriversMap from '../../components/DriversMap'
 import DriverHoursTab from '../../components/DriverHoursTab'
 import ResendInviteModal from '../../components/ResendInviteModal'
@@ -873,10 +874,9 @@ export default function DriversPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">טלפון נייד *</label>
-                      <input
-                        type="tel"
+                      <PhoneInput
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        onChange={(phone) => setFormData({ ...formData, phone })}
                         placeholder="050-1234567"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />

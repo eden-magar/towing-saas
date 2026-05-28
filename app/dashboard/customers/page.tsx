@@ -22,6 +22,7 @@ import {
   checkCustomerDuplicate,
   CustomerWithDetails 
 } from '../../lib/queries/customers'
+import { PhoneInput } from '../../components/ui/PhoneInput'
 
 export default function CustomersPage() {
   const { companyId } = useAuth()
@@ -558,10 +559,9 @@ export default function CustomersPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">טלפון</label>
-                      <input
-                        type="tel"
+                      <PhoneInput
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        onChange={(phone) => setFormData({ ...formData, phone })}
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
                     </div>
