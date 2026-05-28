@@ -366,12 +366,16 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
           <p className="text-sm text-gray-400 mb-6">הגרירה תוסר מהתור שלך לאחר אישור המנהל</p>
           <button
             onClick={async () => {
-              if (pendingRejectionRequestId) {
+              if (!pendingRejectionRequestId) return
+              try {
                 const { cancelRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
                 await cancelRejectionRequest(pendingRejectionRequestId)
+                setRejectionPending(false)
+                setPendingRejectionRequestId(null)
+              } catch (error) {
+                console.error('Error cancelling rejection request:', error)
+                alert('לא ניתן לבטל את בקשת הדחייה. נסה שוב.')
               }
-              setRejectionPending(false)
-              setPendingRejectionRequestId(null)
             }}
             className="w-full py-3 rounded-xl bg-red-100 text-red-700 font-medium mb-3"
           >
