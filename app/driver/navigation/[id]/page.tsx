@@ -2,11 +2,9 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '../../../lib/AuthContext'
 import { 
-  getTaskDetail, 
-  updateTaskStatusWithHistory,
-  updateLegStatus,
+  getTaskDetail,
+  getCurrentPointIndex,
   type TaskDetailFull,
   type DriverTaskPoint,
 } from '../../../lib/queries/driver-tasks'
@@ -19,7 +17,6 @@ import {
   Navigation,
   MessageCircle,
   Share2,
-  CheckCircle2,
   AlertCircle,
   Locate,
   Plus,
@@ -30,12 +27,10 @@ import {
 export default function DriverNavigationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { user } = useAuth()
   
   const [task, setTask] = useState<TaskDetailFull | null>(null)
   const [loading, setLoading] = useState(true)
   const [navigatingTo, setNavigatingTo] = useState<'source' | 'destination'>('source')
-  const [isUpdating, setIsUpdating] = useState(false)
 
   // Load task data
   useEffect(() => {
@@ -44,18 +39,41 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     }
   }, [id])
 
-  // Auto-determine navigation target based on task status
+  // Auto-determine navigation target from tow_points (not legs)
   useEffect(() => {
-    if (task) {
-      const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
-      const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
-      
-      // אם רגל האיסוף הושלמה, מנווטים ליעד
-      if (pickupLeg?.status === 'completed' || deliveryLeg?.status === 'in_progress') {
-        setNavigatingTo('destination')
-      } else {
-        setNavigatingTo('source')
-      }
+    if (!task?.points?.length) return
+
+    const points = [...task.points].sort((a, b) => a.point_order - b.point_order)
+    const pickup = points.find((p) => p.point_type === 'pickup')
+
+    if (pickup && pickup.status !== 'arrived' && pickup.status !== 'completed') {
+      setNavigatingTo('source')
+      return
+    }
+
+    const idx = getCurrentPointIndex(points)
+    const current = points[idx]
+
+    if (!current) {
+      setNavigatingTo('destination')
+      return
+    }
+
+    if (current.point_type === 'pickup') {
+      setNavigatingTo('source')
+      return
+    }
+
+    if (current.point_type === 'dropoff') {
+      setNavigatingTo('destination')
+      return
+    }
+
+    // stop / exchange / other: pickup done → heading to dropoff
+    if (pickup && (pickup.status === 'arrived' || pickup.status === 'completed')) {
+      setNavigatingTo('destination')
+    } else {
+      setNavigatingTo('source')
     }
   }, [task])
 
@@ -208,45 +226,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
         text: `אני בדרך ל${navigatingTo === 'source' ? 'איסוף' : 'יעד'}: ${navData.address}`,
         url: window.location.href
       })
-    }
-  }
-
-  const handleArrived = async () => {
-    if (!task || !user) {
-      alert('טוען נתונים, נסה שוב')
-      return
-    }
-
-    setIsUpdating(true)
-    try {
-      const pickupLeg = task.legs.find(l => l.leg_type === 'pickup')
-      const deliveryLeg = task.legs.find(l => l.leg_type === 'delivery')
-      
-      if (navigatingTo === 'source') {
-        // הגעתי לאיסוף
-        if (pickupLeg) {
-          await updateLegStatus(pickupLeg.id, 'in_progress')
-        }
-        await updateTaskStatusWithHistory(task.id, 'in_progress', user.id, pickupLeg?.id, 'הגיע לאיסוף')
-        
-        // עוברים לניווט ליעד
-        setNavigatingTo('destination')
-        await loadTask()
-      } else {
-        // הגעתי ליעד
-        if (deliveryLeg) {
-          await updateLegStatus(deliveryLeg.id, 'completed')
-        }
-        await updateTaskStatusWithHistory(task.id, 'in_progress', user.id, deliveryLeg?.id, 'הגיע ליעד')
-        
-        // חוזרים לדף פרטי המשימה
-        router.push(`/driver/task/${id}`)
-      }
-    } catch (error) {
-      console.error('Error updating status:', error)
-      alert('שגיאה בעדכון הסטטוס')
-    } finally {
-      setIsUpdating(false)
     }
   }
 
@@ -525,24 +504,12 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
               </button>
             </div>
 
-            {/* Status Update Button */}
-            <button 
-              onClick={handleArrived}
-              disabled={isUpdating}
-              className={`w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50 ${
-                navigatingTo === 'source' 
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-blue-600 text-white'
-              }`}
+            <button
+              onClick={() => router.push(`/driver/task/${id}`)}
+              className="w-full py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 active:scale-98 bg-blue-600 text-white"
             >
-              {isUpdating ? (
-                <Loader2 size={22} className="animate-spin" />
-              ) : (
-                <>
-                  <CheckCircle2 size={22} />
-                  {navigatingTo === 'source' ? 'הגעתי לאיסוף' : 'הגעתי ליעד'}
-                </>
-              )}
+              <ArrowRight size={22} />
+              חזור למשימה
             </button>
           </div>
 
