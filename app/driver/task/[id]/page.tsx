@@ -151,7 +151,10 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   // הגעתי לנקודה
   const handleArrived = async (notes?: string) => {
     if (!currentPoint || !user) {
-      alert(`חסר: currentPoint=${!!currentPoint} user=${!!user}`)
+      console.warn('[handleArrived] missing currentPoint or user', {
+        hasPoint: !!currentPoint,
+        hasUser: !!user,
+      })
       return
     }
     try {
@@ -163,10 +166,19 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       } else {
         setPointStep('camera')
       }
-      await loadTask()
+      const arrivedAt = new Date().toISOString()
+      setTask((prev) => {
+        if (!prev) return prev
+        const points = prev.points.map((p, i) =>
+          i === currentPointIndex
+            ? { ...p, status: 'arrived' as const, arrived_at: arrivedAt }
+            : p
+        )
+        return { ...prev, points }
+      })
     } catch (error) {
       console.error('Error updating arrival:', error)
-      alert(`שגיאה: ${JSON.stringify(error)}`)
+      alert('שגיאה בעדכון ההגעה. נסה שוב.')
     }
   }
 
