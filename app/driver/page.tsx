@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
-import { useLocationTracking } from '../hooks/useLocationTracking'
 import { useAuth } from '../lib/AuthContext'
 import { getDriverTasksForDriver } from '@/app/lib/queries/driver-tasks-admin'
 import { DriverTaskWithDetails } from '@/app/lib/types'
@@ -67,13 +66,6 @@ export default function DriverHomePage() {
   
 
   const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
-
-  useLocationTracking(
-  driverInfo?.id || null,
-  driverInfo?.company_id || null,
-  activeShift?.id || null,
-  !!activeShift
-)
 
   // טעינת נתונים
   useEffect(() => {

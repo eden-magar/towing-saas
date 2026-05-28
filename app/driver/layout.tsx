@@ -68,6 +68,36 @@ export default function DriverLayout({
     }
   }, [authLoading, user])
 
+  useEffect(() => {
+    if (!driverInfo?.id) return
+
+    const driverId = driverInfo.id
+    const refreshActiveShift = async () => {
+      const shift = await getActiveShift(driverId)
+      setActiveShiftId(shift?.id ?? null)
+    }
+
+    const channel = supabase
+      .channel(`driver-shift-${driverId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'driver_shifts',
+          filter: `driver_id=eq.${driverId}`,
+        },
+        () => {
+          void refreshActiveShift()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [driverInfo?.id])
+
   const loadDriverInfo = async () => {
     if (!user) return
     try {
