@@ -16,7 +16,6 @@ import {
   Phone,
   Navigation,
   MessageCircle,
-  Share2,
   AlertCircle,
   Locate,
   Plus,
@@ -217,16 +216,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
       ? `שלום, אני בדרך לאסוף את הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
       : `שלום, אני בדרך עם הרכב ${vehicle}. אגיע בעוד ${routeInfo.eta} בערך.`
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
-  }
-
-  const shareLocation = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: 'המיקום שלי',
-        text: `אני בדרך ל${navigatingTo === 'source' ? 'איסוף' : 'יעד'}: ${navData.address}`,
-        url: window.location.href
-      })
-    }
   }
 
   // Loading state
@@ -443,7 +432,7 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
             )}
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-3 gap-3 mb-4">
               <button 
                 onClick={openPhone}
                 disabled={!navData.canCall || !navData.phone}
@@ -463,15 +452,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
                   <MessageCircle size={20} className="text-green-600" />
                 </div>
                 <span className="text-xs text-slate-600 font-medium">וואטסאפ</span>
-              </button>
-              <button 
-                onClick={shareLocation}
-                className="flex flex-col items-center gap-2 p-3 bg-slate-100 rounded-xl active:scale-95"
-              >
-                <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Share2 size={20} className="text-blue-600" />
-                </div>
-                <span className="text-xs text-slate-600 font-medium">שתף מיקום</span>
               </button>
               <button 
                 onClick={() => router.push(`/driver/task/${id}`)}
