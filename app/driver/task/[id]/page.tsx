@@ -33,7 +33,7 @@ import { REJECTION_REASONS } from '@/app/lib/queries/rejection-requests'
 export default function TaskFlowPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   
   // State
   const [task, setTask] = useState<TaskDetailFull | null>(null)
@@ -61,8 +61,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // טעינת המשימה
   useEffect(() => {
+    if (authLoading || !user?.id) return
     loadTask()
-  }, [id])
+  }, [id, authLoading, user?.id])
 
   useEffect(() => {
     if (!pendingRejectionRequestId) return
@@ -89,13 +90,15 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       if (data) {
         setTask(data)
         // בדוק אם יש בקשת דחייה ממתינה
-        const driver = await getDriverByUserId(user?.id || '')
-        if (driver) {
-          const { getPendingRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
-          const pending = await getPendingRejectionRequest(id, driver.id)
-          if (pending) {
-            setRejectionPending(true)
-            setPendingRejectionRequestId(pending.id)
+        if (user?.id) {
+          const driver = await getDriverByUserId(user.id)
+          if (driver) {
+            const { getPendingRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
+            const pending = await getPendingRejectionRequest(id, driver.id)
+            if (pending) {
+              setRejectionPending(true)
+              setPendingRejectionRequestId(pending.id)
+            }
           }
         }
         
