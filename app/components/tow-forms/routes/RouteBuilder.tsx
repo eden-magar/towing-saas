@@ -14,6 +14,7 @@ import { AddressInput, loadGoogleMaps, AddressData } from './AddressInput'
 import { VehicleCard, VehicleOnTruck, createEmptyVehicle } from './VehicleCard'
 import { StorageNotification } from './StorageVehicleSelector'
 import { TowTruckTypeSelector, ServiceSurchargeSelector, type SelectedService } from '../shared'
+import { PhoneInput } from '../../ui/PhoneInput'
 
 
 // ==================== Types ====================
@@ -709,10 +710,9 @@ export function RouteBuilder({
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">טלפון</label>
-                            <input
-                              type="tel"
+                            <PhoneInput
                               value={point.contactPhone}
-                              onChange={(e) => updatePoint(point.id, { contactPhone: e.target.value })}
+                              onChange={(phone) => updatePoint(point.id, { contactPhone: phone })}
                               placeholder="050-0000000"
                               className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                             />

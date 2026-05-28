@@ -40,6 +40,7 @@ import {
   UserRole
 } from '../../lib/queries/users'
 import ResendInviteModal from '../../components/ResendInviteModal'
+import { PhoneInput } from '../../components/ui/PhoneInput'
 
 export default function UsersPage() {
   const { companyId } = useAuth()
@@ -628,10 +629,9 @@ export default function UsersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">טלפון</label>
-                <input
-                  type="tel"
+                <PhoneInput
                   value={newUser.phone}
-                  onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                  onChange={(phone) => setNewUser({ ...newUser, phone })}
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
                   placeholder="050-0000000"
                 />

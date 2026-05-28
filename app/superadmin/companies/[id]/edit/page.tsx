@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../../../lib/supabase'
+import { PhoneInput } from '../../../../components/ui/PhoneInput'
 import {
   ArrowRight,
   Building2,
@@ -200,10 +201,9 @@ export default function EditCompanyPage() {
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 טלפון
               </label>
-              <input
-                type="tel"
+              <PhoneInput
                 value={formData.phone || ''}
-                onChange={(e) => updateField('phone', e.target.value)}
+                onChange={(phone) => updateField('phone', phone)}
                 className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </div>

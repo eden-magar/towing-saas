@@ -35,6 +35,7 @@ import {
   deleteCustomerUser,
 } from '@/app/lib/queries/customer-portal'
 import type { CustomerUserWithDetails } from '@/app/lib/types'
+import { PhoneInput } from '@/app/components/ui/PhoneInput'
 
 interface CustomerDetail {
   id: string
@@ -582,10 +583,9 @@ export default function CustomerDetailPage() {
 
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">טלפון</label>
-                  <input
-                    type="tel"
+                  <PhoneInput
                     value={newUserForm.phone}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, phone: e.target.value })}
+                    onChange={(phone) => setNewUserForm({ ...newUserForm, phone })}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                   />
                 </div>

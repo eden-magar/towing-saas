@@ -17,6 +17,7 @@ import {
   StoredVehicleWithCustomer,
 } from '../../../lib/queries/storage'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
+import { PhoneInput } from '../../ui/PhoneInput'
 
 interface RouteStop {
   id: string
@@ -402,10 +403,9 @@ export function ExchangeRoute({
                         placeholder="שם"
                         className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
-                      <input
-                        type="tel"
+                      <PhoneInput
                         value={workingVehicleContactPhone}
-                        onChange={(e) => onWorkingVehicleContactPhoneChange(e.target.value)}
+                        onChange={onWorkingVehicleContactPhoneChange}
                         placeholder="טלפון"
                         className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
@@ -521,10 +521,9 @@ export function ExchangeRoute({
                         placeholder="שם"
                         className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
-                      <input
-                        type="tel"
+                      <PhoneInput
                         value={defectiveDestinationContactPhone}
-                        onChange={(e) => onDefectiveDestinationContactPhoneChange(e.target.value)}
+                        onChange={onDefectiveDestinationContactPhoneChange}
                         placeholder="טלפון"
                         className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                       />
@@ -640,10 +639,9 @@ export function ExchangeRoute({
                       placeholder="איש קשר"
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
-                    <input
-                      type="tel"
+                    <PhoneInput
                       value={stop.contactPhone}
-                      onChange={(e) => updateStop('before', stop.id, 'contactPhone', e.target.value)}
+                      onChange={(phone) => updateStop('before', stop.id, 'contactPhone', phone)}
                       placeholder="טלפון"
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
@@ -694,10 +692,9 @@ export function ExchangeRoute({
                     placeholder="שם"
                     className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                   />
-                  <input
-                    type="tel"
+                  <PhoneInput
                     value={exchangeContactPhone}
-                    onChange={(e) => onExchangeContactPhoneChange(e.target.value)}
+                    onChange={onExchangeContactPhoneChange}
                     placeholder="טלפון"
                     className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                   />
@@ -757,10 +754,9 @@ export function ExchangeRoute({
                       placeholder="איש קשר"
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />
-                    <input
-                      type="tel"
+                    <PhoneInput
                       value={stop.contactPhone}
-                      onChange={(e) => updateStop('after', stop.id, 'contactPhone', e.target.value)}
+                      onChange={(phone) => updateStop('after', stop.id, 'contactPhone', phone)}
                       placeholder="טלפון"
                       className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                     />

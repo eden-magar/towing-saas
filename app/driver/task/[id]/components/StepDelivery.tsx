@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Package
 } from 'lucide-react'
+import { PhoneInput } from '../../../../components/ui/PhoneInput'
 
 function StoragePointBadge({
   pointType,
@@ -210,13 +211,11 @@ export default function StepDelivery({
             {/* טלפון */}
             <div className="mb-4">
               <label className="block text-sm text-gray-500 mb-2 text-right">טלפון</label>
-              <input
-                type="tel"
+              <PhoneInput
                 value={recipientPhone}
-                onChange={(e) => setRecipientPhone(e.target.value)}
+                onChange={(phone) => setRecipientPhone(phone)}
                 placeholder="050-0000000"
                 className="w-full p-4 border border-gray-200 rounded-xl text-right text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                dir="ltr"
               />
             </div>
 

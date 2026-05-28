@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../lib/AuthContext'
+import { PhoneInput } from '../../components/ui/PhoneInput'
 import {
   Building2,
   Settings,
@@ -414,13 +415,11 @@ export default function SettingsPage() {
                     <Phone size={14} className="inline ml-1" />
                     טלפון
                   </label>
-                  <input
-                    type="tel"
+                  <PhoneInput
                     value={companyForm.phone}
-                    onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                    onChange={(phone) => setCompanyForm({ ...companyForm, phone })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
                     placeholder="טלפון החברה"
-                    dir="ltr"
                   />
                 </div>
 

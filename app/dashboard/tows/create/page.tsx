@@ -41,6 +41,7 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import { FormCard, FormSubcard, Input } from '../../../components/ui'
+import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
@@ -1256,10 +1257,9 @@ function CreateTowForm({
                                         <label className="block text-sm font-medium text-gray-700 mb-1">
                                           טלפון איש קשר
                                         </label>
-                                        <input
-                                          type="tel"
+                                        <PhoneInput
                                           value={followUpContactPhone}
-                                          onChange={(e) => setFollowUpContactPhone(e.target.value)}
+                                          onChange={(phone) => setFollowUpContactPhone(phone)}
                                           placeholder="050-1234567"
                                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                                         />
@@ -2203,10 +2203,9 @@ function CreateTowForm({
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                               טלפון איש קשר
                                             </label>
-                                            <input
-                                              type="tel"
+                                            <PhoneInput
                                               value={followUpContactPhone}
-                                              onChange={(e) => setFollowUpContactPhone(e.target.value)}
+                                              onChange={(phone) => setFollowUpContactPhone(phone)}
                                               placeholder="050-1234567"
                                               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                                             />
@@ -2635,7 +2634,7 @@ function CreateTowForm({
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <input type="tel" value={workingVehicleContactPhone} onChange={(e) => setWorkingVehicleContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <PhoneInput value={workingVehicleContactPhone} onChange={(phone) => setWorkingVehicleContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
                       </div>
 
@@ -2649,7 +2648,7 @@ function CreateTowForm({
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={workingDestinationContact} onChange={(e) => setWorkingDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <input type="tel" value={workingDestinationContactPhone} onChange={(e) => setWorkingDestinationContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <PhoneInput value={workingDestinationContactPhone} onChange={(phone) => setWorkingDestinationContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
                       </div>
 
@@ -2667,7 +2666,7 @@ function CreateTowForm({
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <input type="tel" value={exchangeContactPhone} onChange={(e) => setExchangeContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <PhoneInput value={exchangeContactPhone} onChange={(phone) => setExchangeContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
                         {workingDestinationContact && (
                           <button
@@ -2693,7 +2692,7 @@ function CreateTowForm({
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <input type="tel" value={defectiveDestinationContactPhone} onChange={(e) => setDefectiveDestinationContactPhone(e.target.value)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
+                          <PhoneInput value={defectiveDestinationContactPhone} onChange={(phone) => setDefectiveDestinationContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
                         </div>
                       </div>
                       </div>
@@ -2722,10 +2721,9 @@ function CreateTowForm({
                             placeholder="שם"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
-                          <input
-                            type="tel"
+                          <PhoneInput
                             value={pickupContactPhone}
-                            onChange={(e) => setPickupContactPhone(e.target.value)}
+                            onChange={(phone) => setPickupContactPhone(phone)}
                             placeholder="טלפון"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
@@ -2754,10 +2752,9 @@ function CreateTowForm({
                             placeholder="שם"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
-                          <input
-                            type="tel"
+                          <PhoneInput
                             value={dropoffContactPhone}
-                            onChange={(e) => setDropoffContactPhone(e.target.value)}
+                            onChange={(phone) => setDropoffContactPhone(phone)}
                             placeholder="טלפון"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />

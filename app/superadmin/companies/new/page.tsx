@@ -8,6 +8,7 @@ import {
   type SubscriptionPlan
 } from '../../../lib/superadmin'
 import { supabase } from '../../../lib/supabase'
+import { PhoneInput } from '../../../components/ui/PhoneInput'
 import {
   ArrowRight,
   ArrowLeft,
@@ -337,10 +338,9 @@ export default function NewCompanyPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     טלפון
                   </label>
-                  <input
-                    type="tel"
+                  <PhoneInput
                     value={formData.phone}
-                    onChange={(e) => updateField('phone', e.target.value)}
+                    onChange={(phone) => updateField('phone', phone)}
                     className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="03-1234567"
                   />
@@ -493,10 +493,9 @@ export default function NewCompanyPage() {
                   <label className="block text-sm font-medium text-slate-300 mb-2">
                     טלפון
                   </label>
-                  <input
-                    type="tel"
+                  <PhoneInput
                     value={formData.admin_phone}
-                    onChange={(e) => updateField('admin_phone', e.target.value)}
+                    onChange={(phone) => updateField('admin_phone', phone)}
                     className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
                     placeholder="050-1234567"
                   />

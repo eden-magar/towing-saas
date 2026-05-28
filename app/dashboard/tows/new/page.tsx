@@ -15,6 +15,7 @@ import { CustomerSection, TowTypeSelector, PaymentSection, PriceSummary, PriceSe
 import { PinDropModal } from '../../../components/tow-forms/shared'
 import { SingleRoute, RouteBuilder, ExchangeRoute } from '../../../components/tow-forms/routes'
 import { useTowForm } from '../../../hooks/useTowForm'
+import { PhoneInput } from '../../../components/ui/PhoneInput'
 
 // ==================== Main Form Component ====================
 function NewTowForm({ editTowId }: { editTowId?: string }) {
@@ -431,7 +432,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                       <div className="space-y-3">
                         <input type="text" value={pickupContactName} onChange={(e) => setPickupContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
                         <div className="flex gap-2">
-                          <input type="tel" value={pickupContactPhone} onChange={(e) => setPickupContactPhone(e.target.value)} placeholder="טלפון" className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
+                          <PhoneInput value={pickupContactPhone} onChange={(phone) => setPickupContactPhone(phone)} placeholder="טלפון" className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
                           <button onClick={() => copyFromCustomer('pickup')} className="px-2 py-2 bg-cyan-50 border border-cyan-200 text-cyan-600 rounded-lg text-xs hover:bg-cyan-100">👤</button>
                         </div>
                       </div>
@@ -441,7 +442,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                       <div className="space-y-3">
                         <input type="text" value={dropoffContactName} onChange={(e) => setDropoffContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
                         <div className="flex gap-2">
-                          <input type="tel" value={dropoffContactPhone} onChange={(e) => setDropoffContactPhone(e.target.value)} placeholder="טלפון" className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
+                          <PhoneInput value={dropoffContactPhone} onChange={(phone) => setDropoffContactPhone(phone)} placeholder="טלפון" className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white" />
                           <button onClick={() => copyFromCustomer('dropoff')} className="px-2 py-2 bg-cyan-50 border border-cyan-200 text-cyan-600 rounded-lg text-xs hover:bg-cyan-100">👤</button>
                         </div>
                       </div>

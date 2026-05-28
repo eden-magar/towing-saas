@@ -14,6 +14,7 @@ import {
   createTaskSubtype,
 } from '@/app/lib/queries/driver-tasks-admin'
 import { getDrivers } from '@/app/lib/queries/drivers'
+import { PhoneInput } from '@/app/components/ui/PhoneInput'
 import { getTrucks } from '@/app/lib/queries/trucks'
 import {
   DriverTaskWithDetails,
@@ -508,11 +509,9 @@ export default function TasksPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-gray-500">טלפון</label>
-                <input
-                  type="tel"
-                  dir="ltr"
+                <PhoneInput
                   value={fContactPhone}
-                  onChange={e => setFContactPhone(e.target.value)}
+                  onChange={(phone) => setFContactPhone(phone)}
                   placeholder="050-..."
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
                 />
