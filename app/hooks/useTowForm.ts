@@ -58,6 +58,7 @@ export function useTowForm(editTowId?: string) {
   const [savedTowId, setSavedTowId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [dataLoading, setDataLoading] = useState(true)
   
   // Data from database
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
@@ -776,7 +777,7 @@ export function useTowForm(editTowId?: string) {
   const loadData = async () => {
     if (!companyId) return
     try {
-      const [customersData, driversData, trucksData, basePriceData, fixedPricesData, customersPricingData, timeSurchargesRes, locationSurchargesRes, serviceSurchargesRes, companySettingsData] = await Promise.all([
+      const results = await Promise.allSettled([
         getCustomersLite(companyId),
         getDrivers(companyId),
         getTrucks(companyId),
@@ -786,22 +787,87 @@ export function useTowForm(editTowId?: string) {
         getTimeSurcharges(companyId),
         getLocationSurcharges(companyId),
         getServiceSurcharges(companyId),
-        getCompanySettings(companyId)
+        getCompanySettings(companyId),
       ])
-      setCustomers(customersData)
-      setDrivers(driversData)
-      setTrucks(trucksData)
-      setBasePriceList(basePriceData)
-      setFixedPriceItems(fixedPricesData)
-      setCustomersWithPricing(customersPricingData)
-      setTimeSurchargesData(timeSurchargesRes)
-      setLocationSurchargesData(locationSurchargesRes)
-      setServiceSurchargesData(serviceSurchargesRes)
-      if (companySettingsData?.default_vat_percent) {
-        setVatPercent(companySettingsData.default_vat_percent / 100)
+
+      const [
+        customersResult,
+        driversResult,
+        trucksResult,
+        basePriceListResult,
+        fixedPriceItemsResult,
+        customersWithPricingResult,
+        timeSurchargesResult,
+        locationSurchargesResult,
+        serviceSurchargesResult,
+        companySettingsResult,
+      ] = results
+
+      if (customersResult.status === 'fulfilled') {
+        setCustomers(customersResult.value)
+      } else {
+        console.error('Error loading customers:', customersResult.reason)
+        setError('שגיאה בטעינת רשימת הלקוחות, נסה לרענן')
       }
-    } catch (err) {
-      console.error('Error loading data:', err)
+
+      if (driversResult.status === 'fulfilled') {
+        setDrivers(driversResult.value)
+      } else {
+        console.error('Error loading drivers:', driversResult.reason)
+      }
+
+      if (trucksResult.status === 'fulfilled') {
+        setTrucks(trucksResult.value)
+      } else {
+        console.error('Error loading trucks:', trucksResult.reason)
+      }
+
+      if (basePriceListResult.status === 'fulfilled') {
+        setBasePriceList(basePriceListResult.value)
+      } else {
+        console.error('Error loading basePriceList:', basePriceListResult.reason)
+      }
+
+      if (fixedPriceItemsResult.status === 'fulfilled') {
+        setFixedPriceItems(fixedPriceItemsResult.value)
+      } else {
+        console.error('Error loading fixedPriceItems:', fixedPriceItemsResult.reason)
+      }
+
+      if (customersWithPricingResult.status === 'fulfilled') {
+        setCustomersWithPricing(customersWithPricingResult.value)
+      } else {
+        console.error('Error loading customersWithPricing:', customersWithPricingResult.reason)
+      }
+
+      if (timeSurchargesResult.status === 'fulfilled') {
+        setTimeSurchargesData(timeSurchargesResult.value)
+      } else {
+        console.error('Error loading timeSurcharges:', timeSurchargesResult.reason)
+      }
+
+      if (locationSurchargesResult.status === 'fulfilled') {
+        setLocationSurchargesData(locationSurchargesResult.value)
+      } else {
+        console.error('Error loading locationSurcharges:', locationSurchargesResult.reason)
+      }
+
+      if (serviceSurchargesResult.status === 'fulfilled') {
+        setServiceSurchargesData(serviceSurchargesResult.value)
+      } else {
+        console.error('Error loading serviceSurcharges:', serviceSurchargesResult.reason)
+      }
+
+      if (companySettingsResult.status === 'fulfilled') {
+        const companySettingsData = companySettingsResult.value
+        if (companySettingsData?.default_vat_percent) {
+          setVatPercent(companySettingsData.default_vat_percent / 100)
+        }
+      } else {
+        console.error('Error loading companySettings:', companySettingsResult.reason)
+      }
+    } finally {
+      setDataLoading(false)
     }
   }
 
@@ -1422,6 +1488,7 @@ export function useTowForm(editTowId?: string) {
     savedTowId, setSavedTowId,
     saving, setSaving,
     error, setError,
+    dataLoading,
     // Data
     customers,
     drivers,
