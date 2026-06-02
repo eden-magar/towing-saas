@@ -470,7 +470,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
               <p className="text-[11px] uppercase tracking-wide text-gt-brand-subtle">לקוח</p>
               <p className="text-sm text-white font-medium truncate">{towCustomer.name}</p>
             </div>
-            {customerPhone && (
+            {customerPhone && towCustomer.customer_type !== 'business' && (
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
@@ -497,7 +497,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       </div>
 
       {/* תוכן לפי השלב */}
-      <div className="pt-16 h-full overflow-auto">
+      <div className={`${towCustomer ? 'pt-28' : 'pt-16'} h-full overflow-auto`}>
         {task.notes && (
           <div className="mx-4 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
             <p className="text-xs font-medium text-amber-600 mb-1">📋 הערות דיספצ&apos;ר</p>
@@ -514,6 +514,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             onArrived={handleArrived}
             onMarkStopVisited={handleStopVisited}
             taskId={id}
+            priceBreakdown={task.price_breakdown}
           />
         )}
 

@@ -490,40 +490,44 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     return null
   }
 
-  // שליפת כלי רכב
-  const { data: vehicles } = await supabase
-    .from('tow_vehicles')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('order_index', { ascending: true })
-
-  // שליפת רגליים (לתאימות לאחור)
-  const { data: legs } = await supabase
-    .from('tow_legs')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('leg_order', { ascending: true })
-
-  // שליפת נקודות עם רכבים משויכים
-  const { data: points } = await supabase
-    .from('tow_points')
-    .select(`
-      *,
-      point_vehicles:tow_point_vehicles (
-        id,
-        tow_vehicle_id,
-        action
-      )
-    `)
-    .eq('tow_id', towId)
-    .order('point_order', { ascending: true })
-
-  // שליפת תמונות
-  const { data: images } = await supabase
-    .from('tow_images')
-    .select('*')
-    .eq('tow_id', towId)
-    .order('created_at', { ascending: true })
+  const [
+    { data: vehicles },
+    { data: legs },
+    { data: points },
+    { data: images },
+  ] = await Promise.all([
+    // שליפת כלי רכב
+    supabase
+      .from('tow_vehicles')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('order_index', { ascending: true }),
+    // שליפת רגליים (לתאימות לאחור)
+    supabase
+      .from('tow_legs')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('leg_order', { ascending: true }),
+    // שליפת נקודות עם רכבים משויכים
+    supabase
+      .from('tow_points')
+      .select(`
+        *,
+        point_vehicles:tow_point_vehicles (
+          id,
+          tow_vehicle_id,
+          action
+        )
+      `)
+      .eq('tow_id', towId)
+      .order('point_order', { ascending: true }),
+    // שליפת תמונות
+    supabase
+      .from('tow_images')
+      .select('*')
+      .eq('tow_id', towId)
+      .order('created_at', { ascending: true }),
+  ])
 
   return {
     id: tow.id,

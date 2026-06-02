@@ -2092,7 +2092,7 @@ export default function TowDetailsPage() {
                   }
                   
                   tow.points?.forEach((point: any) => {
-                    const pointLabel = `${point.point_type === 'pickup' ? 'איסוף' : 'פריקה'} — ${point.address?.split(',')[0] || 'נקודה ' + point.point_order}`
+                    const pointLabel = `${getRoutePointLabel(point, tow.tow_type, tow.points ?? [])} — ${point.address?.split(',')[0] || 'נקודה ' + point.point_order}`
                     
                     if (point.arrived_at) {
                       events.push({ time: point.arrived_at, label: `הנהג הגיע: ${pointLabel}`, color: 'bg-cyan-500' })

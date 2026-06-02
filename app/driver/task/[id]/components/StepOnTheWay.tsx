@@ -2,7 +2,7 @@
 
 import { openWaze } from '@/app/lib/utils/navigation'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { 
   MapPin, 
   Phone, 
@@ -13,7 +13,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
-import { DriverTaskPoint, DriverTaskVehicle, getTaskDetail, type TaskDetailFull } from '@/app/lib/queries/driver-tasks'
+import { DriverTaskPoint, DriverTaskVehicle } from '@/app/lib/queries/driver-tasks'
 import { resolveDriverContact } from '@/app/lib/utils/driver-contact'
 import { toWhatsApp } from '@/app/lib/utils/phone'
 
@@ -52,6 +52,7 @@ interface StepOnTheWayProps {
   onArrived: (notes?: string) => Promise<void>
   onMarkStopVisited: (driverNotes?: string) => Promise<void>
   taskId: string
+  priceBreakdown?: any
 }
 
 export default function StepOnTheWay({
@@ -62,26 +63,14 @@ export default function StepOnTheWay({
   currentIndex,
   onArrived,
   onMarkStopVisited,
-  taskId
+  taskId,
+  priceBreakdown
 }: StepOnTheWayProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showRoute, setShowRoute] = useState(false)
   const [arrivalNotes, setArrivalNotes] = useState('')
   const [stopVisitNotes, setStopVisitNotes] = useState('')
-  const [priceBreakdown, setPriceBreakdown] = useState<any>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    getTaskDetail(taskId).then((detail: TaskDetailFull | null) => {
-      if (!cancelled && detail?.price_breakdown) {
-        setPriceBreakdown(detail.price_breakdown)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [taskId])
 
   const isPickup = point.point_type === 'pickup'
   const isExchange = point.point_type === 'exchange'
@@ -219,7 +208,7 @@ export default function StepOnTheWay({
       })()}
 
       {/* Content Card */}
-      <div className="flex-1 bg-gray-50 rounded-t-3xl px-5 pt-6 pb-4">
+      <div className="flex-1 overflow-y-auto bg-gray-50 rounded-t-3xl px-5 pt-6 pb-44">
         {vehicles.length > 0 && (
           <div className="space-y-2 mb-3">
             {vehicles.map((v, idx) => (
