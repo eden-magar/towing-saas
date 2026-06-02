@@ -131,6 +131,8 @@ export function useTowForm(editTowId?: string) {
 
   const [customerOrderNumber, setCustomerOrderNumber] = useState('')
   const [orderNumber, setOrderNumber] = useState<string | null>(null)
+  const [department, setDepartment] = useState('')
+  const [orderedBy, setOrderedBy] = useState('')
   
   // Customer info
   const [customerName, setCustomerName] = useState('')
@@ -580,6 +582,8 @@ export function useTowForm(editTowId?: string) {
         setPriceMode(tow.price_mode || 'custom')
         setCustomerOrderNumber(tow.customer_order_number || '')
         setOrderNumber(tow.order_number || null)
+        setDepartment(tow.department || '')
+        setOrderedBy(tow.ordered_by || '')
         // Payment
         setPaymentMethod((tow as any).payment_method || 'cash')
         setInvoiceName((tow as any).invoice_name || '')
@@ -1008,6 +1012,10 @@ export function useTowForm(editTowId?: string) {
     setSelectedCustomerId(customerId)
     setCustomerName(name)
     setCustomerPhone(phone)
+    if (!customerId) {
+      setDepartment('')
+      setOrderedBy('')
+    }
   }
 
   // Exchange helpers
@@ -1505,6 +1513,8 @@ export function useTowForm(editTowId?: string) {
       setSelectedCustomerId(null)
       setCustomerName('')
       setCustomerPhone('')
+      setDepartment('')
+      setOrderedBy('')
     }
   }
 
@@ -1566,12 +1576,15 @@ export function useTowForm(editTowId?: string) {
     vehiclePlate,
     setSaving,
     setError,
+    customers,
     selectedCustomerId,
     customerName,
     customerPhone,
     customerEmail,
     customerAddress,
     customerOrderNumber,
+    department,
+    orderedBy,
     towDate,
     towTime,
     vehicleCode,
@@ -1685,6 +1698,8 @@ export function useTowForm(editTowId?: string) {
     customerOrderNumber, setCustomerOrderNumber,
     orderNumber,
     loadedTowStatus,
+    department, setDepartment,
+    orderedBy, setOrderedBy,
     customerName, setCustomerName,
     customerPhone, setCustomerPhone,
     customerEmail, setCustomerEmail,

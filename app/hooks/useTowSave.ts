@@ -1,5 +1,5 @@
 import { useRouter } from 'next/navigation'
-import { createCustomer } from '@/app/lib/queries/customers'
+import { createCustomer, type CustomerListItem } from '@/app/lib/queries/customers'
 import { prepareTowData } from '../lib/utils/tow-save-handler'
 import {
   createTow,
@@ -47,12 +47,15 @@ interface UseTowSaveParams {
   saving?: boolean
   setError: (v: string) => void
   // Customer
+  customers: CustomerListItem[]
   selectedCustomerId: string | null
   customerName: string
   customerPhone: string
   customerEmail: string
   customerAddress: string
   customerOrderNumber: string
+  department: string
+  orderedBy: string
   towDate: string
   towTime: string
   // Vehicle
@@ -152,12 +155,15 @@ export function useTowSave(params: UseTowSaveParams) {
     setSaving,
     saving,
     setError,
+    customers,
     selectedCustomerId,
     customerName,
     customerPhone,
     customerEmail,
     customerAddress,
     customerOrderNumber,
+    department,
+    orderedBy,
     towDate,
     towTime,
     vehicleCode,
@@ -284,6 +290,12 @@ export function useTowSave(params: UseTowSaveParams) {
     
     const originalTow = editTowId ? editTowSnapshot ?? null : null
 
+    const isBusinessCustomer =
+      !!finalCustomerId &&
+      customers.some(
+        (c) => c.id === finalCustomerId && c.customer_type === 'business'
+      )
+
     const towData = prepareTowData({
       companyId,
       userId: user.id,
@@ -292,6 +304,9 @@ export function useTowSave(params: UseTowSaveParams) {
       customerId: finalCustomerId,
       customerName,
       customerPhone,
+      department,
+      orderedBy,
+      isBusinessCustomer,
       towDate,
       towTime,
       preSelectedDriverId,

@@ -28,7 +28,11 @@ export interface SaveTowInput {
   customerId: string | null
   customerName: string
   customerPhone: string
-  
+  department?: string | null
+  orderedBy?: string | null
+  /** When false, department/orderedBy are not persisted (saved as null). */
+  isBusinessCustomer?: boolean
+
   // Date/Time
   towDate: string
   towTime: string
@@ -147,10 +151,25 @@ export interface PreparedTowPoint {
 }
 
 // Output ל-createTow
+function businessTowCustomerFields(input: SaveTowInput): {
+  department: string | null
+  ordered_by: string | null
+} {
+  if (!input.isBusinessCustomer) {
+    return { department: null, ordered_by: null }
+  }
+  return {
+    department: input.department?.trim() || null,
+    ordered_by: input.orderedBy?.trim() || null,
+  }
+}
+
 export interface PreparedTowData {
   companyId: string
   createdBy: string
   customerOrderNumber?: string
+  department?: string | null
+  ordered_by?: string | null
   customerId?: string
   driverId?: string
   truckId?: string
@@ -852,6 +871,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   const scheduledAt = input.towDate && input.towTime 
     ? new Date(`${input.towDate}T${input.towTime}:00`).toISOString() 
     : new Date().toISOString()
+  const businessFields = businessTowCustomerFields(input)
 
   // גרירה רגילה
   if (input.towType === 'single') {
@@ -905,6 +925,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       companyId: input.companyId,
       createdBy: input.userId,
       customerOrderNumber: input.customerOrderNumber,
+      ...businessFields,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
       truckId: input.preSelectedTruckId || undefined,
@@ -952,6 +973,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       companyId: input.companyId,
       createdBy: input.userId,
       customerOrderNumber: input.customerOrderNumber,
+      ...businessFields,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
       truckId: input.preSelectedTruckId || undefined,
@@ -1204,6 +1226,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     companyId: input.companyId,
     createdBy: input.userId,
     customerOrderNumber: input.customerOrderNumber,
+    ...businessFields,
     customerId: input.customerId || undefined,
     driverId: input.preSelectedDriverId || undefined,
     truckId: input.preSelectedTruckId || undefined,

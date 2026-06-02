@@ -274,6 +274,10 @@ function CreateTowForm({
     baseToPickupLoading,
     customerOrderNumber,
     setCustomerOrderNumber,
+    department,
+    setDepartment,
+    orderedBy,
+    setOrderedBy,
     orderNumber,
     loadedTowStatus,
     notes,
@@ -311,6 +315,11 @@ function CreateTowForm({
   // Local state for new form
   const [customerTab, setCustomerTab] = useState<'existing' | 'casual'>('existing')
   const [customerSearch, setCustomerSearch] = useState('')
+
+  const isBusinessCustomer =
+    customerTab === 'existing' &&
+    !!selectedCustomerId &&
+    customers.find((c) => c.id === selectedCustomerId)?.customer_type === 'business'
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
   const [quoteSavedId, setQuoteSavedId] = useState<string | null>(null)
@@ -1074,6 +1083,11 @@ function CreateTowForm({
             onNowClick={handleNowClick}
             customerOrderNumber={customerOrderNumber}
             onCustomerOrderNumberChange={setCustomerOrderNumber}
+            isBusinessCustomer={isBusinessCustomer}
+            department={department}
+            onDepartmentChange={setDepartment}
+            orderedBy={orderedBy}
+            onOrderedByChange={setOrderedBy}
             editTowId={editTowId}
             orderNumber={orderNumber}
           />

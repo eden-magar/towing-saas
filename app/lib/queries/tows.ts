@@ -122,7 +122,10 @@ export interface TowWithDetails {
     phone: string | null
     email: string | null
     address: string | null
+    customer_type: 'private' | 'business'
   } | null
+  department: string | null
+  ordered_by: string | null
   driver: {
     id: string
     user: {
@@ -392,7 +395,8 @@ const TOW_WITH_RELATIONS_SELECT = `
     name,
     phone,
     email,
-    address
+    address,
+    customer_type
   ),
   driver:drivers!tows_driver_id_fkey (
     id,
@@ -582,6 +586,8 @@ interface CreateTowInput {
   companyId: string
   createdBy: string
   customerOrderNumber?: string
+  department?: string | null
+  ordered_by?: string | null
   customerId?: string
   driverId?: string
   truckId?: string
@@ -641,6 +647,8 @@ export async function createTow(input: CreateTowInput) {
       company_id: input.companyId,
       created_by: input.createdBy,
       customer_order_number: input.customerOrderNumber || null,
+      department: input.department ?? null,
+      ordered_by: input.ordered_by ?? null,
       customer_id: input.customerId || null,
       driver_id: input.driverId || null,
       truck_id: input.truckId || null,
@@ -1154,6 +1162,8 @@ interface UpdateTowInput {
   towId: string
   customerId?: string | null
   customerOrderNumber?: string | null
+  department?: string | null
+  ordered_by?: string | null
   notes?: string | null
   priceMode?: string | null
   finalPrice?: number | null
@@ -1201,6 +1211,8 @@ export async function updateTow(input: UpdateTowInput) {
   
   if (input.customerId !== undefined) towUpdates.customer_id = input.customerId
   if (input.customerOrderNumber !== undefined) towUpdates.customer_order_number = input.customerOrderNumber || null
+  if (input.department !== undefined) towUpdates.department = input.department
+  if (input.ordered_by !== undefined) towUpdates.ordered_by = input.ordered_by
   if (input.notes !== undefined) towUpdates.notes = input.notes
   if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
   if (input.recommendedPrice !== undefined) towUpdates.recommended_price = input.recommendedPrice

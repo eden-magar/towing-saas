@@ -35,6 +35,11 @@ export interface CreateCustomerSectionProps {
   onNowClick: () => void
   customerOrderNumber: string
   onCustomerOrderNumberChange: (v: string) => void
+  isBusinessCustomer?: boolean
+  department?: string
+  onDepartmentChange?: (v: string) => void
+  orderedBy?: string
+  onOrderedByChange?: (v: string) => void
   editTowId?: string | null
   orderNumber?: string | null
 }
@@ -68,6 +73,11 @@ export function CreateCustomerSection({
   onNowClick,
   customerOrderNumber,
   onCustomerOrderNumberChange,
+  isBusinessCustomer = false,
+  department = '',
+  onDepartmentChange,
+  orderedBy = '',
+  onOrderedByChange,
   editTowId,
   orderNumber,
 }: CreateCustomerSectionProps) {
@@ -155,7 +165,7 @@ export function CreateCustomerSection({
           </Button>
         }
       >
-        <div className="p-3 space-y-3">
+        <div className="p-3 grid grid-cols-2 gap-2" dir="rtl">
           <Input
             type="text"
             value={customerName}
@@ -282,6 +292,25 @@ export function CreateCustomerSection({
           <User className="w-4 h-4 text-[#33d4ff]" />
         </div>
       </div>
+
+      {isBusinessCustomer && onDepartmentChange && onOrderedByChange && (
+        <div className="px-4 pb-3 grid grid-cols-2 gap-2 border-t border-gray-100" dir="rtl">
+          <Input
+            type="text"
+            value={department}
+            onChange={(e) => onDepartmentChange(e.target.value)}
+            placeholder="מחלקה (אופציונלי)"
+            className="text-right"
+          />
+          <Input
+            type="text"
+            value={orderedBy}
+            onChange={(e) => onOrderedByChange(e.target.value)}
+            placeholder="מזמין (אופציונלי)"
+            className="text-right"
+          />
+        </div>
+      )}
 
       {customerStoredVehicles.length > 0 && (
         <div className="px-4 pb-4 pt-0 border-t border-gray-100">
