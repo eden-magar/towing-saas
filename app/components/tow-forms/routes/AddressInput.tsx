@@ -254,7 +254,7 @@ export function AddressInput({
   }
 
   const inputClassName =
-    'flex-1 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
+    'flex-1 min-w-0 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
 
   const actionButtonClassName =
     'shrink-0 px-3 py-2.5 border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
@@ -337,7 +337,7 @@ export function AddressInput({
 
   const renderInputRow = (inputClasses: string) => (
     <>
-      <div className="flex gap-2 items-stretch">
+      <div className="flex gap-2 items-stretch min-w-0">
         <input
           ref={inputRef}
           type="text"
@@ -378,7 +378,7 @@ export function AddressInput({
 
   // With label (old style - used by SingleRoute) or hideLabel (create page stops)
   return (
-    <div className={className}>
+    <div className={className ? `min-w-0 w-full ${className}` : 'min-w-0 w-full'}>
       {!hideLabel && (
         <label className="block text-sm font-medium text-gray-700 mb-1.5">
           {label}

@@ -599,6 +599,7 @@ function CreateTowForm({
                       value={followUpAddress}
                       onChange={(d: AddressData) => setFollowUpAddress(d)}
                       placeholder="כתובת היעד של הגרירה הבאה"
+                      onPinDropClick={() => handlePinDropOpen('followUp')}
                     />
                     <div className="grid grid-cols-2 gap-2">
                       <input
@@ -703,6 +704,7 @@ function CreateTowForm({
     else if (field === 'workingVehicle') setWorkingVehicleAddress(data)
     else if (field === 'workingDestination') setWorkingVehicleDestinationAddress(data)
     else if (field === 'defectiveDestination') setDefectiveDestinationAddress(data)
+    else if (field === 'followUp') setFollowUpAddress(data)
     else if (field?.startsWith('routestop:')) {
       const stopId = field.slice('routestop:'.length)
       updateStop(stopId, { address: data })
@@ -2375,6 +2377,7 @@ function CreateTowForm({
                                             value={followUpAddress}
                                             onChange={(d: AddressData) => setFollowUpAddress(d)}
                                             placeholder="כתובת היעד של הגרירה הבאה"
+                                            onPinDropClick={() => handlePinDropOpen('followUp')}
                                           />
                                         </div>
 
@@ -3159,6 +3162,7 @@ function CreateTowForm({
           : pinDropModal.field === 'workingVehicle' ? workingVehicleAddress
           : pinDropModal.field === 'workingDestination' ? workingVehicleDestinationAddress
           : pinDropModal.field === 'defectiveDestination' ? defectiveDestinationAddress
+          : pinDropModal.field === 'followUp' ? followUpAddress
           : undefined
         }
         title={
