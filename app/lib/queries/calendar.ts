@@ -2,6 +2,9 @@ import { supabase } from '../supabase'
 import { TowWithDetails, TowVehicle, TowLeg } from './tows'
 import { insertDriverTruckAssignments } from './driver-truck-assignments'
 
+type CalendarTowVehicleSummary = Pick<TowVehicle, 'id' | 'tow_id' | 'plate_number' | 'order_index'>
+type CalendarTowLegSummary = Pick<TowLeg, 'id' | 'tow_id' | 'leg_order' | 'from_address' | 'to_address'>
+
 // ==================== שליפת גרירות ליומן ====================
 
 export async function getCalendarTows(
@@ -15,22 +18,21 @@ export async function getCalendarTows(
   const { data: tows, error } = await supabase
     .from('tows')
     .select(`
-      *,
+      id,
+      status,
+      order_number,
+      driver_id,
+      created_at,
+      scheduled_at,
+      started_at,
+      completed_at,
+      final_price,
+      price_mode,
+      price_breakdown,
       customer:customers (
         id,
         name,
         phone
-      ),
-      driver:drivers!tows_driver_id_fkey (
-        id,
-        user:users!drivers_user_id_fkey (
-          full_name,
-          phone
-        )
-      ),
-      truck:tow_trucks (
-        id,
-        plate_number
       )
     `)
     .eq('company_id', companyId)
@@ -53,25 +55,25 @@ export async function getCalendarTows(
   
   const { data: vehicles } = await supabase
     .from('tow_vehicles')
-    .select('*')
+    .select('id, tow_id, plate_number, order_index')
     .in('tow_id', towIds)
     .order('order_index', { ascending: true })
 
   // שליפת רגליים
   const { data: legs } = await supabase
     .from('tow_legs')
-    .select('*')
+    .select('id, tow_id, leg_order, from_address, to_address')
     .in('tow_id', towIds)
     .order('leg_order', { ascending: true })
 
   // מיפוי לפי tow_id
-  const vehiclesByTow: Record<string, TowVehicle[]> = {}
+  const vehiclesByTow: Record<string, CalendarTowVehicleSummary[]> = {}
   vehicles?.forEach(v => {
     if (!vehiclesByTow[v.tow_id]) vehiclesByTow[v.tow_id] = []
     vehiclesByTow[v.tow_id].push(v)
   })
 
-  const legsByTow: Record<string, TowLeg[]> = {}
+  const legsByTow: Record<string, CalendarTowLegSummary[]> = {}
   legs?.forEach(l => {
     if (!legsByTow[l.tow_id]) legsByTow[l.tow_id] = []
     legsByTow[l.tow_id].push(l)
@@ -80,11 +82,11 @@ export async function getCalendarTows(
   return tows.map(tow => ({
     ...tow,
     customer: tow.customer as any,
-    driver: tow.driver as any,
-    truck: tow.truck as any,
-    vehicles: vehiclesByTow[tow.id] || [],
-    legs: legsByTow[tow.id] || []
-  }))
+    driver: null,
+    truck: null,
+    vehicles: (vehiclesByTow[tow.id] || []) as unknown as TowVehicle[],
+    legs: (legsByTow[tow.id] || []) as unknown as TowLeg[]
+  })) as unknown as TowWithDetails[]
 }
 
 // ==================== שליפת גרירות לשבוע ====================
