@@ -7,6 +7,7 @@ import {
   getTaskDetail, 
   updateTaskStatus,
   updatePointStatus,
+  markStopVisited,
   getCurrentPointIndex,
   rejectTask,
   type TaskDetailFull,
@@ -15,7 +16,8 @@ import {
 import { createCashCollection, updateTowCashPayment } from '@/app/lib/queries/driver-cash'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
 import { supabase } from '@/app/lib/supabase'
-import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle } from 'lucide-react'
+import { toWhatsApp } from '@/app/lib/utils/phone'
+import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle, Phone, MessageCircle } from 'lucide-react'
 
 // קומפוננטות השלבים
 import StepOnTheWay from './components/StepOnTheWay'
@@ -185,6 +187,28 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     }
   }
 
+  const handleStopVisited = async (driverNotes?: string) => {
+    if (!currentPoint || !user || !task || currentPoint.point_type !== 'stop') return
+    try {
+      await markStopVisited(currentPoint.id, driverNotes)
+      await updatePointStatus(currentPoint.id, 'completed', undefined, undefined, driverNotes)
+
+      const nextIndex = currentPointIndex + 1
+      if (nextIndex >= totalPoints) {
+        await updateTaskStatus(task.id, 'completed')
+        await loadTask()
+        setIsCompleted(true)
+      } else {
+        await loadTask()
+        setCurrentPointIndex(nextIndex)
+        setPointStep('on_the_way')
+      }
+    } catch (error) {
+      console.error('Error marking stop visit:', error)
+      alert('שגיאה בסימון עצירה')
+    }
+  }
+
   // סיום צילום - עובר לשלב סיום
   const handleCameraComplete = async () => {
     if (currentPoint?.point_type === 'exchange') {
@@ -291,6 +315,20 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     }
   }
 
+  const openCustomerPhone = (phone: string) => {
+    window.open(`tel:${phone}`, '_self')
+  }
+
+  const openCustomerWhatsApp = (phone: string) => {
+    const waNumber = toWhatsApp(phone).replace(/^\+/, '')
+    if (!waNumber) return
+    const vehicleInfo = task?.vehicles?.[0]?.plate_number
+    const message = vehicleInfo
+      ? `שלום, אני הגרריסט בדרך לגרירה של ${vehicleInfo}`
+      : 'שלום, אני הגרריסט בדרך לגרירה'
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
+  }
+
   // צבע הרקע לפי השלב
   const getBackgroundColor = () => {
     if (isCompleted) return 'bg-emerald-500'
@@ -392,6 +430,8 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     )
   }
 
+  const towCustomer = task.customer
+
   return (
     <div dir="rtl" className={`fixed inset-0 ${getBackgroundColor()} transition-colors duration-300 overflow-hidden`}>
       {/* Header */}
@@ -421,6 +461,39 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             <X size={20} className="text-white" />
           </button>
         </div>
+        {towCustomer && (
+          (() => {
+            const customerPhone = towCustomer.phone
+            return (
+          <div className="mt-2.5 bg-white/10 backdrop-blur rounded-xl px-3 py-2 flex items-center justify-between gap-3">
+            <div className="text-right min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-gt-brand-subtle">לקוח</p>
+              <p className="text-sm text-white font-medium truncate">{towCustomer.name}</p>
+            </div>
+            {customerPhone && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => openCustomerPhone(customerPhone)}
+                  className="w-8 h-8 rounded-lg bg-gt-brand text-white hover:bg-gt-brand-hover flex items-center justify-center"
+                  aria-label="התקשר ללקוח"
+                >
+                  <Phone size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openCustomerWhatsApp(customerPhone)}
+                  className="w-8 h-8 rounded-lg bg-gt-brand text-white hover:bg-gt-brand-hover flex items-center justify-center"
+                  aria-label="שלח וואטסאפ ללקוח"
+                >
+                  <MessageCircle size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+            )
+          })()
+        )}
       </div>
 
       {/* תוכן לפי השלב */}
@@ -439,6 +512,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             totalPoints={totalPoints}
             currentIndex={currentPointIndex}
             onArrived={handleArrived}
+            onMarkStopVisited={handleStopVisited}
             taskId={id}
           />
         )}

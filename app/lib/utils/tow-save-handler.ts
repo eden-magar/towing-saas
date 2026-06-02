@@ -57,6 +57,7 @@ export interface SaveTowInput {
     contactName?: string
     contactPhone?: string
     notes?: string
+    orderNotes?: string
   }[]
   distance?: DistanceResult | null
   startFromBase?: boolean
@@ -134,6 +135,9 @@ export interface PreparedTowPoint {
   contact_name: string | null
   contact_phone: string | null
   notes: string | null
+  order_notes?: string | null
+  driver_visited_at?: string | null
+  driver_notes?: string | null
   // רכבים בנקודה - מכיל את ה-index של הרכב ב-vehicles array
   vehicleIndices: number[]
   // האם זו נקודה לאחסנה
@@ -519,6 +523,7 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
       contact_name: row.contactName?.trim() || null,
       contact_phone: row.contactPhone?.trim() || null,
       notes: row.notes?.trim() || null,
+      order_notes: row.orderNotes?.trim() || null,
       vehicleIndices: isPickup || isDropoff ? [0] : [],
       isStorage: isFirstPickup
         ? !!input.selectedStoredVehicleId

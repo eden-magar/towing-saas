@@ -421,6 +421,9 @@ export interface TowPoint {
   recipient_phone: string | null
   
   notes: string | null
+  order_notes?: string | null
+  driver_visited_at?: string | null
+  driver_notes?: string | null
   is_storage?: boolean
   /** Set when point_type is stop; null for pickup/dropoff/exchange */
   stop_subtype?:

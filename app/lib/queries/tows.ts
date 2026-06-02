@@ -562,6 +562,9 @@ export interface PreparedTowPoint {
   contact_name: string | null
   contact_phone: string | null
   notes: string | null
+  order_notes?: string | null
+  driver_visited_at?: string | null
+  driver_notes?: string | null
   vehicleIndices: number[]
   dropToStorage?: boolean
   isStorage?: boolean
@@ -758,6 +761,9 @@ export async function createTow(input: CreateTowInput) {
           contact_name: point.contact_name,
           contact_phone: point.contact_phone,
           notes: point.notes,
+          order_notes: point.order_notes ?? null,
+          driver_visited_at: point.driver_visited_at ?? null,
+          driver_notes: point.driver_notes ?? null,
           is_storage: point.isStorage || false,
           stop_subtype: point.stop_subtype ?? null,
           status: 'pending'
@@ -1327,6 +1333,9 @@ export async function updateTow(input: UpdateTowInput) {
         contact_name: point.contact_name,
         contact_phone: point.contact_phone,
         notes: point.notes,
+        order_notes: point.order_notes ?? null,
+        driver_visited_at: point.driver_visited_at ?? null,
+        driver_notes: point.driver_notes ?? null,
         is_storage: point.isStorage || false,
         stop_subtype: point.stop_subtype ?? null,
         status: 'pending'

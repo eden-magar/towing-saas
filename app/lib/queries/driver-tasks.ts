@@ -51,6 +51,9 @@ export interface DriverTaskPoint {
   recipient_name: string | null
   recipient_phone: string | null
   notes: string | null
+  order_notes?: string | null
+  driver_visited_at?: string | null
+  driver_notes?: string | null
   is_storage?: boolean
   point_vehicles?: { id: string; tow_vehicle_id: string; action: string }[]
 }
@@ -249,6 +252,9 @@ function mapEmbeddedTowPointsToDriverTaskPoints(
       recipient_name: null,
       recipient_phone: null,
       notes: null,
+      order_notes: null,
+      driver_visited_at: null,
+      driver_notes: null,
     }))
 }
 
@@ -966,6 +972,28 @@ export async function updatePointStatus(
   }
 
   return { success: true, storageOk: true, storageFailures: [] }
+}
+
+export async function markStopVisited(
+  pointId: string,
+  driverNotes?: string
+) {
+  const { error } = await supabase
+    .from('tow_points')
+    .update({
+      driver_visited_at: new Date().toISOString(),
+      driver_notes: driverNotes?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pointId)
+    .eq('point_type', 'stop')
+
+  if (error) {
+    console.error('Error marking stop as visited:', error)
+    throw error
+  }
+
+  return true
 }
 
 // ==================== העלאת תמונה ====================

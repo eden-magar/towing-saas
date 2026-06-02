@@ -50,6 +50,7 @@ interface StepOnTheWayProps {
   totalPoints: number
   currentIndex: number
   onArrived: (notes?: string) => Promise<void>
+  onMarkStopVisited: (driverNotes?: string) => Promise<void>
   taskId: string
 }
 
@@ -60,12 +61,14 @@ export default function StepOnTheWay({
   totalPoints,
   currentIndex,
   onArrived,
+  onMarkStopVisited,
   taskId
 }: StepOnTheWayProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [showRoute, setShowRoute] = useState(false)
   const [arrivalNotes, setArrivalNotes] = useState('')
+  const [stopVisitNotes, setStopVisitNotes] = useState('')
   const [priceBreakdown, setPriceBreakdown] = useState<any>(null)
 
   useEffect(() => {
@@ -118,6 +121,15 @@ export default function StepOnTheWay({
     setLoading(true)
     try {
       await onArrived(arrivalNotes.trim() || undefined)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStopVisited = async () => {
+    setLoading(true)
+    try {
+      await onMarkStopVisited(stopVisitNotes.trim() || undefined)
     } finally {
       setLoading(false)
     }
@@ -240,6 +252,13 @@ export default function StepOnTheWay({
           </div>
         )}
 
+        {isStop && point.order_notes && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+            <p className="text-xs font-medium text-amber-700 mb-1">הערות להזמנה</p>
+            <p className="text-sm text-amber-900">{point.order_notes}</p>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl p-3 mb-3 shadow-sm flex items-center justify-between">
           <div className="flex gap-2">
             {canCall && contactPhone && (
@@ -286,7 +305,7 @@ export default function StepOnTheWay({
           )}
         </div>
 
-        {point.point_type !== 'pickup' && point.point_type !== 'dropoff' && (
+        {point.point_type !== 'pickup' && point.point_type !== 'dropoff' && !isStop && (
           <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
             <label className="block text-sm text-gray-500 mb-2 text-right">הערות הגעה (אופציונלי)</label>
             <textarea
@@ -298,13 +317,25 @@ export default function StepOnTheWay({
             />
           </div>
         )}
+        {isStop && (
+          <div className="bg-white rounded-2xl p-4 mb-4 shadow-sm">
+            <label className="block text-sm text-gray-500 mb-2 text-right">הערת נהג לעצירה (אופציונלי)</label>
+            <textarea
+              value={stopVisitNotes}
+              onChange={(e) => setStopVisitNotes(e.target.value)}
+              placeholder="מה עודכן בעצירה..."
+              rows={2}
+              className="w-full p-2 border border-gray-200 rounded-xl text-right focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none text-sm"
+            />
+          </div>
+        )}
       </div>
 
       {/* Bottom Actions - Fixed */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 pb-8">
         <div className="flex gap-3">
           <button
-            onClick={handleArrived}
+            onClick={isStop ? handleStopVisited : handleArrived}
             disabled={loading}
             className={`flex-1 py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 ${
               isPickup 
@@ -317,7 +348,7 @@ export default function StepOnTheWay({
             ) : (
               <>
                 <MapPin size={22} />
-                הגעתי
+                {isStop ? 'הייתי כאן' : 'הגעתי'}
               </>
             )}
           </button>

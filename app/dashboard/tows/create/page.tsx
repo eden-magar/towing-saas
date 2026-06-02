@@ -101,6 +101,7 @@ function CreateTowForm({
     error,
     setError,
     customers,
+    customersLoading,
     drivers,
     customersWithPricing,
     selectedCustomerId,
@@ -461,6 +462,18 @@ function CreateTowForm({
                 className="w-full max-w-xs h-10 px-3 border border-gt-border rounded-xl text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15"
               />
             )}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-gray-600">
+                הערות לעצירה
+              </label>
+              <textarea
+                value={stop.orderNotes ?? ''}
+                onChange={(e) => updateStop(stop.id, { orderNotes: e.target.value })}
+                placeholder="מידע לנהג לגבי העצירה"
+                rows={2}
+                className="w-full px-3 py-2 border border-gt-border rounded-xl text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 resize-none"
+              />
+            </div>
           </div>
         )}
 
@@ -1041,6 +1054,7 @@ function CreateTowForm({
           {/* Section 1 — לקוח */}
           <CreateCustomerSection
             customers={customers}
+            customersLoading={customersLoading}
             customersWithPricing={customersWithPricing}
             selectedCustomerId={selectedCustomerId}
             customerTab={customerTab}

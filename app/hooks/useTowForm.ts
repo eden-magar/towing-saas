@@ -52,6 +52,7 @@ export interface RouteStop {
   contactName?: string
   contactPhone?: string
   notes?: string
+  orderNotes?: string
 }
 
 export function createDefaultRouteStops(): RouteStop[] {
@@ -89,6 +90,7 @@ export function useTowForm(editTowId?: string) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [dataLoading, setDataLoading] = useState(true)
+  const [customersLoading, setCustomersLoading] = useState(true)
   
   // Data from database
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
@@ -782,6 +784,7 @@ export function useTowForm(editTowId?: string) {
                 contactName: p.contact_name || '',
                 contactPhone: p.contact_phone || '',
                 notes: p.notes || '',
+                orderNotes: p.order_notes || '',
               }))
             )
             const dropoffPoint = sortedSinglePoints.find(
@@ -846,9 +849,21 @@ export function useTowForm(editTowId?: string) {
 
   const loadData = async () => {
     if (!companyId) return
+    setCustomersLoading(true)
     try {
+      const customersPromise = getCustomersLite(companyId)
+        .then((customersData) => {
+          setCustomers(customersData)
+        })
+        .catch((err) => {
+          console.error('Error loading customers:', err)
+          setError('שגיאה בטעינת רשימת הלקוחות, נסה לרענן')
+        })
+        .finally(() => {
+          setCustomersLoading(false)
+        })
+
       const results = await Promise.allSettled([
-        getCustomersLite(companyId),
         getDrivers(companyId),
         getTrucks(companyId),
         getBasePriceList(companyId),
@@ -861,7 +876,6 @@ export function useTowForm(editTowId?: string) {
       ])
 
       const [
-        customersResult,
         driversResult,
         trucksResult,
         basePriceListResult,
@@ -873,12 +887,7 @@ export function useTowForm(editTowId?: string) {
         companySettingsResult,
       ] = results
 
-      if (customersResult.status === 'fulfilled') {
-        setCustomers(customersResult.value)
-      } else {
-        console.error('Error loading customers:', customersResult.reason)
-        setError('שגיאה בטעינת רשימת הלקוחות, נסה לרענן')
-      }
+      await customersPromise
 
       if (driversResult.status === 'fulfilled') {
         setDrivers(driversResult.value)
@@ -1643,6 +1652,7 @@ export function useTowForm(editTowId?: string) {
     saving, setSaving,
     error, setError,
     dataLoading,
+    customersLoading,
     // Data
     customers,
     drivers,

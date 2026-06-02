@@ -317,6 +317,7 @@ export function useTowSave(params: UseTowSaveParams) {
               contactName: s.contactName,
               contactPhone: s.contactPhone,
               notes: s.notes,
+              orderNotes: s.orderNotes,
             }))
           : undefined,
       distance:

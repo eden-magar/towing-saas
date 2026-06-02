@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, User, ArrowLeftRight } from 'lucide-react'
+import { Search, User, ArrowLeftRight, Loader2 } from 'lucide-react'
 import type { CustomerListItem } from '../../../lib/queries/customers'
 import type { CustomerWithPricing } from '../../../lib/queries/price-lists'
 import {
@@ -15,6 +15,7 @@ export type CreateCustomerTab = 'existing' | 'casual'
 
 export interface CreateCustomerSectionProps {
   customers: CustomerListItem[]
+  customersLoading: boolean
   customersWithPricing: CustomerWithPricing[]
   selectedCustomerId: string | null
   customerTab: CreateCustomerTab
@@ -47,6 +48,7 @@ function hasPersonalPricing(
 
 export function CreateCustomerSection({
   customers,
+  customersLoading,
   customersWithPricing,
   selectedCustomerId,
   customerTab,
@@ -198,12 +200,19 @@ export function CreateCustomerSection({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setTimeout(() => setIsFocused(false), 150)}
               placeholder="חפש לפי שם, טלפון, ת.ז..."
+              disabled={customersLoading}
               className="pl-9 pr-3 text-right"
             />
           </div>
+          {customersLoading && (
+            <div className="mt-2 flex items-center justify-end gap-2 text-xs text-gt-text-secondary">
+              <span>טוען לקוחות...</span>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-gt-brand" />
+            </div>
+          )}
         </div>
 
-        {showCustomerList && (
+        {showCustomerList && !customersLoading && (
           <div
             className="max-h-48 overflow-y-auto divide-y divide-gray-100"
             dir="rtl"

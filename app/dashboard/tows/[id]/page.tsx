@@ -1653,10 +1653,25 @@ export default function TowDetailsPage() {
                               {point.notes && (
                                 <div className="text-xs text-gray-500 italic mt-1">{point.notes}</div>
                               )}
+                              {point.order_notes && (
+                                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-2">
+                                  הערות לעצירה: {point.order_notes}
+                                </div>
+                              )}
                               {(point.recipient_name || point.recipient_phone) && (
                                 <div className="text-xs text-gray-600 mt-1">
                                   נמסר ל: {point.recipient_name || '—'}
                                   {point.recipient_phone ? ` ${point.recipient_phone}` : ''}
+                                </div>
+                              )}
+                              {(point.driver_visited_at || point.driver_notes) && (
+                                <div className="text-xs text-slate-600 mt-2 space-y-1">
+                                  {point.driver_visited_at && (
+                                    <div>
+                                      ביקור נהג: {new Date(point.driver_visited_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                  )}
+                                  {point.driver_notes && <div>הערת נהג: {point.driver_notes}</div>}
                                 </div>
                               )}
                               {(point.arrived_at || point.completed_at) && (
