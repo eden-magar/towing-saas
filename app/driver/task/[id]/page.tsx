@@ -433,9 +433,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const towCustomer = task.customer
 
   return (
-    <div dir="rtl" className={`fixed inset-0 ${getBackgroundColor()} transition-colors duration-300 overflow-hidden`}>
+    <div dir="rtl" className={`fixed inset-0 ${getBackgroundColor()} transition-colors duration-300 overflow-hidden flex flex-col`}>
       {/* Header */}
-      <div className="absolute top-0 left-0 right-0 z-10 px-4 pt-4 pb-3">
+      <div className="relative z-10 shrink-0 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <button 
             onClick={() => router.push('/driver')}
@@ -497,7 +497,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       </div>
 
       {/* תוכן לפי השלב */}
-      <div className={`${towCustomer ? 'pt-28' : 'pt-16'} h-full overflow-auto`}>
+      <div className="flex-1 min-h-0 overflow-auto">
         {task.notes && (
           <div className="mx-4 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
             <p className="text-xs font-medium text-amber-600 mb-1">📋 הערות דיספצ&apos;ר</p>

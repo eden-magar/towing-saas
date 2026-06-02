@@ -667,42 +667,30 @@ export async function createTow(input: CreateTowInput) {
     throw towError
   }
 
-  // יצירת כלי רכב - ושמירת מיפוי IDs
-  const vehicleIds: string[] = []
-  for (let i = 0; i < input.vehicles.length; i++) {
-    const v = input.vehicles[i]
-    const vehicleId = crypto.randomUUID()
-    vehicleIds.push(vehicleId)
+  // Precompute IDs and bulk payloads
+  const vehicleIds = input.vehicles.map(() => crypto.randomUUID())
+  const pointIds = (input.points || []).map(() => crypto.randomUUID())
 
-    const { error: vehicleError } = await supabase
-      .from('tow_vehicles')
-      .insert({
-        id: vehicleId,
-        tow_id: towId,
-        plate_number: v.plateNumber,
-        manufacturer: v.manufacturer || null,
-        model: v.model || null,
-        year: v.year || null,
-        vehicle_type: v.vehicleType || null,
-        color: v.color || null,
-        is_working: v.isWorking ?? true,
-        tow_reason: v.towReason || null,
-        notes: v.notes || null,
-        order_index: i,
-        drive_type: v.driveType || null,
-        fuel_type: v.fuelType || null,
-        total_weight: v.totalWeight || null,
-        gear_type: v.gearType || null,
-        drive_technology: v.driveTechnology || null,
-        vehicle_code: v.vehicleCode || null,
-      })
-
-    if (vehicleError) {
-      console.error('Error creating tow vehicle:', vehicleError)
-      await supabase.from('tows').delete().eq('id', towId)
-      throw vehicleError
-    }
-  }
+  const vehicleRows = input.vehicles.map((v, i) => ({
+    id: vehicleIds[i],
+    tow_id: towId,
+    plate_number: v.plateNumber,
+    manufacturer: v.manufacturer || null,
+    model: v.model || null,
+    year: v.year || null,
+    vehicle_type: v.vehicleType || null,
+    color: v.color || null,
+    is_working: v.isWorking ?? true,
+    tow_reason: v.towReason || null,
+    notes: v.notes || null,
+    order_index: i,
+    drive_type: v.driveType || null,
+    fuel_type: v.fuelType || null,
+    total_weight: v.totalWeight || null,
+    gear_type: v.gearType || null,
+    drive_technology: v.driveTechnology || null,
+    vehicle_code: v.vehicleCode || null,
+  }))
 
   // בדיקה אם יש delivery leg - אם לא, ניצור אוטומטית
   let legsToCreate = [...input.legs]
@@ -717,82 +705,86 @@ export async function createTow(input: CreateTowInput) {
     })
   }
 
-  // יצירת רגליים (לתאימות אחורה)
-  for (let i = 0; i < legsToCreate.length; i++) {
-    const leg = legsToCreate[i]
-    const towVehicleId = leg.towVehicleIndex !== undefined ? vehicleIds[leg.towVehicleIndex] : null
+  const legRows = legsToCreate.map((leg, i) => ({
+    tow_id: towId,
+    tow_vehicle_id: leg.towVehicleIndex !== undefined ? vehicleIds[leg.towVehicleIndex] : null,
+    leg_type: leg.legType,
+    leg_order: i,
+    from_address: leg.fromAddress || null,
+    to_address: leg.toAddress || null,
+    status: 'pending',
+  }))
 
-    const { error: legError } = await supabase
-      .from('tow_legs')
-      .insert({
-        tow_id: towId,
-        tow_vehicle_id: towVehicleId,
-        leg_type: leg.legType,
-        leg_order: i,
-        from_address: leg.fromAddress || null,
-        to_address: leg.toAddress || null,
-        status: 'pending'
+  const pointRows = (input.points || []).map((point, i) => ({
+    id: pointIds[i],
+    tow_id: towId,
+    point_order: point.point_order,
+    point_type: point.point_type,
+    address: point.address,
+    lat: point.lat,
+    lng: point.lng,
+    contact_name: point.contact_name,
+    contact_phone: point.contact_phone,
+    notes: point.notes,
+    order_notes: point.order_notes ?? null,
+    driver_visited_at: point.driver_visited_at ?? null,
+    driver_notes: point.driver_notes ?? null,
+    is_storage: point.isStorage || false,
+    stop_subtype: point.stop_subtype ?? null,
+    status: 'pending',
+  }))
+
+  const pointVehicleRows = (input.points || []).flatMap((point, pointIndex) => {
+    const pointId = pointIds[pointIndex]
+    if (!pointId || !point.vehicleIndices || point.vehicleIndices.length === 0) return []
+    return point.vehicleIndices
+      .map((vehicleIndex) => {
+        const vehicleId = vehicleIds[vehicleIndex]
+        if (!vehicleId) return null
+        return {
+          tow_point_id: pointId,
+          tow_vehicle_id: vehicleId,
+          action: point.point_type,
+        }
       })
+      .filter((row): row is { tow_point_id: string; tow_vehicle_id: string; action: PreparedTowPoint['point_type'] } => row !== null)
+  })
 
-    if (legError) {
-      console.error('Error creating tow leg:', legError)
-      await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
-      await supabase.from('tows').delete().eq('id', towId)
-      throw legError
-    }
+  const [vehiclesResult, legsResult, pointsResult] = await Promise.all([
+    vehicleRows.length > 0
+      ? supabase.from('tow_vehicles').insert(vehicleRows)
+      : Promise.resolve({ error: null } as { error: any }),
+    legRows.length > 0
+      ? supabase.from('tow_legs').insert(legRows)
+      : Promise.resolve({ error: null } as { error: any }),
+    pointRows.length > 0
+      ? supabase.from('tow_points').insert(pointRows)
+      : Promise.resolve({ error: null } as { error: any }),
+  ])
+
+  if (vehiclesResult.error) {
+    console.error('Error creating tow vehicle:', vehiclesResult.error)
+    await supabase.from('tows').delete().eq('id', towId)
+    throw vehiclesResult.error
   }
 
-  // NEW: יצירת נקודות גרירה (tow_points)
-  if (input.points && input.points.length > 0) {
-    for (const point of input.points) {
-      const pointId = crypto.randomUUID()
-      
-      // שמירת הנקודה
-      const { error: pointError } = await supabase
-        .from('tow_points')
-        .insert({
-          id: pointId,
-          tow_id: towId,
-          point_order: point.point_order,
-          point_type: point.point_type,
-          address: point.address,
-          lat: point.lat,
-          lng: point.lng,
-          contact_name: point.contact_name,
-          contact_phone: point.contact_phone,
-          notes: point.notes,
-          order_notes: point.order_notes ?? null,
-          driver_visited_at: point.driver_visited_at ?? null,
-          driver_notes: point.driver_notes ?? null,
-          is_storage: point.isStorage || false,
-          stop_subtype: point.stop_subtype ?? null,
-          status: 'pending'
-        })
+  if (legsResult.error) {
+    console.error('Error creating tow leg:', legsResult.error)
+    await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
+    await supabase.from('tows').delete().eq('id', towId)
+    throw legsResult.error
+  }
 
-      if (pointError) {
-        console.error('Error creating tow point:', pointError)
-        // לא נעצור את כל התהליך - הנקודות הן תוספת
-      } else {
-        // שמירת הרכבים בנקודה
-        if (point.vehicleIndices && point.vehicleIndices.length > 0) {
-          for (const vehicleIndex of point.vehicleIndices) {
-            const vehicleId = vehicleIds[vehicleIndex]
-            if (!vehicleId) continue
+  if (pointsResult.error) {
+    console.error('Error creating tow point:', pointsResult.error)
+    // לא נעצור את כל התהליך - הנקודות הן תוספת
+  } else if (pointVehicleRows.length > 0) {
+    const { error: pointVehicleError } = await supabase
+      .from('tow_point_vehicles')
+      .insert(pointVehicleRows)
 
-            const { error: pointVehicleError } = await supabase
-              .from('tow_point_vehicles')
-              .insert({
-                tow_point_id: pointId,
-                tow_vehicle_id: vehicleId,
-                action: point.point_type
-              })
-
-            if (pointVehicleError) {
-              console.error('Error creating tow point vehicle:', pointVehicleError)
-            }
-          }
-        }
-      }
+    if (pointVehicleError) {
+      console.error('Error creating tow point vehicle:', pointVehicleError)
     }
   }
 
@@ -1243,25 +1235,26 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.vehicles) {
     await supabase.from('tow_vehicles').delete().eq('tow_id', input.towId)
 
-    for (let i = 0; i < input.vehicles.length; i++) {
-      const v = input.vehicles[i]
+    const vehicleRows = input.vehicles.map((v, i) => ({
+      id: crypto.randomUUID(),
+      tow_id: input.towId,
+      plate_number: v.plateNumber,
+      manufacturer: v.manufacturer || null,
+      model: v.model || null,
+      year: v.year || null,
+      vehicle_type: v.vehicleType || null,
+      color: v.color || null,
+      is_working: v.isWorking ?? true,
+      tow_reason: v.towReason || null,
+      notes: v.notes || null,
+      order_index: i,
+      vehicle_code: v.vehicleCode || null,
+    }))
+
+    if (vehicleRows.length > 0) {
       const { error: vehicleError } = await supabase
         .from('tow_vehicles')
-        .insert({
-          id: crypto.randomUUID(),
-          tow_id: input.towId,
-          plate_number: v.plateNumber,
-          manufacturer: v.manufacturer || null,
-          model: v.model || null,
-          year: v.year || null,
-          vehicle_type: v.vehicleType || null,
-          color: v.color || null,
-          is_working: v.isWorking ?? true,
-          tow_reason: v.towReason || null,
-          notes: v.notes || null,
-          order_index: i,
-          vehicle_code: v.vehicleCode || null,
-        })
+        .insert(vehicleRows)
 
       if (vehicleError) {
         console.error('Error updating tow vehicle:', vehicleError)
@@ -1273,18 +1266,19 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.legs) {
     await supabase.from('tow_legs').delete().eq('tow_id', input.towId)
 
-    for (let i = 0; i < input.legs.length; i++) {
-      const leg = input.legs[i]
+    const legRows = input.legs.map((leg, i) => ({
+      tow_id: input.towId,
+      leg_type: leg.legType,
+      leg_order: i,
+      from_address: leg.fromAddress || null,
+      to_address: leg.toAddress || null,
+      status: 'pending',
+    }))
+
+    if (legRows.length > 0) {
       const { error: legError } = await supabase
         .from('tow_legs')
-        .insert({
-          tow_id: input.towId,
-          leg_type: leg.legType,
-          leg_order: i,
-          from_address: leg.fromAddress || null,
-          to_address: leg.toAddress || null,
-          status: 'pending'
-        })
+        .insert(legRows)
 
       if (legError) {
         console.error('Error updating tow leg:', legError)
@@ -1318,38 +1312,57 @@ export async function updateTow(input: UpdateTowInput) {
     
     const vehicleIds = vehicles?.map(v => v.id) || []
 
-    // יצירת נקודות חדשות
-    for (const point of input.points) {
-      const pointId = crypto.randomUUID()
-      
-      await supabase.from('tow_points').insert({
-        id: pointId,
-        tow_id: input.towId,
-        point_order: point.point_order,
-        point_type: point.point_type,
-        address: point.address,
-        lat: point.lat,
-        lng: point.lng,
-        contact_name: point.contact_name,
-        contact_phone: point.contact_phone,
-        notes: point.notes,
-        order_notes: point.order_notes ?? null,
-        driver_visited_at: point.driver_visited_at ?? null,
-        driver_notes: point.driver_notes ?? null,
-        is_storage: point.isStorage || false,
-        stop_subtype: point.stop_subtype ?? null,
-        status: 'pending'
-      })
-
-      for (const vehicleIndex of point.vehicleIndices || []) {
-        const vehicleId = vehicleIds[vehicleIndex]
-        if (vehicleId) {
-          await supabase.from('tow_point_vehicles').insert({
+    const pointIds = input.points.map(() => crypto.randomUUID())
+    const pointRows = input.points.map((point, i) => ({
+      id: pointIds[i],
+      tow_id: input.towId,
+      point_order: point.point_order,
+      point_type: point.point_type,
+      address: point.address,
+      lat: point.lat,
+      lng: point.lng,
+      contact_name: point.contact_name,
+      contact_phone: point.contact_phone,
+      notes: point.notes,
+      order_notes: point.order_notes ?? null,
+      driver_visited_at: point.driver_visited_at ?? null,
+      driver_notes: point.driver_notes ?? null,
+      is_storage: point.isStorage || false,
+      stop_subtype: point.stop_subtype ?? null,
+      status: 'pending',
+    }))
+    const pointVehicleRows = input.points.flatMap((point, pointIndex) =>
+      (point.vehicleIndices || [])
+        .map((vehicleIndex) => {
+          const vehicleId = vehicleIds[vehicleIndex]
+          const pointId = pointIds[pointIndex]
+          if (!vehicleId || !pointId) return null
+          return {
             tow_point_id: pointId,
             tow_vehicle_id: vehicleId,
-            action: point.point_type
-          })
-        }
+            action: point.point_type,
+          }
+        })
+        .filter((row): row is { tow_point_id: string; tow_vehicle_id: string; action: PreparedTowPoint['point_type'] } => row !== null)
+    )
+
+    const [pointsInsertResult] = await Promise.all([
+      pointRows.length > 0
+        ? supabase.from('tow_points').insert(pointRows)
+        : Promise.resolve({ error: null } as { error: any }),
+    ])
+
+    if (pointsInsertResult.error) {
+      throw pointsInsertResult.error
+    }
+
+    if (pointVehicleRows.length > 0) {
+      const { error: pointVehiclesError } = await supabase
+        .from('tow_point_vehicles')
+        .insert(pointVehicleRows)
+
+      if (pointVehiclesError) {
+        throw pointVehiclesError
       }
     }
   }
