@@ -614,6 +614,7 @@ interface CreateTowInput {
     totalWeight?: number
     gearType?: string
     driveTechnology?: string
+    registrySource?: string | null
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -698,6 +699,7 @@ export async function createTow(input: CreateTowInput) {
     gear_type: v.gearType || null,
     drive_technology: v.driveTechnology || null,
     vehicle_code: v.vehicleCode || null,
+    registry_source: v.registrySource ?? null,
   }))
 
   // בדיקה אם יש delivery leg - אם לא, ניצור אוטומטית
@@ -1183,6 +1185,7 @@ interface UpdateTowInput {
     isWorking?: boolean
     towReason?: string
     notes?: string
+    registrySource?: string | null
   }[]
   legs?: {
     id?: string
@@ -1261,6 +1264,7 @@ export async function updateTow(input: UpdateTowInput) {
       notes: v.notes || null,
       order_index: i,
       vehicle_code: v.vehicleCode || null,
+      registry_source: v.registrySource ?? null,
     }))
 
     if (vehicleRows.length > 0) {

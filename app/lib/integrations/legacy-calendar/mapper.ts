@@ -30,6 +30,7 @@ type TowVehicleRow = TowWithDetails['vehicles'][number] & {
   gear_type?: string | null
   drive_technology?: string | null
   total_weight?: number | null
+  registry_source?: string | null
 }
 
 /**
@@ -228,6 +229,13 @@ function mapLegacyVehicle(v: TowVehicleRow | undefined): LegacyVehicle {
   }
 }
 
+/** Legacy hidden-field JSON: `{ type: 'private' | 'motorcycle' | 'heavy' | 'machinery' }` */
+function legacyDataSourceJson(registrySource: string | null | undefined): string {
+  const type = registrySource?.trim()
+  if (!type) return ''
+  return JSON.stringify({ type })
+}
+
 function buildPriceBredown(
   tow: TowForLegacyMapping,
   totalPrice: number
@@ -375,7 +383,7 @@ function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
     location: sourceAddr.physicalAddress,
     defectiveCar,
     hasSecondCar,
-    dataSource_defective: '',
+    dataSource_defective: legacyDataSourceJson(primary?.registry_source),
   }
 
   if (hasSecondCar) {
@@ -396,7 +404,7 @@ function mapDefectivePayload(tow: TowForLegacyMapping): LegacyPayloadDefective {
       secondCar.destinationContact = contactFromPoint(dropoff)
     }
     payload.secondDefectiveCar = secondCar
-    payload.dataSource_defective2 = ''
+    payload.dataSource_defective2 = legacyDataSourceJson(second?.registry_source)
   }
 
   return payload
@@ -467,8 +475,8 @@ function mapExchangeNewPayload(tow: TowForLegacyMapping): LegacyPayloadExchangeN
     workingCar,
     defectivePickup,
     manualPrice: String(tow.final_price ?? ''),
-    dataSource_working: '',
-    dataSource_defective2: '',
+    dataSource_working: legacyDataSourceJson(working?.registry_source),
+    dataSource_defective2: legacyDataSourceJson(defective?.registry_source),
   }
 }
 

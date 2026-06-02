@@ -198,6 +198,7 @@ export interface PreparedTowData {
     gearType?: string
     driveTechnology?: string
     vehicleCode?: string
+    registrySource?: string | null
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -326,6 +327,7 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
     color: v.vehicleData?.color,
     isWorking: v.isWorking,
     towReason: v.isWorking ? undefined : (v.defects?.filter(Boolean).join(', ') || 'לא נוסע'),
+    registrySource: v.vehicleType ?? null,
     driveType: v.vehicleData?.driveType,
     fuelType: v.vehicleData?.fuelType,
     totalWeight: v.vehicleData?.totalWeight ? Number(v.vehicleData.totalWeight) : undefined,
@@ -903,6 +905,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.vehicleData?.data?.gearType,
       driveTechnology: input.vehicleData?.data?.driveTechnology,
       vehicleCode: input.vehicleCode || undefined,
+      registrySource: input.vehicleData?.source ?? null,
     }]
 
     const { pickup: legPickup, dropoff: legDropoff } = findPrimaryPickupDropoffForLegs(
@@ -1031,7 +1034,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       fuelType: input.workingVehicleData?.data?.fuelType,
       totalWeight: input.workingVehicleData?.data?.totalWeight,
       gearType: input.workingVehicleData?.data?.gearType,
-      driveTechnology: input.workingVehicleData?.data?.driveTechnology
+      driveTechnology: input.workingVehicleData?.data?.driveTechnology,
+      registrySource: input.workingVehicleData?.source ?? null,
     })
   }
 
@@ -1051,7 +1055,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       fuelType: input.defectiveVehicleData?.data?.fuelType,
       totalWeight: input.defectiveVehicleData?.data?.totalWeight,
       gearType: input.defectiveVehicleData?.data?.gearType,
-      driveTechnology: input.defectiveVehicleData?.data?.driveTechnology
+      driveTechnology: input.defectiveVehicleData?.data?.driveTechnology,
+      registrySource: input.defectiveVehicleData?.source ?? null,
     })
   }
 
