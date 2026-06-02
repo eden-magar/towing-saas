@@ -7,6 +7,14 @@ import { VehicleType } from '../types'
 import { normalizePlate } from './plate-number'
 import type { AddressData } from '../google-maps'
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
+function roundKm1(n: number): number {
+  return Math.round(n * 10) / 10
+}
+
 // ==================== Types ====================
 
 export interface DistanceResult {
@@ -724,18 +732,18 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     .filter((s): s is NonNullable<typeof s> => s !== null)
 
   return {
-    base_price: result.basePrice,
+    base_price: round2(result.basePrice),
     vehicle_type: input.vehicleType || '',
-    distance_km: distanceKm,
-    distance_price: Math.round(result.distancePrice),
-    time_surcharges: timeSurchargesBreakdown,
-    location_surcharges: locationSurchargesBreakdown,
-    service_surcharges: serviceSurchargesBreakdown,
-    subtotal: result.beforeVat,
+    distance_km: roundKm1(distanceKm),
+    distance_price: round2(result.distancePrice),
+    time_surcharges: timeSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    location_surcharges: locationSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    subtotal: round2(result.beforeVat),
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
-    discount_amount: Math.round(result.discountAmount),
-    vat_amount: Math.round(result.vatAmount),
-    total: result.total
+    discount_amount: round2(result.discountAmount),
+    vat_amount: round2(result.vatAmount),
+    total: round2(result.total),
   }
 }
 
@@ -847,19 +855,19 @@ export function buildCustomTowPriceBreakdown(
     .filter((s): s is NonNullable<typeof s> => s !== null)
 
   return {
-    base_price: result.basePrice,
+    base_price: round2(result.basePrice),
     vehicle_type: 'mixed',
     vehicle_count: vehicles.length,
-    distance_km: totalDistanceKm,
-    distance_price: Math.round(result.distancePrice),
-    time_surcharges: timeSurchargesBreakdown,
-    location_surcharges: locationSurchargesBreakdown,
-    service_surcharges: serviceSurchargesBreakdown,
-    subtotal: result.beforeVat,
+    distance_km: roundKm1(totalDistanceKm),
+    distance_price: round2(result.distancePrice),
+    time_surcharges: timeSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    location_surcharges: locationSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    subtotal: round2(result.beforeVat),
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
-    discount_amount: Math.round(result.discountAmount),
-    vat_amount: Math.round(result.vatAmount),
-    total: result.total,
+    discount_amount: round2(result.discountAmount),
+    vat_amount: round2(result.vatAmount),
+    total: round2(result.total),
     route_points: routePoints,
   }
 }

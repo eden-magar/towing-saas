@@ -270,22 +270,22 @@ export function PriceSummary({
                       : `מחיר בסיס (${getVehicleTypeLabel(vehicleType)})`
                     }
                   </span>
-                  <span className="text-gray-700">₪{basePrice}</span>
+                  <span className="text-gray-700">₪{basePrice.toFixed(2)}</span>
                 </div>
                 
                 {/* מרחק */}
                 {totalDistanceKm > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">
-                      מרחק ({totalDistanceKm} ק״מ × ₪{pricePerKm})
+                      מרחק ({totalDistanceKm.toFixed(1)} ק״מ × ₪{pricePerKm})
                     </span>
-                    <span className="text-gray-700">₪{distancePrice}</span>
+                    <span className="text-gray-700">₪{distancePrice.toFixed(2)}</span>
                   </div>
                 )}
                 {/* יציאה מהחניון */}
                 {!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm && (
                   <div className="flex justify-between text-sm text-gray-400">
-                    <span>מתוכם יציאה מהחניון ({baseToPickupDistance.distanceKm} ק״מ)</span>
+                    <span>מתוכם יציאה מהחניון ({baseToPickupDistance.distanceKm.toFixed(1)} ק״מ)</span>
                   </div>
                 )}
                 
@@ -293,7 +293,7 @@ export function PriceSummary({
                 {timeAmount > 0 && (
                   <div className="flex justify-between text-orange-600">
                     <span>{timeLabel} (+{timePercent}%)</span>
-                    <span>₪{timeAmount}</span>
+                    <span>₪{timeAmount.toFixed(2)}</span>
                   </div>
                 )}
                 
@@ -301,7 +301,7 @@ export function PriceSummary({
                 {activeLocationSurcharges.map(s => (
                   <div key={s.id} className="flex justify-between text-amber-600">
                     <span>{s.label} (+{s.surcharge_percent}%)</span>
-                    <span>₪{Math.round(subtotal * s.surcharge_percent / 100)}</span>
+                    <span>₪{(Math.round(subtotal * s.surcharge_percent / 100)).toFixed(2)}</span>
                   </div>
                 ))}
                 
@@ -309,7 +309,7 @@ export function PriceSummary({
                 {activeServices.map((s, i) => (
                   <div key={i} className="flex justify-between text-blue-600">
                     <span>{s.label}</span>
-                    <span>₪{s.amount}</span>
+                    <span>₪{s.amount.toFixed(2)}</span>
                   </div>
                 ))}
                 
@@ -317,7 +317,7 @@ export function PriceSummary({
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-emerald-600">
                     <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
-                    <span>-₪{discountAmount}</span>
+                    <span>-₪{discountAmount.toFixed(2)}</span>
                   </div>
                 )}
                 
@@ -325,7 +325,7 @@ export function PriceSummary({
                 {beforeVat > 0 && (
                   <div className="flex justify-between border-t border-gray-100 pt-2">
                     <span className="text-gray-500">מע״מ ({vatPercentLabel}%)</span>
-                    <span className="text-gray-700">₪{vatAmount}</span>
+                    <span className="text-gray-700">₪{vatAmount.toFixed(2)}</span>
                   </div>
                 )}
               </>
@@ -336,14 +336,14 @@ export function PriceSummary({
         {priceMode === 'fixed' && selectedPriceItem && (
           <div className="flex justify-between">
             <span className="text-gray-500">{selectedPriceItem.label}</span>
-            <span className="text-gray-700">₪{selectedPriceItem.price}</span>
+            <span className="text-gray-700">₪{selectedPriceItem.price.toFixed(2)}</span>
           </div>
         )}
 
         {priceMode === 'customer' && selectedPriceItem && (
           <div className="flex justify-between">
             <span className="text-gray-500">{selectedPriceItem.label}</span>
-            <span className="text-gray-700">₪{selectedPriceItem.price}</span>
+            <span className="text-gray-700">₪{selectedPriceItem.price.toFixed(2)}</span>
           </div>
         )}
 
@@ -359,7 +359,7 @@ export function PriceSummary({
         <div className="flex justify-between items-center">
           <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
           <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-            ₪{(priceMode === 'recommended' || priceMode === 'recommended_customer') ? (hasDataForCalculation ? total : 0) : finalPrice}
+            ₪{((priceMode === 'recommended' || priceMode === 'recommended_customer') ? (hasDataForCalculation ? total : 0) : finalPrice).toFixed(2)}
           </span>
         </div>
       </div>

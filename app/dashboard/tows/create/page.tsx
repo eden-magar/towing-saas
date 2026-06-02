@@ -2622,16 +2622,16 @@ function CreateTowForm({
                           .filter(item => item.amount !== 0)
                           .map((item, idx) => (
                             <p key={idx} className={item.bold ? 'font-bold text-base text-gray-900' : 'text-gray-500'}>
-                              {item.label}: ₪{Math.round(item.amount)}
+                              {item.label}: ₪{item.amount.toFixed(2)}
                             </p>
                           ))}
                       </>
                     ) : (
                       <>
                         <p>בסיס + מרחק + תוספות</p>
-                        <p>לפני מע״מ: ₪{Math.round(finalPrice / 1.18)}</p>
-                        <p>מע״מ 18%: ₪{Math.round((finalPrice / 1.18) * 0.18)}</p>
-                        <p className="font-bold">סה״כ: ₪{finalPrice}</p>
+                        <p>לפני מע״מ: ₪{(finalPrice / 1.18).toFixed(2)}</p>
+                        <p>מע״מ 18%: ₪{((finalPrice / 1.18) * 0.18).toFixed(2)}</p>
+                        <p className="font-bold">סה״כ: ₪{finalPrice.toFixed(2)}</p>
                       </>
                     )}
                     {/* הנחה / תוספת ידנית */}

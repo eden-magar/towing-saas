@@ -334,7 +334,7 @@ export function useTowForm(editTowId?: string) {
           totalMinutes += result.durationMinutes
         }
 
-        setDistance({ distanceKm: totalKm, durationMinutes: totalMinutes })
+        setDistance({ distanceKm: Math.round(totalKm * 10) / 10, durationMinutes: totalMinutes })
       } catch (err) {
         console.error('Distance calculation error:', err)
         setDistance(null)
