@@ -185,7 +185,7 @@ export function AddressInput({
         onChange={handleInputChange}
         placeholder={placeholder}
         readOnly={readOnly}
-        className={`flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] ${
+        className={`flex-1 px-3 py-2.5 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
           readOnly ? 'bg-gray-50' : ''
         } ${className}`}
       />
@@ -209,13 +209,13 @@ export function AddressInput({
           onChange={handleInputChange}
           placeholder={placeholder}
           readOnly={readOnly}
-          className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+          className="flex-1 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15"
         />
         {onPinDropClick && (
           <button
             type="button"
             onClick={onPinDropClick}
-            className="px-3 py-2.5 border border-gray-200 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-red-500 transition-colors"
+            className="px-3 py-2.5 border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:text-red-500 hover:border-gt-border-strong transition-colors"
             title="הנח סיכה על המפה"
           >
             <MapPin size={18} />

@@ -34,12 +34,42 @@ import { RoutePoint } from '../components/tow-forms/routes'
 import { useTowPricing } from './useTowPricing'
 import { useTowSave } from './useTowSave'
 
-interface RouteStop {
+interface ExchangeRouteStop {
   id: string
   address: AddressData
   contactName: string
   contactPhone: string
   notes: string
+}
+
+export type RouteRole = 'pickup' | 'dropoff' | 'stop'
+
+export interface RouteStop {
+  id: string
+  role: RouteRole
+  stopSubtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other'
+  address: AddressData
+  contactName?: string
+  contactPhone?: string
+  notes?: string
+}
+
+export function createDefaultRouteStops(): RouteStop[] {
+  return [
+    { id: crypto.randomUUID(), role: 'pickup', address: { address: '' } },
+    { id: crypto.randomUUID(), role: 'dropoff', address: { address: '' } },
+  ]
+}
+
+export function findPickupRouteStop(stops: RouteStop[]): RouteStop | undefined {
+  return stops.find((s) => s.role === 'pickup')
+}
+
+export function findDropoffRouteStop(stops: RouteStop[]): RouteStop | undefined {
+  for (let i = stops.length - 1; i >= 0; i--) {
+    if (stops[i].role === 'dropoff') return stops[i]
+  }
+  return undefined
 }
 
 type CustomRouteData = {
@@ -220,8 +250,8 @@ export function useTowForm(editTowId?: string) {
   const [defectiveDestinationContact, setDefectiveDestinationContact] = useState('')
   const [defectiveDestinationContactPhone, setDefectiveDestinationContactPhone] = useState('')
   
-  const [stopsBeforeExchange, setStopsBeforeExchange] = useState<RouteStop[]>([])
-  const [stopsAfterExchange, setStopsAfterExchange] = useState<RouteStop[]>([])
+  const [stopsBeforeExchange, setStopsBeforeExchange] = useState<ExchangeRouteStop[]>([])
+  const [stopsAfterExchange, setStopsAfterExchange] = useState<ExchangeRouteStop[]>([])
   
   const [exchangeTotalDistance, setExchangeTotalDistance] = useState<DistanceResult | null>(null)
   const [exchangeDistanceLoading, setExchangeDistanceLoading] = useState(false)
@@ -241,10 +271,9 @@ export function useTowForm(editTowId?: string) {
   const [workingSelectedServices, setWorkingSelectedServices] = useState<SelectedService[]>([])
   const [defectiveSelectedServices, setDefectiveSelectedServices] = useState<SelectedService[]>([])
 
-  // Single tow - Addresses
-  const [pickupAddress, setPickupAddress] = useState<AddressData>({ address: '' })
-  const [dropoffAddress, setDropoffAddress] = useState<AddressData>({ address: '' })
-  
+  // Single tow - unified route list
+  const [routeStops, setRouteStops] = useState<RouteStop[]>(createDefaultRouteStops)
+
   // Distance
   const [distance, setDistance] = useState<DistanceResult | null>(null)
   const [distanceLoading, setDistanceLoading] = useState(false)
@@ -254,11 +283,6 @@ export function useTowForm(editTowId?: string) {
   const [baseToPickupDistance, setBaseToPickupDistance] = useState<DistanceResult | null>(null)
   const [baseToPickupLoading, setBaseToPickupLoading] = useState(false)
   
-  // Contacts
-  const [pickupContactName, setPickupContactName] = useState('')
-  const [pickupContactPhone, setPickupContactPhone] = useState('')
-  const [dropoffContactName, setDropoffContactName] = useState('')
-  const [dropoffContactPhone, setDropoffContactPhone] = useState('')
   const [notes, setNotes] = useState('')
   
   // Payment
@@ -279,17 +303,34 @@ export function useTowForm(editTowId?: string) {
   // Load Google Maps
   useEffect(() => { loadGoogleMaps() }, [])
 
-  // Calculate distance
+  const routeStopsDistanceSignature = JSON.stringify(
+    routeStops.map((stop) => [stop.address.address, stop.address.lat, stop.address.lng])
+  )
+
+  // Calculate distance as ordered multi-leg route chain
   useEffect(() => {
-    if (!pickupAddress.address || !dropoffAddress.address) {
+    const waypoints: AddressData[] = routeStops
+      .filter((stop) => stop.address.address.trim())
+      .map((stop) => stop.address)
+
+    if (waypoints.length < 2) {
       setDistance(null)
       return
     }
     const calc = async () => {
       setDistanceLoading(true)
       try {
-        const result = await calculateDistance(pickupAddress, dropoffAddress)
-        setDistance(result)
+        let totalKm = 0
+        let totalMinutes = 0
+
+        for (let i = 0; i < waypoints.length - 1; i++) {
+          const result = await calculateDistance(waypoints[i], waypoints[i + 1])
+          if (!result) { setDistance(null); return }
+          totalKm += result.distanceKm
+          totalMinutes += result.durationMinutes
+        }
+
+        setDistance({ distanceKm: totalKm, durationMinutes: totalMinutes })
       } catch (err) {
         console.error('Distance calculation error:', err)
         setDistance(null)
@@ -299,11 +340,12 @@ export function useTowForm(editTowId?: string) {
     }
     const timeout = setTimeout(calc, 500)
     return () => clearTimeout(timeout)
-  }, [pickupAddress.address, pickupAddress.lat, pickupAddress.lng, dropoffAddress.address, dropoffAddress.lat, dropoffAddress.lng])
+  }, [routeStopsDistanceSignature])
 
   // Calculate base to pickup distance
   useEffect(() => {
-    if (!startFromBase || !pickupAddress.address || !basePriceList?.base_lat || !basePriceList?.base_lng) {
+    const pickup = findPickupRouteStop(routeStops)
+    if (!startFromBase || !pickup?.address.address || !basePriceList?.base_lat || !basePriceList?.base_lng) {
       setBaseToPickupDistance(null)
       return
     }
@@ -315,7 +357,7 @@ export function useTowForm(editTowId?: string) {
           lat: basePriceList.base_lat,
           lng: basePriceList.base_lng
         }
-        const result = await calculateDistance(baseAddress, pickupAddress)
+        const result = await calculateDistance(baseAddress, pickup.address)
         setBaseToPickupDistance(result)
       } catch (err) {
         console.error('Base distance calculation error:', err)
@@ -326,7 +368,7 @@ export function useTowForm(editTowId?: string) {
     }
     const timeout = setTimeout(calcBaseDistance, 500)
     return () => clearTimeout(timeout)
-  }, [startFromBase, pickupAddress.address, pickupAddress.lat, pickupAddress.lng, basePriceList?.base_lat, basePriceList?.base_lng])
+  }, [startFromBase, routeStops, basePriceList?.base_lat, basePriceList?.base_lng])
 
 
   // Calculate exchange total distance
@@ -470,7 +512,11 @@ export function useTowForm(editTowId?: string) {
       lng: basePriceList.base_lng,
     }
     if (deferStorageBaseAddressRef.current) {
-      setPickupAddress(baseAddr)
+      setRouteStops((prev) => {
+        const pickupId = findPickupRouteStop(prev)?.id
+        if (!pickupId) return prev
+        return prev.map((s) => (s.id === pickupId ? { ...s, address: baseAddr } : s))
+      })
       deferStorageBaseAddressRef.current = false
     }
     if (deferStorageWorkingAddressRef.current) {
@@ -695,30 +741,54 @@ export function useTowForm(editTowId?: string) {
               defectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean)
             )
           }
-          // Points / addresses
+          // Points / addresses → unified route list
           if (tow.points && tow.points.length > 0) {
-            const pickup = tow.points.find((p: any) => p.point_type === 'pickup')
-            const dropoff = tow.points.find((p: any) => p.point_type === 'dropoff')
-            if (pickup) {
-              setPickupAddress({
-                address: pickup.address || '',
-                lat: pickup.lat ? Number(pickup.lat) : undefined,
-                lng: pickup.lng ? Number(pickup.lng) : undefined,
-              })
-              setPickupContactName(pickup.contact_name || '')
-              setPickupContactPhone(pickup.contact_phone || '')
-            }
-            if (dropoff) {
-              setDropoffAddress({
-                address: dropoff.address || '',
-                lat: dropoff.lat ? Number(dropoff.lat) : undefined,
-                lng: dropoff.lng ? Number(dropoff.lng) : undefined,
-              })
-              setDropoffContactName(dropoff.contact_name || '')
-              setDropoffContactPhone(dropoff.contact_phone || '')
-              if (dropoff.is_storage) {
-                setDropoffToStorage(true)
+            const sortedSinglePoints = [...tow.points].sort(
+              (a: { point_order: number }, b: { point_order: number }) =>
+                a.point_order - b.point_order
+            )
+            const validSubtypes = [
+              'key',
+              'customer_pickup',
+              'customer_dropoff',
+              'other',
+            ] as const
+            const normalizeStopSubtype = (subtype: unknown): (typeof validSubtypes)[number] => {
+              if (subtype === 'customer') return 'customer_pickup'
+              if (subtype === 'general') return 'other'
+              if (typeof subtype === 'string' && validSubtypes.includes(subtype as (typeof validSubtypes)[number])) {
+                return subtype as (typeof validSubtypes)[number]
               }
+              return 'other'
+            }
+            const roleFromPointType = (t: string): RouteRole => {
+              if (t === 'pickup') return 'pickup'
+              if (t === 'dropoff') return 'dropoff'
+              return 'stop'
+            }
+            setRouteStops(
+              sortedSinglePoints.map((p: any) => ({
+                id: p.id || crypto.randomUUID(),
+                role: roleFromPointType(p.point_type),
+                stopSubtype:
+                  p.point_type === 'stop'
+                    ? normalizeStopSubtype(p.stop_subtype)
+                    : undefined,
+                address: {
+                  address: p.address || '',
+                  lat: p.lat ? Number(p.lat) : undefined,
+                  lng: p.lng ? Number(p.lng) : undefined,
+                },
+                contactName: p.contact_name || '',
+                contactPhone: p.contact_phone || '',
+                notes: p.notes || '',
+              }))
+            )
+            const dropoffPoint = sortedSinglePoints.find(
+              (p: { point_type: string }) => p.point_type === 'dropoff'
+            )
+            if (dropoffPoint?.is_storage) {
+              setDropoffToStorage(true)
             }
           }
         }
@@ -996,7 +1066,16 @@ export function useTowForm(editTowId?: string) {
     setStorageVehicleCondition(vehicle.vehicle_condition)
     setStartFromBase(true)
 
-    applyBaseAddressFromPriceList(setPickupAddress, deferStorageBaseAddressRef)
+    applyBaseAddressFromPriceList(
+      (addr) => {
+        setRouteStops((prev) => {
+          const pickupId = findPickupRouteStop(prev)?.id
+          if (!pickupId) return prev
+          return prev.map((s) => (s.id === pickupId ? { ...s, address: addr } : s))
+        })
+      },
+      deferStorageBaseAddressRef
+    )
 
     const vehicleResult = buildStoredVehicleLookupResult(vehicle)
 
@@ -1072,27 +1151,86 @@ export function useTowForm(editTowId?: string) {
     setVehiclePlate('')
     setVehicleData(null)
     setVehicleType('')
-    setPickupAddress({ address: '' })
+    setRouteStops((prev) => {
+      const pickupId = findPickupRouteStop(prev)?.id
+      if (!pickupId) return prev
+      return prev.map((s) =>
+        s.id === pickupId ? { ...s, address: { address: '' } } : s
+      )
+    })
     setStartFromBase(false)
   }
 
   const handlePinDropConfirm = (data: AddressData) => {
-    if (pinDropModal.field === 'pickup') setPickupAddress(data)
-    else if (pinDropModal.field === 'dropoff') setDropoffAddress(data)
-    else if (pinDropModal.field) {
-      // For RouteBuilder points - send data to RouteBuilder
-      setPinDropResult({ pointId: pinDropModal.field, data })
+    const field = pinDropModal.field
+    if (field?.startsWith('routestop:')) {
+      const stopId = field.slice('routestop:'.length)
+      updateStop(stopId, { address: data })
+    } else if (field) {
+      setPinDropResult({ pointId: field, data })
     }
+  }
+
+  const addStop = () => {
+    setRouteStops((prev) => {
+      let dropoffIndex = -1
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === 'dropoff') {
+          dropoffIndex = i
+          break
+        }
+      }
+      const insertAt = dropoffIndex >= 0 ? dropoffIndex : prev.length
+      const newStop: RouteStop = {
+        id: crypto.randomUUID(),
+        role: 'stop',
+        stopSubtype: 'other',
+        address: { address: '' },
+      }
+      const next = [...prev]
+      next.splice(insertAt, 0, newStop)
+      return next
+    })
+  }
+
+  const removeStop = (id: string) => {
+    setRouteStops((prev) => {
+      const target = prev.find((s) => s.id === id)
+      if (!target || target.role !== 'stop') return prev
+      return prev.filter((s) => s.id !== id)
+    })
+  }
+
+  const moveStopUp = (id: string) => {
+    setRouteStops((prev) => {
+      const index = prev.findIndex((s) => s.id === id)
+      if (index <= 0) return prev
+      const next = [...prev]
+      ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+      return next
+    })
+  }
+
+  const moveStopDown = (id: string) => {
+    setRouteStops((prev) => {
+      const index = prev.findIndex((s) => s.id === id)
+      if (index < 0 || index >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+      return next
+    })
+  }
+
+  const updateStop = (id: string, patch: Partial<Omit<RouteStop, 'id'>>) => {
+    setRouteStops((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
+    )
   }
 
   const resetTypeSpecificFields = (previousType: 'single' | 'exchange' | 'custom') => {
     if (previousType === 'single') {
-      setDropoffAddress({ address: '' })
+      setRouteStops(createDefaultRouteStops())
       setDistance(null)
-      setPickupContactName('')
-      setPickupContactPhone('')
-      setDropoffContactName('')
-      setDropoffContactPhone('')
       setDropoffToStorage(false)
       setHasStorageFollowUp(false)
       setFollowUpAddress({ address: '' })
@@ -1221,16 +1359,32 @@ export function useTowForm(editTowId?: string) {
 
     if (from === 'exchange' && to === 'single') {
       const e = captured as ExchangeToSingleSnapshot
-      if (e.workingVehicleAddress?.address) setPickupAddress(e.workingVehicleAddress)
-      if (e.workingVehicleContact.trim()) setPickupContactName(e.workingVehicleContact)
-      if (e.workingVehicleContactPhone.trim()) setPickupContactPhone(e.workingVehicleContactPhone)
+      const pickupId = crypto.randomUUID()
+      const dropoffId = crypto.randomUUID()
+      setRouteStops([
+        {
+          id: pickupId,
+          role: 'pickup',
+          address: e.workingVehicleAddress?.address
+            ? e.workingVehicleAddress
+            : { address: '' },
+          contactName: e.workingVehicleContact,
+          contactPhone: e.workingVehicleContactPhone,
+        },
+        {
+          id: dropoffId,
+          role: 'dropoff',
+          address: e.workingVehicleDestinationAddress?.address
+            ? e.workingVehicleDestinationAddress
+            : { address: '' },
+          contactName: e.workingDestinationContact,
+          contactPhone: e.workingDestinationContactPhone,
+        },
+      ])
       if (e.workingVehiclePlate.trim()) setVehiclePlate(e.workingVehiclePlate)
       if (e.workingVehicleData != null) setVehicleData(e.workingVehicleData)
       if (e.workingVehicleType) setVehicleType(e.workingVehicleType)
       if (e.workingVehicleCode.trim()) setVehicleCode(e.workingVehicleCode)
-      if (e.workingVehicleDestinationAddress?.address) setDropoffAddress(e.workingVehicleDestinationAddress)
-      if (e.workingDestinationContact.trim()) setDropoffContactName(e.workingDestinationContact)
-      if (e.workingDestinationContactPhone.trim()) setDropoffContactPhone(e.workingDestinationContactPhone)
     }
   }
 
@@ -1239,18 +1393,20 @@ export function useTowForm(editTowId?: string) {
     to: TowType,
   ) => {
     if (from === 'single' && to === 'exchange') {
+      const pickup = findPickupRouteStop(routeStops)
+      const dropoff = findDropoffRouteStop(routeStops)
       const captured: SingleToExchangeSnapshot = {
         isDefective: selectedDefects.length > 0,
-        pickupAddress,
-        pickupContactName,
-        pickupContactPhone,
+        pickupAddress: pickup?.address ?? { address: '' },
+        pickupContactName: pickup?.contactName ?? '',
+        pickupContactPhone: pickup?.contactPhone ?? '',
         vehiclePlate,
         vehicleData,
         vehicleType,
         vehicleCode,
-        dropoffAddress,
-        dropoffContactName,
-        dropoffContactPhone,
+        dropoffAddress: dropoff?.address ?? { address: '' },
+        dropoffContactName: dropoff?.contactName ?? '',
+        dropoffContactPhone: dropoff?.contactPhone ?? '',
       }
       resetTypeSpecificFields('single')
       copyFieldsBetweenTypes('single', 'exchange', captured)
@@ -1325,15 +1481,8 @@ export function useTowForm(editTowId?: string) {
     setVehicleData(null)
     setVehicleType('')
     setSelectedDefects([])
-    // Reset addresses
-    setPickupAddress({ address: '' })
-    setDropoffAddress({ address: '' })
+    setRouteStops(createDefaultRouteStops())
     setDistance(null)
-    // Reset contacts
-    setPickupContactName('')
-    setPickupContactPhone('')
-    setDropoffContactName('')
-    setDropoffContactPhone('')
     setNotes('')
     // Reset surcharges
     setSelectedLocationSurcharges([])
@@ -1360,11 +1509,21 @@ export function useTowForm(editTowId?: string) {
       | 'defective_destination',
   ) => {
     if (target === 'pickup') {
-      setPickupContactName(customerName)
-      setPickupContactPhone(customerPhone)
+      setRouteStops((prev) =>
+        prev.map((s) =>
+          s.role === 'pickup'
+            ? { ...s, contactName: customerName, contactPhone: customerPhone }
+            : s
+        )
+      )
     } else if (target === 'dropoff') {
-      setDropoffContactName(customerName)
-      setDropoffContactPhone(customerPhone)
+      setRouteStops((prev) =>
+        prev.map((s) =>
+          s.role === 'dropoff'
+            ? { ...s, contactName: customerName, contactPhone: customerPhone }
+            : s
+        )
+      )
     } else if (target === 'exchange_pickup') {
       setExchangeContactName(customerName)
       setExchangeContactPhone(customerPhone)
@@ -1413,8 +1572,7 @@ export function useTowForm(editTowId?: string) {
     manualManufacturer,
     manualColor,
     manualWeight,
-    pickupAddress,
-    dropoffAddress,
+    routeStops,
     distance,
     exchangeTotalDistance,
     startFromBase,
@@ -1433,10 +1591,6 @@ export function useTowForm(editTowId?: string) {
     locationSurchargesData,
     selectedServices,
     serviceSurchargesData,
-    pickupContactName,
-    pickupContactPhone,
-    dropoffContactName,
-    dropoffContactPhone,
     notes,
     paymentMethod,
     invoiceName,
@@ -1598,19 +1752,61 @@ export function useTowForm(editTowId?: string) {
     defectiveFaultDescription, setDefectiveFaultDescription,
     workingSelectedServices, setWorkingSelectedServices,
     defectiveSelectedServices, setDefectiveSelectedServices,
-    // Addresses
-    pickupAddress, setPickupAddress,
-    dropoffAddress, setDropoffAddress,
+    // Addresses — unified route list
+    routeStops,
+    setRouteStops,
+    addStop,
+    removeStop,
+    moveStopUp,
+    moveStopDown,
+    updateStop,
+    /** @deprecated Used by app/dashboard/tows/new only */
+    pickupAddress: findPickupRouteStop(routeStops)?.address ?? { address: '' },
+    setPickupAddress: (addr: AddressData) => {
+      setRouteStops((prev) => {
+        const pickupId = findPickupRouteStop(prev)?.id
+        if (!pickupId) return prev
+        return prev.map((s) => (s.id === pickupId ? { ...s, address: addr } : s))
+      })
+    },
+    dropoffAddress: findDropoffRouteStop(routeStops)?.address ?? { address: '' },
+    setDropoffAddress: (addr: AddressData) => {
+      setRouteStops((prev) => {
+        const dropoffId = findDropoffRouteStop(prev)?.id
+        if (!dropoffId) return prev
+        return prev.map((s) => (s.id === dropoffId ? { ...s, address: addr } : s))
+      })
+    },
+    pickupContactName: findPickupRouteStop(routeStops)?.contactName ?? '',
+    setPickupContactName: (name: string) => {
+      setRouteStops((prev) =>
+        prev.map((s) => (s.role === 'pickup' ? { ...s, contactName: name } : s))
+      )
+    },
+    pickupContactPhone: findPickupRouteStop(routeStops)?.contactPhone ?? '',
+    setPickupContactPhone: (phone: string) => {
+      setRouteStops((prev) =>
+        prev.map((s) => (s.role === 'pickup' ? { ...s, contactPhone: phone } : s))
+      )
+    },
+    dropoffContactName: findDropoffRouteStop(routeStops)?.contactName ?? '',
+    setDropoffContactName: (name: string) => {
+      setRouteStops((prev) =>
+        prev.map((s) => (s.role === 'dropoff' ? { ...s, contactName: name } : s))
+      )
+    },
+    dropoffContactPhone: findDropoffRouteStop(routeStops)?.contactPhone ?? '',
+    setDropoffContactPhone: (phone: string) => {
+      setRouteStops((prev) =>
+        prev.map((s) => (s.role === 'dropoff' ? { ...s, contactPhone: phone } : s))
+      )
+    },
     distance,
     distanceLoading,
     startFromBase, setStartFromBase,
     baseToPickupDistance,
     baseToPickupLoading,
     // Contacts
-    pickupContactName, setPickupContactName,
-    pickupContactPhone, setPickupContactPhone,
-    dropoffContactName, setDropoffContactName,
-    dropoffContactPhone, setDropoffContactPhone,
     notes, setNotes,
     // Payment
     invoiceName, setInvoiceName,

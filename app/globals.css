@@ -56,13 +56,13 @@ html {
   --gt-text-tertiary: #8a9bab;
   --gt-text-muted: #b8c5d1;
 
-  /* Brand: Deep Teal */
-  --gt-brand: #0891b2;
-  --gt-brand-hover: #0e7490;
-  --gt-brand-active: #155e75;
-  --gt-brand-subtle: #ecfeff;
-  --gt-brand-subtle-border: #a5f3fc;
-  --gt-brand-text: #0e7490;
+  /* Brand: Bright Cyan */
+  --gt-brand: #00c2e8;
+  --gt-brand-hover: #00a8cc;
+  --gt-brand-active: #008fb0;
+  --gt-brand-subtle: #e6fbff;
+  --gt-brand-subtle-border: #9fefff;
+  --gt-brand-text: #007fa0;
 
   /* Semantic */
   --gt-success: #16a34a;
@@ -92,12 +92,12 @@ html {
   --color-gt-text-secondary: #4a5a6b;
   --color-gt-text-tertiary: #8a9bab;
   --color-gt-text-muted: #b8c5d1;
-  --color-gt-brand: #0891b2;
-  --color-gt-brand-hover: #0e7490;
-  --color-gt-brand-active: #155e75;
-  --color-gt-brand-subtle: #ecfeff;
-  --color-gt-brand-subtle-border: #a5f3fc;
-  --color-gt-brand-text: #0e7490;
+  --color-gt-brand: #00c2e8;
+  --color-gt-brand-hover: #00a8cc;
+  --color-gt-brand-active: #008fb0;
+  --color-gt-brand-subtle: #e6fbff;
+  --color-gt-brand-subtle-border: #9fefff;
+  --color-gt-brand-text: #007fa0;
   --color-gt-success: #16a34a;
   --color-gt-success-subtle: #f0fdf4;
   --color-gt-success-border: #bbf7d0;

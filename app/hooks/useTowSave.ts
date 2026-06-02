@@ -14,6 +14,7 @@ import {
   getVehiclesReservedForTow,
 } from '../lib/queries/storage'
 import { AddressData } from '../lib/google-maps'
+import type { RouteStop } from './useTowForm'
 import { DistanceResult, PriceItem, TowType } from '../components/tow-forms/sections'
 import { CustomerWithPricing, LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../lib/queries/price-lists'
 import { VehicleLookupResult, VehicleType } from '../lib/types'
@@ -63,8 +64,7 @@ interface UseTowSaveParams {
   manualColor?: string
   manualWeight?: string
   // Route - single
-  pickupAddress: AddressData
-  dropoffAddress: AddressData
+  routeStops: RouteStop[]
   distance: DistanceResult | null
   startFromBase: boolean
   baseToPickupDistance: DistanceResult | null
@@ -84,11 +84,6 @@ interface UseTowSaveParams {
   locationSurchargesData: LocationSurcharge[]
   selectedServices: SelectedService[]
   serviceSurchargesData: ServiceSurcharge[]
-  // Contacts
-  pickupContactName: string
-  pickupContactPhone: string
-  dropoffContactName: string
-  dropoffContactPhone: string
   notes: string
   paymentMethod: 'cash' | 'credit' | 'invoice'
   invoiceName: string
@@ -172,8 +167,7 @@ export function useTowSave(params: UseTowSaveParams) {
     manualManufacturer,
     manualColor,
     manualWeight,
-    pickupAddress,
-    dropoffAddress,
+    routeStops,
     distance,
     startFromBase,
     baseToPickupDistance,
@@ -191,10 +185,6 @@ export function useTowSave(params: UseTowSaveParams) {
     locationSurchargesData,
     selectedServices,
     serviceSurchargesData,
-    pickupContactName,
-    pickupContactPhone,
-    dropoffContactName,
-    dropoffContactPhone,
     notes,
     paymentMethod,
     invoiceName,
@@ -318,8 +308,17 @@ export function useTowSave(params: UseTowSaveParams) {
       manualManufacturer,
       manualColor,
       manualWeight,
-      pickupAddress,
-      dropoffAddress,
+      routeStops:
+        towType === 'single'
+          ? routeStops.map((s) => ({
+              role: s.role,
+              stopSubtype: s.stopSubtype,
+              address: s.address,
+              contactName: s.contactName,
+              contactPhone: s.contactPhone,
+              notes: s.notes,
+            }))
+          : undefined,
       distance:
         towType === 'custom'
           ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 }
@@ -351,10 +350,6 @@ export function useTowSave(params: UseTowSaveParams) {
       serviceSurchargesData,
       // Additional
       notes,
-      pickupContactName,
-      pickupContactPhone,
-      dropoffContactName,
-      dropoffContactPhone,
       paymentMethod: paymentMethod || undefined,
       invoiceName: invoiceName || undefined,
       dropoffToStorage,

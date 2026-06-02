@@ -23,6 +23,8 @@ import {
   MapPin,
   Plus,
   Minus,
+  ChevronUp,
+  ChevronDown,
   Calendar,
   Loader2,
   Info,
@@ -30,7 +32,13 @@ import {
   User,
   AlertTriangle,
 } from 'lucide-react'
-import { useTowForm } from '../../../hooks/useTowForm'
+import {
+  useTowForm,
+  findDropoffRouteStop,
+  findPickupRouteStop,
+  type RouteRole,
+  type RouteStop,
+} from '../../../hooks/useTowForm'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
 import {
   PinDropModal,
@@ -251,24 +259,18 @@ function CreateTowForm({
     setDefectiveDestination,
     defectiveDestinationAddress,
     setDefectiveDestinationAddress,
-    pickupAddress,
-    setPickupAddress,
-    dropoffAddress,
-    setDropoffAddress,
+    routeStops,
+    addStop,
+    removeStop,
+    moveStopUp,
+    moveStopDown,
+    updateStop,
     distance,
     distanceLoading,
     startFromBase,
     setStartFromBase,
     baseToPickupDistance,
     baseToPickupLoading,
-    pickupContactName,
-    setPickupContactName,
-    pickupContactPhone,
-    setPickupContactPhone,
-    dropoffContactName,
-    setDropoffContactName,
-    dropoffContactPhone,
-    setDropoffContactPhone,
     customerOrderNumber,
     setCustomerOrderNumber,
     orderNumber,
@@ -355,6 +357,261 @@ function CreateTowForm({
   const [showStorageModal, setShowStorageModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
+  const [stopContactModalId, setStopContactModalId] = useState<string | null>(null)
+  const [stopContactDraft, setStopContactDraft] = useState({ name: '', phone: '' })
+
+  const routeRoleLabel = (role: RouteRole) => {
+    if (role === 'pickup') return 'מוצא'
+    if (role === 'dropoff') return 'יעד'
+    return 'נקודת עצירה'
+  }
+
+  const hasIntermediateStops = routeStops.some((s) => s.role === 'stop')
+
+  const openStopContactModal = (stop: RouteStop) => {
+    setStopContactModalId(stop.id)
+    setStopContactDraft({
+      name: stop.contactName ?? '',
+      phone: stop.contactPhone ?? '',
+    })
+  }
+
+  const saveStopContactModal = () => {
+    if (stopContactModalId) {
+      updateStop(stopContactModalId, {
+        contactName: stopContactDraft.name,
+        contactPhone: stopContactDraft.phone,
+      })
+    }
+    setStopContactModalId(null)
+  }
+
+  const STOP_SUBTYPE_OPTIONS: Array<{
+    value: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other'
+    label: string
+  }> = [
+    { value: 'key', label: 'מפתח' },
+    { value: 'customer_pickup', label: 'איסוף לקוח' },
+    { value: 'customer_dropoff', label: 'הורדת לקוח' },
+    { value: 'other', label: 'אחר' },
+  ]
+
+  const renderRouteStopFields = (stop: RouteStop) => {
+    const dropoffRow = findDropoffRouteStop(routeStops)
+    const isLastDropoff = stop.role === 'dropoff' && stop.id === dropoffRow?.id
+
+    return (
+      <div className="space-y-3 w-full">
+        <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
+          <span className="text-sm font-medium text-gray-700">
+            {routeRoleLabel(stop.role)}
+            {stop.role === 'stop' && stop.stopSubtype && (
+              <span className="text-gray-400">
+                {' '}
+                ·{' '}
+                {stop.stopSubtype === 'key'
+                  ? 'מפתח'
+                  : stop.stopSubtype === 'customer_pickup'
+                    ? 'איסוף לקוח'
+                    : stop.stopSubtype === 'customer_dropoff'
+                      ? 'הורדת לקוח'
+                      : 'אחר'}
+              </span>
+            )}
+          </span>
+          {stop.role === 'stop' && (
+            <button
+              type="button"
+              onClick={() => removeStop(stop.id)}
+              className="p-1 text-gray-400 hover:text-red-500 shrink-0"
+              aria-label="הסר נקודת עצירה"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {stop.role === 'stop' && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {STOP_SUBTYPE_OPTIONS.map((option) => {
+                const selected = (stop.stopSubtype ?? 'other') === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateStop(stop.id, { stopSubtype: option.value })}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      selected
+                        ? 'bg-gt-brand text-white border-gt-brand'
+                        : 'bg-white text-gt-text-secondary border-gt-border hover:border-gt-brand'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            {(stop.stopSubtype ?? 'other') === 'other' && (
+              <input
+                type="text"
+                value={stop.notes ?? ''}
+                onChange={(e) => updateStop(stop.id, { notes: e.target.value })}
+                placeholder="פרטים נוספים"
+                className="w-full max-w-xs h-10 px-3 border border-gt-border rounded-xl text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15"
+              />
+            )}
+          </div>
+        )}
+
+        <AddressInput
+          value={stop.address}
+          onChange={(d: AddressData) => updateStop(stop.id, { address: d })}
+          label={routeRoleLabel(stop.role)}
+          hideLabel
+          onPinDropClick={() => handlePinDropOpen(`routestop:${stop.id}`)}
+          className="[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3"
+        />
+
+        {stop.role === 'pickup' && (
+          <button
+            type="button"
+            onClick={() => setStartFromBase(!startFromBase)}
+            className={`inline-flex px-3 py-1.5 rounded-lg text-sm ${
+              startFromBase
+                ? 'bg-gt-brand text-white'
+                : 'bg-white text-gray-700 border border-gray-300 font-medium'
+            }`}
+          >
+            יציאה מהחניון
+          </button>
+        )}
+
+        {isLastDropoff && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (dropoffToStorage) {
+                  setDropoffToStorage(false)
+                  updateStop(stop.id, { address: { address: '' } })
+                  setHasStorageFollowUp(false)
+                  setFollowUpAddress({ address: '' })
+                  setFollowUpContactName('')
+                  setFollowUpContactPhone('')
+                  return
+                }
+                setDropoffToStorage(true)
+                if (storageAddress) {
+                  updateStop(stop.id, {
+                    address: {
+                      address: storageAddress,
+                      lat: basePriceList?.base_lat,
+                      lng: basePriceList?.base_lng,
+                    },
+                  })
+                }
+              }}
+              className={`inline-flex px-3 py-1.5 rounded-lg text-sm ${
+                dropoffToStorage
+                  ? 'bg-gt-brand text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 font-medium'
+              }`}
+            >
+              הורדה לאחסנה
+            </button>
+            {dropoffToStorage && (
+              <div className="flex gap-2 items-center flex-wrap">
+                <span className="text-sm text-gray-600">מצב הרכב:</span>
+                <button
+                  type="button"
+                  onClick={() => setStorageVehicleCondition('operational')}
+                  className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'operational' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                >
+                  תקין
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStorageVehicleCondition('faulty')}
+                  className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'faulty' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}
+                >
+                  תקול
+                </button>
+              </div>
+            )}
+            {dropoffToStorage && (
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hasStorageFollowUp}
+                  onClick={() => {
+                    const next = !hasStorageFollowUp
+                    setHasStorageFollowUp(next)
+                    if (!next) {
+                      setFollowUpAddress({ address: '' })
+                      setFollowUpContactName('')
+                      setFollowUpContactPhone('')
+                    }
+                  }}
+                  className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
+                >
+                  <span
+                    aria-hidden
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
+                      hasStorageFollowUp ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
+                    }`}
+                  >
+                    <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-800">יש המשך לגרירה?</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      צרי גרירה נוספת מהחניון אל יעד חדש
+                    </div>
+                  </div>
+                </button>
+                {hasStorageFollowUp && (
+                  <div className="space-y-2 bg-cyan-50/30 rounded-lg p-3 border border-cyan-100">
+                    <AddressInput
+                      value={followUpAddress}
+                      onChange={(d: AddressData) => setFollowUpAddress(d)}
+                      placeholder="כתובת היעד של הגרירה הבאה"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={followUpContactName}
+                        onChange={(e) => setFollowUpContactName(e.target.value)}
+                        placeholder="שם איש קשר"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <PhoneInput
+                        value={followUpContactPhone}
+                        onChange={(phone) => setFollowUpContactPhone(phone)}
+                        placeholder="050-1234567"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {stop.role === 'stop' && (
+          <button
+            type="button"
+            onClick={() => openStopContactModal(stop)}
+            className="text-xs text-cyan-700 hover:text-cyan-900 border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 px-2.5 py-1 rounded-lg font-medium"
+          >
+            {stop.contactName?.trim() ? stop.contactName : 'הוסף איש קשר'}
+          </button>
+        )}
+      </div>
+    )
+  }
 
   // URL params (date/time only — driver goes through truck step when ?driver= is present)
   useEffect(() => {
@@ -424,7 +681,10 @@ function CreateTowForm({
     else if (field === 'workingVehicle') setWorkingVehicleAddress(data)
     else if (field === 'workingDestination') setWorkingVehicleDestinationAddress(data)
     else if (field === 'defectiveDestination') setDefectiveDestinationAddress(data)
-    else handlePinDropConfirm(data)
+    else if (field?.startsWith('routestop:')) {
+      const stopId = field.slice('routestop:'.length)
+      updateStop(stopId, { address: data })
+    } else handlePinDropConfirm(data)
   }
 
   // Vehicle lookup for single
@@ -529,8 +789,6 @@ function CreateTowForm({
         })
         finalCustomerId = result.id
       }
-      const pickupAddr = pickupAddress
-      const dropoffAddr = dropoffAddress
       const dist = distance
       const plate = vehiclePlate
       const vData = vehicleData
@@ -553,8 +811,17 @@ function CreateTowForm({
         vehicleData: vData,
         selectedDefects: [],
         requiredTruckTypes,
-        pickupAddress: pickupAddr,
-        dropoffAddress: dropoffAddr,
+        routeStops:
+          towType === 'single'
+            ? routeStops.map((s) => ({
+                role: s.role,
+                stopSubtype: s.stopSubtype,
+                address: s.address,
+                contactName: s.contactName,
+                contactPhone: s.contactPhone,
+                notes: s.notes,
+              }))
+            : undefined,
         distance: dist,
         startFromBase,
         baseToPickupDistance,
@@ -570,10 +837,6 @@ function CreateTowForm({
         selectedServices,
         serviceSurchargesData,
         notes,
-        pickupContactName,
-        pickupContactPhone,
-        dropoffContactName,
-        dropoffContactPhone,
         paymentMethod: paymentMethod || undefined,
         invoiceName: invoiceName || undefined,
         dropoffToStorage,
@@ -682,8 +945,7 @@ function CreateTowForm({
     vehicleData,
     defectiveVehiclePlate,
     defectiveVehicleData,
-    pickupAddress,
-    dropoffAddress,
+    routeStops,
     exchangeAddress,
     defectiveDestinationAddress,
     distance,
@@ -701,10 +963,6 @@ function CreateTowForm({
     selectedServices,
     serviceSurchargesData,
     notes,
-    pickupContactName,
-    pickupContactPhone,
-    dropoffContactName,
-    dropoffContactPhone,
     paymentMethod,
     invoiceName,
     dropoffToStorage,
@@ -1114,163 +1372,64 @@ function CreateTowForm({
                     {/* Block 3 — כתובות ומסלול */}
                     <FormSubcard title="כתובות ומסלול">
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <div className="flex items-center">
-                              <label className="text-sm font-medium text-gray-700 block">כתובת מוצא</label>
-                            </div>
-                            <AddressInput
-                              value={pickupAddress}
-                              onChange={(d: AddressData) => setPickupAddress(d)}
-                              label="כתובת מוצא"
-                              hideLabel
-                              onPinDropClick={() => handlePinDropOpen('pickup')}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setStartFromBase(!startFromBase)}
-                              className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
-                                startFromBase
-                                  ? 'bg-gt-brand text-white'
-                                  : 'bg-white text-gray-700 border border-gray-300 font-medium'
-                              }`}
-                            >
-                              יציאה מהחניון
-                            </button>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">כתובת הורדה</label>
-                            <AddressInput
-                              value={dropoffAddress}
-                              onChange={(d: AddressData) => setDropoffAddress(d)}
-                              label="כתובת הורדה"
-                              hideLabel
-                              onPinDropClick={() => handlePinDropOpen('dropoff')}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (dropoffToStorage) {
-                                  setDropoffToStorage(false)
-                                  setDropoffAddress({ address: '' })
-                                  setHasStorageFollowUp(false)
-                                  setFollowUpAddress({ address: '' })
-                                  setFollowUpContactName('')
-                                  setFollowUpContactPhone('')
-                                  return
-                                }
-                                setDropoffToStorage(true)
-                                if (storageAddress)
-                                  setDropoffAddress({
-                                    address: storageAddress,
-                                    lat: basePriceList?.base_lat,
-                                    lng: basePriceList?.base_lng,
-                                  })
-                              }}
-                              className={`shrink-0 px-3 py-1.5 rounded-lg text-sm ${
-                                dropoffToStorage
-                                  ? 'bg-gt-brand text-white'
-                                  : 'bg-white text-gray-700 border border-gray-300 font-medium'
-                              }`}
-                            >
-                              הורדה לאחסנה
-                            </button>
-                            {dropoffToStorage && (
-                              <div className="flex gap-2 mt-2 items-center flex-wrap">
-                                <span className="text-sm text-gray-600">מצב הרכב:</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setStorageVehicleCondition('operational')}
-                                  className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'operational' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-600'}`}
-                                >
-                                  תקין
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setStorageVehicleCondition('faulty')}
-                                  className={`px-3 py-1.5 rounded-lg text-sm ${storageVehicleCondition === 'faulty' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600'}`}
-                                >
-                                  תקול
-                                </button>
-                              </div>
-                            )}
-                            {dropoffToStorage && (
-                              <div className="mt-3 pt-3 border-t border-gray-200">
-                                <button
-                                  type="button"
-                                  role="switch"
-                                  aria-checked={hasStorageFollowUp}
-                                  onClick={() => {
-                                    const next = !hasStorageFollowUp
-                                    setHasStorageFollowUp(next)
-                                    if (!next) {
-                                      setFollowUpAddress({ address: '' })
-                                      setFollowUpContactName('')
-                                      setFollowUpContactPhone('')
-                                    }
-                                  }}
-                                  className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
-                                >
-                                  <span
-                                    aria-hidden
-                                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
-                                      hasStorageFollowUp ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
-                                    }`}
-                                  >
-                                    <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
-                                  </span>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-semibold text-gray-800">יש המשך לגרירה?</div>
-                                    <div className="text-xs text-gray-500 mt-0.5">
-                                      צרי גרירה נוספת מהחניון אל יעד חדש
-                                    </div>
-                                  </div>
-                                </button>
-
-                                {hasStorageFollowUp && (
-                                  <div className="mt-3 space-y-2 bg-cyan-50/30 rounded-lg p-3 border border-cyan-100">
-                                    <div>
-                                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        יעד ההמשך
-                                      </label>
-                                      <AddressInput
-                                        value={followUpAddress}
-                                        onChange={(d: AddressData) => setFollowUpAddress(d)}
-                                        placeholder="כתובת היעד של הגרירה הבאה"
-                                      />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                          שם איש קשר ביעד
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={followUpContactName}
-                                          onChange={(e) => setFollowUpContactName(e.target.value)}
-                                          placeholder="שם"
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                                        />
-                                      </div>
-                                      <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                                          טלפון איש קשר
-                                        </label>
-                                        <PhoneInput
-                                          value={followUpContactPhone}
-                                          onChange={(phone) => setFollowUpContactPhone(phone)}
-                                          placeholder="050-1234567"
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
+                        {!hasIntermediateStops ? (
+                          (() => {
+                            const pickupRow = findPickupRouteStop(routeStops)
+                            const dropoffRow = findDropoffRouteStop(routeStops)
+                            return (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {pickupRow && (
+                                  <div key={pickupRow.id}>{renderRouteStopFields(pickupRow)}</div>
+                                )}
+                                {dropoffRow && (
+                                  <div key={dropoffRow.id}>{renderRouteStopFields(dropoffRow)}</div>
                                 )}
                               </div>
-                            )}
+                            )
+                          })()
+                        ) : (
+                          <div className="space-y-4">
+                            {routeStops.map((stop, index) => (
+                              <div
+                                key={stop.id}
+                                className="flex gap-3 items-center border-b border-gray-200 pb-4 last:border-b-0 last:pb-0"
+                              >
+                                <div className="flex flex-col items-center justify-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveStopUp(stop.id)}
+                                    disabled={index === 0}
+                                    className="w-[30px] h-[30px] inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300"
+                                    aria-label="הזז למעלה"
+                                  >
+                                    <ChevronUp className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveStopDown(stop.id)}
+                                    disabled={index === routeStops.length - 1}
+                                    className="w-[30px] h-[30px] inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300"
+                                    aria-label="הזז למטה"
+                                  >
+                                    <ChevronDown className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0 max-w-md">
+                                  {renderRouteStopFields(stop)}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={addStop}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gt-brand text-gt-brand text-sm font-medium hover:bg-gt-brand-subtle transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                          הוסף נקודת עצירה
+                        </button>
                         {distanceLoading ? (
                           <p className="text-sm text-gray-500">מחשב מרחק...</p>
                         ) : (
@@ -1472,11 +1631,16 @@ function CreateTowForm({
                                   } else {
                                     handleSelectStoredVehicle(v)
                                     if (storageAddress) {
-                                      setPickupAddress({
-                                        address: storageAddress,
-                                        lat: basePriceList?.base_lat,
-                                        lng: basePriceList?.base_lng,
-                                      })
+                                      const pickup = findPickupRouteStop(routeStops)
+                                      if (pickup) {
+                                        updateStop(pickup.id, {
+                                          address: {
+                                            address: storageAddress,
+                                            lat: basePriceList?.base_lat,
+                                            lng: basePriceList?.base_lng,
+                                          },
+                                        })
+                                      }
                                       setStartFromBase(true)
                                     }
                                   }
@@ -2697,9 +2861,8 @@ function CreateTowForm({
                       </div>
                       </div>
                     </>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  ) : towType === 'single' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-medium">איש קשר במוצא</label>
@@ -2716,14 +2879,20 @@ function CreateTowForm({
                         <div className="grid grid-cols-2 gap-2">
                           <input
                             type="text"
-                            value={pickupContactName}
-                            onChange={(e) => setPickupContactName(e.target.value)}
+                            value={findPickupRouteStop(routeStops)?.contactName ?? ''}
+                            onChange={(e) => {
+                              const pickup = findPickupRouteStop(routeStops)
+                              if (pickup) updateStop(pickup.id, { contactName: e.target.value })
+                            }}
                             placeholder="שם"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                           <PhoneInput
-                            value={pickupContactPhone}
-                            onChange={(phone) => setPickupContactPhone(phone)}
+                            value={findPickupRouteStop(routeStops)?.contactPhone ?? ''}
+                            onChange={(phone) => {
+                              const pickup = findPickupRouteStop(routeStops)
+                              if (pickup) updateStop(pickup.id, { contactPhone: phone })
+                            }}
                             placeholder="טלפון"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
@@ -2731,9 +2900,7 @@ function CreateTowForm({
                       </div>
                       <div>
                         <div className="flex justify-between items-center mb-2">
-                          <label className="text-sm font-medium">
-                            איש קשר ביעד
-                          </label>
+                          <label className="text-sm font-medium">איש קשר ביעד</label>
                           {!selectedCustomerId && (
                             <button
                               type="button"
@@ -2747,22 +2914,27 @@ function CreateTowForm({
                         <div className="grid grid-cols-2 gap-2">
                           <input
                             type="text"
-                            value={dropoffContactName}
-                            onChange={(e) => setDropoffContactName(e.target.value)}
+                            value={findDropoffRouteStop(routeStops)?.contactName ?? ''}
+                            onChange={(e) => {
+                              const dropoff = findDropoffRouteStop(routeStops)
+                              if (dropoff) updateStop(dropoff.id, { contactName: e.target.value })
+                            }}
                             placeholder="שם"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                           <PhoneInput
-                            value={dropoffContactPhone}
-                            onChange={(phone) => setDropoffContactPhone(phone)}
+                            value={findDropoffRouteStop(routeStops)?.contactPhone ?? ''}
+                            onChange={(phone) => {
+                              const dropoff = findDropoffRouteStop(routeStops)
+                              if (dropoff) updateStop(dropoff.id, { contactPhone: phone })
+                            }}
                             placeholder="טלפון"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                         </div>
                       </div>
-                      </div>
-                    </>
-                  )}
+                    </div>
+                  ) : null}
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -2890,25 +3062,85 @@ function CreateTowForm({
         )}
       </div>
 
+      {stopContactModalId && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-800 text-base">איש קשר בנקודת עצירה</h3>
+              <button
+                type="button"
+                onClick={() => setStopContactModalId(null)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">שם</label>
+                <input
+                  type="text"
+                  value={stopContactDraft.name}
+                  onChange={(e) =>
+                    setStopContactDraft((d) => ({ ...d, name: e.target.value }))
+                  }
+                  placeholder="שם איש קשר"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">טלפון</label>
+                <PhoneInput
+                  value={stopContactDraft.phone}
+                  onChange={(phone) =>
+                    setStopContactDraft((d) => ({ ...d, phone }))
+                  }
+                  placeholder="050-1234567"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={saveStopContactModal}
+                  className="flex-1 py-2.5 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
+                >
+                  שמור
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStopContactModalId(null)}
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <PinDropModal
         isOpen={pinDropModal.isOpen}
         onClose={() => setPinDropModal({ isOpen: false, field: null })}
         onConfirm={handlePinDropConfirmWrapped}
         initialAddress={
-          pinDropModal.field === 'pickup' ? pickupAddress
-          : pinDropModal.field === 'dropoff' ? dropoffAddress
-          : pinDropModal.field === 'exchange' ? exchangeAddress
+          pinDropModal.field?.startsWith('routestop:')
+            ? routeStops.find((s) => `routestop:${s.id}` === pinDropModal.field)?.address
+            : pinDropModal.field === 'exchange' ? exchangeAddress
           : pinDropModal.field === 'workingVehicle' ? workingVehicleAddress
           : pinDropModal.field === 'workingDestination' ? workingVehicleDestinationAddress
           : pinDropModal.field === 'defectiveDestination' ? defectiveDestinationAddress
           : undefined
         }
         title={
-          pinDropModal.field === 'pickup'
-            ? 'בחר מיקום מוצא'
-            : pinDropModal.field === 'dropoff'
-              ? 'בחר מיקום יעד'
-              : 'בחר מיקום'
+          pinDropModal.field?.startsWith('routestop:')
+            ? 'בחר מיקום'
+            : pinDropModal.field === 'pickup'
+              ? 'בחר מיקום מוצא'
+              : pinDropModal.field === 'dropoff'
+                ? 'בחר מיקום יעד'
+                : 'בחר מיקום'
         }
       />
 

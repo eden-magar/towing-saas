@@ -49,8 +49,15 @@ export interface SaveTowInput {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
-  pickupAddress?: AddressData
-  dropoffAddress?: AddressData
+  /** Regular tow: ordered route list (pickup / stop / dropoff in list order) */
+  routeStops?: {
+    role: 'pickup' | 'dropoff' | 'stop'
+    stopSubtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other'
+    address: AddressData
+    contactName?: string
+    contactPhone?: string
+    notes?: string
+  }[]
   distance?: DistanceResult | null
   startFromBase?: boolean
   baseToPickupDistance?: DistanceResult | null
@@ -83,10 +90,6 @@ export interface SaveTowInput {
   
   // Additional
   notes?: string
-  pickupContactName?: string
-  pickupContactPhone?: string
-  dropoffContactName?: string
-  dropoffContactPhone?: string
 
   paymentMethod?: string
   invoiceName?: string
@@ -136,6 +139,7 @@ export interface PreparedTowPoint {
   // האם זו נקודה לאחסנה
   dropToStorage?: boolean
   isStorage?: boolean
+  stop_subtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other' | null
 }
 
 // Output ל-createTow
@@ -453,41 +457,77 @@ export function convertRoutePointsToTowPoints(
 /**
  * NEW: יצירת נקודות גרירה לגרירה פשוטה (single)
  */
+function findPrimaryPickupDropoffForLegs(routeStops: NonNullable<SaveTowInput['routeStops']>) {
+  const pickup = routeStops.find((s) => s.role === 'pickup')
+  let dropoff: (typeof routeStops)[number] | undefined
+  for (let i = routeStops.length - 1; i >= 0; i--) {
+    if (routeStops[i].role === 'dropoff') {
+      dropoff = routeStops[i]
+      break
+    }
+  }
+  return { pickup, dropoff }
+}
+
 export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
+  const normalizeStopSubtype = (subtype: unknown): PreparedTowPoint['stop_subtype'] => {
+    if (subtype === 'customer') return 'customer_pickup'
+    if (subtype === 'general') return 'other'
+    if (
+      subtype === 'key' ||
+      subtype === 'customer_pickup' ||
+      subtype === 'customer_dropoff' ||
+      subtype === 'other'
+    ) {
+      return subtype
+    }
+    return 'other'
+  }
+
   const points: PreparedTowPoint[] = []
-  
-  // נקודת איסוף
-  if (input.pickupAddress?.address) {
+  let pointOrder = 0
+  const rows = input.routeStops ?? []
+  let seenPickup = false
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    if (!row.address?.address?.trim()) continue
+
+    const isPickup = row.role === 'pickup'
+    const isDropoff = row.role === 'dropoff'
+    const isFirstPickup = isPickup && !seenPickup
+    if (isPickup) seenPickup = true
+
+    let dropoffIsLast = false
+    if (isDropoff) {
+      dropoffIsLast = true
+      for (let j = i + 1; j < rows.length; j++) {
+        if (rows[j].role === 'dropoff' && rows[j].address?.address?.trim()) {
+          dropoffIsLast = false
+          break
+        }
+      }
+    }
+
     points.push({
-      point_order: 0,
-      point_type: 'pickup',
-      address: input.pickupAddress.address,
-      lat: input.pickupAddress.lat || null,
-      lng: input.pickupAddress.lng || null,
-      contact_name: input.pickupContactName || null,
-      contact_phone: input.pickupContactPhone || null,
-      notes: null,
-      vehicleIndices: [0], // הרכב היחיד
-      isStorage: !!input.selectedStoredVehicleId,
+      point_order: pointOrder++,
+      point_type: row.role,
+      stop_subtype: row.role === 'stop' ? normalizeStopSubtype(row.stopSubtype) : null,
+      address: row.address.address,
+      lat: row.address.lat ?? null,
+      lng: row.address.lng ?? null,
+      contact_name: row.contactName?.trim() || null,
+      contact_phone: row.contactPhone?.trim() || null,
+      notes: row.notes?.trim() || null,
+      vehicleIndices: isPickup || isDropoff ? [0] : [],
+      isStorage: isFirstPickup
+        ? !!input.selectedStoredVehicleId
+        : isDropoff && dropoffIsLast
+          ? input.dropoffToStorage === true
+          : undefined,
     })
   }
-  
-  // נקודת פריקה
-  if (input.dropoffAddress?.address) {
-    points.push({
-      point_order: 1,
-      point_type: 'dropoff',
-      address: input.dropoffAddress.address,
-      lat: input.dropoffAddress.lat || null,
-      lng: input.dropoffAddress.lng || null,
-      contact_name: input.dropoffContactName || null,
-      contact_phone: input.dropoffContactPhone || null,
-      notes: null,
-      vehicleIndices: [0], // הרכב היחיד
-      isStorage: input.dropoffToStorage === true,
-    })
-  }
-  
+
   return points
 }
 
@@ -840,14 +880,17 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       vehicleCode: input.vehicleCode || undefined,
     }]
 
+    const { pickup: legPickup, dropoff: legDropoff } = findPrimaryPickupDropoffForLegs(
+      input.routeStops ?? []
+    )
     const legs: PreparedTowData['legs'] = [{
       legType: 'pickup',
-      fromAddress: input.pickupAddress?.address,
-      toAddress: input.dropoffAddress?.address,
-      fromLat: input.pickupAddress?.lat,
-      fromLng: input.pickupAddress?.lng,
-      toLat: input.dropoffAddress?.lat,
-      toLng: input.dropoffAddress?.lng
+      fromAddress: legPickup?.address?.address,
+      toAddress: legDropoff?.address?.address,
+      fromLat: legPickup?.address?.lat,
+      fromLng: legPickup?.address?.lng,
+      toLat: legDropoff?.address?.lat,
+      toLng: legDropoff?.address?.lng
     }]
 
     // NEW: יצירת נקודות גרירה

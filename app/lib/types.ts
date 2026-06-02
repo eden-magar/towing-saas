@@ -422,6 +422,15 @@ export interface TowPoint {
   
   notes: string | null
   is_storage?: boolean
+  /** Set when point_type is stop; null for pickup/dropoff/exchange */
+  stop_subtype?:
+    | 'key'
+    | 'customer_pickup'
+    | 'customer_dropoff'
+    | 'other'
+    | 'customer'
+    | 'general'
+    | null
   created_at: string
   updated_at: string
 }

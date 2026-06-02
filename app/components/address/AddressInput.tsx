@@ -167,11 +167,11 @@ export default function AddressInput({
             disabled={disabled}
             className={`
               w-full px-4 py-2.5 border rounded-xl text-sm
-              focus:outline-none focus:ring-2 focus:ring-[#33d4ff]
-              disabled:bg-gray-100 disabled:cursor-not-allowed
+              focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
+              disabled:bg-gt-surface-subtle disabled:cursor-not-allowed
               ${hasValidCoordinates 
                 ? 'border-emerald-300 bg-emerald-50 pr-10' 
-                : 'border-gray-200'
+                : 'border-gt-border hover:border-gt-border-strong'
               }
             `}
           />
@@ -207,7 +207,7 @@ export default function AddressInput({
               transition-colors
               ${value.isPinDropped
                 ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gt-border'
               }
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
