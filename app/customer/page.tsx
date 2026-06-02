@@ -188,6 +188,7 @@ export default function CustomerDashboard() {
           {filteredTows.map(tow => {
             const { from, to } = getFirstAndLast(tow)
             const progress = getProgress(tow)
+            const stopCount = tow.points.filter((p) => p.point_type === 'stop').length
             const config = statusConfig[tow.status] || statusConfig.pending
             const StatusIcon = config.icon
 
@@ -223,6 +224,9 @@ export default function CustomerDashboard() {
                     <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
                     <p className="text-sm text-gray-700 truncate">{to}</p>
                   </div>
+                  {stopCount > 0 && (
+                    <p className="text-xs text-gray-500 mr-4">כולל {stopCount} עצירות</p>
+                  )}
                 </div>
 
                 {/* Bottom Row */}

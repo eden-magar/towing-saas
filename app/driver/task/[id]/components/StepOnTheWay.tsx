@@ -83,6 +83,14 @@ export default function StepOnTheWay({
   const isPickup = point.point_type === 'pickup'
   const isExchange = point.point_type === 'exchange'
   const isStop = point.point_type === 'stop'
+  const stopSubtypeLabel = (() => {
+    if (!isStop) return null
+    if (point.stop_subtype === 'key') return 'מפתח'
+    if (point.stop_subtype === 'customer_pickup') return 'איסוף לקוח'
+    if (point.stop_subtype === 'customer_dropoff') return 'הורדת לקוח'
+    if (point.stop_subtype === 'other') return point.notes?.trim() || 'אחר'
+    return null
+  })()
   const title = isPickup ? 'בדרך לאיסוף' 
     : isExchange ? 'בדרך לנקודת החלפה'
     : isStop ? 'בדרך לעצירה'
@@ -124,6 +132,11 @@ export default function StepOnTheWay({
       <div className="px-5 pt-2 pb-6 text-white">
         <h1 className="text-2xl font-bold mb-1">{title}</h1>
         <p className="text-white/80">{subtitle}</p>
+        {stopSubtypeLabel && (
+          <span className="inline-flex mt-2 px-2 py-0.5 rounded-full text-xs bg-white/20 text-white">
+            {stopSubtypeLabel}
+          </span>
+        )}
       </div>
 
       {point.is_storage && <StoragePointBadge pointType={point.point_type} />}

@@ -39,6 +39,7 @@ export interface DriverTaskPoint {
   id: string
   point_order: number
   point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
+  stop_subtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other' | null
   address: string | null
   lat: number | null
   lng: number | null

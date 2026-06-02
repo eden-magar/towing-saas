@@ -25,7 +25,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
   
   const [task, setTask] = useState<TaskDetailFull | null>(null)
   const [loading, setLoading] = useState(true)
-  const [navigatingTo, setNavigatingTo] = useState<'source' | 'destination'>('source')
 
   // Load task data
   useEffect(() => {
@@ -33,44 +32,6 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
       loadTask()
     }
   }, [id])
-
-  // Auto-determine navigation target from tow_points (not legs)
-  useEffect(() => {
-    if (!task?.points?.length) return
-
-    const points = [...task.points].sort((a, b) => a.point_order - b.point_order)
-    const pickup = points.find((p) => p.point_type === 'pickup')
-
-    if (pickup && pickup.status !== 'arrived' && pickup.status !== 'completed') {
-      setNavigatingTo('source')
-      return
-    }
-
-    const idx = getCurrentPointIndex(points)
-    const current = points[idx]
-
-    if (!current) {
-      setNavigatingTo('destination')
-      return
-    }
-
-    if (current.point_type === 'pickup') {
-      setNavigatingTo('source')
-      return
-    }
-
-    if (current.point_type === 'dropoff') {
-      setNavigatingTo('destination')
-      return
-    }
-
-    // stop / exchange / other: pickup done → heading to dropoff
-    if (pickup && (pickup.status === 'arrived' || pickup.status === 'completed')) {
-      setNavigatingTo('destination')
-    } else {
-      setNavigatingTo('source')
-    }
-  }, [task])
 
   const loadTask = async () => {
     setLoading(true)
@@ -88,14 +49,11 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     ? [...task.points].sort((a, b) => a.point_order - b.point_order)
     : []
 
-  const pickupPoint =
-    sortedPoints.find((p) => p.point_type === 'pickup') ?? sortedPoints[0]
-  const dropoffPoint =
-    sortedPoints.find((p) => p.point_type === 'dropoff') ??
-    sortedPoints[sortedPoints.length - 1]
-
+  const currentPointIndex = getCurrentPointIndex(sortedPoints)
   const navPoint: DriverTaskPoint | null =
-    navigatingTo === 'source' ? pickupPoint ?? null : dropoffPoint ?? null
+    currentPointIndex < sortedPoints.length
+      ? sortedPoints[currentPointIndex]
+      : sortedPoints[sortedPoints.length - 1] ?? null
 
   const navContact = resolveDriverContact(navPoint, task?.customer ?? null)
 
@@ -110,29 +68,11 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
       }
     }
 
-    const pickupLeg = task.legs.find((l) => l.leg_type === 'pickup')
-    const deliveryLeg = task.legs.find((l) => l.leg_type === 'delivery')
-
-    if (navigatingTo === 'source') {
-      return {
-        address:
-          navPoint?.address || pickupLeg?.from_address || 'לא צוין',
-        contact: navContact.displayName,
-        phone: navContact.phone || '',
-        notes: task.notes || '',
-        canCall: navContact.canCall,
-      }
-    }
-
     return {
-      address:
-        navPoint?.address ||
-        deliveryLeg?.to_address ||
-        pickupLeg?.to_address ||
-        'לא צוין',
+      address: navPoint?.address || 'לא צוין',
       contact: navContact.displayName,
       phone: navContact.phone || '',
-      notes: '',
+      notes: navPoint?.notes || '',
       canCall: navContact.canCall,
     }
   }
@@ -177,9 +117,7 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
     const waNumber = toWhatsApp(navData.phone).replace(/^\+/, '')
     if (!waNumber) return
     const vehicle = task.vehicles[0]?.plate_number || ''
-    const message = navigatingTo === 'source' 
-      ? `שלום, אני בדרך לאסוף את הרכב ${vehicle}.`
-      : `שלום, אני בדרך עם הרכב ${vehicle}.`
+    const message = `שלום, אני בדרך לנקודה הבאה בגרירה ${vehicle}.`
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
@@ -234,50 +172,15 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
         <div className="w-12" aria-hidden="true" />
       </div>
 
-      {/* Toggle Source/Destination */}
-      <div className="px-4 pt-3">
-        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg p-1.5 flex gap-1">
-          <button
-            onClick={() => setNavigatingTo('source')}
-            className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-              navigatingTo === 'source'
-                ? 'bg-emerald-500 text-white shadow-md'
-                : 'text-slate-600'
-            }`}
-          >
-            <div className={`w-2.5 h-2.5 rounded-full ${navigatingTo === 'source' ? 'bg-white' : 'bg-emerald-500'}`}></div>
-            נווט לאיסוף
-          </button>
-          <button
-            onClick={() => setNavigatingTo('destination')}
-            className={`flex-1 py-3.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-              navigatingTo === 'destination'
-                ? 'bg-red-500 text-white shadow-md'
-                : 'text-slate-600'
-            }`}
-          >
-            <div className={`w-2.5 h-2.5 rounded-full ${navigatingTo === 'destination' ? 'bg-white' : 'bg-red-500'}`}></div>
-            נווט ליעד
-          </button>
-        </div>
-      </div>
-
       {/* Destination address */}
       <div className="flex-1 px-5 py-6 flex flex-col justify-center min-h-0">
         <div className="flex items-start gap-4">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-            navigatingTo === 'source' ? 'bg-emerald-500/20' : 'bg-red-500/20'
-          }`}>
-            <MapPin
-              size={24}
-              className={navigatingTo === 'source' ? 'text-emerald-400' : 'text-red-400'}
-            />
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-red-500/20">
+            <MapPin size={24} className="text-red-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-bold mb-1 ${
-              navigatingTo === 'source' ? 'text-emerald-400' : 'text-red-400'
-            }`}>
-              {navigatingTo === 'source' ? 'איסוף' : 'יעד'}
+            <p className="text-sm font-bold mb-1 text-red-400">
+              נקודה נוכחית
             </p>
             <p className="font-bold text-white text-xl leading-snug">{navData.address}</p>
             <p className="text-sm text-slate-400 mt-2">

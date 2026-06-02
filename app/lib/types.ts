@@ -556,6 +556,7 @@ export interface CustomerPortalTow {
     id: string
     point_order: number
     point_type: PointType
+    stop_subtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other' | null
     address: string | null
     status: PointStatus
     arrived_at: string | null

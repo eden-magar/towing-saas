@@ -123,6 +123,17 @@ export default function CustomerTowDetail() {
     return tow?.images.filter(img => img.tow_point_id === pointId) || []
   }
 
+  const getStopSubtypeLabel = (
+    stopSubtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other' | null,
+    notes?: string | null
+  ) => {
+    if (stopSubtype === 'key') return 'מפתח'
+    if (stopSubtype === 'customer_pickup') return 'איסוף לקוח'
+    if (stopSubtype === 'customer_dropoff') return 'הורדת לקוח'
+    if (stopSubtype === 'other') return notes?.trim() || 'אחר'
+    return null
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -309,8 +320,21 @@ export default function CustomerTowDetail() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                            {point.point_type === 'pickup' ? 'איסוף' : 'פריקה'}
+                            {point.point_type === 'pickup'
+                              ? 'איסוף'
+                              : point.point_type === 'dropoff'
+                                ? 'פריקה'
+                                : point.point_type === 'stop'
+                                  ? 'עצירה'
+                                  : point.point_type === 'exchange'
+                                    ? 'החלפה'
+                                    : 'נקודה'}
                           </span>
+                          {point.point_type === 'stop' && getStopSubtypeLabel(point.stop_subtype, point.notes) && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                              {getStopSubtypeLabel(point.stop_subtype, point.notes)}
+                            </span>
+                          )}
                           <span className={`text-xs font-medium ${pointConfig.color}`}>
                             {pointConfig.label}
                           </span>
