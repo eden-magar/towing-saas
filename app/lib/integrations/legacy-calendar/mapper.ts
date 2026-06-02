@@ -13,6 +13,8 @@ import type {
   LegacyPricingFields,
   LegacyPaymentType,
   LegacyPriceBredown,
+  LegacyRouteStop,
+  LegacyRoutePoint,
 } from './types'
 import { getTruckTypeLabel } from '../../utils/truck-type-labels'
 
@@ -292,6 +294,33 @@ function buildPricingFields(tow: TowForLegacyMapping): LegacyPricingFields {
   }
 }
 
+function buildLegacyStops(points: TowPointWithDetails[] | undefined): LegacyRouteStop[] {
+  return sortPoints(points ?? [])
+    .filter((p) => p.point_type === 'stop')
+    .map((point) => ({
+      order: point.point_order,
+      address: pointToAddressForCalendar(point),
+      subtype: point.stop_subtype ?? '',
+      notes: point.order_notes ?? '',
+      contactName: point.contact_name ?? '',
+      contactPhone: point.contact_phone ?? '',
+    }))
+}
+
+function buildLegacyRoutePoints(
+  points: TowPointWithDetails[] | undefined
+): LegacyRoutePoint[] {
+  return sortPoints(points ?? []).map((point) => ({
+    order: point.point_order,
+    pointType: point.point_type,
+    address: pointToAddressForCalendar(point),
+    subtype: point.stop_subtype ?? '',
+    notes: point.order_notes ?? '',
+    contactName: point.contact_name ?? '',
+    contactPhone: point.contact_phone ?? '',
+  }))
+}
+
 function buildSharedBase(tow: TowForLegacyMapping, towSelection: string) {
   return {
     orderNumber: tow.customer_order_number || tow.order_number || '',
@@ -306,7 +335,10 @@ function buildSharedBase(tow: TowForLegacyMapping, towSelection: string) {
     priceApproved: tow.status !== 'quote',
     invoiceName: tow.invoice_name ?? '',
     company: tow.company?.name ?? '',
-    department: '',
+    department: tow.department ?? '',
+    orderedBy: tow.ordered_by ?? '',
+    stops: buildLegacyStops(tow.points),
+    routePoints: buildLegacyRoutePoints(tow.points),
   }
 }
 

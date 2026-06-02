@@ -140,6 +140,25 @@ export type LegacyPricingFields = {
 // Base fields (collectBaseFormData)
 // ---------------------------------------------------------------------------
 
+export type LegacyRouteStop = {
+  order: number
+  address: LegacyAddress
+  subtype: string
+  notes: string
+  contactName: string
+  contactPhone: string
+}
+
+export type LegacyRoutePoint = {
+  order: number
+  pointType: string
+  address: LegacyAddress
+  subtype: string
+  notes: string
+  contactName: string
+  contactPhone: string
+}
+
 export type LegacyBaseFields = {
   orderNumber: string
   executionDate: string
@@ -153,6 +172,9 @@ export type LegacyBaseFields = {
   invoiceName: string
   company: string
   department: string
+  orderedBy: string
+  stops: LegacyRouteStop[]
+  routePoints: LegacyRoutePoint[]
 }
 
 // ---------------------------------------------------------------------------
