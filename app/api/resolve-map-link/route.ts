@@ -5,14 +5,63 @@ type ResolveMapLinkBody = {
   url?: unknown
 }
 
+/** Decimal patterns in priority order (map @ center is separate, last). */
 const COORD_PATTERNS: RegExp[] = [
+  /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
   /\/place\/(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/,
   /\/search\/(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/,
-  /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/,
   /[?&](?:q|query)=(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/,
-  /@(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/,
   /(?:to=ll\.|ll[.=])(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/,
 ]
+
+/** Map viewport center — fallback only after place pin / DMS. */
+const MAP_CENTER_PATTERN = /@(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/
+
+const DMS_PATTERN =
+  /(\d+)°(\d+)'([\d.]+)"([NS])[+\s]+(\d+)°(\d+)'([\d.]+)"([EW])/i
+
+function dmsToDecimal(deg: number, min: number, sec: number, hemisphere: string): number {
+  let decimal = deg + min / 60 + sec / 3600
+  const h = hemisphere.toUpperCase()
+  if (h === 'S' || h === 'W') decimal = -decimal
+  return decimal
+}
+
+function extractDmsCoords(text: string): { lat: number; lng: number } | null {
+  const match = text.match(DMS_PATTERN)
+  if (!match) return null
+
+  const lat = dmsToDecimal(
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+    match[4]
+  )
+  const lng = dmsToDecimal(
+    Number(match[5]),
+    Number(match[6]),
+    Number(match[7]),
+    match[8]
+  )
+  if (isValidLatLng(lat, lng)) {
+    return { lat, lng }
+  }
+  return null
+}
+
+function matchDecimalPair(
+  pattern: RegExp,
+  text: string
+): { lat: number; lng: number } | null {
+  const match = text.match(pattern)
+  if (!match) return null
+  const lat = Number(match[1])
+  const lng = Number(match[2])
+  if (isValidLatLng(lat, lng)) {
+    return { lat, lng }
+  }
+  return null
+}
 
 function isSupportedMapLink(urlString: string): boolean {
   try {
@@ -53,15 +102,15 @@ function extractCoordsFromText(text: string): { lat: number; lng: number } | nul
 
   for (const candidate of [decoded, text]) {
     for (const pattern of COORD_PATTERNS) {
-      const match = candidate.match(pattern)
-      if (!match) continue
-
-      const lat = Number(match[1])
-      const lng = Number(match[2])
-      if (isValidLatLng(lat, lng)) {
-        return { lat, lng }
-      }
+      const coords = matchDecimalPair(pattern, candidate)
+      if (coords) return coords
     }
+
+    const dms = extractDmsCoords(candidate)
+    if (dms) return dms
+
+    const center = matchDecimalPair(MAP_CENTER_PATTERN, candidate)
+    if (center) return center
   }
 
   return null
