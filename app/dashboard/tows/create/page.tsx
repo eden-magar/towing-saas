@@ -2824,7 +2824,9 @@ function CreateTowForm({
                         <div className="flex justify-between items-start mb-2 min-h-[32px]">
                           <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
                           <div className="flex gap-1.5 flex-wrap justify-end">
-                            <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                            {!selectedCustomerId && (
+                              <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                            )}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -2838,7 +2840,9 @@ function CreateTowForm({
                         <div className="flex justify-between items-start mb-2 min-h-[32px]">
                           <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
                           <div className="flex gap-1.5 flex-wrap justify-end">
-                            <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                            {!selectedCustomerId && (
+                              <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                            )}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
@@ -2851,13 +2855,15 @@ function CreateTowForm({
                       <div>
                         <div className="flex justify-between items-start mb-2 min-h-[32px]">
                           <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
-                          <button
-                            type="button"
-                            onClick={() => copyFromCustomer('exchange_pickup')}
-                            className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
-                          >
-                            כמו לקוח 👤
-                          </button>
+                          {!selectedCustomerId && (
+                            <button
+                              type="button"
+                              onClick={() => copyFromCustomer('exchange_pickup')}
+                              className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
+                            >
+                              כמו לקוח 👤
+                            </button>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
@@ -2882,7 +2888,9 @@ function CreateTowForm({
                         <div className="flex justify-between items-start mb-2 min-h-[32px]">
                           <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
                           <div className="flex gap-1.5 flex-wrap justify-end">
-                            <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                            {!selectedCustomerId && (
+                              <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                            )}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
