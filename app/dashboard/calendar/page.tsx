@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
 import { getDrivers } from '../../lib/queries/drivers'
@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   Plus,
   Clock,
-  MapPin,
   Truck,
   X,
   GripVertical,
@@ -26,10 +25,13 @@ import {
   AlertTriangle,
   Search,
   Users,
+  CheckCircle,
+  XCircle,
+  Play,
 } from 'lucide-react'
 import Link from 'next/link'
 import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
-import { getOverlapLayout } from '../../lib/utils/tow-overlap-layout'
+import { getOverlapLayout, type OverlapPosition } from '../../lib/utils/tow-overlap-layout'
 
 // צבעים לנהגים — ~20 well-separated hues (id-based via getDriverColor)
 const DRIVER_COLORS = [
@@ -49,17 +51,221 @@ const statusLabels: Record<string, string> = {
   quote: 'הצעת מחיר',
 }
 
-const PIXELS_PER_HOUR_WEEK = 50
-const PIXELS_PER_HOUR_DAY = 60
-const MIN_VISIBLE_CALENDAR_HOURS = 12
-const WEEK_SCROLL_MIN_HEIGHT = MIN_VISIBLE_CALENDAR_HOURS * PIXELS_PER_HOUR_WEEK
-const DAY_SCROLL_MIN_HEIGHT = MIN_VISIBLE_CALENDAR_HOURS * PIXELS_PER_HOUR_DAY
+const PIXELS_PER_HOUR_WEEK = 40
+const PIXELS_PER_HOUR_DAY = 48
+const VISIBLE_HOURS = 12
+const WEEK_VIEWPORT_MIN_HEIGHT = VISIBLE_HOURS * PIXELS_PER_HOUR_WEEK
+const DAY_VIEWPORT_MIN_HEIGHT = VISIBLE_HOURS * PIXELS_PER_HOUR_DAY
 const CALENDAR_SCROLL_MAX_HEIGHT = 'calc(100vh - 280px)'
+
+function calendarScrollViewportStyle(viewportMinHeight: number): CSSProperties {
+  return {
+    minHeight: `${viewportMinHeight}px`,
+    maxHeight: `max(${viewportMinHeight}px, ${CALENDAR_SCROLL_MAX_HEIGHT})`,
+  }
+}
+
+function formatTowTimeRange(startMs: number, endMs: number): string {
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
+  const start = new Date(startMs).toLocaleTimeString('he-IL', timeOpts)
+  const end = new Date(endMs).toLocaleTimeString('he-IL', timeOpts)
+  return `${start}–${end}`
+}
+
+function getEffectiveOverlapSpan(pos: Pick<OverlapPosition, 'columnIndex' | 'totalColumns' | 'span'>): number {
+  return Math.min(pos.span, pos.totalColumns - pos.columnIndex)
+}
+
+function getOverlapBlockWidthPct(
+  pos: Pick<OverlapPosition, 'columnIndex' | 'totalColumns' | 'span'>,
+  laneWidthPct: number,
+): { offsetPct: number; widthPct: number } {
+  const span = getEffectiveOverlapSpan(pos)
+  const slotWidth = laneWidthPct / pos.totalColumns
+  const maxWidth = laneWidthPct - pos.columnIndex * slotWidth
+  return {
+    offsetPct: pos.columnIndex * slotWidth,
+    widthPct: Math.min(slotWidth * span, maxWidth),
+  }
+}
+
+function TowBlockStatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' }) {
+  if (status === 'pending' || status === 'assigned' || status === 'quote') {
+    return null
+  }
+
+  const iconSize = size === 'sm' ? 12 : 14
+  const shell = 'absolute top-1 right-1 flex items-center justify-center rounded-full bg-white/90 p-0.5 shadow-sm pointer-events-none z-10'
+
+  if (status === 'completed') {
+    return (
+      <div className={shell}>
+        <CheckCircle size={iconSize} className="text-green-600" strokeWidth={2.5} />
+      </div>
+    )
+  }
+  if (status === 'cancelled') {
+    return (
+      <div className={shell}>
+        <XCircle size={iconSize} className="text-gray-600" strokeWidth={2.5} />
+      </div>
+    )
+  }
+  if (status === 'in_progress') {
+    return (
+      <div className={shell}>
+        <Play size={iconSize} className="text-orange-500 fill-orange-500" strokeWidth={2.5} />
+      </div>
+    )
+  }
+  return null
+}
+
+function TowModalStatusIcon({ status }: { status: string }) {
+  const iconSize = 16
+  if (status === 'completed') {
+    return <CheckCircle size={iconSize} className="text-green-600 shrink-0" strokeWidth={2.5} />
+  }
+  if (status === 'cancelled') {
+    return <XCircle size={iconSize} className="text-gray-600 shrink-0" strokeWidth={2.5} />
+  }
+  if (status === 'in_progress') {
+    return (
+      <Play size={iconSize} className="text-orange-500 fill-orange-500 shrink-0" strokeWidth={2.5} />
+    )
+  }
+  return null
+}
+
+function TowDetailRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5 border-b border-gray-100 last:border-0">
+      <span className="text-sm text-gray-500 shrink-0">{label}</span>
+      <div className="text-sm text-gray-800 text-left flex-1 min-w-0">{children}</div>
+    </div>
+  )
+}
 
 const HEBREW_MONTHS = [
   'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט',
   'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
 ]
+
+const MINI_CAL_WEEKDAY_HEADERS = ['ש', 'ו', 'ה', 'ד', 'ג', 'ב', 'א'] as const
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+function sundayOfWeek(d: Date): Date {
+  const x = startOfDay(d)
+  x.setDate(x.getDate() - x.getDay())
+  return x
+}
+
+interface MiniCalendarProps {
+  selectedDate: Date
+  onPickDate: (date: Date) => void
+}
+
+function MiniCalendar({ selectedDate, onPickDate }: MiniCalendarProps) {
+  const [miniCalMonth, setMiniCalMonth] = useState(
+    () => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
+  )
+
+  const todayKey = startOfDay(new Date()).toDateString()
+  const selectedKey = startOfDay(selectedDate).toDateString()
+  const displayMonth = miniCalMonth.getMonth()
+  const displayYear = miniCalMonth.getFullYear()
+
+  const cells = useMemo(() => {
+    const first = new Date(displayYear, displayMonth, 1)
+    const gridStart = new Date(first)
+    gridStart.setDate(first.getDate() - first.getDay())
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(gridStart)
+      d.setDate(gridStart.getDate() + i)
+      return d
+    })
+  }, [displayMonth, displayYear])
+
+  const handlePick = (date: Date) => {
+    onPickDate(startOfDay(date))
+    setMiniCalMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+  }
+
+  return (
+    <div className="select-none">
+      <div className="flex items-center justify-between mb-2">
+        <button
+          type="button"
+          onClick={() =>
+            setMiniCalMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+          }
+          className="p-1 rounded hover:bg-gray-100 text-gray-500"
+          aria-label="חודש קודם"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <span className="text-xs font-semibold text-gray-800">
+          {HEBREW_MONTHS[displayMonth]} {displayYear}
+        </span>
+        <button
+          type="button"
+          onClick={() =>
+            setMiniCalMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+          }
+          className="p-1 rounded hover:bg-gray-100 text-gray-500"
+          aria-label="חודש הבא"
+        >
+          <ChevronLeft size={16} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {MINI_CAL_WEEKDAY_HEADERS.map((label) => (
+          <div
+            key={label}
+            className="text-[10px] text-gray-400 text-center font-medium py-0.5"
+          >
+            {label}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((date) => {
+          const key = date.toDateString()
+          const isToday = key === todayKey
+          const isSelected = !isToday && key === selectedKey
+          const inMonth = date.getMonth() === displayMonth
+
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handlePick(date)}
+              className={[
+                'mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs transition-colors',
+                isToday
+                  ? 'bg-[#33d4ff] text-white font-semibold'
+                  : isSelected
+                    ? 'bg-[#33d4ff]/25 text-gray-800 font-medium'
+                    : inMonth
+                      ? 'text-gray-800 hover:bg-gray-100'
+                      : 'text-gray-300 hover:bg-gray-50',
+              ].join(' ')}
+            >
+              {date.getDate()}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 interface DriverFilterPanelProps {
   drivers: DriverWithDetails[]
@@ -74,6 +280,8 @@ interface DriverFilterPanelProps {
   onShowUnassignedChange: (value: boolean) => void
   getDriverColor: (driverId: string) => string
   getDriverName: (driverId: string) => string
+  selectedDate: Date
+  onPickDate: (date: Date) => void
   onClose?: () => void
   className?: string
 }
@@ -91,6 +299,8 @@ function DriverFilterPanel({
   onShowUnassignedChange,
   getDriverColor,
   getDriverName,
+  selectedDate,
+  onPickDate,
   onClose,
   className = '',
 }: DriverFilterPanelProps) {
@@ -106,7 +316,7 @@ function DriverFilterPanel({
     showAllDrivers || selectedDrivers.includes(driverId)
 
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-280px)] ${className}`}>
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col ${className}`}>
       <div className="p-3 border-b border-gray-100 flex items-center justify-between shrink-0">
         <h3 className="text-sm font-semibold text-gray-800">נהגים</h3>
         {onClose && (
@@ -121,7 +331,10 @@ function DriverFilterPanel({
         )}
       </div>
 
-      <div className="p-3 space-y-3 overflow-y-auto flex-1 min-h-0">
+      <div className="p-3 space-y-3">
+        <MiniCalendar selectedDate={selectedDate} onPickDate={onPickDate} />
+        <div className="border-t border-gray-100" />
+
         <div className="relative">
           <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
@@ -470,6 +683,15 @@ export default function CalendarPage() {
     setSelectedDrivers([])
   }
 
+  const handlePickDate = (date: Date) => {
+    const picked = startOfDay(date)
+    setSelectedDate(picked)
+    if (view === 'week') {
+      setCurrentWeekStart(sundayOfWeek(picked))
+      setMobileDayIndex(picked.getDay())
+    }
+  }
+
   const driverFilterPanelProps: DriverFilterPanelProps = {
     drivers,
     selectedDrivers,
@@ -483,6 +705,8 @@ export default function CalendarPage() {
     onShowUnassignedChange: setShowUnassigned,
     getDriverColor,
     getDriverName,
+    selectedDate,
+    onPickDate: handlePickDate,
   }
 
   // גרירות לתצוגה יומית
@@ -494,7 +718,7 @@ export default function CalendarPage() {
   }, [filteredTows, selectedDate])
 
   const weekOverlapLayout = useMemo(() => {
-    const layout = new Map<string, { columnIndex: number; totalColumns: number }>()
+    const layout = new Map<string, OverlapPosition>()
     const byDay = new Map<string, TowWithDetails[]>()
 
     for (const tow of filteredTows) {
@@ -548,10 +772,6 @@ export default function CalendarPage() {
       }
     }
     return { from: '-', to: '-' }
-  }
-
-  const getFirstVehicle = (tow: TowWithDetails) => {
-    return tow.vehicles?.[0]?.plate_number || '-'
   }
 
   const goToToday = () => {
@@ -955,10 +1175,8 @@ const handleSkipPriceUpdate = () => {
       </div>
 
       <div className="flex flex-row-reverse gap-4 items-start">
-        <aside className="w-60 shrink-0 hidden lg:block">
-          <div className="sticky top-4">
-            <DriverFilterPanel {...driverFilterPanelProps} />
-          </div>
+        <aside className="w-60 shrink-0 hidden lg:block sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto">
+          <DriverFilterPanel {...driverFilterPanelProps} />
         </aside>
 
         <div className="flex-1 min-w-0">
@@ -994,10 +1212,7 @@ const handleSkipPriceUpdate = () => {
             <div
               ref={scrollContainerRef}
               className="relative overflow-y-auto"
-              style={{
-                maxHeight: CALENDAR_SCROLL_MAX_HEIGHT,
-                minHeight: `min(${WEEK_SCROLL_MIN_HEIGHT}px, ${CALENDAR_SCROLL_MAX_HEIGHT})`,
-              }}
+              style={calendarScrollViewportStyle(WEEK_VIEWPORT_MIN_HEIGHT)}
             >
               {hours.map((hour) => (
                 <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-2' : 'grid-cols-8'}`} style={{ height: `${PIXELS_PER_HOUR_WEEK}px` }}>
@@ -1045,11 +1260,15 @@ const handleSkipPriceUpdate = () => {
                   const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_WEEK
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
-                  const overlap = weekOverlapLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
-                  const slotWidth = dayWidth / overlap.totalColumns
-                  const right = displayIndex * dayWidth + overlap.columnIndex * slotWidth
+                  const overlap = weekOverlapLayout.get(tow.id) || {
+                    columnIndex: 0,
+                    totalColumns: 1,
+                    span: 1,
+                  }
+                  const { offsetPct, widthPct } = getOverlapBlockWidthPct(overlap, dayWidth)
+                  const right = displayIndex * dayWidth + offsetPct
                   const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                  const route = getRoute(tow)
+                  const isCancelled = tow.status === 'cancelled'
 
                   return (
                     <div
@@ -1065,17 +1284,18 @@ const handleSkipPriceUpdate = () => {
                         }
                       }}
                       className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
-                        draggedTow?.id === tow.id ? 'opacity-50' : ''
+                        draggedTow?.id === tow.id ? 'opacity-50' : isCancelled ? 'opacity-60' : ''
                       } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                       style={{
                         top: `${top}px`,
                         height: `${Math.max(heightPx - 4, 20)}px`,
                         right: `${right + 0.3}%`,
-                        width: `${slotWidth - 0.6}%`,
-                        backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : tow.status === 'in_progress' ? '#f97316' : driverColor,
+                        width: `${Math.max(widthPct - 0.6, 0)}%`,
+                        backgroundColor: driverColor,
                         borderRightColor: driverColor,
                       }}
                     >
+                      <TowBlockStatusBadge status={tow.status} />
                       {tow.status === 'quote' && (
                         <div className="absolute top-0 left-0 bg-amber-400 text-white text-[8px] px-1 rounded-br font-bold">
                           הצעה
@@ -1086,36 +1306,12 @@ const handleSkipPriceUpdate = () => {
                           לשיבוץ
                         </div>
                       )}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          bottom: 2,
-                          left: 2,
-                          display: 'flex',
-                          gap: 2,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        {tow.status === 'completed' && (
-                          <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
-                            ✓ בוצעה
-                          </span>
-                        )}
+                      <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
+                        {formatTowTimeRange(startMs, endMs)}
                       </div>
-                      <div className="flex items-start justify-between gap-1">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold truncate text-[10px] sm:text-xs">
-                            {tow.customer?.name || 'ללא לקוח'}
-                          </div>
-                          <div className="truncate opacity-90 text-[9px] sm:text-[11px]">
-                            {route.from} ← {route.to}
-                          </div>
-                        </div>
-                        <div className="text-[9px] sm:text-[11px] opacity-80 shrink-0">
-                          {new Date(startMs).toLocaleTimeString('he-IL', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                      <div className={`pt-3 min-w-0 ${isCancelled ? 'line-through decoration-white/70' : ''}`}>
+                        <div className="font-bold truncate text-[10px] sm:text-xs">
+                          {tow.customer?.name || 'ללא לקוח'}
                         </div>
                       </div>
                     </div>
@@ -1179,10 +1375,7 @@ const handleSkipPriceUpdate = () => {
             <div
               ref={scrollContainerRef}
               className="relative overflow-y-auto"
-              style={{
-                maxHeight: CALENDAR_SCROLL_MAX_HEIGHT,
-                minHeight: `min(${DAY_SCROLL_MIN_HEIGHT}px, ${CALENDAR_SCROLL_MAX_HEIGHT})`,
-              }}
+              style={calendarScrollViewportStyle(DAY_VIEWPORT_MIN_HEIGHT)}
             >
               <div className="flex min-w-0">
                 <div className="w-16 sm:w-20 flex-shrink-0 border-l border-gray-200">
@@ -1221,15 +1414,19 @@ const handleSkipPriceUpdate = () => {
 
                   <div className="absolute inset-0 pointer-events-none">
                     {dayFilteredTows.map((tow) => {
-                      const pos = dayOverlapLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
-                      const slotWidthPct = 100 / pos.totalColumns
+                      const pos = dayOverlapLayout.get(tow.id) || {
+                        columnIndex: 0,
+                        totalColumns: 1,
+                        span: 1,
+                      }
+                      const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
                       const effectiveStartIso = getEffectiveTowStartIso(tow)
                       const hour =
                         new Date(effectiveStartIso).getHours() +
                         new Date(effectiveStartIso).getMinutes() / 60
                       const top = hour * PIXELS_PER_HOUR_DAY
                       const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                      const route = getRoute(tow)
+                      const isCancelled = tow.status === 'cancelled'
 
                       const { startMs, endMs } = getTowTimeBounds(tow, now, {
                         clampEndToDay: selectedDate,
@@ -1251,24 +1448,18 @@ const handleSkipPriceUpdate = () => {
                             }
                           }}
                           className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
-                            draggedTow?.id === tow.id ? 'opacity-50' : ''
+                            draggedTow?.id === tow.id ? 'opacity-50' : isCancelled ? 'opacity-60' : ''
                           } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                           style={{
                             top: `${top}px`,
                             height: `${heightPx}px`,
-                            left: `calc(${pos.columnIndex * slotWidthPct}% + 2px)`,
-                            width: `calc(${slotWidthPct}% - 4px)`,
-                            backgroundColor:
-                              tow.status === 'completed'
-                                ? '#16a34a'
-                                : tow.status === 'cancelled'
-                                  ? '#9ca3af'
-                                  : tow.status === 'in_progress'
-                                    ? '#f97316'
-                                    : driverColor,
+                            left: `calc(${offsetPct}% + 2px)`,
+                            width: `calc(${widthPct}% - 4px)`,
+                            backgroundColor: driverColor,
                             borderRightColor: driverColor,
                           }}
                         >
+                          <TowBlockStatusBadge status={tow.status} size="md" />
                           {tow.status === 'quote' && (
                             <div className="absolute top-0 left-0 bg-amber-400 text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold">
                               הצעה
@@ -1279,33 +1470,12 @@ const handleSkipPriceUpdate = () => {
                               לשיבוץ
                             </div>
                           )}
-                          <div
-                            style={{
-                              position: 'absolute',
-                              bottom: 2,
-                              left: 2,
-                              display: 'flex',
-                              gap: 2,
-                              pointerEvents: 'none',
-                            }}
-                          >
-                            {tow.status === 'completed' && (
-                              <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
-                                ✓ בוצעה
-                              </span>
-                            )}
+                          <div className="absolute top-1 left-2 text-[10px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
+                            {formatTowTimeRange(startMs, endMs)}
                           </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="font-bold truncate text-sm">
-                                {tow.customer?.name || 'ללא לקוח'}
-                              </div>
-                              <div className="truncate opacity-90 text-xs">
-                                {route.from} ← {route.to}
-                              </div>
-                            </div>
-                            <div className="text-xs opacity-80 mr-2">
-                              {new Date(startMs).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                          <div className={`pt-4 min-w-0 ${isCancelled ? 'line-through decoration-white/70' : ''}`}>
+                            <div className="font-bold truncate text-sm">
+                              {tow.customer?.name || 'ללא לקוח'}
                             </div>
                           </div>
                         </div>
@@ -1354,11 +1524,11 @@ const handleSkipPriceUpdate = () => {
             onClick={() => setDriverPanelOpen(false)}
             aria-hidden
           />
-          <aside className="fixed top-0 right-0 h-full w-72 max-w-[85vw] z-50 lg:hidden">
+          <aside className="fixed top-0 right-0 h-full w-72 max-w-[85vw] z-50 lg:hidden overflow-y-auto">
             <DriverFilterPanel
               {...driverFilterPanelProps}
               onClose={() => setDriverPanelOpen(false)}
-              className="h-full max-h-none rounded-none border-0 shadow-none"
+              className="min-h-full rounded-none border-0 shadow-none"
             />
           </aside>
         </>
@@ -1387,65 +1557,98 @@ const handleSkipPriceUpdate = () => {
       </div>
 
       {/* Tow Detail Modal */}
-      {selectedTow && (
+      {selectedTow && (() => {
+        const tow = selectedTow
+        const route = getRoute(tow)
+        const cellDay = new Date(getEffectiveTowStartIso(tow))
+        const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: cellDay })
+        const vehiclePlates =
+          tow.vehicles?.map((v) => v.plate_number).filter(Boolean).join(' · ') || '-'
+        const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
+
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
-          <div className="bg-white w-full sm:rounded-2xl sm:mx-4 overflow-hidden rounded-t-2xl max-h-[80vh] overflow-y-auto" style={{ maxWidth: '380px' }}>
+          <div
+            className="bg-white w-full sm:rounded-2xl sm:mx-4 overflow-hidden rounded-t-2xl max-h-[80vh] overflow-y-auto"
+            style={{ maxWidth: '380px' }}
+            dir="rtl"
+          >
             <div
               className="px-5 py-4 text-white flex items-center justify-between sticky top-0"
-              style={{ backgroundColor: selectedTow.driver_id ? getDriverColor(selectedTow.driver_id) : '#6b7280' }}
+              style={{ backgroundColor: driverColor }}
             >
-              <div>
-                <h2 className="font-bold text-lg">{selectedTow.customer?.name || 'ללא לקוח'}</h2>
-                <p className="text-white/80 text-sm">
-                  {selectedTow.driver_id ? getDriverName(selectedTow.driver_id) : 'לא שובץ נהג'}
+              <div className="min-w-0">
+                <h2 className="font-bold text-lg truncate">{tow.customer?.name || 'ללא לקוח'}</h2>
+                <p className="text-white/80 text-sm truncate">
+                  {tow.driver_id ? getDriverName(tow.driver_id) : 'לא שובץ נהג'}
                 </p>
               </div>
-              <button onClick={() => setSelectedTow(null)} className="p-2 hover:bg-white/20 rounded-lg">
+              <button onClick={() => setSelectedTow(null)} className="p-2 hover:bg-white/20 rounded-lg shrink-0">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <Truck size={20} className="text-gray-400" />
-                <div>
-                  <p className="text-sm text-gray-500">רכב</p>
-                  <p className="font-mono font-medium text-gray-800">{getFirstVehicle(selectedTow)}</p>
-                </div>
-              </div>
+            <div className="px-5 py-3">
+              <TowDetailRow label="לקוח">
+                <span className="font-medium">{tow.customer?.name || 'ללא לקוח'}</span>
+              </TowDetailRow>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <MapPin size={20} className="text-gray-400" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500">מסלול</p>
-                  <p className="font-medium text-gray-800">
-                    {getRoute(selectedTow).from} ← {getRoute(selectedTow).to}
-                  </p>
-                </div>
-              </div>
+              <TowDetailRow label="טלפון">
+                {tow.customer?.phone ? (
+                  <a
+                    href={`tel:${tow.customer.phone}`}
+                    className="text-[#0284c7] hover:underline font-medium"
+                    dir="ltr"
+                  >
+                    {tow.customer.phone}
+                  </a>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </TowDetailRow>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <Clock size={20} className="text-gray-400" />
-                <div>
-                  <p className="text-sm text-gray-500">זמן מתוזמן</p>
-                  <p className="font-medium text-gray-800">
-                    {new Date(selectedTow.scheduled_at || selectedTow.created_at).toLocaleString('he-IL')}
-                  </p>
-                </div>
-              </div>
+              <TowDetailRow label="מסלול">
+                <span className="font-medium">
+                  {route.from} → {route.to}
+                </span>
+              </TowDetailRow>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <div className="w-5 h-5 rounded-full" style={{ 
-                  backgroundColor: selectedTow.status === 'completed' ? '#22c55e' : 
-                    selectedTow.status === 'in_progress' ? '#3b82f6' : 
-                    selectedTow.status === 'pending' ? '#f59e0b' :
-                    selectedTow.status === 'quote' ? '#f59e0b' : '#6b7280'
-                }}></div>
-                <div>
-                  <p className="text-sm text-gray-500">סטטוס</p>
-                  <p className="font-medium text-gray-800">{statusLabels[selectedTow.status]}</p>
+              <TowDetailRow label="נהג">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">
+                    {tow.driver_id ? getDriverName(tow.driver_id) : 'לא שובץ'}
+                  </span>
+                  <span
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: driverColor }}
+                  />
                 </div>
-              </div>
+              </TowDetailRow>
+
+              <TowDetailRow label="רכבים">
+                <span className="font-mono font-medium">{vehiclePlates}</span>
+              </TowDetailRow>
+
+              <TowDetailRow label="זמן">
+                <span className="font-medium" dir="ltr">
+                  {formatTowTimeRange(startMs, endMs)}
+                </span>
+              </TowDetailRow>
+
+              <TowDetailRow label="סטטוס">
+                <div className="flex items-center gap-2">
+                  <TowModalStatusIcon status={tow.status} />
+                  <span className="font-medium">{statusLabels[tow.status] || tow.status}</span>
+                </div>
+              </TowDetailRow>
+
+              {tow.final_price != null && (
+                <TowDetailRow label="מחיר">
+                  <span className="font-medium" dir="ltr">
+                    {tow.final_price.toLocaleString('he-IL')} ₪
+                  </span>
+                </TowDetailRow>
+              )}
             </div>
 
             <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50">
@@ -1456,7 +1659,7 @@ const handleSkipPriceUpdate = () => {
                 סגור
               </button>
               <Link
-                href={`/dashboard/tows/${selectedTow.id}`}
+                href={`/dashboard/tows/${tow.id}`}
                 className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] text-center"
               >
                 פרטים מלאים
@@ -1464,7 +1667,8 @@ const handleSkipPriceUpdate = () => {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Driver Selection Modal */}
       {showDriverModal && (
