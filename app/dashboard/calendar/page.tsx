@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
 import { getDrivers } from '../../lib/queries/drivers'
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
+import { getOverlapLayout } from '../../lib/utils/tow-overlap-layout'
 
 // צבעים לנהגים
 const DRIVER_COLORS = [
@@ -45,44 +46,7 @@ const statusLabels: Record<string, string> = {
   quote: 'הצעת מחיר',
 }
 
-function getCollisionLayout(towList: TowWithDetails[], TOW_DURATION = 1) {
-  const layout = new Map<string, { columnIndex: number; totalColumns: number }>()
-  const byDay = new Map<string, { tow: TowWithDetails; start: number }[]>()
-  for (const tow of towList) {
-    const d = new Date(tow.scheduled_at || tow.created_at)
-    const dayKey = d.toDateString()
-    const start = d.getHours() + d.getMinutes() / 60
-    if (!byDay.has(dayKey)) byDay.set(dayKey, [])
-    byDay.get(dayKey)!.push({ tow, start })
-  }
-  for (const group of byDay.values()) {
-    group.sort((a, b) => a.start - b.start)
-    const clusters: { tow: TowWithDetails; start: number; end: number; col: number }[][] = []
-    for (const item of group) {
-      const end = item.start + TOW_DURATION
-      let placed = false
-      for (const cluster of clusters) {
-        const overlaps = cluster.some(c => item.start < c.end && end > c.start)
-        if (overlaps) {
-          const usedCols = new Set(cluster.map(c => c.col))
-          let col = 0
-          while (usedCols.has(col)) col++
-          cluster.push({ ...item, end, col })
-          placed = true
-          break
-        }
-      }
-      if (!placed) clusters.push([{ ...item, end, col: 0 }])
-    }
-    for (const cluster of clusters) {
-      const totalColumns = Math.max(...cluster.map(c => c.col)) + 1
-      for (const entry of cluster) {
-        layout.set(entry.tow.id, { columnIndex: entry.col, totalColumns })
-      }
-    }
-  }
-  return layout
-}
+const PIXELS_PER_HOUR_DAY = 60
 
 export default function CalendarPage() {
   const { companyId, loading: authLoading } = useAuth()
@@ -138,10 +102,6 @@ export default function CalendarPage() {
   const [manualPrice, setManualPrice] = useState<string>('')
   const [now, setNow] = useState(Date.now())
 
-  const UNASSIGNED_DRIVER_COLUMN = 'UNASSIGNED'
-
-  const [dayDriverColumnRects, setDayDriverColumnRects] = useState<{ left: number; width: number }[]>([])
-  const dayHeaderRowRef = useRef<HTMLDivElement>(null)
   const dayLayoutRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -321,51 +281,38 @@ export default function CalendarPage() {
     })
   }, [filteredTows, selectedDate])
 
-  const weekCollisionLayout = useMemo(
-    () => getCollisionLayout(filteredTows),
-    [filteredTows]
-  )
+  const weekOverlapLayout = useMemo(() => {
+    const layout = new Map<string, { columnIndex: number; totalColumns: number }>()
+    const byDay = new Map<string, TowWithDetails[]>()
 
-  const dayDriverIds = useMemo(() => {
-    const activeIds = drivers
-      .filter((d) => d.user?.is_active === true)
-      .map((d) => d.id)
-    const filtered = isAllSelected
-      ? activeIds
-      : activeIds.filter((id) => selectedDrivers.includes(id))
-    return [...filtered, UNASSIGNED_DRIVER_COLUMN]
-  }, [drivers, isAllSelected, selectedDrivers])
+    for (const tow of filteredTows) {
+      const cellDay = new Date(getEffectiveTowStartIso(tow))
+      const dayKey = cellDay.toDateString()
+      if (!byDay.has(dayKey)) byDay.set(dayKey, [])
+      byDay.get(dayKey)!.push(tow)
+    }
 
-  useLayoutEffect(() => {
-    if (view !== 'day') {
-      setDayDriverColumnRects([])
-      return
-    }
-    const headerEl = dayHeaderRowRef.current
-    const layoutEl = dayLayoutRef.current
-    if (!headerEl || !layoutEl) {
-      setDayDriverColumnRects([])
-      return
-    }
-    const measure = () => {
-      const layoutRect = layoutEl.getBoundingClientRect()
-      const cells = headerEl.querySelectorAll('[data-day-driver-cell]')
-      const rects: { left: number; width: number }[] = []
-      cells.forEach((cell) => {
-        const r = cell.getBoundingClientRect()
-        rects.push({
-          left: r.left - layoutRect.left,
-          width: r.width,
-        })
+    for (const dayTows of byDay.values()) {
+      const items = dayTows.map((tow) => {
+        const cellDay = new Date(getEffectiveTowStartIso(tow))
+        const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: cellDay })
+        return { id: tow.id, startMs, endMs }
       })
-      setDayDriverColumnRects(rects)
+      for (const [id, pos] of getOverlapLayout(items)) {
+        layout.set(id, pos)
+      }
     }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(headerEl)
-    ro.observe(layoutEl)
-    return () => ro.disconnect()
-  }, [view, loading, dayDriverIds.length, selectedDrivers.length, drivers.length, selectedDate.getTime()])
+
+    return layout
+  }, [filteredTows, now])
+
+  const dayOverlapLayout = useMemo(() => {
+    const items = dayFilteredTows.map((tow) => {
+      const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: selectedDate })
+      return { id: tow.id, startMs, endMs }
+    })
+    return getOverlapLayout(items)
+  }, [dayFilteredTows, now, selectedDate])
 
   // חישוב מיקום גרירה בלוח
   const getTowPosition = (tow: TowWithDetails) => {
@@ -424,7 +371,7 @@ export default function CalendarPage() {
     if (loading) return
     const container = scrollContainerRef.current
     if (!container) return
-    const hourHeight = view === 'week' ? 50 : 60
+    const hourHeight = view === 'week' ? 50 : PIXELS_PER_HOUR_DAY
     const currentTimePosition = getCurrentTime() * hourHeight
     // Position current time roughly in the top third of the visible area
     container.scrollTop = Math.max(0, currentTimePosition - container.clientHeight / 3)
@@ -887,9 +834,9 @@ const handleSkipPriceUpdate = () => {
                   const heightPx = (elapsedMinutes / 60) * 50
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
-                  const collision = weekCollisionLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
-                  const slotWidth = dayWidth / collision.totalColumns
-                  const right = displayIndex * dayWidth + collision.columnIndex * slotWidth
+                  const overlap = weekOverlapLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
+                  const slotWidth = dayWidth / overlap.totalColumns
+                  const right = displayIndex * dayWidth + overlap.columnIndex * slotWidth
                   const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                   const route = getRoute(tow)
 
@@ -1018,172 +965,144 @@ const handleSkipPriceUpdate = () => {
             </div>
 
             {/* Time Grid for Day View */}
-            <div className="overflow-x-auto">
-              <div
-                className="min-w-[300px]"
-                style={{ minWidth: `${Math.max(300, dayDriverIds.length * 100 + 64)}px` }}
-              >
-                <div ref={scrollContainerRef} className="relative overflow-y-auto max-h-[calc(100vh-280px)]">
-                  <div
-                    ref={dayHeaderRowRef}
-                    className="sticky top-0 z-20 flex border-b border-gray-200 bg-gray-50"
-                  >
-                    <div className="w-16 sm:w-20 flex-shrink-0 border-l border-gray-100 bg-gray-50" aria-hidden />
-                    {dayDriverIds.map((driverColId, i) => (
-                      <div
-                        key={String(driverColId)}
-                        data-day-driver-cell
-                        className="flex-1 min-w-0 px-1 py-2 text-center text-xs font-medium border-l border-gray-100 text-gray-700 truncate"
-                        style={
-                          driverColId !== UNASSIGNED_DRIVER_COLUMN
-                            ? { color: DRIVER_COLORS[i % DRIVER_COLORS.length] }
-                            : undefined
-                        }
-                      >
-                        {driverColId === UNASSIGNED_DRIVER_COLUMN
-                          ? 'לא משויך'
-                          : getDriverName(driverColId as string).split(' ')[0]}
-                      </div>
-                    ))}
-                  </div>
+            <div ref={scrollContainerRef} className="relative overflow-y-auto max-h-[calc(100vh-280px)]">
+              <div className="flex min-w-0">
+                <div className="w-16 sm:w-20 flex-shrink-0 border-l border-gray-200">
+                  {hours.map((hour) => (
+                    <div
+                      key={hour}
+                      className="p-2 text-sm text-gray-400 text-center border-b border-gray-100"
+                      style={{ height: `${PIXELS_PER_HOUR_DAY}px` }}
+                    >
+                      {hour.toString().padStart(2, '0')}:00
+                    </div>
+                  ))}
+                </div>
 
-                  <div ref={dayLayoutRef} className="relative">
-                    {hours.map((hour) => (
-                      <div
-                        key={hour}
-                        className="flex border-b border-gray-100"
-                        style={{ height: '60px' }}
-                      >
-                        <div className="w-16 sm:w-20 p-2 text-sm text-gray-400 text-center border-l border-gray-200 flex-shrink-0">
-                          {hour.toString().padStart(2, '0')}:00
+                <div
+                  ref={dayLayoutRef}
+                  className="flex-1 relative border-l border-gray-200"
+                  style={{ height: `${hours.length * PIXELS_PER_HOUR_DAY}px` }}
+                >
+                  {hours.map((hour) => (
+                    <div
+                      key={hour}
+                      onClick={() => handleSlotClick(selectedDate, hour)}
+                      className="group border-b border-gray-100 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative"
+                      style={{ height: `${PIXELS_PER_HOUR_DAY}px` }}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, 0, hour)}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        <div className="w-7 h-7 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
+                          <Plus size={16} className="text-white" />
                         </div>
-                        {dayDriverIds.map((driverColId) => (
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="absolute inset-0 pointer-events-none">
+                    {dayFilteredTows.map((tow) => {
+                      const pos = dayOverlapLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
+                      const slotWidthPct = 100 / pos.totalColumns
+                      const effectiveStartIso = getEffectiveTowStartIso(tow)
+                      const hour =
+                        new Date(effectiveStartIso).getHours() +
+                        new Date(effectiveStartIso).getMinutes() / 60
+                      const top = hour * PIXELS_PER_HOUR_DAY
+                      const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
+                      const route = getRoute(tow)
+
+                      const { startMs, endMs } = getTowTimeBounds(tow, now, {
+                        clampEndToDay: selectedDate,
+                      })
+                      const elapsedMinutes = (endMs - startMs) / 60000
+                      const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_DAY
+
+                      return (
+                        <div
+                          key={tow.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, tow)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!tow.driver_id) {
+                              handleAssignDriver(tow)
+                            } else {
+                              setSelectedTow(tow)
+                            }
+                          }}
+                          className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
+                            draggedTow?.id === tow.id ? 'opacity-50' : ''
+                          } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
+                          style={{
+                            top: `${top}px`,
+                            height: `${heightPx}px`,
+                            left: `calc(${pos.columnIndex * slotWidthPct}% + 2px)`,
+                            width: `calc(${slotWidthPct}% - 4px)`,
+                            backgroundColor:
+                              tow.status === 'completed'
+                                ? '#16a34a'
+                                : tow.status === 'cancelled'
+                                  ? '#9ca3af'
+                                  : tow.status === 'in_progress'
+                                    ? '#f97316'
+                                    : driverColor,
+                            borderRightColor: driverColor,
+                          }}
+                        >
+                          {tow.status === 'quote' && (
+                            <div className="absolute top-0 left-0 bg-amber-400 text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold">
+                              הצעה
+                            </div>
+                          )}
+                          {!tow.driver_id && tow.status !== 'quote' && (
+                            <div className="absolute top-0 left-0 bg-white text-gray-600 text-[10px] px-1.5 py-0.5 rounded-br font-bold">
+                              לשיבוץ
+                            </div>
+                          )}
                           <div
-                            key={`${hour}-${String(driverColId)}`}
-                            onClick={() => handleSlotClick(selectedDate, hour)}
-                            className="group flex-1 min-w-0 hover:bg-[#33d4ff]/5 cursor-pointer transition-colors relative border-l border-gray-100"
-                            onDragOver={handleDragOver}
-                            onDrop={(e) => handleDrop(e, 0, hour)}
+                            style={{
+                              position: 'absolute',
+                              bottom: 2,
+                              left: 2,
+                              display: 'flex',
+                              gap: 2,
+                              pointerEvents: 'none',
+                            }}
                           >
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                              <div className="w-7 h-7 bg-[#33d4ff] rounded-full flex items-center justify-center shadow-lg">
-                                <Plus size={16} className="text-white" />
+                            {tow.status === 'completed' && (
+                              <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
+                                ✓ בוצעה
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold truncate text-sm">
+                                {tow.customer?.name || 'ללא לקוח'}
                               </div>
+                              <div className="truncate opacity-90 text-xs">
+                                {route.from} ← {route.to}
+                              </div>
+                            </div>
+                            <div className="text-xs opacity-80 mr-2">
+                              {new Date(startMs).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ))}
-
-                    <div className="absolute inset-0 pointer-events-none">
-                      {dayDriverIds.map((driverColId, driverIdx) => {
-                        const colTows = dayFilteredTows.filter((tow) =>
-                          driverColId === UNASSIGNED_DRIVER_COLUMN
-                            ? !tow.driver_id
-                            : tow.driver_id === driverColId
-                        )
-                        return colTows.map((tow) => {
-                          const rect = dayDriverColumnRects[driverIdx]
-                          if (!rect) return null
-                          const effectiveStartIso = getEffectiveTowStartIso(tow)
-                          const hour = new Date(effectiveStartIso).getHours() +
-                            new Date(effectiveStartIso).getMinutes() / 60
-                          const top = hour * 60
-                          const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                          const route = getRoute(tow)
-
-                          const { startMs, endMs } = getTowTimeBounds(tow, now, {
-                            clampEndToDay: selectedDate,
-                          })
-                          const elapsedMinutes = (endMs - startMs) / 60000
-                          const heightPx = (elapsedMinutes / 60) * 60
-
-                          return (
-                            <div
-                              key={tow.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, tow)}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (!tow.driver_id) {
-                                  handleAssignDriver(tow)
-                                } else {
-                                  setSelectedTow(tow)
-                                }
-                              }}
-                              className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
-                                draggedTow?.id === tow.id ? 'opacity-50' : ''
-                              } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
-                              style={{
-                                top: `${top}px`,
-                                height: `${heightPx}px`,
-                                left: `${rect.left + 2}px`,
-                                width: `${rect.width - 4}px`,
-                                backgroundColor:
-                                  tow.status === 'completed'
-                                    ? '#16a34a'
-                                    : tow.status === 'cancelled'
-                                      ? '#9ca3af'
-                                      : tow.status === 'in_progress'
-                                        ? '#f97316'
-                                        : driverColor,
-                                borderRightColor: driverColor,
-                              }}
-                            >
-                              {tow.status === 'quote' && (
-                                <div className="absolute top-0 left-0 bg-amber-400 text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold">
-                                  הצעה
-                                </div>
-                              )}
-                              {!tow.driver_id && tow.status !== 'quote' && (
-                                <div className="absolute top-0 left-0 bg-white text-gray-600 text-[10px] px-1.5 py-0.5 rounded-br font-bold">
-                                  לשיבוץ
-                                </div>
-                              )}
-                              <div
-                                style={{
-                                  position: 'absolute',
-                                  bottom: 2,
-                                  left: 2,
-                                  display: 'flex',
-                                  gap: 2,
-                                  pointerEvents: 'none',
-                                }}
-                              >
-                                {tow.status === 'completed' && (
-                                  <span className="bg-white text-green-700 text-[9px] font-bold px-1 py-0.5 rounded">
-                                    ✓ בוצעה
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-bold truncate text-sm">
-                                    {tow.customer?.name || 'ללא לקוח'}
-                                  </div>
-                                  <div className="truncate opacity-90 text-xs">
-                                    {route.from} ← {route.to}
-                                  </div>
-                                </div>
-                                <div className="text-xs opacity-80 mr-2">
-                                  {new Date(startMs).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })
-                      })}
-                    </div>
-
-                    {selectedDate.toDateString() === new Date().toDateString() && (
-                      <div
-                        className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
-                        style={{ top: `${getCurrentTime() * 60}px` }}
-                      >
-                        <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
-                      </div>
-                    )}
+                        </div>
+                      )
+                    })}
                   </div>
+
+                  {selectedDate.toDateString() === new Date().toDateString() && (
+                    <div
+                      className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
+                      style={{ top: `${getCurrentTime() * PIXELS_PER_HOUR_DAY}px` }}
+                    >
+                      <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
