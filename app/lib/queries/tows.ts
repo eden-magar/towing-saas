@@ -1175,6 +1175,7 @@ interface UpdateTowInput {
   recommendedPrice?: number | null
   scheduledAt?: string | null
   scheduledEndAt?: string | null
+  completedAt?: string | null
   priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles?: {
@@ -1228,6 +1229,7 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.requiredTruckTypes !== undefined) towUpdates.required_truck_types = input.requiredTruckTypes
   if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
   if (input.scheduledEndAt !== undefined) towUpdates.scheduled_end_at = input.scheduledEndAt
+  if (input.completedAt !== undefined) towUpdates.completed_at = input.completedAt
   if (input.paymentMethod !== undefined) towUpdates.payment_method = input.paymentMethod
   if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
   if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase

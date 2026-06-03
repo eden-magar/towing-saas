@@ -165,6 +165,11 @@ export default function TowDetailsPage() {
   const [editScheduledEndDate, setEditScheduledEndDate] = useState('')
   const [editScheduledEndTime, setEditScheduledEndTime] = useState('')
   const [editRequiredTruckTypes, setEditRequiredTruckTypes] = useState<string[]>([])
+
+  const [endEditOpen, setEndEditOpen] = useState(false)
+  const [endEditDate, setEndEditDate] = useState('')
+  const [endEditTime, setEndEditTime] = useState('')
+  const [endEditSaving, setEndEditSaving] = useState(false)
   const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
   const [showAllDrivers, setShowAllDrivers] = useState(false)
@@ -388,6 +393,52 @@ export default function TowDetailsPage() {
   const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
   const canManualClose =
     tow != null && (tow.status === 'assigned' || tow.status === 'in_progress')
+
+  const showEndTimeEditor =
+    tow != null && (tow.status === 'in_progress' || tow.status === 'completed')
+
+  const getEndTimeDisplaySource = () => {
+    if (!tow) return null
+    if (tow.status === 'completed') return tow.completed_at
+    return tow.scheduled_end_at
+  }
+
+  const openEndTimeEditor = () => {
+    if (!tow) return
+    const source = getEndTimeDisplaySource()
+    if (source) {
+      const d = new Date(source)
+      setEndEditDate(d.toISOString().split('T')[0])
+      setEndEditTime(d.toTimeString().slice(0, 5))
+    } else {
+      setEndEditDate('')
+      setEndEditTime('')
+    }
+    setEndEditOpen(true)
+  }
+
+  const handleSaveEndTime = async () => {
+    if (!tow) return
+    const iso =
+      endEditDate && endEditTime
+        ? new Date(`${endEditDate}T${endEditTime}:00`).toISOString()
+        : null
+    setEndEditSaving(true)
+    try {
+      if (tow.status === 'completed') {
+        await updateTow({ towId: tow.id, completedAt: iso })
+      } else {
+        await updateTow({ towId: tow.id, scheduledEndAt: iso })
+      }
+      await refreshTow()
+      setEndEditOpen(false)
+    } catch (err) {
+      console.error('Error saving end time:', err)
+      alert('שגיאה בשמירת שעת הסיום')
+    } finally {
+      setEndEditSaving(false)
+    }
+  }
 
   const getDriverTrucks = (driverId: string) =>
     trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
@@ -1447,6 +1498,105 @@ export default function TowDetailsPage() {
                   )}
                 </div>
               </div>
+
+              {showEndTimeEditor && (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
+                    <h2 className="font-bold text-gray-800 flex items-center gap-2">
+                      <Clock size={18} />
+                      שעת סיום
+                    </h2>
+                    {!endEditOpen && (
+                      <button
+                        type="button"
+                        onClick={openEndTimeEditor}
+                        className="text-sm text-[#33d4ff] hover:text-[#21b8e6] font-medium"
+                      >
+                        ערוך שעת סיום
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-4 sm:p-5">
+                    {endEditOpen ? (
+                      <div className="space-y-4">
+                        <p className="text-xs text-gray-500">
+                          {tow.status === 'completed'
+                            ? 'מעדכן את זמן הסיום בפועל (completed_at) — משפיע על תצוגת היומן'
+                            : 'מעדכן את שעת הסיום המתוכננת (scheduled_end_at)'}
+                        </p>
+                        <div className="grid grid-cols-2 gap-4" lang="en-GB">
+                          <div>
+                            <label className="block text-sm text-gray-600 mb-1">תאריך</label>
+                            <input
+                              type="date"
+                              value={endEditDate}
+                              onChange={(e) => setEndEditDate(e.target.value)}
+                              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-gray-600 mb-1">שעה</label>
+                            <input
+                              type="time"
+                              step={60}
+                              lang="en-GB"
+                              value={endEditTime}
+                              onChange={(e) => {
+                                const v = e.target.value
+                                setEndEditTime(v)
+                                if (v && !endEditDate) {
+                                  const startSource = tow.scheduled_at || tow.created_at
+                                  if (startSource) {
+                                    setEndEditDate(new Date(startSource).toISOString().split('T')[0])
+                                  }
+                                }
+                              }}
+                              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleSaveEndTime()}
+                            disabled={endEditSaving}
+                            className="px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:bg-gray-300"
+                          >
+                            {endEditSaving ? 'שומר...' : 'שמור שעת סיום'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEndEditOpen(false)}
+                            disabled={endEditSaving}
+                            className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            ביטול
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        {getEndTimeDisplaySource() ? (
+                          <p className="text-sm text-gray-800">
+                            {new Date(getEndTimeDisplaySource()!).toLocaleDateString('he-IL', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })}{' '}
+                            {new Date(getEndTimeDisplaySource()!).toLocaleTimeString('he-IL', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-400">לא הוגדרה שעת סיום</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {tow.tow_type === 'exchange' && !tow.linked_tow_id && (
                 <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
