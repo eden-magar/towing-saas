@@ -18,6 +18,7 @@
   import { formatOpenShiftDuration, formatShiftStartJerusalem } from '../lib/shift-datetime'
   import Link from 'next/link'
   import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Check, Search, Loader2 } from 'lucide-react'
+  import { getEffectiveTowStartIso, getTowTimeBounds } from '../lib/utils/tow-time-bounds'
 
   type EndShiftModalTarget = {
     shiftId: string
@@ -914,33 +915,16 @@
                         const liveTows = filteredCalendarTows.filter((t: any) =>
                           t.driver_id === id &&
                           (t.status === 'in_progress' || t.status === 'assigned' || t.status === 'completed') &&
-                          t.scheduled_at
+                          getEffectiveTowStartIso(t)
                         )
                         return liveTows.map((t: any) => {
                           const rect = driverColumnRects[driverIdx]
                           if (!rect) return null
-                          // Use actual start time if available, otherwise scheduled time
-                          const effectiveStartIso = t.started_at || t.scheduled_at
-                          const startMs = new Date(effectiveStartIso).getTime()
-
-                          // End time depends on status
-                          let endMs: number
-                          if (t.status === 'completed' && t.completed_at) {
-                            endMs = new Date(t.completed_at).getTime()
-                          } else if (t.status === 'in_progress') {
-                            // Live - growing, but capped at end of the displayed day
-                            const endOfDay = new Date(calendarDate)
-                            endOfDay.setHours(23, 59, 59, 999)
-                            endMs = Math.min(now, endOfDay.getTime())
-                          } else if (t.status === 'assigned') {
-                            // Not started yet - fixed 60-minute default block
-                            endMs = startMs + 60 * 60 * 1000
-                          } else {
-                            // Defensive fallback for any other status
-                            endMs = startMs + 60 * 60 * 1000
-                          }
-
-                          const elapsedMinutes = Math.max(60, (endMs - startMs) / 60000)
+                          const effectiveStartIso = getEffectiveTowStartIso(t)
+                          const { startMs, endMs } = getTowTimeBounds(t, now, {
+                            clampEndToDay: calendarDate,
+                          })
+                          const elapsedMinutes = (endMs - startMs) / 60000
                           const startHour = getLocalFractionalHour(effectiveStartIso)
                           const top = calendarTheadHeightPx + startHour * PIXELS_PER_HOUR
                           const height = (elapsedMinutes / 60) * PIXELS_PER_HOUR

@@ -27,6 +27,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
+import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
 
 // צבעים לנהגים
 const DRIVER_COLORS = [
@@ -315,7 +316,7 @@ export default function CalendarPage() {
   // גרירות לתצוגה יומית
   const dayFilteredTows = useMemo(() => {
     return filteredTows.filter(tow => {
-      const towDate = new Date(tow.scheduled_at || tow.created_at)
+      const towDate = new Date(getEffectiveTowStartIso(tow))
       return towDate.toDateString() === selectedDate.toDateString()
     })
   }, [filteredTows, selectedDate])
@@ -368,7 +369,7 @@ export default function CalendarPage() {
 
   // חישוב מיקום גרירה בלוח
   const getTowPosition = (tow: TowWithDetails) => {
-    const towDate = new Date(tow.scheduled_at || tow.created_at)
+    const towDate = new Date(getEffectiveTowStartIso(tow))
     const dayIndex = weekDays.findIndex(d => 
       d.fullDate.toDateString() === towDate.toDateString()
     )
@@ -870,45 +871,19 @@ const handleSkipPriceUpdate = () => {
               {/* Tow Events */}
               <div className={`absolute top-0 left-0 bottom-0 pointer-events-none ${isMobile ? 'right-[50%]' : 'right-[12.5%]'}`}>
                 {filteredTows.map((tow) => {
-                  const { dayIndex } = getTowPosition(tow)
+                  const { dayIndex, hour } = getTowPosition(tow)
 
                   // בדיקה אם היום מוצג
                   const displayIndex = displayedDays.findIndex(d => d.dayIndex === dayIndex)
                   if (displayIndex === -1) return null
 
-                  const effectiveStartIso = tow.started_at || tow.scheduled_at || tow.created_at
-                  const effectiveStart = new Date(effectiveStartIso)
-                  const hour = effectiveStart.getHours() + effectiveStart.getMinutes() / 60
+                  const cellDay = displayedDays[displayIndex].fullDate
+                  const { startMs, endMs } = getTowTimeBounds(tow, now, {
+                    clampEndToDay: cellDay,
+                  })
 
                   const top = hour * 50
-                  const startMs = effectiveStart.getTime()
-                  const scheduledForFallback = tow.scheduled_at || tow.created_at
-                  const scheduledMs = scheduledForFallback
-                    ? new Date(scheduledForFallback).getTime()
-                    : startMs
-
-                  let endMs: number
-                  if (tow.status === 'completed' && (tow as any).completed_at) {
-                    endMs = new Date((tow as any).completed_at).getTime()
-                  } else if (tow.status === 'in_progress') {
-                    const dayDate = new Date(effectiveStart)
-                    const endOfDay = new Date(
-                      dayDate.getFullYear(),
-                      dayDate.getMonth(),
-                      dayDate.getDate(),
-                      23,
-                      59,
-                      59,
-                      999
-                    )
-                    endMs = Math.min(now, endOfDay.getTime())
-                  } else if (tow.status === 'assigned') {
-                    endMs = scheduledMs + 60 * 60 * 1000
-                  } else {
-                    endMs = startMs + 60 * 60 * 1000
-                  }
-
-                  const elapsedMinutes = Math.max(60, (endMs - startMs) / 60000)
+                  const elapsedMinutes = (endMs - startMs) / 60000
                   const heightPx = (elapsedMinutes / 60) * 50
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
@@ -979,7 +954,7 @@ const handleSkipPriceUpdate = () => {
                           </div>
                         </div>
                         <div className="text-[9px] sm:text-[11px] opacity-80 shrink-0">
-                          {effectiveStart.toLocaleTimeString('he-IL', {
+                          {new Date(startMs).toLocaleTimeString('he-IL', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
@@ -1110,33 +1085,17 @@ const handleSkipPriceUpdate = () => {
                         return colTows.map((tow) => {
                           const rect = dayDriverColumnRects[driverIdx]
                           if (!rect) return null
-                          const effectiveStartIso = tow.started_at || tow.scheduled_at || tow.created_at
-                          const effectiveStart = new Date(effectiveStartIso)
-                          const hour = effectiveStart.getHours() + effectiveStart.getMinutes() / 60
+                          const effectiveStartIso = getEffectiveTowStartIso(tow)
+                          const hour = new Date(effectiveStartIso).getHours() +
+                            new Date(effectiveStartIso).getMinutes() / 60
                           const top = hour * 60
                           const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                           const route = getRoute(tow)
 
-                          const startMs = effectiveStart.getTime()
-                          const scheduledForFallback = tow.scheduled_at || tow.created_at
-                          const scheduledMs = scheduledForFallback
-                            ? new Date(scheduledForFallback).getTime()
-                            : startMs
-
-                          let endMs: number
-                          if (tow.status === 'completed' && (tow as any).completed_at) {
-                            endMs = new Date((tow as any).completed_at).getTime()
-                          } else if (tow.status === 'in_progress') {
-                            const endOfDay = new Date(selectedDate)
-                            endOfDay.setHours(23, 59, 59, 999)
-                            endMs = Math.min(now, endOfDay.getTime())
-                          } else if (tow.status === 'assigned') {
-                            endMs = scheduledMs + 60 * 60 * 1000
-                          } else {
-                            endMs = startMs + 60 * 60 * 1000
-                          }
-
-                          const elapsedMinutes = Math.max(60, (endMs - startMs) / 60000)
+                          const { startMs, endMs } = getTowTimeBounds(tow, now, {
+                            clampEndToDay: selectedDate,
+                          })
+                          const elapsedMinutes = (endMs - startMs) / 60000
                           const heightPx = (elapsedMinutes / 60) * 60
 
                           return (
@@ -1207,7 +1166,7 @@ const handleSkipPriceUpdate = () => {
                                   </div>
                                 </div>
                                 <div className="text-xs opacity-80 mr-2">
-                                  {effectiveStart.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                                  {new Date(startMs).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               </div>
                             </div>
