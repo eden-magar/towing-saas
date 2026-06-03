@@ -131,6 +131,8 @@ export default function TowDetailsPage() {
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
   const [showManualCloseModal, setShowManualCloseModal] = useState(false)
   const [manualClosing, setManualClosing] = useState(false)
+  const [closeEndDate, setCloseEndDate] = useState('')
+  const [closeEndTime, setCloseEndTime] = useState('')
   const [assigning, setAssigning] = useState(false)
   const [showLinkedTowModal, setShowLinkedTowModal] = useState(false)
   const [creatingLinkedTow, setCreatingLinkedTow] = useState(false)
@@ -851,7 +853,11 @@ export default function TowDetailsPage() {
     if (!tow || !user?.id) return
     setManualClosing(true)
     try {
-      await manualCloseTow(tow.id, user.id)
+      const endTimeIso =
+        closeEndDate && closeEndTime
+          ? new Date(`${closeEndDate}T${closeEndTime}:00`).toISOString()
+          : undefined
+      await manualCloseTow(tow.id, user.id, endTimeIso)
       await refreshTow()
       if (changeLogsLoaded) void loadChangeLogs(true)
       setShowManualCloseModal(false)
@@ -861,6 +867,13 @@ export default function TowDetailsPage() {
     } finally {
       setManualClosing(false)
     }
+  }
+
+  const openManualCloseModal = () => {
+    const n = new Date()
+    setCloseEndDate(n.toISOString().split('T')[0])
+    setCloseEndTime(n.toTimeString().slice(0, 5))
+    setShowManualCloseModal(true)
   }
 
   const handleConfirmCancel = async () => {
@@ -1140,7 +1153,7 @@ export default function TowDetailsPage() {
                 <>
                   {canManualClose && (
                     <button
-                      onClick={() => setShowManualCloseModal(true)}
+                      onClick={openManualCloseModal}
                       className="p-2 sm:px-3 sm:py-2 text-violet-700 hover:bg-violet-50 rounded-lg text-sm flex items-center gap-2"
                     >
                       <CheckCircle size={18} />
@@ -2646,6 +2659,30 @@ export default function TowDetailsPage() {
               <p className="text-gray-600 text-sm leading-relaxed">
                 האם לסגור את הגרירה ידנית? פעולה זו תסמן את כל הנקודות כהושלמו ולא ניתן יהיה לפתוח שוב.
               </p>
+              <div className="mt-4 text-right">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  שעת סיום בפועל (אופציונלי)
+                </label>
+                <p className="text-xs text-gray-500 mb-2">אם לא תשנה, ייקבע הזמן הנוכחי</p>
+                <div className="grid grid-cols-2 gap-3" lang="en-GB">
+                  <input
+                    type="date"
+                    value={closeEndDate}
+                    onChange={(e) => setCloseEndDate(e.target.value)}
+                    disabled={manualClosing}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  />
+                  <input
+                    type="time"
+                    step={60}
+                    lang="en-GB"
+                    value={closeEndTime}
+                    onChange={(e) => setCloseEndTime(e.target.value)}
+                    disabled={manualClosing}
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 px-5 pb-5">
               <button

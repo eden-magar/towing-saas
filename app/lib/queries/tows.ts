@@ -855,7 +855,7 @@ export async function updateTowStatus(
 
 // ==================== סגירה ידנית (מנהל) ====================
 
-export async function manualCloseTow(towId: string, adminUserId: string) {
+export async function manualCloseTow(towId: string, adminUserId: string, endTimeIso?: string) {
   const tow = await getTowWithPoints(towId)
   if (!tow) {
     throw new Error('הגרירה לא נמצאה')
@@ -873,11 +873,12 @@ export async function manualCloseTow(towId: string, adminUserId: string) {
   }
 
   const now = new Date().toISOString()
+  const completedAt = endTimeIso ?? now
   const { error: towError } = await supabase
     .from('tows')
     .update({
       status: 'completed',
-      completed_at: now,
+      completed_at: completedAt,
       manually_closed_at: now,
       manually_closed_by: adminUserId,
       updated_at: now,
