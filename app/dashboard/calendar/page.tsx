@@ -19,21 +19,24 @@ import {
   Truck,
   X,
   GripVertical,
-  Check,
   RefreshCw,
   Calendar,
   ArrowRight,
   User,
   AlertTriangle,
+  Search,
+  Users,
 } from 'lucide-react'
 import Link from 'next/link'
 import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
 import { getOverlapLayout } from '../../lib/utils/tow-overlap-layout'
 
-// צבעים לנהגים
+// צבעים לנהגים — ~20 well-separated hues (id-based via getDriverColor)
 const DRIVER_COLORS = [
-  '#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1'
+  '#dc2626', '#ea580c', '#d97706', '#ca8a04', '#65a30d',
+  '#16a34a', '#059669', '#0d9488', '#0891b2', '#0284c7',
+  '#2563eb', '#4f46e5', '#7c3aed', '#9333ea', '#c026d3',
+  '#db2777', '#be185d', '#b45309', '#047857', '#1e40af',
 ]
 
 // מיפוי סטטוסים
@@ -46,12 +49,195 @@ const statusLabels: Record<string, string> = {
   quote: 'הצעת מחיר',
 }
 
+const PIXELS_PER_HOUR_WEEK = 50
 const PIXELS_PER_HOUR_DAY = 60
+const MIN_VISIBLE_CALENDAR_HOURS = 12
+const WEEK_SCROLL_MIN_HEIGHT = MIN_VISIBLE_CALENDAR_HOURS * PIXELS_PER_HOUR_WEEK
+const DAY_SCROLL_MIN_HEIGHT = MIN_VISIBLE_CALENDAR_HOURS * PIXELS_PER_HOUR_DAY
+const CALENDAR_SCROLL_MAX_HEIGHT = 'calc(100vh - 280px)'
+
+const HEBREW_MONTHS = [
+  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט',
+  'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
+]
+
+interface DriverFilterPanelProps {
+  drivers: DriverWithDetails[]
+  selectedDrivers: string[]
+  showAllDrivers: boolean
+  showUnassigned: boolean
+  driverSearch: string
+  onDriverSearchChange: (value: string) => void
+  onToggleDriver: (driverId: string) => void
+  onSelectAll: () => void
+  onClearAll: () => void
+  onShowUnassignedChange: (value: boolean) => void
+  getDriverColor: (driverId: string) => string
+  getDriverName: (driverId: string) => string
+  onClose?: () => void
+  className?: string
+}
+
+function DriverFilterPanel({
+  drivers,
+  selectedDrivers,
+  showAllDrivers,
+  showUnassigned,
+  driverSearch,
+  onDriverSearchChange,
+  onToggleDriver,
+  onSelectAll,
+  onClearAll,
+  onShowUnassignedChange,
+  getDriverColor,
+  getDriverName,
+  onClose,
+  className = '',
+}: DriverFilterPanelProps) {
+  const searchLower = driverSearch.trim().toLowerCase()
+  const visibleDrivers = drivers.filter((driver) => {
+    if (driver.user?.is_active !== true) return false
+    if (!searchLower) return true
+    const name = getDriverName(driver.id) || driver.user?.full_name || ''
+    return name.toLowerCase().includes(searchLower)
+  })
+
+  const isDriverVisible = (driverId: string) =>
+    showAllDrivers || selectedDrivers.includes(driverId)
+
+  return (
+    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col max-h-[calc(100vh-280px)] ${className}`}>
+      <div className="p-3 border-b border-gray-100 flex items-center justify-between shrink-0">
+        <h3 className="text-sm font-semibold text-gray-800">נהגים</h3>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+            aria-label="סגור"
+          >
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      <div className="p-3 space-y-3 overflow-y-auto flex-1 min-h-0">
+        <div className="relative">
+          <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="search"
+            value={driverSearch}
+            onChange={(e) => onDriverSearchChange(e.target.value)}
+            placeholder="חיפוש נהג..."
+            className="w-full pr-9 pl-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40 focus:border-[#33d4ff]"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 text-xs">
+          <button
+            type="button"
+            onClick={onSelectAll}
+            className="text-[#33d4ff] hover:underline font-medium"
+          >
+            בחר הכל
+          </button>
+          <span className="text-gray-300">|</span>
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="text-gray-500 hover:underline font-medium"
+          >
+            נקה הכל
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onToggleDriver('all')}
+          className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-right transition-colors ${
+            showAllDrivers ? 'bg-[#33d4ff]/10' : 'hover:bg-gray-50'
+          }`}
+        >
+          <span
+            className={`w-3 h-3 rounded-full shrink-0 bg-[#33d4ff] ${showAllDrivers ? '' : 'opacity-30'}`}
+          />
+          <span className={`text-sm flex-1 ${showAllDrivers ? 'font-medium text-gray-800' : 'text-gray-400'}`}>
+            הכל
+          </span>
+        </button>
+
+        <div className="border-t border-gray-100 pt-1 space-y-0.5">
+          {visibleDrivers.length === 0 ? (
+            <p className="text-xs text-gray-400 px-2 py-3 text-center">לא נמצאו נהגים</p>
+          ) : (
+            visibleDrivers.map((driver) => {
+              const visible = isDriverVisible(driver.id)
+              const color = getDriverColor(driver.id)
+              return (
+                <button
+                  key={driver.id}
+                  type="button"
+                  onClick={() => onToggleDriver(driver.id)}
+                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-right transition-colors ${
+                    visible ? 'bg-gray-50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <span
+                    className={`w-3 h-3 rounded-full shrink-0 ${visible ? '' : 'opacity-30'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                  <span
+                    className={`text-sm flex-1 truncate ${
+                      visible ? 'font-medium text-gray-800' : 'text-gray-400'
+                    }`}
+                  >
+                    {getDriverName(driver.id) || driver.user?.full_name}
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </div>
+
+        <div className="border-t border-gray-100 pt-2">
+          <button
+            type="button"
+            onClick={() => onShowUnassignedChange(!showUnassigned)}
+            className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-right transition-colors ${
+              showUnassigned ? 'bg-gray-50' : 'hover:bg-gray-50'
+            }`}
+          >
+            <span
+              className={`w-3 h-3 rounded-full shrink-0 bg-gray-500 ${showUnassigned ? '' : 'opacity-30'}`}
+            />
+            <span
+              className={`text-sm flex-1 ${showUnassigned ? 'font-medium text-gray-800' : 'text-gray-400'}`}
+            >
+              לא משויך
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-500 px-3 py-2 border-t border-gray-100 shrink-0">
+        {showAllDrivers
+          ? 'כל הנהגים'
+          : selectedDrivers.length === 0
+            ? 'אין נהגים נבחרים'
+            : `${selectedDrivers.length} נהגים נבחרו`}
+      </p>
+    </div>
+  )
+}
 
 export default function CalendarPage() {
   const { companyId, loading: authLoading } = useAuth()
   const [view, setView] = useState<'week' | 'day'>('week')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
+  const [showAllDrivers, setShowAllDrivers] = useState(true)
+  const [showUnassigned, setShowUnassigned] = useState(true)
+  const [driverSearch, setDriverSearch] = useState('')
+  const [driverPanelOpen, setDriverPanelOpen] = useState(false)
   
   // תאריך תחילת שבוע
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -244,34 +430,60 @@ export default function CalendarPage() {
     return [weekDays[mobileDayIndex]].filter(Boolean)
   }, [weekDays, isMobile, mobileDayIndex])
 
-  // בדיקה אם "הכל" נבחר - אם הרשימה ריקה = הכל נבחר
-  const isAllSelected = selectedDrivers.length === 0
-
-  // פילטור נהגים - תוקן!
   const toggleDriver = (driverId: string) => {
     if (driverId === 'all') {
+      setShowAllDrivers(true)
       setSelectedDrivers([])
-    } else {
-      setSelectedDrivers(prev => {
-        if (prev.includes(driverId)) {
-          return prev.filter(d => d !== driverId)
-        } else {
-          return [...prev, driverId]
-        }
-      })
+      return
     }
+    if (showAllDrivers) {
+      setShowAllDrivers(false)
+      setSelectedDrivers([driverId])
+      return
+    }
+    setSelectedDrivers((prev) => {
+      if (prev.includes(driverId)) {
+        return prev.filter((d) => d !== driverId)
+      }
+      return [...prev, driverId]
+    })
   }
 
-  const isDriverSelected = (driverId: string) => 
-    isAllSelected || selectedDrivers.includes(driverId)
-
-  // פילטור גרירות - תוקן!
   const filteredTows = useMemo(() => {
-    if (isAllSelected) {
-      return tows
-    }
-    return tows.filter(t => t.driver_id && selectedDrivers.includes(t.driver_id))
-  }, [tows, selectedDrivers, isAllSelected])
+    return tows.filter((t) => {
+      if (!t.driver_id) {
+        return showUnassigned
+      }
+      if (showAllDrivers) {
+        return true
+      }
+      return selectedDrivers.includes(t.driver_id)
+    })
+  }, [tows, selectedDrivers, showAllDrivers, showUnassigned])
+
+  const handleSelectAllDrivers = () => {
+    setShowAllDrivers(true)
+    setSelectedDrivers([])
+  }
+  const handleClearAllDrivers = () => {
+    setShowAllDrivers(false)
+    setSelectedDrivers([])
+  }
+
+  const driverFilterPanelProps: DriverFilterPanelProps = {
+    drivers,
+    selectedDrivers,
+    showAllDrivers,
+    showUnassigned,
+    driverSearch,
+    onDriverSearchChange: setDriverSearch,
+    onToggleDriver: toggleDriver,
+    onSelectAll: handleSelectAllDrivers,
+    onClearAll: handleClearAllDrivers,
+    onShowUnassignedChange: setShowUnassigned,
+    getDriverColor,
+    getDriverName,
+  }
 
   // גרירות לתצוגה יומית
   const dayFilteredTows = useMemo(() => {
@@ -357,9 +569,27 @@ export default function CalendarPage() {
     setSelectedDate(todayClean)
   }
 
-  const getMonthYear = () => {
-    const months = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
-    return `${months[currentWeekStart.getMonth()]} ${currentWeekStart.getFullYear()}`
+  const getMonthYear = (d: Date = currentWeekStart) => {
+    return `${HEBREW_MONTHS[d.getMonth()]} ${d.getFullYear()}`
+  }
+
+  const getWeekTitleLabel = () => {
+    const weekStart = currentWeekStart
+    const weekEnd = new Date(currentWeekStart)
+    weekEnd.setDate(weekEnd.getDate() + 6)
+
+    if (
+      weekStart.getMonth() === weekEnd.getMonth() &&
+      weekStart.getFullYear() === weekEnd.getFullYear()
+    ) {
+      return getMonthYear(weekStart)
+    }
+
+    if (weekStart.getFullYear() !== weekEnd.getFullYear()) {
+      return `${HEBREW_MONTHS[weekStart.getMonth()]} ${weekStart.getFullYear()} – ${HEBREW_MONTHS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`
+    }
+
+    return `${HEBREW_MONTHS[weekStart.getMonth()]} – ${HEBREW_MONTHS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`
   }
 
   const getCurrentTime = () => {
@@ -371,7 +601,7 @@ export default function CalendarPage() {
     if (loading) return
     const container = scrollContainerRef.current
     if (!container) return
-    const hourHeight = view === 'week' ? 50 : PIXELS_PER_HOUR_DAY
+    const hourHeight = view === 'week' ? PIXELS_PER_HOUR_WEEK : PIXELS_PER_HOUR_DAY
     const currentTimePosition = getCurrentTime() * hourHeight
     // Position current time roughly in the top third of the visible area
     container.scrollTop = Math.max(0, currentTimePosition - container.clientHeight / 3)
@@ -614,6 +844,14 @@ const handleSkipPriceUpdate = () => {
           
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={() => setDriverPanelOpen(true)}
+              className="lg:hidden flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
+              <Users size={18} />
+              נהגים
+            </button>
+            <button
               onClick={handleRefresh}
               disabled={refreshing}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -653,10 +891,12 @@ const handleSkipPriceUpdate = () => {
             
             {/* Desktop: month/year, Mobile: day name and date */}
             <span className="hidden sm:block text-base sm:text-lg font-medium text-gray-700 min-w-[120px] text-center">
-              {getMonthYear()}
+              {getWeekTitleLabel()}
             </span>
             <span className="sm:hidden text-base font-medium text-gray-700 min-w-[100px] text-center">
-              {weekDays[mobileDayIndex]?.day} {weekDays[mobileDayIndex]?.date}/{currentWeekStart.getMonth() + 1}
+              {weekDays[mobileDayIndex]?.day}{' '}
+              {weekDays[mobileDayIndex]?.date}/
+              {(weekDays[mobileDayIndex]?.fullDate.getMonth() ?? 0) + 1}
             </span>
             
             {/* Desktop: week navigation */}
@@ -714,50 +954,14 @@ const handleSkipPriceUpdate = () => {
         </Link>
       </div>
 
-      {/* Driver Filter */}
-      {drivers.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 mb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-gray-500">נהגים:</span>
-            <button
-              onClick={() => toggleDriver('all')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors border-2 ${
-                isAllSelected
-                  ? 'border-[#33d4ff] bg-[#33d4ff]/10 text-[#33d4ff]'
-                  : 'border-gray-200 bg-gray-50 text-gray-600 hover:border-gray-300'
-              }`}
-            >
-              <span className="font-medium">הכל</span>
-              {isAllSelected && <Check size={16} />}
-            </button>
-            {drivers.map((driver, index) => {
-              const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
-              const selected = selectedDrivers.includes(driver.id)
-              return (
-                <button
-                  key={driver.id}
-                  onClick={() => toggleDriver(driver.id)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all border-2"
-                  style={{
-                    backgroundColor: selected ? color + '20' : '#f3f4f6',
-                    color: selected ? color : '#6b7280',
-                    borderColor: selected ? color : 'transparent'
-                  }}
-                >
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
-                  <span className="font-medium hidden sm:inline">{driver.user?.full_name}</span>
-                  <span className="font-medium sm:hidden">{driver.user?.full_name?.split(' ')[0]}</span>
-                  {selected && <Check size={14} />}
-                </button>
-              )
-            })}
+      <div className="flex flex-row-reverse gap-4 items-start">
+        <aside className="w-60 shrink-0 hidden lg:block">
+          <div className="sticky top-4">
+            <DriverFilterPanel {...driverFilterPanelProps} />
           </div>
-          {!isAllSelected && (
-            <p className="text-xs text-gray-500 mt-2">{selectedDrivers.length} נהגים נבחרו</p>
-          )}
-        </div>
-      )}
+        </aside>
 
+        <div className="flex-1 min-w-0">
       {/* Calendar Grid */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Week View */}
@@ -787,9 +991,16 @@ const handleSkipPriceUpdate = () => {
             )}
 
             {/* Time Grid */}
-            <div ref={scrollContainerRef} className="relative overflow-y-auto max-h-[calc(100vh-280px)]">
+            <div
+              ref={scrollContainerRef}
+              className="relative overflow-y-auto"
+              style={{
+                maxHeight: CALENDAR_SCROLL_MAX_HEIGHT,
+                minHeight: `min(${WEEK_SCROLL_MIN_HEIGHT}px, ${CALENDAR_SCROLL_MAX_HEIGHT})`,
+              }}
+            >
               {hours.map((hour) => (
-                <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-2' : 'grid-cols-8'}`} style={{ height: '50px' }}>
+                <div key={hour} className={`grid border-b border-gray-100 ${isMobile ? 'grid-cols-2' : 'grid-cols-8'}`} style={{ height: `${PIXELS_PER_HOUR_WEEK}px` }}>
                   <div className="p-1 sm:p-2 text-xs sm:text-sm text-gray-400 text-center border-l border-gray-200 flex items-start justify-center">
                     {hour.toString().padStart(2, '0')}:00
                   </div>
@@ -829,9 +1040,9 @@ const handleSkipPriceUpdate = () => {
                     clampEndToDay: cellDay,
                   })
 
-                  const top = hour * 50
+                  const top = hour * PIXELS_PER_HOUR_WEEK
                   const elapsedMinutes = (endMs - startMs) / 60000
-                  const heightPx = (elapsedMinutes / 60) * 50
+                  const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_WEEK
                   const numDays = isMobile ? 1 : 7
                   const dayWidth = 100 / numDays
                   const overlap = weekOverlapLayout.get(tow.id) || { columnIndex: 0, totalColumns: 1 }
@@ -916,7 +1127,7 @@ const handleSkipPriceUpdate = () => {
                 {weekDays.some(d => d.isToday) && (
                   <div
                     className="absolute right-0 left-0 border-t-2 border-red-500 z-10 pointer-events-none"
-                    style={{ top: `${getCurrentTime() * 50}px` }}
+                    style={{ top: `${getCurrentTime() * PIXELS_PER_HOUR_WEEK}px` }}
                   >
                     <div className="absolute right-0 w-3 h-3 bg-red-500 rounded-full -mt-1.5 -mr-1.5"></div>
                   </div>
@@ -947,7 +1158,7 @@ const handleSkipPriceUpdate = () => {
                     {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][selectedDate.getDay()]},{' '}
                   </span>
                   <span className="text-xl sm:text-2xl font-bold text-[#33d4ff]">
-                    {selectedDate.getDate()} ב{getMonthYear()}
+                    {selectedDate.getDate()} ב{getMonthYear(selectedDate)}
                   </span>
                 </div>
                 
@@ -965,7 +1176,14 @@ const handleSkipPriceUpdate = () => {
             </div>
 
             {/* Time Grid for Day View */}
-            <div ref={scrollContainerRef} className="relative overflow-y-auto max-h-[calc(100vh-280px)]">
+            <div
+              ref={scrollContainerRef}
+              className="relative overflow-y-auto"
+              style={{
+                maxHeight: CALENDAR_SCROLL_MAX_HEIGHT,
+                minHeight: `min(${DAY_SCROLL_MIN_HEIGHT}px, ${CALENDAR_SCROLL_MAX_HEIGHT})`,
+              }}
+            >
               <div className="flex min-w-0">
                 <div className="w-16 sm:w-20 flex-shrink-0 border-l border-gray-200">
                   {hours.map((hour) => (
@@ -1123,6 +1341,27 @@ const handleSkipPriceUpdate = () => {
             צור גרירה חדשה
           </Link>
         </div>
+      )}
+
+        </div>
+      </div>
+
+      {/* Mobile driver filter drawer */}
+      {driverPanelOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setDriverPanelOpen(false)}
+            aria-hidden
+          />
+          <aside className="fixed top-0 right-0 h-full w-72 max-w-[85vw] z-50 lg:hidden">
+            <DriverFilterPanel
+              {...driverFilterPanelProps}
+              onClose={() => setDriverPanelOpen(false)}
+              className="h-full max-h-none rounded-none border-0 shadow-none"
+            />
+          </aside>
+        </>
       )}
 
       {/* Instructions - Hidden on mobile */}
