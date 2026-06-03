@@ -92,6 +92,7 @@ export interface TowWithDetails {
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
   status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
   scheduled_at: string | null
+  scheduled_end_at: string | null
   duration_minutes?: number
   notes: string | null
   recommended_price: number | null
@@ -593,6 +594,7 @@ interface CreateTowInput {
   truckId?: string
   towType: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
   scheduledAt?: string
+  scheduledEndAt?: string | null
   notes?: string
   finalPrice?: number
   priceMode?: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
@@ -658,6 +660,7 @@ export async function createTow(input: CreateTowInput) {
       required_truck_types: input.requiredTruckTypes || null,
       status,
       scheduled_at: input.scheduledAt || null,
+      scheduled_end_at: input.scheduledEndAt ?? null,
       notes: input.notes || null,
       price_mode: input.priceMode || 'recommended',
       final_price: input.finalPrice || null,
@@ -1171,6 +1174,7 @@ interface UpdateTowInput {
   finalPrice?: number | null
   recommendedPrice?: number | null
   scheduledAt?: string | null
+  scheduledEndAt?: string | null
   priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles?: {
@@ -1223,6 +1227,7 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.priceMode !== undefined) towUpdates.price_mode = input.priceMode
   if (input.requiredTruckTypes !== undefined) towUpdates.required_truck_types = input.requiredTruckTypes
   if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
+  if (input.scheduledEndAt !== undefined) towUpdates.scheduled_end_at = input.scheduledEndAt
   if (input.paymentMethod !== undefined) towUpdates.payment_method = input.paymentMethod
   if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
   if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase

@@ -162,6 +162,8 @@ export default function TowDetailsPage() {
 
   const [editScheduledDate, setEditScheduledDate] = useState('')
   const [editScheduledTime, setEditScheduledTime] = useState('')
+  const [editScheduledEndDate, setEditScheduledEndDate] = useState('')
+  const [editScheduledEndTime, setEditScheduledEndTime] = useState('')
   const [editRequiredTruckTypes, setEditRequiredTruckTypes] = useState<string[]>([])
   const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
@@ -457,6 +459,14 @@ export default function TowDetailsPage() {
       const scheduledDate = new Date(tow.scheduled_at || tow.created_at)
       setEditScheduledDate(scheduledDate.toISOString().split('T')[0])
       setEditScheduledTime(scheduledDate.toTimeString().slice(0, 5))
+      if (tow.scheduled_end_at) {
+        const endDate = new Date(tow.scheduled_end_at)
+        setEditScheduledEndDate(endDate.toISOString().split('T')[0])
+        setEditScheduledEndTime(endDate.toTimeString().slice(0, 5))
+      } else {
+        setEditScheduledEndDate('')
+        setEditScheduledEndTime('')
+      }
       setEditRequiredTruckTypes((tow.required_truck_types as string[]) || [])
       setEditVehicles(tow.vehicles?.map((v: any) => ({
         id: v.id,
@@ -498,6 +508,10 @@ export default function TowDetailsPage() {
 
     // יצירת תאריך חדש
     const newScheduledAt = new Date(`${editScheduledDate}T${editScheduledTime}:00`)
+    const newScheduledEndAt =
+      editScheduledEndDate && editScheduledEndTime
+        ? new Date(`${editScheduledEndDate}T${editScheduledEndTime}:00`).toISOString()
+        : null
 
     // חישוב מחדש של תוספות שירות
     let newPriceBreakdown = tow.price_breakdown ? { ...tow.price_breakdown } : null
@@ -562,6 +576,7 @@ export default function TowDetailsPage() {
         notes: editNotes || null,
         finalPrice: newFinalPrice || null,
         scheduledAt: newScheduledAt.toISOString(),
+        scheduledEndAt: newScheduledEndAt,
         priceBreakdown: newPriceBreakdown,
         requiredTruckTypes: editRequiredTruckTypes,
         vehicles: editVehicles.map(v => ({
@@ -1348,24 +1363,49 @@ export default function TowDetailsPage() {
                 </div>
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-600 mb-1">תאריך</label>
-                        <input
-                          type="date"
-                          value={editScheduledDate}
-                          onChange={(e) => setEditScheduledDate(e.target.value)}
-                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">תאריך</label>
+                          <input
+                            type="date"
+                            value={editScheduledDate}
+                            onChange={(e) => setEditScheduledDate(e.target.value)}
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-600 mb-1">שעה</label>
+                          <input
+                            type="time"
+                            value={editScheduledTime}
+                            onChange={(e) => setEditScheduledTime(e.target.value)}
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                          />
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm text-gray-600 mb-1">שעה</label>
-                        <input
-                          type="time"
-                          value={editScheduledTime}
-                          onChange={(e) => setEditScheduledTime(e.target.value)}
-                          className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                        />
+                        <label className="block text-sm text-gray-600 mb-1">שעת סיום (אופציונלי)</label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <input
+                            type="time"
+                            value={editScheduledEndTime}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setEditScheduledEndTime(v)
+                              if (v && !editScheduledEndDate && editScheduledDate) {
+                                setEditScheduledEndDate(editScheduledDate)
+                              }
+                            }}
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                          />
+                          <input
+                            type="date"
+                            value={editScheduledEndDate}
+                            onChange={(e) => setEditScheduledEndDate(e.target.value)}
+                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1388,6 +1428,20 @@ export default function TowDetailsPage() {
                             minute: '2-digit'
                           })}
                         </p>
+                        {tow.scheduled_end_at && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            סיום מתוכנן:{' '}
+                            {new Date(tow.scheduled_end_at).toLocaleDateString('he-IL', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                            })}{' '}
+                            {new Date(tow.scheduled_end_at).toLocaleTimeString('he-IL', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}

@@ -143,6 +143,8 @@ export function useTowForm(editTowId?: string) {
   // Date/Time
   const [towDate, setTowDate] = useState('')
   const [towTime, setTowTime] = useState('')
+  const [towEndDate, setTowEndDate] = useState('')
+  const [towEndTime, setTowEndTime] = useState('')
   const [isToday, setIsToday] = useState(true)
   
   // Tow type
@@ -559,6 +561,14 @@ export function useTowForm(editTowId?: string) {
           const d = new Date(tow.scheduled_at)
           setTowDate(d.toISOString().split('T')[0])
           setTowTime(d.toTimeString().slice(0, 5))
+        }
+        if (tow.scheduled_end_at) {
+          const end = new Date(tow.scheduled_end_at)
+          setTowEndDate(end.toISOString().split('T')[0])
+          setTowEndTime(end.toTimeString().slice(0, 5))
+        } else {
+          setTowEndDate('')
+          setTowEndTime('')
         }
         if (tow.driver_id) {
           setPreSelectedDriverId(tow.driver_id)
@@ -1587,6 +1597,8 @@ export function useTowForm(editTowId?: string) {
     orderedBy,
     towDate,
     towTime,
+    towEndDate,
+    towEndTime,
     vehicleCode,
     vehicleType,
     vehicleData,
@@ -1707,6 +1719,8 @@ export function useTowForm(editTowId?: string) {
     // Date/Time
     towDate, setTowDate,
     towTime, setTowTime,
+    towEndDate, setTowEndDate,
+    towEndTime, setTowEndTime,
     isToday, setIsToday,
     // Tow type
     towType, setTowType,

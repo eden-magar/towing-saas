@@ -24,6 +24,7 @@ export async function getCalendarTows(
       driver_id,
       created_at,
       scheduled_at,
+      scheduled_end_at,
       started_at,
       completed_at,
       final_price,

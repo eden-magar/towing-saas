@@ -30,8 +30,12 @@ export interface CreateCustomerSectionProps {
   customerStoredVehicles: StoredVehicleWithCustomer[]
   towDate: string
   towTime: string
+  towEndDate: string
+  towEndTime: string
   onTowDateChange: (v: string) => void
   onTowTimeChange: (v: string) => void
+  onTowEndDateChange: (v: string) => void
+  onTowEndTimeChange: (v: string) => void
   onNowClick: () => void
   customerOrderNumber: string
   onCustomerOrderNumberChange: (v: string) => void
@@ -68,8 +72,12 @@ export function CreateCustomerSection({
   customerStoredVehicles,
   towDate,
   towTime,
+  towEndDate,
+  towEndTime,
   onTowDateChange,
   onTowTimeChange,
+  onTowEndDateChange,
+  onTowEndTimeChange,
   onNowClick,
   customerOrderNumber,
   onCustomerOrderNumberChange,
@@ -143,6 +151,27 @@ export function CreateCustomerSection({
           onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
           placeholder="מס׳ הזמנת לקוח"
           className="flex-1 min-w-[8rem]"
+        />
+      </div>
+      <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
+        <span className="text-sm text-gray-600 shrink-0">שעת סיום (אופציונלי)</span>
+        <Input
+          type="time"
+          value={towEndTime}
+          onChange={(e) => {
+            const v = e.target.value
+            onTowEndTimeChange(v)
+            if (v && !towEndDate && towDate) {
+              onTowEndDateChange(towDate)
+            }
+          }}
+          className="flex-1 min-w-[7rem]"
+        />
+        <Input
+          type="date"
+          value={towEndDate}
+          onChange={(e) => onTowEndDateChange(e.target.value)}
+          className="flex-1 min-w-[7rem]"
         />
       </div>
     </>

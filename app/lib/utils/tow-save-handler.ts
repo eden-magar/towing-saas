@@ -44,6 +44,8 @@ export interface SaveTowInput {
   // Date/Time
   towDate: string
   towTime: string
+  towEndDate?: string
+  towEndTime?: string
   
   // Driver (pre-selected)
   preSelectedDriverId: string | null
@@ -185,6 +187,7 @@ export interface PreparedTowData {
   secondDriverScheduledAt?: string
   towType: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
   scheduledAt?: string
+  scheduledEndAt?: string | null
   notes?: string
   finalPrice?: number
   priceMode?: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
@@ -881,6 +884,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   const scheduledAt = input.towDate && input.towTime 
     ? new Date(`${input.towDate}T${input.towTime}:00`).toISOString() 
     : new Date().toISOString()
+  const scheduledEndAt =
+    input.towEndDate && input.towEndTime
+      ? new Date(`${input.towEndDate}T${input.towEndTime}:00`).toISOString()
+      : null
   const businessFields = businessTowCustomerFields(input)
 
   // גרירה רגילה
@@ -943,6 +950,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       towType: 'simple',
       requiredTruckTypes: input.requiredTruckTypes || [],
       scheduledAt,
+      scheduledEndAt,
       notes: input.notes || undefined,
       finalPrice: input.finalPrice || undefined,
       priceMode: input.priceMode,
@@ -991,6 +999,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       towType: 'multi_vehicle',
       requiredTruckTypes: input.requiredTruckTypes || [],
       scheduledAt,
+      scheduledEndAt,
       notes: input.notes || undefined,
       finalPrice: input.finalPrice || undefined,
       priceMode: input.priceMode,
@@ -1248,6 +1257,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     towType: 'exchange',
     requiredTruckTypes: input.requiredTruckTypes || [],
     scheduledAt,
+    scheduledEndAt,
     notes: input.notes || undefined,
     finalPrice: input.finalPrice || undefined,
     priceMode: input.priceMode,

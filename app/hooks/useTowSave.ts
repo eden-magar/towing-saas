@@ -58,6 +58,8 @@ interface UseTowSaveParams {
   orderedBy: string
   towDate: string
   towTime: string
+  towEndDate: string
+  towEndTime: string
   // Vehicle
   vehicleCode?: string
   vehicleType: VehicleType | ''
@@ -166,6 +168,8 @@ export function useTowSave(params: UseTowSaveParams) {
     orderedBy,
     towDate,
     towTime,
+    towEndDate,
+    towEndTime,
     vehicleCode,
     vehicleType,
     vehicleData,
@@ -309,6 +313,8 @@ export function useTowSave(params: UseTowSaveParams) {
       isBusinessCustomer,
       towDate,
       towTime,
+      towEndDate,
+      towEndTime,
       preSelectedDriverId,
       preSelectedTruckId,
       secondDriverId,

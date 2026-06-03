@@ -161,6 +161,7 @@ export interface Tow {
   tow_type: TowType
   status: TowStatus
   scheduled_at: string | null
+  scheduled_end_at: string | null
   notes: string | null
   recommended_price: number | null
   final_price: number | null

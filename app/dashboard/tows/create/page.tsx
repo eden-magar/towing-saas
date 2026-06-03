@@ -143,6 +143,10 @@ function CreateTowForm({
     setTowDate,
     towTime,
     setTowTime,
+    towEndDate,
+    setTowEndDate,
+    towEndTime,
+    setTowEndTime,
     isToday,
     setIsToday,
     towType,
@@ -828,6 +832,8 @@ function CreateTowForm({
         customerPhone,
         towDate,
         towTime,
+        towEndDate,
+        towEndTime,
         preSelectedDriverId: null,
         vehiclePlate: plate,
         vehicleCode,
@@ -1080,8 +1086,12 @@ function CreateTowForm({
             customerStoredVehicles={customerStoredVehicles}
             towDate={towDate}
             towTime={towTime}
+            towEndDate={towEndDate}
+            towEndTime={towEndTime}
             onTowDateChange={setTowDate}
             onTowTimeChange={setTowTime}
+            onTowEndDateChange={setTowEndDate}
+            onTowEndTimeChange={setTowEndTime}
             onNowClick={handleNowClick}
             customerOrderNumber={customerOrderNumber}
             onCustomerOrderNumberChange={setCustomerOrderNumber}
