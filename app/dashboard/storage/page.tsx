@@ -38,6 +38,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { lookupVehicle } from '../../lib/vehicle-lookup'
 import { DEFECT_OPTIONS } from '../../lib/constants/defects'
+import { CustomerSearchSelect } from '@/app/components/shared/CustomerSearchSelect'
 
 interface Customer {
   id: string
@@ -66,7 +67,6 @@ export default function StoragePage() {
   const [statusFilter, setStatusFilter] = useState<
     'stored' | 'reserved_for_tow' | 'released' | 'all'
   >('stored')
-  const [customerFilter, setCustomerFilter] = useState<string>('')
   const [conditionFilter, setConditionFilter] = useState<'all' | 'operational' | 'faulty'>('all')
   const [showModal, setShowModal] = useState(false)
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'release'>('add')
@@ -96,7 +96,7 @@ export default function StoragePage() {
     if (companyId) {
       loadData()
     }
-  }, [companyId, statusFilter, customerFilter])
+  }, [companyId, statusFilter])
 
   const loadData = async () => {
     if (!companyId) return
@@ -105,8 +105,8 @@ export default function StoragePage() {
     try {
       // טעינת רכבים
       const vehiclesData = await getStoredVehicles(
-        companyId, 
-        customerFilter || undefined,
+        companyId,
+        undefined,
         statusFilter
       )
       setVehicles(vehiclesData)
@@ -401,18 +401,6 @@ export default function StoragePage() {
               />
             </div>
             <div className="flex gap-2">
-              <select
-                value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
-              >
-                <option value="">כל הלקוחות</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
               <div className="flex gap-1">
                 {(
                   [
@@ -780,18 +768,12 @@ export default function StoragePage() {
                   {/* לקוח */}
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">לקוח</label>
-                    <select
-                      value={formData.customerId}
-                      onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
-                    >
-                      <option value="">ללא לקוח</option>
-                      {customers.map((customer) => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.name}
-                        </option>
-                      ))}
-                    </select>
+                    <CustomerSearchSelect
+                      customers={customers.map((c) => ({ id: c.id, name: c.name, phone: '' }))}
+                      value={formData.customerId || null}
+                      onSelect={(id) => setFormData({ ...formData, customerId: id || '' })}
+                      placeholder="חפש לקוח..."
+                    />
                   </div>
 
                   {/* מיקום */}
