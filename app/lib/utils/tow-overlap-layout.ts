@@ -120,3 +120,22 @@ export function getOverlapLayout(items: OverlapLayoutItem[]): Map<string, Overla
 
   return result
 }
+
+export function getEffectiveOverlapSpan(
+  pos: Pick<OverlapPosition, 'columnIndex' | 'totalColumns' | 'span'>,
+): number {
+  return Math.min(pos.span, pos.totalColumns - pos.columnIndex)
+}
+
+export function getOverlapBlockWidthPct(
+  pos: Pick<OverlapPosition, 'columnIndex' | 'totalColumns' | 'span'>,
+  laneWidthPct: number,
+): { offsetPct: number; widthPct: number } {
+  const span = getEffectiveOverlapSpan(pos)
+  const slotWidth = laneWidthPct / pos.totalColumns
+  const maxWidth = laneWidthPct - pos.columnIndex * slotWidth
+  return {
+    offsetPct: pos.columnIndex * slotWidth,
+    widthPct: Math.min(slotWidth * span, maxWidth),
+  }
+}

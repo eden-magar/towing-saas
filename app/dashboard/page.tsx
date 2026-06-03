@@ -19,6 +19,11 @@
   import Link from 'next/link'
   import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play } from 'lucide-react'
   import { getEffectiveTowStartIso, getTowTimeBounds } from '../lib/utils/tow-time-bounds'
+  import {
+    getOverlapLayout,
+    getOverlapBlockWidthPct,
+    type OverlapPosition,
+  } from '../lib/utils/tow-overlap-layout'
 
   type EndShiftModalTarget = {
     shiftId: string
@@ -45,20 +50,17 @@
     cancelled: 'bg-red-100 text-red-700',
   }
 
-  // Same 20-hue palette as app/dashboard/calendar/page.tsx (index by driver list order)
+  const PIXELS_PER_HOUR_DASH = 28
+  const DASH_CALENDAR_HOURS = Array.from({ length: 24 }, (_, i) => i)
+  const DASH_GRID_HEIGHT_PX = DASH_CALENDAR_HOURS.length * PIXELS_PER_HOUR_DASH
+
+  // Same 20-hue palette as app/dashboard/calendar/page.tsx (index by driver list order; not exported there)
   const DRIVER_COLORS = [
     '#dc2626', '#ea580c', '#d97706', '#ca8a04', '#65a30d',
     '#16a34a', '#059669', '#0d9488', '#0891b2', '#0284c7',
     '#2563eb', '#4f46e5', '#7c3aed', '#9333ea', '#c026d3',
     '#db2777', '#be185d', '#b45309', '#047857', '#1e40af',
   ]
-
-  function formatTowTimeRange(startMs: number, endMs: number): string {
-    const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
-    const start = new Date(startMs).toLocaleTimeString('he-IL', timeOpts)
-    const end = new Date(endMs).toLocaleTimeString('he-IL', timeOpts)
-    return `${start}–${end}`
-  }
 
   function startOfDay(d: Date): Date {
     const x = new Date(d)
@@ -78,23 +80,40 @@
     return index >= 0 ? DRIVER_COLORS[index % DRIVER_COLORS.length] : '#6b7280'
   }
 
-  function TodayTowStatusIcon({ status }: { status: string }) {
-    const iconSize = 14
+  function CompactTowBlockStatusBadge({ status }: { status: string }) {
+    const iconSize = 10
+    const shell =
+      'absolute top-0.5 right-0.5 flex items-center justify-center rounded-full bg-white/90 p-px shadow-sm pointer-events-none z-10'
     if (status === 'pending' || status === 'assigned' || status === 'quote') {
       return null
     }
     if (status === 'completed') {
-      return <CheckCircle size={iconSize} className="text-green-600 shrink-0" strokeWidth={2.5} />
+      return (
+        <div className={shell}>
+          <CheckCircle size={iconSize} className="text-green-600" strokeWidth={2.5} />
+        </div>
+      )
     }
     if (status === 'cancelled') {
-      return <XCircle size={iconSize} className="text-gray-500 shrink-0" strokeWidth={2.5} />
+      return (
+        <div className={shell}>
+          <XCircle size={iconSize} className="text-gray-600" strokeWidth={2.5} />
+        </div>
+      )
     }
     if (status === 'in_progress') {
       return (
-        <Play size={iconSize} className="text-orange-500 fill-orange-500 shrink-0" strokeWidth={2.5} />
+        <div className={shell}>
+          <Play size={iconSize} className="text-orange-500 fill-orange-500" strokeWidth={2.5} />
+        </div>
       )
     }
     return null
+  }
+
+  function getCurrentFractionalHour(): number {
+    const d = new Date()
+    return d.getHours() + d.getMinutes() / 60
   }
 
   export default function DashboardPage() {
@@ -145,6 +164,7 @@
     const [endShiftTarget, setEndShiftTarget] = useState<EndShiftModalTarget | null>(null)
 
     const searchWrapRef = useRef<HTMLDivElement>(null)
+    const dashCalendarScrollRef = useRef<HTMLDivElement>(null)
     const [towSearchInput, setTowSearchInput] = useState('')
     const [towSearchDebounced, setTowSearchDebounced] = useState('')
     const [towSearchResults, setTowSearchResults] = useState<TowWithDetails[]>([])
@@ -405,13 +425,43 @@
       return () => { supabase.removeChannel(channel) }
     }, [companyId, debouncedRefreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime, loadListTows])
 
-    const sortedListTows = useMemo(() => {
-      return [...listTows].sort((a, b) => {
+    const assignedListTows = useMemo(
+      () => listTows.filter((t) => t.driver_id),
+      [listTows],
+    )
+
+    const sortedAssignedListTows = useMemo(() => {
+      return [...assignedListTows].sort((a, b) => {
         const aMs = new Date(getEffectiveTowStartIso(a)).getTime()
         const bMs = new Date(getEffectiveTowStartIso(b)).getTime()
         return aMs - bMs
       })
-    }, [listTows])
+    }, [assignedListTows])
+
+    const listDayOverlapLayout = useMemo(() => {
+      const items = sortedAssignedListTows.map((tow) => {
+        const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: listDate })
+        return { id: tow.id, startMs, endMs }
+      })
+      return getOverlapLayout(items)
+    }, [sortedAssignedListTows, now, listDate])
+
+    const listDayDrivers = useMemo(() => {
+      const driverIds = new Set<string>()
+      for (const tow of assignedListTows) {
+        if (tow.driver_id) driverIds.add(tow.driver_id)
+      }
+      return allDrivers.filter((d) => driverIds.has(d.id))
+    }, [assignedListTows, allDrivers])
+
+    useEffect(() => {
+      if (authLoading || loading) return
+      const container = dashCalendarScrollRef.current
+      if (!container) return
+      const scrollToHour = isListToday ? getCurrentFractionalHour() : 7
+      const position = scrollToHour * PIXELS_PER_HOUR_DASH
+      container.scrollTop = Math.max(0, position - container.clientHeight / 3)
+    }, [authLoading, loading, listDate, isListToday, sortedAssignedListTows.length])
 
     const getDaysText = (daysLeft: number) => {
       if (daysLeft < 0) return `פג לפני ${Math.abs(daysLeft)} ימים`
@@ -651,45 +701,109 @@
                   ליומן המלא ←
                 </Link>
               </div>
-              <div className="flex-1 overflow-y-auto min-h-0">
-                {sortedListTows.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-gray-300 text-sm px-4 text-center">
-                    {isListToday ? 'אין גרירות היום' : 'אין גרירות בתאריך זה'}
+              <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
+                {sortedAssignedListTows.length === 0 ? (
+                  <div className="flex flex-1 items-center justify-center text-gray-300 text-sm px-4 text-center">
+                    אין גרירות משובצות
                   </div>
                 ) : (
-                  <div className="divide-y divide-gray-50">
-                    {sortedListTows.map((tow) => {
-                      const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: listDate })
-                      const dotColor = tow.driver_id
-                        ? getDriverColor(tow.driver_id, allDrivers)
-                        : '#6b7280'
-                      return (
-                        <button
-                          key={tow.id}
-                          type="button"
-                          onClick={() => router.push(`/dashboard/tows/${tow.id}`)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-right hover:bg-gray-50 transition-colors min-w-0"
-                        >
+                  <>
+                    <div
+                      ref={dashCalendarScrollRef}
+                      className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden"
+                    >
+                      <div className="flex min-w-0" style={{ height: `${DASH_GRID_HEIGHT_PX}px` }}>
+                        <div className="flex-1 relative min-w-0 border-r border-gray-100">
+                          {DASH_CALENDAR_HOURS.map((hour) => (
+                            <div
+                              key={hour}
+                              className="border-b border-gray-50"
+                              style={{ height: `${PIXELS_PER_HOUR_DASH}px` }}
+                            />
+                          ))}
+                          <div className="absolute inset-0 pointer-events-none">
+                            {sortedAssignedListTows.map((tow) => {
+                              const pos: OverlapPosition = listDayOverlapLayout.get(tow.id) ?? {
+                                columnIndex: 0,
+                                totalColumns: 1,
+                                span: 1,
+                              }
+                              const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
+                              const effectiveStartIso = getEffectiveTowStartIso(tow)
+                              const hour =
+                                new Date(effectiveStartIso).getHours() +
+                                new Date(effectiveStartIso).getMinutes() / 60
+                              const top = hour * PIXELS_PER_HOUR_DASH
+                              const driverColor = getDriverColor(tow.driver_id!, allDrivers)
+                              const isCancelled = tow.status === 'cancelled'
+                              const { startMs, endMs } = getTowTimeBounds(tow, now, {
+                                clampEndToDay: listDate,
+                              })
+                              const heightPx = Math.max(
+                                16,
+                                ((endMs - startMs) / 60000 / 60) * PIXELS_PER_HOUR_DASH,
+                              )
+
+                              return (
+                                <button
+                                  key={tow.id}
+                                  type="button"
+                                  onClick={() => router.push(`/dashboard/tows/${tow.id}`)}
+                                  className={`absolute pointer-events-auto rounded px-1 py-0.5 text-white overflow-hidden text-[10px] leading-tight text-right hover:brightness-95 transition-[filter] ${
+                                    isCancelled ? 'opacity-60 line-through' : ''
+                                  }`}
+                                  style={{
+                                    top: `${top}px`,
+                                    height: `${heightPx}px`,
+                                    left: `calc(${offsetPct}% + 1px)`,
+                                    width: `calc(${widthPct}% - 2px)`,
+                                    backgroundColor: driverColor,
+                                  }}
+                                >
+                                  <CompactTowBlockStatusBadge status={tow.status} />
+                                  <span className="block truncate pr-3">
+                                    {tow.customer?.name || 'ללא לקוח'}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                          {isListToday && (
+                            <div
+                              className="absolute right-0 left-0 border-t border-red-500 z-10 pointer-events-none"
+                              style={{ top: `${getCurrentFractionalHour() * PIXELS_PER_HOUR_DASH}px` }}
+                            >
+                              <div className="absolute right-0 w-2 h-2 bg-red-500 rounded-full -mt-1 -mr-1" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="w-10 shrink-0 border-r border-gray-100">
+                          {DASH_CALENDAR_HOURS.map((hour) => (
+                            <div
+                              key={hour}
+                              className="text-[10px] text-gray-400 text-center border-b border-gray-50 leading-none pt-0.5"
+                              style={{ height: `${PIXELS_PER_HOUR_DASH}px` }}
+                            >
+                              {hour.toString().padStart(2, '0')}:00
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-[110px] shrink-0 border-r border-gray-100 overflow-y-auto py-1.5 px-2 space-y-1.5">
+                      {listDayDrivers.map((driver) => (
+                        <div key={driver.id} className="flex items-center gap-1.5 min-w-0">
                           <span
                             className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: dotColor }}
+                            style={{ backgroundColor: getDriverColor(driver.id, allDrivers) }}
                           />
-                          {!tow.driver_id && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0">
-                              לא משויך
-                            </span>
-                          )}
-                          <span className="text-xs text-gray-500 shrink-0 tabular-nums" dir="ltr">
-                            {formatTowTimeRange(startMs, endMs)}
+                          <span className="text-[10px] text-gray-600 truncate">
+                            {(driver.user?.full_name || '').split(' ')[0] || 'נהג'}
                           </span>
-                          <span className="text-xs font-medium text-gray-800 truncate flex-1 min-w-0">
-                            {tow.customer?.name || 'ללא לקוח'}
-                          </span>
-                          <TodayTowStatusIcon status={tow.status} />
-                        </button>
-                      )
-                    })}
-                  </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </div>

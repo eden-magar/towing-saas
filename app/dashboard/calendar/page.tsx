@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
-import { getOverlapLayout, type OverlapPosition } from '../../lib/utils/tow-overlap-layout'
+import { getOverlapLayout, getOverlapBlockWidthPct, type OverlapPosition } from '../../lib/utils/tow-overlap-layout'
 
 // צבעים לנהגים — ~20 well-separated hues (id-based via getDriverColor)
 const DRIVER_COLORS = [
@@ -70,23 +70,6 @@ function formatTowTimeRange(startMs: number, endMs: number): string {
   const start = new Date(startMs).toLocaleTimeString('he-IL', timeOpts)
   const end = new Date(endMs).toLocaleTimeString('he-IL', timeOpts)
   return `${start}–${end}`
-}
-
-function getEffectiveOverlapSpan(pos: Pick<OverlapPosition, 'columnIndex' | 'totalColumns' | 'span'>): number {
-  return Math.min(pos.span, pos.totalColumns - pos.columnIndex)
-}
-
-function getOverlapBlockWidthPct(
-  pos: Pick<OverlapPosition, 'columnIndex' | 'totalColumns' | 'span'>,
-  laneWidthPct: number,
-): { offsetPct: number; widthPct: number } {
-  const span = getEffectiveOverlapSpan(pos)
-  const slotWidth = laneWidthPct / pos.totalColumns
-  const maxWidth = laneWidthPct - pos.columnIndex * slotWidth
-  return {
-    offsetPct: pos.columnIndex * slotWidth,
-    widthPct: Math.min(slotWidth * span, maxWidth),
-  }
 }
 
 function TowBlockStatusBadge({ status, size = 'sm' }: { status: string; size?: 'sm' | 'md' }) {
