@@ -19,13 +19,31 @@ interface DriverOnMap {
 
 const STATUS_COLORS: Record<string, string> = {
   available: '#22c55e',
-  busy: '#f59e0b',
-  on_way: '#3b82f6',
+  busy: '#f97316',
+  on_way: '#f97316',
+  break: '#f59e0b',
   unavailable: '#9ca3af',
-  break: '#f97316',
 }
 
-export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
+/** Dot colors on map markers — keep legend in sync with getDriverStatusColor */
+export const MAP_STATUS_LEGEND = [
+  { color: STATUS_COLORS.available, label: 'זמין' },
+  { color: STATUS_COLORS.busy, label: 'בגרירה / בדרך' },
+  { color: STATUS_COLORS.break, label: 'הפסקה' },
+  { color: STATUS_COLORS.unavailable, label: 'לא זמין' },
+] as const
+
+function getDriverStatusColor(status: string): string {
+  return STATUS_COLORS[status] ?? STATUS_COLORS.unavailable
+}
+
+export default function DriversMap({
+  drivers,
+  embedded = false,
+}: {
+  drivers: DriverOnMap[]
+  embedded?: boolean
+}) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const markersRef = useRef<any[]>([])
@@ -56,10 +74,7 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
       const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
       const initial = driver.name.charAt(0)
 
-      const statusColor = driver.status === 'available' ? '#22c55e'
-        : driver.status === 'busy' || driver.status === 'on_way' ? '#f97316'
-        : driver.status === 'break' ? '#f59e0b'
-        : '#9ca3af'
+      const statusColor = getDriverStatusColor(driver.status)
 
       const svgIcon = `
 <svg xmlns="http://www.w3.org/2000/svg" width="52" height="60" viewBox="0 0 52 60">
@@ -112,17 +127,27 @@ export default function DriversMap({ drivers }: { drivers: DriverOnMap[] }) {
     })
   }, [drivers])
 
+  if (embedded) {
+    return <div ref={mapRef} className="h-full w-full min-h-0" />
+  }
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden h-full flex flex-col min-h-0">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3 shrink-0">
         <h3 className="font-semibold text-gray-800">מפת נהגים חיה</h3>
-        <div className="flex gap-3 text-xs">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block"/> זמין</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block"/> בגרירה</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-400 inline-block"/> לא זמין</span>
+        <div className="flex flex-wrap gap-3 text-xs">
+          {MAP_STATUS_LEGEND.map((item) => (
+            <span key={item.label} className="flex items-center gap-1">
+              <span
+                className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                style={{ backgroundColor: item.color }}
+              />
+              {item.label}
+            </span>
+          ))}
         </div>
       </div>
-      <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
+      <div ref={mapRef} className="flex-1 min-h-0 w-full" />
     </div>
   )
 }
