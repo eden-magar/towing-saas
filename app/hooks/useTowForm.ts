@@ -128,11 +128,22 @@ function normalizeRegistrySource(
   return null
 }
 
+function isManualCommercialVehicle(v: TowVehicleEditRow): boolean {
+  if (v.registry_source) return false
+  if (v.vehicle_type === 'van') return true
+  if (!v.vehicle_type && v.total_weight != null && Number(v.total_weight) > 0) {
+    return true
+  }
+  return false
+}
+
 function buildVehicleLookupResultFromTowVehicle(
   v: TowVehicleEditRow
 ): VehicleLookupResult | null {
+  const registrySource = normalizeRegistrySource(v.registry_source)
+  if (!registrySource) return null
+
   const hasStoredDetails = !!(
-    v.registry_source ||
     v.manufacturer ||
     v.model ||
     v.year ||
@@ -145,9 +156,7 @@ function buildVehicleLookupResultFromTowVehicle(
   )
   if (!hasStoredDetails) return null
 
-  const registrySource = normalizeRegistrySource(v.registry_source)
-  const typeSource = normalizeRegistrySource(v.vehicle_type)
-  const source = registrySource ?? typeSource ?? 'private'
+  const source = registrySource
 
   return {
     found: true,
@@ -954,8 +963,6 @@ export function useTowForm(editTowId?: string) {
           if (firstVehicle?.plate_number) {
             setVehiclePlate(firstVehicle.plate_number || '')
             setVehicleCode(firstVehicle.vehicle_code || '')
-            const savedType = (firstVehicle.vehicle_type || '') as VehicleType | ''
-            setVehicleType(savedType)
 
             setSelectedDefects(
               (firstVehicle.tow_reason || '')
@@ -964,17 +971,8 @@ export function useTowForm(editTowId?: string) {
                 .filter(Boolean)
             )
 
-            const lookupResult = buildVehicleLookupResultFromTowVehicle(firstVehicle)
-            if (lookupResult) {
-              setVehicleData(lookupResult)
-              setVehicleLookupNotFound(false)
-              if (!savedType && lookupResult.source) {
-                setVehicleType(lookupResult.source)
-              }
-              setManualManufacturer('')
-              setManualColor('')
-              setManualWeight('')
-            } else {
+            if (isManualCommercialVehicle(firstVehicle)) {
+              setVehicleType('van' as VehicleType)
               setVehicleData(null)
               setVehicleLookupNotFound(true)
               setManualManufacturer(firstVehicle.manufacturer || '')
@@ -984,6 +982,31 @@ export function useTowForm(editTowId?: string) {
                   ? String(firstVehicle.total_weight)
                   : ''
               )
+            } else {
+              const savedType = (firstVehicle.vehicle_type || '') as VehicleType | ''
+              setVehicleType(savedType)
+
+              const lookupResult = buildVehicleLookupResultFromTowVehicle(firstVehicle)
+              if (lookupResult) {
+                setVehicleData(lookupResult)
+                setVehicleLookupNotFound(false)
+                if (!savedType && lookupResult.source) {
+                  setVehicleType(lookupResult.source)
+                }
+                setManualManufacturer('')
+                setManualColor('')
+                setManualWeight('')
+              } else {
+                setVehicleData(null)
+                setVehicleLookupNotFound(true)
+                setManualManufacturer(firstVehicle.manufacturer || '')
+                setManualColor(firstVehicle.color || '')
+                setManualWeight(
+                  firstVehicle.total_weight != null
+                    ? String(firstVehicle.total_weight)
+                    : ''
+                )
+              }
             }
           }
           // Points / addresses → unified route list

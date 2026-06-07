@@ -612,7 +612,7 @@ interface CreateTowInput {
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery'
+    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van'
     color?: string
     isWorking?: boolean
     towReason?: string
@@ -1192,7 +1192,7 @@ interface UpdateTowInput {
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery'
+    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van'
     color?: string
     isWorking?: boolean
     towReason?: string

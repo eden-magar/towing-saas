@@ -212,7 +212,7 @@ export interface PreparedTowData {
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery'
+    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van'
     color?: string
     isWorking?: boolean
     towReason?: string
@@ -304,9 +304,9 @@ function aggregateRouteServices(services: SelectedService[] | undefined): Select
 /**
  * מיפוי סוג רכב מקוד לטיפוס DB
  */
-function mapVehicleType(vehicleCode?: string): 'motorcycle' | 'private' | 'heavy' | 'machinery' | undefined {
+function mapVehicleType(vehicleCode?: string): 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van' | undefined {
   if (!vehicleCode) return undefined
-  const validTypes = ['motorcycle', 'private', 'heavy', 'machinery']
+  const validTypes = ['motorcycle', 'private', 'heavy', 'machinery', 'van']
   return validTypes.includes(vehicleCode) ? vehicleCode as any : undefined
 }
 
