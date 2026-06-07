@@ -75,6 +75,103 @@ export function findDropoffRouteStop(stops: RouteStop[]): RouteStop | undefined 
   return undefined
 }
 
+function routeStopsDistanceSignatureFromStops(stops: RouteStop[]): string {
+  return JSON.stringify(
+    stops.map((stop) => [stop.address.address, stop.address.lat, stop.address.lng])
+  )
+}
+
+function routeStopsDistanceSignatureFromPoints(
+  points: Array<{ address?: string | null; lat?: unknown; lng?: unknown }>
+): string {
+  return JSON.stringify(
+    points.map((p) => [
+      p.address || '',
+      p.lat != null && p.lat !== '' ? Number(p.lat) : undefined,
+      p.lng != null && p.lng !== '' ? Number(p.lng) : undefined,
+    ])
+  )
+}
+
+const TOW_VEHICLE_REGISTRY_LABELS: Record<string, string> = {
+  private: 'רכב פרטי',
+  motorcycle: 'דו גלגלי',
+  heavy: 'רכב כבד',
+  machinery: 'צמ"ה',
+}
+
+type TowVehicleEditRow = {
+  plate_number?: string | null
+  manufacturer?: string | null
+  model?: string | null
+  year?: number | null
+  vehicle_type?: string | null
+  color?: string | null
+  is_working?: boolean | null
+  tow_reason?: string | null
+  vehicle_code?: string | null
+  registry_source?: string | null
+  drive_type?: string | null
+  fuel_type?: string | null
+  total_weight?: number | null
+  gear_type?: string | null
+  drive_technology?: string | null
+}
+
+function normalizeRegistrySource(
+  raw: string | null | undefined
+): VehicleLookupResult['source'] {
+  const valid = ['private', 'motorcycle', 'heavy', 'machinery'] as const
+  if (raw && (valid as readonly string[]).includes(raw)) {
+    return raw as VehicleLookupResult['source']
+  }
+  return null
+}
+
+function buildVehicleLookupResultFromTowVehicle(
+  v: TowVehicleEditRow
+): VehicleLookupResult | null {
+  const hasStoredDetails = !!(
+    v.registry_source ||
+    v.manufacturer ||
+    v.model ||
+    v.year ||
+    v.color ||
+    v.drive_type ||
+    v.fuel_type ||
+    v.total_weight ||
+    v.gear_type ||
+    v.drive_technology
+  )
+  if (!hasStoredDetails) return null
+
+  const registrySource = normalizeRegistrySource(v.registry_source)
+  const typeSource = normalizeRegistrySource(v.vehicle_type)
+  const source = registrySource ?? typeSource ?? 'private'
+
+  return {
+    found: true,
+    source,
+    sourceLabel: TOW_VEHICLE_REGISTRY_LABELS[source] || 'רכב פרטי',
+    data: {
+      plateNumber: v.plate_number || '',
+      manufacturer: v.manufacturer || null,
+      model: v.model || null,
+      year: v.year ?? null,
+      color: v.color || null,
+      fuelType: v.fuel_type || null,
+      totalWeight: v.total_weight ?? null,
+      vehicleType: null,
+      driveType: v.drive_type || null,
+      driveTechnology: v.drive_technology || null,
+      gearType: v.gear_type || null,
+      machineryType: null,
+      selfWeight: null,
+      totalWeightTon: null,
+    },
+  }
+}
+
 type CustomRouteData = {
   totalDistanceKm: number
   vehicles: { type: string; isWorking: boolean }[]
@@ -203,6 +300,7 @@ export function useTowForm(editTowId?: string) {
   const [vehicleCode, setVehicleCode] = useState('')
   const [vehicleData, setVehicleData] = useState<VehicleLookupResult | null>(null)
   const [vehicleType, setVehicleType] = useState<VehicleType | ''>('')
+  const [vehicleLookupNotFound, setVehicleLookupNotFound] = useState(false)
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
   const [requiredTruckTypes, setRequiredTruckTypes] = useState<string[]>([])
   const [manualManufacturer, setManualManufacturer] = useState('')
@@ -211,6 +309,10 @@ export function useTowForm(editTowId?: string) {
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
+  const editRouteBaselineRef = useRef<string | null>(null)
+  const loadedEditPriceModeRef = useRef<string | null>(null)
+  const editSeededDistanceRef = useRef<number | null>(null)
+  const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
   const deferStorageBaseAddressRef = useRef(false)
@@ -318,9 +420,14 @@ export function useTowForm(editTowId?: string) {
   // Load Google Maps
   useEffect(() => { loadGoogleMaps() }, [])
 
-  const routeStopsDistanceSignature = JSON.stringify(
-    routeStops.map((stop) => [stop.address.address, stop.address.lat, stop.address.lng])
-  )
+  useEffect(() => {
+    editRouteBaselineRef.current = null
+    loadedEditPriceModeRef.current = null
+    editSeededDistanceRef.current = null
+    setEditHydrationSettled(false)
+  }, [editTowId])
+
+  const routeStopsDistanceSignature = routeStopsDistanceSignatureFromStops(routeStops)
 
   // Calculate distance as ordered multi-leg route chain
   useEffect(() => {
@@ -328,34 +435,75 @@ export function useTowForm(editTowId?: string) {
       .filter((stop) => stop.address.address.trim())
       .map((stop) => stop.address)
 
+    const signatureAtStart = routeStopsDistanceSignature
+    const preserveSeededOnFailure = () =>
+      !!(
+        editTowId &&
+        editSeededDistanceRef.current != null &&
+        editRouteBaselineRef.current &&
+        signatureAtStart === editRouteBaselineRef.current
+      )
+
     if (waypoints.length < 2) {
-      setDistance(null)
+      if (!preserveSeededOnFailure()) setDistance(null)
       return
     }
+    let cancelled = false
     const calc = async () => {
       setDistanceLoading(true)
       try {
+        await loadGoogleMaps()
+        if (cancelled) return
+
         let totalKm = 0
         let totalMinutes = 0
 
         for (let i = 0; i < waypoints.length - 1; i++) {
           const result = await calculateDistance(waypoints[i], waypoints[i + 1])
-          if (!result) { setDistance(null); return }
+          if (cancelled) return
+          if (!result) {
+            if (!preserveSeededOnFailure()) setDistance(null)
+            return
+          }
           totalKm += result.distanceKm
           totalMinutes += result.durationMinutes
         }
 
-        setDistance({ distanceKm: Math.round(totalKm * 10) / 10, durationMinutes: totalMinutes })
+        if (!cancelled) {
+          editSeededDistanceRef.current = null
+          setDistance({ distanceKm: Math.round(totalKm * 10) / 10, durationMinutes: totalMinutes })
+        }
       } catch (err) {
         console.error('Distance calculation error:', err)
-        setDistance(null)
+        if (!cancelled && !preserveSeededOnFailure()) setDistance(null)
       } finally {
-        setDistanceLoading(false)
+        if (!cancelled) setDistanceLoading(false)
       }
     }
     const timeout = setTimeout(calc, 500)
-    return () => clearTimeout(timeout)
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
   }, [routeStopsDistanceSignature])
+
+  // After edit hydration settles, only user route edits switch to live recommended pricing
+  useEffect(() => {
+    if (!editTowId || towType !== 'single' || !editHydrationSettled) return
+    if (!editRouteBaselineRef.current) return
+
+    if (routeStopsDistanceSignature !== editRouteBaselineRef.current) {
+      editSeededDistanceRef.current = null
+      setPriceMode((prev) => {
+        if (prev === 'recommended' || prev === 'recommended_customer') return prev
+        if (loadedEditPriceModeRef.current === 'recommended_customer') {
+          return 'recommended_customer'
+        }
+        return 'recommended'
+      })
+      editRouteBaselineRef.current = routeStopsDistanceSignature
+    }
+  }, [editTowId, towType, editHydrationSettled, routeStopsDistanceSignature])
 
   // Calculate base to pickup distance
   useEffect(() => {
@@ -364,25 +512,31 @@ export function useTowForm(editTowId?: string) {
       setBaseToPickupDistance(null)
       return
     }
+    let cancelled = false
     const calcBaseDistance = async () => {
       setBaseToPickupLoading(true)
       try {
+        await loadGoogleMaps()
+        if (cancelled) return
         const baseAddress: AddressData = {
           address: basePriceList.base_address || '',
           lat: basePriceList.base_lat,
           lng: basePriceList.base_lng
         }
         const result = await calculateDistance(baseAddress, pickup.address)
-        setBaseToPickupDistance(result)
+        if (!cancelled) setBaseToPickupDistance(result)
       } catch (err) {
         console.error('Base distance calculation error:', err)
-        setBaseToPickupDistance(null)
+        if (!cancelled) setBaseToPickupDistance(null)
       } finally {
-        setBaseToPickupLoading(false)
+        if (!cancelled) setBaseToPickupLoading(false)
       }
     }
     const timeout = setTimeout(calcBaseDistance, 500)
-    return () => clearTimeout(timeout)
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
   }, [startFromBase, routeStops, basePriceList?.base_lat, basePriceList?.base_lng])
 
 
@@ -550,6 +704,9 @@ export function useTowForm(editTowId?: string) {
   useEffect(() => {
     if (!editTowId || !companyId) return
     const loadTowForEdit = async () => {
+      setEditHydrationSettled(false)
+      editRouteBaselineRef.current = null
+      editSeededDistanceRef.current = null
       try {
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
@@ -612,9 +769,21 @@ export function useTowForm(editTowId?: string) {
         setTowType(towTypeMap[tow.tow_type] || 'single')
         // Notes
         setNotes(tow.notes || '')
-        // Price
+        // Price — preserve manual/custom value; live recompute activates on route change
         setCustomPrice(String(tow.final_price ?? 0))
-        setPriceMode(tow.price_mode || 'custom')
+        loadedEditPriceModeRef.current = tow.price_mode || 'custom'
+        const loadedMode = String(tow.price_mode || 'custom')
+        if (loadedMode === 'recommended_customer') {
+          setPriceMode('recommended_customer')
+        } else if (loadedMode === 'recommended') {
+          setPriceMode('recommended')
+        } else if (loadedMode === 'fixed') {
+          setPriceMode('fixed')
+        } else if (loadedMode === 'customer') {
+          setPriceMode('customer')
+        } else {
+          setPriceMode('custom')
+        }
         setCustomerOrderNumber(tow.customer_order_number || '')
         setOrderNumber(tow.order_number || null)
         setDepartment(tow.department || '')
@@ -769,18 +938,53 @@ export function useTowForm(editTowId?: string) {
           )
           setSelectedServices([])
         } else {
-          // Single tow - vehicle
-          const firstVehicle = tow.points
+          // Single tow - vehicle (tow_vehicles row wins over point junction for full columns)
+          const vehicleFromPoints = tow.points
             ?.flatMap((p: any) => p.vehicles || [])
-            ?.find((pv: any) => pv.vehicle)?.vehicle
-          if (firstVehicle) {
+            ?.find((pv: any) => pv.vehicle)?.vehicle as TowVehicleEditRow | undefined
+          const vehicleFromTow = [...(tow.vehicles ?? [])].sort(
+            (a: { order_index?: number | null }, b: { order_index?: number | null }) =>
+              (a.order_index ?? 0) - (b.order_index ?? 0)
+          )[0] as TowVehicleEditRow | undefined
+          const firstVehicle: TowVehicleEditRow | undefined =
+            vehicleFromTow || vehicleFromPoints
+              ? { ...vehicleFromPoints, ...vehicleFromTow }
+              : undefined
+
+          if (firstVehicle?.plate_number) {
             setVehiclePlate(firstVehicle.plate_number || '')
-            setVehicleCode('')
-            setVehicleType((firstVehicle as any).vehicle_type || '')
-            const defectsRaw = firstVehicle.tow_reason || ''
+            setVehicleCode(firstVehicle.vehicle_code || '')
+            const savedType = (firstVehicle.vehicle_type || '') as VehicleType | ''
+            setVehicleType(savedType)
+
             setSelectedDefects(
-              defectsRaw.split(',').map((s: string) => s.trim()).filter(Boolean)
+              (firstVehicle.tow_reason || '')
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             )
+
+            const lookupResult = buildVehicleLookupResultFromTowVehicle(firstVehicle)
+            if (lookupResult) {
+              setVehicleData(lookupResult)
+              setVehicleLookupNotFound(false)
+              if (!savedType && lookupResult.source) {
+                setVehicleType(lookupResult.source)
+              }
+              setManualManufacturer('')
+              setManualColor('')
+              setManualWeight('')
+            } else {
+              setVehicleData(null)
+              setVehicleLookupNotFound(true)
+              setManualManufacturer(firstVehicle.manufacturer || '')
+              setManualColor(firstVehicle.color || '')
+              setManualWeight(
+                firstVehicle.total_weight != null
+                  ? String(firstVehicle.total_weight)
+                  : ''
+              )
+            }
           }
           // Points / addresses → unified route list
           if (tow.points && tow.points.length > 0) {
@@ -826,11 +1030,26 @@ export function useTowForm(editTowId?: string) {
                 orderNotes: p.order_notes || '',
               }))
             )
+            editRouteBaselineRef.current =
+              routeStopsDistanceSignatureFromPoints(sortedSinglePoints)
             const dropoffPoint = sortedSinglePoints.find(
               (p: { point_type: string }) => p.point_type === 'dropoff'
             )
             if (dropoffPoint?.is_storage) {
               setDropoffToStorage(true)
+            }
+          }
+
+          // Bootstrap distance for recommended edit until Maps recalc completes
+          if (
+            (tow.tow_type === 'simple' || tow.tow_type === 'with_base') &&
+            (loadedMode === 'recommended' || loadedMode === 'recommended_customer') &&
+            !tow.start_from_base
+          ) {
+            const savedKm = Number(tow.price_breakdown?.distance_km ?? 0)
+            if (savedKm > 0) {
+              editSeededDistanceRef.current = savedKm
+              setDistance({ distanceKm: savedKm, durationMinutes: 0 })
             }
           }
         }
@@ -879,6 +1098,8 @@ export function useTowForm(editTowId?: string) {
             setWorkingVehicleSource('storage')
           }
         }
+
+        setEditHydrationSettled(true)
       } catch (err) {
         console.error('Error loading tow for edit:', err)
       }
@@ -902,6 +1123,17 @@ export function useTowForm(editTowId?: string) {
           setCustomersLoading(false)
         })
 
+      // Populate surcharges as soon as each query resolves — not blocked on getCustomersWithPricing
+      getTimeSurcharges(companyId)
+        .then((value) => setTimeSurchargesData(value))
+        .catch((err) => console.error('Error loading timeSurcharges:', err))
+      getLocationSurcharges(companyId)
+        .then((value) => setLocationSurchargesData(value))
+        .catch((err) => console.error('Error loading locationSurcharges:', err))
+      getServiceSurcharges(companyId)
+        .then((value) => setServiceSurchargesData(value))
+        .catch((err) => console.error('Error loading serviceSurcharges:', err))
+
       const results = await Promise.allSettled([
         getDrivers(companyId),
         getTrucks(companyId),
@@ -909,9 +1141,6 @@ export function useTowForm(editTowId?: string) {
         getWeightBrackets(companyId),
         getFixedPriceItems(companyId),
         getCustomersWithPricing(companyId),
-        getTimeSurcharges(companyId),
-        getLocationSurcharges(companyId),
-        getServiceSurcharges(companyId),
         getCompanySettings(companyId),
       ])
 
@@ -922,9 +1151,6 @@ export function useTowForm(editTowId?: string) {
         weightBracketsResult,
         fixedPriceItemsResult,
         customersWithPricingResult,
-        timeSurchargesResult,
-        locationSurchargesResult,
-        serviceSurchargesResult,
         companySettingsResult,
       ] = results
 
@@ -964,24 +1190,6 @@ export function useTowForm(editTowId?: string) {
         setCustomersWithPricing(customersWithPricingResult.value)
       } else {
         console.error('Error loading customersWithPricing:', customersWithPricingResult.reason)
-      }
-
-      if (timeSurchargesResult.status === 'fulfilled') {
-        setTimeSurchargesData(timeSurchargesResult.value)
-      } else {
-        console.error('Error loading timeSurcharges:', timeSurchargesResult.reason)
-      }
-
-      if (locationSurchargesResult.status === 'fulfilled') {
-        setLocationSurchargesData(locationSurchargesResult.value)
-      } else {
-        console.error('Error loading locationSurcharges:', locationSurchargesResult.reason)
-      }
-
-      if (serviceSurchargesResult.status === 'fulfilled') {
-        setServiceSurchargesData(serviceSurchargesResult.value)
-      } else {
-        console.error('Error loading serviceSurcharges:', serviceSurchargesResult.reason)
       }
 
       if (companySettingsResult.status === 'fulfilled') {
@@ -1557,6 +1765,7 @@ export function useTowForm(editTowId?: string) {
     setVehicleCode('')
     setVehicleData(null)
     setVehicleType('')
+    setVehicleLookupNotFound(false)
     setSelectedDefects([])
     setRouteStops(createDefaultRouteStops())
     setDistance(null)
@@ -1788,6 +1997,7 @@ export function useTowForm(editTowId?: string) {
     vehicleCode, setVehicleCode,
     vehicleData, setVehicleData,
     vehicleType, setVehicleType,
+    vehicleLookupNotFound, setVehicleLookupNotFound,
     selectedDefects, setSelectedDefects,
     requiredTruckTypes, setRequiredTruckTypes,
     truckTypeError, setTruckTypeError,

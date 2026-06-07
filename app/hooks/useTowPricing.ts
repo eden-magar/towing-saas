@@ -151,17 +151,21 @@ export function useTowPricing(params: UseTowPricingParams) {
       if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
       if (setLocationSurchargesData) setLocationSurchargesData(selectedCustomerPricing.customer_location_surcharges || [])
       if (setServiceSurchargesData) setServiceSurchargesData(selectedCustomerPricing.customer_service_surcharges || [])
-      if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
-      if (setSelectedServices) setSelectedServices([])
+      if (!isEditMode) {
+        if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
+        if (setSelectedServices) setSelectedServices([])
+      }
     } else if (priceMode === 'recommended') {
       setActiveTimeSurchargesList(getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday))
       if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
       if (setLocationSurchargesData) setLocationSurchargesData(companyLocationSurchargesData || [])
       if (setServiceSurchargesData) setServiceSurchargesData(companyServiceSurchargesData || [])
-      if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
-      if (setSelectedServices) setSelectedServices([])
+      if (!isEditMode) {
+        if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
+        if (setSelectedServices) setSelectedServices([])
+      }
     }
-  }, [priceMode, selectedCustomerPricing])
+  }, [priceMode, selectedCustomerPricing, isEditMode])
 
   // Time surcharges calculation
   useEffect(() => {

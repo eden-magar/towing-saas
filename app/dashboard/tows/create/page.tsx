@@ -163,6 +163,8 @@ function CreateTowForm({
     setVehicleData,
     vehicleType,
     setVehicleType,
+    vehicleLookupNotFound,
+    setVehicleLookupNotFound,
     requiredTruckTypes,
     setRequiredTruckTypes,
     truckTypeError,
@@ -365,7 +367,6 @@ function CreateTowForm({
     setShowDriverPicker(true)
   }
   const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
-  const [vehicleNotFound, setVehicleNotFound] = useState(false)
   const [showTruckModal, setShowTruckModal] = useState(false)
   const [showDefectsModal, setShowDefectsModal] = useState(false)
   const [showDefectsExchangeModal, setShowDefectsExchangeModal] = useState(false)
@@ -742,11 +743,11 @@ function CreateTowForm({
       if (result.found && result.data) {
         setVehicleData(result)
         setVehicleType(result.source || 'private')
-        setVehicleNotFound(false)
+        setVehicleLookupNotFound(false)
       } else {
         setVehicleData(null)
         setVehicleType('')
-        setVehicleNotFound(true)
+        setVehicleLookupNotFound(true)
         setManualManufacturer('')
         setManualColor('')
         setManualWeight('')
@@ -1223,7 +1224,7 @@ function CreateTowForm({
                               <input
                                 type="text"
                                 value={vehiclePlate}
-                                onChange={(e) => { setVehiclePlate(normalizePlate(e.target.value)); setPlateStorageWarning(null); setVehicleNotFound(false) }}
+                                onChange={(e) => { setVehiclePlate(normalizePlate(e.target.value)); setPlateStorageWarning(null); setVehicleLookupNotFound(false) }}
                                 onBlur={async (e) => {
                                   const val = e.target.value.trim()
                                   if (val && val.replace(/[^0-9]/g, '').length >= 5) {
@@ -1352,7 +1353,7 @@ function CreateTowForm({
                             </div>
                           </div>
                         )}
-                        {vehicleNotFound && (
+                        {vehicleLookupNotFound && (
                           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
                             <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
                             <div className="grid grid-cols-2 gap-3">
@@ -1418,7 +1419,7 @@ function CreateTowForm({
                           >
                             🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
                           </button>
-                          {vehicleData === null && !vehicleNotFound ? (
+                          {vehicleData === null && !vehicleLookupNotFound ? (
                             <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-2 py-3 text-center text-sm text-gray-400">
                               סוג הגרר יופיע לאחר בדיקת רישוי
                             </div>
@@ -1632,7 +1633,7 @@ function CreateTowForm({
                       </div>
                     )}
 
-                    {showTruckModal && (vehicleData !== null || vehicleNotFound) && (
+                    {showTruckModal && (vehicleData !== null || vehicleLookupNotFound) && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
                         <div className="bg-white rounded-2xl shadow-2xl w-[320px]">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">

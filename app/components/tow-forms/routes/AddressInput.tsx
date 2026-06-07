@@ -242,11 +242,9 @@ export function AddressInput({
     setLocalValue(newValue)
     
     if (isAddressDataMode) {
-      // In AddressData mode, update with partial data
-      const existingData = value as AddressData
+      // Drop stale coordinates until user picks from autocomplete / pin / link
       (onChange as (data: AddressData) => void)({
-        ...existingData,
-        address: newValue
+        address: newValue,
       })
     } else {
       (onChange as (value: string) => void)(newValue)

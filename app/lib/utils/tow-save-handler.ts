@@ -800,6 +800,18 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
   }
 }
 
+/** Single-tow save: always rebuild from live distance/surcharges; keep manual total when priceMode is custom. */
+export function buildSingleTowPriceBreakdownForSave(input: SaveTowInput): PriceBreakdown | null {
+  const fresh = buildSingleTowPriceBreakdown(input)
+  if (input.priceMode === 'custom') {
+    const manual = Number(input.finalPrice)
+    if (Number.isFinite(manual) && manual >= 0) {
+      return { ...fresh, total: round2(manual) }
+    }
+  }
+  return fresh
+}
+
 /**
  * בניית פירוט מחיר לגרירה מותאמת (custom)
  * Uses the same calculateTowPrice path as single tow: multi-vehicle base sum, route distance,
@@ -942,18 +954,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירה רגילה
   if (input.towType === 'single') {
-    const priceBreakdown = input.priceMode === 'custom'
-  ? (input.existingPriceBreakdown
-      ? {
-          ...input.existingPriceBreakdown,
-          location_surcharges: buildLocationSurchargesBreakdown(
-            input,
-            input.existingPriceBreakdown.base_price + input.existingPriceBreakdown.distance_price
-          ),
-          service_surcharges: buildServiceSurchargesBreakdown(input)
-        }
-      : null)
-  : buildSingleTowPriceBreakdown(input)
+    const priceBreakdown = buildSingleTowPriceBreakdownForSave(input)
     
     const vehicles: PreparedTowData['vehicles'] = assignExistingVehicleIds(
       [{

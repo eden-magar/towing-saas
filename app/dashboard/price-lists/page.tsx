@@ -154,7 +154,13 @@ export default function PriceListsPage() {
 
     try {
       setLoading(true)
-      const data = await getFullPriceList(companyId)
+      const [data, brackets] = await Promise.all([
+        getFullPriceList(companyId),
+        getWeightBrackets(companyId).catch((bracketError) => {
+          console.error('Error loading weight brackets:', bracketError)
+          return null
+        }),
+      ])
 
       // Base prices
       if (data.basePriceList) {
@@ -176,13 +182,11 @@ export default function PriceListsPage() {
         }
       }
 
-      try {
-        const brackets = await getWeightBrackets(companyId)
+      if (brackets) {
         setWeightBrackets(
           brackets.map(b => ({ id: b.id, min_kg: b.min_kg, max_kg: b.max_kg, base_price: b.base_price }))
         )
-      } catch (bracketError) {
-        console.error('Error loading weight brackets:', bracketError)
+      } else {
         setWeightBrackets([])
       }
 
