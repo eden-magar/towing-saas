@@ -428,7 +428,7 @@ function DriverFilterPanel({
 
 export default function CalendarPage() {
   const { companyId, loading: authLoading } = useAuth()
-  const [view, setView] = useState<'week' | 'day'>('week')
+  const [view, setView] = useState<'week' | 'day'>('day')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
   const [showAllDrivers, setShowAllDrivers] = useState(true)
   const [showUnassigned, setShowUnassigned] = useState(true)
