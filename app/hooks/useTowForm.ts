@@ -30,6 +30,7 @@ import {
 } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
 import { extractBasePrices, resolveVehicleBasePrice } from '../lib/utils/price-calculator'
+import { buildExchangePriceAffectingSignature } from '../lib/utils/tow-save-handler'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
@@ -441,6 +442,8 @@ export function useTowForm(editTowId?: string) {
   const editSeededExchangeBaseRef = useRef<number | null>(null)
   const editExchangeRouteLayoutRef = useRef<'four_point' | 'hub' | null>(null)
   const editExchangeRouteBaselineRef = useRef<string | null>(null)
+  const editExchangePriceBaselineRef = useRef<string | null>(null)
+  const editExchangePriceBaselineCapturedRef = useRef(false)
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
@@ -556,6 +559,8 @@ export function useTowForm(editTowId?: string) {
     editSeededExchangeBaseRef.current = null
     editExchangeRouteLayoutRef.current = null
     editExchangeRouteBaselineRef.current = null
+    editExchangePriceBaselineRef.current = null
+    editExchangePriceBaselineCapturedRef.current = false
     setEditHydrationSettled(false)
   }, [editTowId])
 
@@ -636,6 +641,67 @@ export function useTowForm(editTowId?: string) {
       editRouteBaselineRef.current = routeStopsDistanceSignature
     }
   }, [editTowId, towType, editHydrationSettled, routeStopsDistanceSignature])
+
+  // Capture exchange edit price-affecting baseline once after hydration settles
+  useEffect(() => {
+    if (!editTowId || towType !== 'exchange' || !editHydrationSettled) return
+    if (editExchangePriceBaselineCapturedRef.current) return
+    if (!towDate || !towTime) return
+
+    const manualAdj = parseFloat(manualAdjustmentPercent ?? '') || 0
+    editExchangePriceBaselineRef.current = buildExchangePriceAffectingSignature({
+      exchangeRouteLayout: editExchangeRouteLayoutRef.current,
+      workingVehicleSourceAddress: workingVehicleAddress,
+      workingVehicleDestinationAddress,
+      exchangePointAddress: exchangeAddress,
+      defectiveDestinationAddress,
+      stopsBeforeExchange,
+      stopsAfterExchange,
+      workingVehicleType: workingVehicleType || undefined,
+      defectiveVehicleType: defectiveVehicleType || undefined,
+      workingManualWeight,
+      defectiveManualWeight,
+      priceMode,
+      selectedLocationSurcharges,
+      workingSelectedServices,
+      defectiveSelectedServices,
+      activeTimeSurchargeIds: activeTimeSurchargesList.map((s) => s.id),
+      timeSurchargesData,
+      isHoliday,
+      hasManualTimeSurchargeOverride,
+      manualAdjustmentPercent:
+        manualAdjustmentType === 'discount' ? -manualAdj : manualAdj,
+      towDate,
+      towTime,
+    })
+    editExchangePriceBaselineCapturedRef.current = true
+  }, [
+    editTowId,
+    towType,
+    editHydrationSettled,
+    towDate,
+    towTime,
+    workingVehicleAddress,
+    workingVehicleDestinationAddress,
+    exchangeAddress,
+    defectiveDestinationAddress,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+    workingVehicleType,
+    defectiveVehicleType,
+    workingManualWeight,
+    defectiveManualWeight,
+    priceMode,
+    selectedLocationSurcharges,
+    workingSelectedServices,
+    defectiveSelectedServices,
+    activeTimeSurchargesList,
+    timeSurchargesData,
+    isHoliday,
+    hasManualTimeSurchargeOverride,
+    manualAdjustmentPercent,
+    manualAdjustmentType,
+  ])
 
   // Calculate base to pickup distance
   useEffect(() => {
@@ -883,6 +949,8 @@ export function useTowForm(editTowId?: string) {
       editRouteBaselineRef.current = null
       editSeededDistanceRef.current = null
       editSeededExchangeBaseRef.current = null
+      editExchangePriceBaselineRef.current = null
+      editExchangePriceBaselineCapturedRef.current = false
       try {
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
@@ -2241,6 +2309,13 @@ export function useTowForm(editTowId?: string) {
     defectiveManualManufacturer,
     defectiveManualColor,
     defectiveManualWeight,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+    timeSurchargesData,
+    isHoliday,
+    hasManualTimeSurchargeOverride,
+    getExchangeEditPriceBaselineSignature: () => editExchangePriceBaselineRef.current,
+    getExchangeRouteLayout: () => editExchangeRouteLayoutRef.current,
     setSavedTowId,
     setShowAssignNowModal,
   })
@@ -2357,6 +2432,8 @@ export function useTowForm(editTowId?: string) {
     defectiveDestinationContactPhone, setDefectiveDestinationContactPhone,
     stopsBeforeExchange, setStopsBeforeExchange,
     stopsAfterExchange, setStopsAfterExchange,
+    getExchangeEditPriceBaselineSignature: () => editExchangePriceBaselineRef.current,
+    getExchangeRouteLayout: () => editExchangeRouteLayoutRef.current,
     exchangeTotalDistance, setExchangeTotalDistance,
     exchangeDistanceLoading, setExchangeDistanceLoading,
     hasSecondTruck, setHasSecondTruck,

@@ -1,5 +1,11 @@
 import { PriceBreakdown } from '../queries/tows'
-import { CustomerWithPricing, TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../queries/price-lists'
+import {
+  CustomerWithPricing,
+  TimeSurcharge,
+  LocationSurcharge,
+  ServiceSurcharge,
+  getActiveTimeSurcharges,
+} from '../queries/price-lists'
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
 import { calculateTowPrice, extractBasePrices, resolveVehicleBasePrice } from './price-calculator'
@@ -110,6 +116,9 @@ export interface SaveTowInput {
   
   // Surcharges (for single tow)
   activeTimeSurcharges?: TimeSurcharge[]
+  timeSurchargesData?: TimeSurcharge[]
+  isHoliday?: boolean
+  hasManualTimeSurchargeOverride?: boolean
   selectedLocationSurcharges?: string[]
   locationSurchargesData?: LocationSurcharge[]
   selectedServices?: SelectedService[]
@@ -151,6 +160,126 @@ export interface SaveTowInput {
   workingVehicleDestinationIsStorage?: boolean
   defectiveDestination?: 'storage' | 'address'
   linkedTowId?: string
+  /** Exchange edit: baseline signature captured at hydration — unchanged inputs keep saved price */
+  exchangeEditPriceBaselineSignature?: string | null
+  exchangeEditOriginalFinalPrice?: number | null
+  exchangeRouteLayout?: 'four_point' | 'hub' | null
+  stopsBeforeExchange?: { address: AddressData }[]
+  stopsAfterExchange?: { address: AddressData }[]
+}
+
+export type ExchangePriceAffectingFields = {
+  exchangeRouteLayout?: 'four_point' | 'hub' | null
+  workingVehicleSourceAddress?: AddressData
+  workingVehicleDestinationAddress?: AddressData
+  exchangePointAddress?: AddressData
+  defectiveDestinationAddress?: AddressData
+  stopsBeforeExchange?: { address: AddressData }[]
+  stopsAfterExchange?: { address: AddressData }[]
+  workingVehicleType?: string
+  defectiveVehicleType?: string
+  workingManualWeight?: string
+  defectiveManualWeight?: string
+  priceMode: string
+  selectedLocationSurcharges?: string[]
+  workingSelectedServices?: SelectedService[]
+  defectiveSelectedServices?: SelectedService[]
+  activeTimeSurchargeIds?: string[]
+  timeSurchargesData?: TimeSurcharge[]
+  isHoliday?: boolean
+  hasManualTimeSurchargeOverride?: boolean
+  manualAdjustmentPercent?: number
+  towDate?: string
+  towTime?: string
+}
+
+function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string {
+  if (fields.hasManualTimeSurchargeOverride) {
+    return [...(fields.activeTimeSurchargeIds ?? [])].sort().join(',')
+  }
+  if (fields.towDate && fields.towTime && fields.timeSurchargesData?.length) {
+    return getActiveTimeSurcharges(
+      fields.timeSurchargesData,
+      fields.towTime,
+      fields.towDate,
+      fields.isHoliday ?? false
+    )
+      .map((s) => s.id)
+      .sort()
+      .join(',')
+  }
+  return ''
+}
+
+function exchangeAddressPart(a?: AddressData): string {
+  if (!a?.address?.trim()) return ''
+  return `${a.address}|${a.lat ?? ''}|${a.lng ?? ''}`
+}
+
+function exchangeStopsSignature(stops?: { address: AddressData }[]): string {
+  return (stops ?? []).map((s) => exchangeAddressPart(s.address)).join('>')
+}
+
+function exchangeServicesSignature(services?: SelectedService[]): string {
+  return JSON.stringify(
+    (services ?? [])
+      .map((s) => ({ id: s.id, q: s.quantity ?? null, m: s.manualPrice ?? null }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+  )
+}
+
+/** Stable signature of exchange inputs that affect recommended/custom price calculation. */
+export function buildExchangePriceAffectingSignature(
+  fields: ExchangePriceAffectingFields
+): string {
+  return JSON.stringify({
+    layout: fields.exchangeRouteLayout ?? '',
+    working: exchangeAddressPart(fields.workingVehicleSourceAddress),
+    workingDest: exchangeAddressPart(fields.workingVehicleDestinationAddress),
+    exchange: exchangeAddressPart(fields.exchangePointAddress),
+    defective: exchangeAddressPart(fields.defectiveDestinationAddress),
+    stopsBefore: exchangeStopsSignature(fields.stopsBeforeExchange),
+    stopsAfter: exchangeStopsSignature(fields.stopsAfterExchange),
+    workingType: fields.workingVehicleType ?? '',
+    defectiveType: fields.defectiveVehicleType ?? '',
+    workingWeight: fields.workingManualWeight ?? '',
+    defectiveWeight: fields.defectiveManualWeight ?? '',
+    priceMode: fields.priceMode,
+    location: [...(fields.selectedLocationSurcharges ?? [])].sort().join(','),
+    workingSvc: exchangeServicesSignature(fields.workingSelectedServices),
+    defectiveSvc: exchangeServicesSignature(fields.defectiveSelectedServices),
+    timeIds: exchangeTimeSurchargeIds(fields),
+    towDate: fields.towDate ?? '',
+    towTime: fields.towTime ?? '',
+    manualAdj: fields.manualAdjustmentPercent ?? 0,
+  })
+}
+
+export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string {
+  return buildExchangePriceAffectingSignature({
+    exchangeRouteLayout: input.exchangeRouteLayout,
+    workingVehicleSourceAddress: input.workingVehicleSourceAddress,
+    workingVehicleDestinationAddress: input.workingVehicleDestinationAddress,
+    exchangePointAddress: input.exchangePointAddress,
+    defectiveDestinationAddress: input.defectiveDestinationAddress,
+    stopsBeforeExchange: input.stopsBeforeExchange,
+    stopsAfterExchange: input.stopsAfterExchange,
+    workingVehicleType: input.workingVehicleType,
+    defectiveVehicleType: input.defectiveVehicleType,
+    workingManualWeight: input.workingManualWeight,
+    defectiveManualWeight: input.defectiveManualWeight,
+    priceMode: input.priceMode,
+    selectedLocationSurcharges: input.selectedLocationSurcharges,
+    workingSelectedServices: input.workingSelectedServices,
+    defectiveSelectedServices: input.defectiveSelectedServices,
+    activeTimeSurchargeIds: (input.activeTimeSurcharges ?? []).map((s) => s.id),
+    timeSurchargesData: input.timeSurchargesData,
+    isHoliday: input.isHoliday,
+    hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
+    manualAdjustmentPercent: input.manualAdjustmentPercent,
+    towDate: input.towDate,
+    towTime: input.towTime,
+  })
 }
 
 // ==================== NEW: TowPoint Types ====================
@@ -1114,14 +1243,31 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירת החלפה (exchange)
   if (input.towType === 'exchange') {
-  let priceBreakdown: PriceBreakdown | null =
-    input.priceMode === 'custom'
-      ? (input.existingPriceBreakdown ?? null)
-      : buildSingleTowPriceBreakdown(input)
+  const exchangePriceInputsUnchanged =
+    input.exchangeEditPriceBaselineSignature != null &&
+    exchangePriceSignatureFromSaveInput(input) === input.exchangeEditPriceBaselineSignature &&
+    input.existingPriceBreakdown != null
+
+  let priceBreakdown: PriceBreakdown | null
+  let resolvedExchangeFinalPrice: number | undefined
+
+  if (exchangePriceInputsUnchanged) {
+    priceBreakdown = structuredClone(input.existingPriceBreakdown!)
+    resolvedExchangeFinalPrice =
+      input.exchangeEditOriginalFinalPrice ??
+      input.existingPriceBreakdown!.total ??
+      input.finalPrice
+  } else if (input.priceMode === 'custom') {
+    priceBreakdown = input.existingPriceBreakdown ?? null
+    resolvedExchangeFinalPrice = input.finalPrice
+  } else {
+    priceBreakdown = buildSingleTowPriceBreakdown(input)
+    resolvedExchangeFinalPrice = input.finalPrice
+  }
 
   const useExchangeServiceRoles =
     input.workingSelectedServices !== undefined || input.defectiveSelectedServices !== undefined
-  if (priceBreakdown && useExchangeServiceRoles) {
+  if (priceBreakdown && useExchangeServiceRoles && !exchangePriceInputsUnchanged) {
     priceBreakdown = {
       ...priceBreakdown,
       service_surcharges: buildExchangeServiceSurchargesBreakdown(
@@ -1372,7 +1518,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     scheduledAt,
     scheduledEndAt,
     notes: input.notes || undefined,
-    finalPrice: input.finalPrice || undefined,
+    finalPrice:
+      resolvedExchangeFinalPrice != null
+        ? resolvedExchangeFinalPrice
+        : input.finalPrice || undefined,
     priceMode: input.priceMode,
     priceBreakdown,
     vehicles: vehiclesWithIds,

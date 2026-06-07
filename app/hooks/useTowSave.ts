@@ -137,6 +137,13 @@ interface UseTowSaveParams {
   selectedWorkingVehicleId?: string | null
   workingVehicleDestinationIsStorage?: boolean
   defectiveDestination?: 'storage' | 'address'
+  stopsBeforeExchange?: { id: string; address: AddressData; contactName: string; contactPhone: string; notes: string }[]
+  stopsAfterExchange?: { id: string; address: AddressData; contactName: string; contactPhone: string; notes: string }[]
+  timeSurchargesData?: import('../lib/queries/price-lists').TimeSurcharge[]
+  isHoliday?: boolean
+  hasManualTimeSurchargeOverride?: boolean
+  getExchangeEditPriceBaselineSignature?: () => string | null
+  getExchangeRouteLayout?: () => 'four_point' | 'hub' | null
   // Post-save
   setSavedTowId: (id: string) => void
   setShowAssignNowModal: (v: boolean) => void
@@ -245,6 +252,13 @@ export function useTowSave(params: UseTowSaveParams) {
     selectedWorkingVehicleId,
     workingVehicleDestinationIsStorage,
     defectiveDestination,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+    timeSurchargesData,
+    isHoliday,
+    hasManualTimeSurchargeOverride,
+    getExchangeEditPriceBaselineSignature,
+    getExchangeRouteLayout,
     setSavedTowId,
     setShowAssignNowModal,
   } = params
@@ -425,6 +439,23 @@ export function useTowSave(params: UseTowSaveParams) {
       workingSelectedServices: towType === 'exchange' ? workingSelectedServices : undefined,
       defectiveSelectedServices: towType === 'exchange' ? defectiveSelectedServices : undefined,
       existingPriceBreakdown: originalTow?.price_breakdown ?? null,
+      timeSurchargesData,
+      isHoliday,
+      hasManualTimeSurchargeOverride,
+      stopsBeforeExchange: towType === 'exchange' ? stopsBeforeExchange : undefined,
+      stopsAfterExchange: towType === 'exchange' ? stopsAfterExchange : undefined,
+      exchangeRouteLayout:
+        editTowId && towType === 'exchange'
+          ? (getExchangeRouteLayout?.() ?? null)
+          : undefined,
+      exchangeEditPriceBaselineSignature:
+        editTowId && towType === 'exchange'
+          ? (getExchangeEditPriceBaselineSignature?.() ?? null)
+          : undefined,
+      exchangeEditOriginalFinalPrice:
+        editTowId && towType === 'exchange'
+          ? (originalTow?.final_price ?? null)
+          : undefined,
     })
 
     if (editTowId) {
