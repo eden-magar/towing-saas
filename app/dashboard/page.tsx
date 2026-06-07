@@ -17,7 +17,7 @@
   import EditShiftModal from '../components/EditShiftModal'
   import { formatOpenShiftDuration, formatShiftStartJerusalem } from '../lib/shift-datetime'
   import Link from 'next/link'
-  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play } from 'lucide-react'
+  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play, X } from 'lucide-react'
   import { getEffectiveTowStartIso, getTowTimeBounds } from '../lib/utils/tow-time-bounds'
   import {
     getOverlapLayout,
@@ -139,6 +139,8 @@
     const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
     const [listDate, setListDate] = useState(() => startOfDay(new Date()))
     const [listTows, setListTows] = useState<TowWithDetails[]>([])
+    const [showDriverModal, setShowDriverModal] = useState(false)
+    const [pendingSlot, setPendingSlot] = useState<{ date: Date; hour: number } | null>(null)
     const [activeDrivers, setActiveDrivers] = useState<any[]>([])
     const [allDrivers, setAllDrivers] = useState<any[]>([])
     const [activeTasks, setActiveTasks] = useState<number>(0)
@@ -373,6 +375,38 @@
     }
 
     const goToListToday = () => setListDate(startOfDay(new Date()))
+
+    const handleSlotClick = (date: Date, hour: number) => {
+      const slotDate = new Date(date)
+      slotDate.setHours(hour, 0, 0, 0)
+      setPendingSlot({ date: slotDate, hour })
+      setShowDriverModal(true)
+    }
+
+    const closeDriverModal = () => {
+      setShowDriverModal(false)
+      setPendingSlot(null)
+    }
+
+    const handleDriverSelect = (driverId: string) => {
+      if (!pendingSlot) return
+      const year = pendingSlot.date.getFullYear()
+      const month = (pendingSlot.date.getMonth() + 1).toString().padStart(2, '0')
+      const day = pendingSlot.date.getDate().toString().padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
+      const timeStr = `${pendingSlot.hour.toString().padStart(2, '0')}:00`
+      router.push(`/dashboard/tows/create?date=${dateStr}&time=${timeStr}&driver=${driverId}`)
+    }
+
+    const handleCreateWithoutDriver = () => {
+      if (!pendingSlot) return
+      const year = pendingSlot.date.getFullYear()
+      const month = (pendingSlot.date.getMonth() + 1).toString().padStart(2, '0')
+      const day = pendingSlot.date.getDate().toString().padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
+      const timeStr = `${pendingSlot.hour.toString().padStart(2, '0')}:00`
+      router.push(`/dashboard/tows/create?date=${dateStr}&time=${timeStr}`)
+    }
 
     useEffect(() => {
       if (authLoading) return
@@ -701,110 +735,110 @@
                   ליומן המלא ←
                 </Link>
               </div>
-              <div className="flex-1 min-h-0 min-w-0 flex overflow-hidden">
-                {sortedAssignedListTows.length === 0 ? (
-                  <div className="flex flex-1 items-center justify-center text-gray-300 text-sm px-4 text-center">
+              <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+                {sortedAssignedListTows.length === 0 && (
+                  <div className="px-3 py-1 text-xs text-gray-400 text-center shrink-0 border-b border-gray-50">
                     אין גרירות משובצות
                   </div>
-                ) : (
-                  <>
-                    <div
-                      ref={dashCalendarScrollRef}
-                      className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden"
-                    >
-                      <div className="flex min-w-0" style={{ height: `${DASH_GRID_HEIGHT_PX}px` }}>
-                        <div className="flex-1 relative min-w-0 border-r border-gray-100">
-                          {DASH_CALENDAR_HOURS.map((hour) => (
-                            <div
-                              key={hour}
-                              className="border-b border-gray-50"
-                              style={{ height: `${PIXELS_PER_HOUR_DASH}px` }}
-                            />
-                          ))}
-                          <div className="absolute inset-0 pointer-events-none">
-                            {sortedAssignedListTows.map((tow) => {
-                              const pos: OverlapPosition = listDayOverlapLayout.get(tow.id) ?? {
-                                columnIndex: 0,
-                                totalColumns: 1,
-                                span: 1,
-                              }
-                              const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
-                              const effectiveStartIso = getEffectiveTowStartIso(tow)
-                              const hour =
-                                new Date(effectiveStartIso).getHours() +
-                                new Date(effectiveStartIso).getMinutes() / 60
-                              const top = hour * PIXELS_PER_HOUR_DASH
-                              const driverColor = getDriverColor(tow.driver_id!, allDrivers)
-                              const isCancelled = tow.status === 'cancelled'
-                              const { startMs, endMs } = getTowTimeBounds(tow, now, {
-                                clampEndToDay: listDate,
-                              })
-                              const heightPx = Math.max(
-                                16,
-                                ((endMs - startMs) / 60000 / 60) * PIXELS_PER_HOUR_DASH,
-                              )
+                )}
+                <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                  <div
+                    ref={dashCalendarScrollRef}
+                    className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden"
+                  >
+                    <div className="flex min-w-0" style={{ height: `${DASH_GRID_HEIGHT_PX}px` }}>
+                      <div className="flex-1 relative min-w-0 border-r border-gray-100">
+                        {DASH_CALENDAR_HOURS.map((hour) => (
+                          <div
+                            key={hour}
+                            onClick={() => handleSlotClick(listDate, hour)}
+                            className="border-b border-gray-50 cursor-pointer hover:bg-[#33d4ff]/5 transition-colors"
+                            style={{ height: `${PIXELS_PER_HOUR_DASH}px` }}
+                          />
+                        ))}
+                        <div className="absolute inset-0 pointer-events-none">
+                          {sortedAssignedListTows.map((tow) => {
+                            const pos: OverlapPosition = listDayOverlapLayout.get(tow.id) ?? {
+                              columnIndex: 0,
+                              totalColumns: 1,
+                              span: 1,
+                            }
+                            const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
+                            const effectiveStartIso = getEffectiveTowStartIso(tow)
+                            const hour =
+                              new Date(effectiveStartIso).getHours() +
+                              new Date(effectiveStartIso).getMinutes() / 60
+                            const top = hour * PIXELS_PER_HOUR_DASH
+                            const driverColor = getDriverColor(tow.driver_id!, allDrivers)
+                            const isCancelled = tow.status === 'cancelled'
+                            const { startMs, endMs } = getTowTimeBounds(tow, now, {
+                              clampEndToDay: listDate,
+                            })
+                            const heightPx = Math.max(
+                              16,
+                              ((endMs - startMs) / 60000 / 60) * PIXELS_PER_HOUR_DASH,
+                            )
 
-                              return (
-                                <button
-                                  key={tow.id}
-                                  type="button"
-                                  onClick={() => router.push(`/dashboard/tows/${tow.id}`)}
-                                  className={`absolute pointer-events-auto rounded px-1 py-0.5 text-white overflow-hidden text-[10px] leading-tight text-right hover:brightness-95 transition-[filter] ${
-                                    isCancelled ? 'opacity-60 line-through' : ''
-                                  }`}
-                                  style={{
-                                    top: `${top}px`,
-                                    height: `${heightPx}px`,
-                                    left: `calc(${offsetPct}% + 1px)`,
-                                    width: `calc(${widthPct}% - 2px)`,
-                                    backgroundColor: driverColor,
-                                  }}
-                                >
-                                  <CompactTowBlockStatusBadge status={tow.status} />
-                                  <span className="block truncate pr-3">
-                                    {tow.customer?.name || 'ללא לקוח'}
-                                  </span>
-                                </button>
-                              )
-                            })}
+                            return (
+                              <button
+                                key={tow.id}
+                                type="button"
+                                onClick={() => router.push(`/dashboard/tows/${tow.id}`)}
+                                className={`absolute pointer-events-auto rounded px-1 py-0.5 text-white overflow-hidden text-[10px] leading-tight text-right hover:brightness-95 transition-[filter] ${
+                                  isCancelled ? 'opacity-60 line-through' : ''
+                                }`}
+                                style={{
+                                  top: `${top}px`,
+                                  height: `${heightPx}px`,
+                                  left: `calc(${offsetPct}% + 1px)`,
+                                  width: `calc(${widthPct}% - 2px)`,
+                                  backgroundColor: driverColor,
+                                }}
+                              >
+                                <CompactTowBlockStatusBadge status={tow.status} />
+                                <span className="block truncate pr-3">
+                                  {tow.customer?.name || 'ללא לקוח'}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {isListToday && (
+                          <div
+                            className="absolute right-0 left-0 border-t border-red-500 z-10 pointer-events-none"
+                            style={{ top: `${getCurrentFractionalHour() * PIXELS_PER_HOUR_DASH}px` }}
+                          >
+                            <div className="absolute right-0 w-2 h-2 bg-red-500 rounded-full -mt-1 -mr-1" />
                           </div>
-                          {isListToday && (
-                            <div
-                              className="absolute right-0 left-0 border-t border-red-500 z-10 pointer-events-none"
-                              style={{ top: `${getCurrentFractionalHour() * PIXELS_PER_HOUR_DASH}px` }}
-                            >
-                              <div className="absolute right-0 w-2 h-2 bg-red-500 rounded-full -mt-1 -mr-1" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="w-10 shrink-0 border-r border-gray-100">
-                          {DASH_CALENDAR_HOURS.map((hour) => (
-                            <div
-                              key={hour}
-                              className="text-[10px] text-gray-400 text-center border-b border-gray-50 leading-none pt-0.5"
-                              style={{ height: `${PIXELS_PER_HOUR_DASH}px` }}
-                            >
-                              {hour.toString().padStart(2, '0')}:00
-                            </div>
-                          ))}
-                        </div>
+                        )}
+                      </div>
+                      <div className="w-10 shrink-0 border-r border-gray-100">
+                        {DASH_CALENDAR_HOURS.map((hour) => (
+                          <div
+                            key={hour}
+                            className="text-[10px] text-gray-400 text-center border-b border-gray-50 leading-none pt-0.5"
+                            style={{ height: `${PIXELS_PER_HOUR_DASH}px` }}
+                          >
+                            {hour.toString().padStart(2, '0')}:00
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="w-[110px] shrink-0 border-r border-gray-100 overflow-y-auto py-1.5 px-2 space-y-1.5">
-                      {listDayDrivers.map((driver) => (
-                        <div key={driver.id} className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: getDriverColor(driver.id, allDrivers) }}
-                          />
-                          <span className="text-[10px] text-gray-600 truncate">
-                            {(driver.user?.full_name || '').split(' ')[0] || 'נהג'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                  </div>
+                  <div className="w-[110px] shrink-0 border-r border-gray-100 overflow-y-auto py-1.5 px-2 space-y-1.5">
+                    {listDayDrivers.map((driver) => (
+                      <div key={driver.id} className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: getDriverColor(driver.id, allDrivers) }}
+                        />
+                        <span className="text-[10px] text-gray-600 truncate">
+                          {(driver.user?.full_name || '').split(' ')[0] || 'נהג'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1112,6 +1146,117 @@
                   className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700"
                 >
                   דחה בקשה
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showDriverModal && pendingSlot && (
+          <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50">
+            <div className="bg-white w-full sm:rounded-2xl sm:max-w-md sm:mx-4 overflow-hidden rounded-t-2xl max-h-[80vh] overflow-y-auto">
+              <div className="px-5 py-4 bg-[#33d4ff] text-white flex items-center justify-between sticky top-0">
+                <div>
+                  <h2 className="font-bold text-lg">בחר נהג</h2>
+                  <p className="text-white/80 text-sm">
+                    {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][pendingSlot.date.getDay()]},{' '}
+                    {pendingSlot.date.toLocaleDateString('he-IL')} בשעה {pendingSlot.hour.toString().padStart(2, '0')}:00
+                  </p>
+                </div>
+                <button type="button" onClick={closeDriverModal} className="p-2 hover:bg-white/20 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-2">
+                {allDrivers.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Truck size={40} className="mx-auto mb-3 text-gray-300" />
+                    <p>אין נהגים במערכת</p>
+                    <Link
+                      href="/dashboard/drivers"
+                      className="text-[#33d4ff] hover:underline text-sm mt-2 inline-block"
+                    >
+                      הוסף נהגים
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    {allDrivers.map((driver, index) => {
+                      const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
+                      const targetDate = pendingSlot.date
+                      const driverTowsToday = listTows.filter((t) => {
+                        if (t.driver_id !== driver.id) return false
+                        const towDate = new Date(t.scheduled_at || t.created_at)
+                        return towDate.toDateString() === targetDate.toDateString()
+                      })
+                      const towCount = driverTowsToday.length
+
+                      return (
+                        <button
+                          key={driver.id}
+                          type="button"
+                          onClick={() => handleDriverSelect(driver.id)}
+                          className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-[#33d4ff] hover:bg-[#33d4ff]/5 transition-all text-right"
+                        >
+                          <div
+                            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                            style={{ backgroundColor: color }}
+                          >
+                            {driver.user?.full_name?.charAt(0) || '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-800">{driver.user?.full_name}</p>
+                            <p className="text-sm text-gray-500">{driver.user?.phone || 'אין טלפון'}</p>
+                          </div>
+                          <div className="text-left flex-shrink-0">
+                            {towCount === 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                פנוי
+                              </span>
+                            ) : towCount <= 3 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
+                                <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                                {towCount} גרירות
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                                {towCount} גרירות
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+
+                    <div className="pt-2 border-t border-gray-200 mt-3">
+                      <button
+                        type="button"
+                        onClick={handleCreateWithoutDriver}
+                        className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-500"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <Plus size={20} className="text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium">ללא נהג</p>
+                          <p className="text-sm">שיבוץ מאוחר יותר</p>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="px-5 py-4 border-t border-gray-200 bg-gray-50">
+                <button
+                  type="button"
+                  onClick={closeDriverModal}
+                  className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
+                >
+                  ביטול
                 </button>
               </div>
             </div>
