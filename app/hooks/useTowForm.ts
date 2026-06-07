@@ -137,6 +137,123 @@ function isManualCommercialVehicle(v: TowVehicleEditRow): boolean {
   return false
 }
 
+type ExchangeVehicleHydrationTargets = {
+  setVehicleType: (t: VehicleType | '') => void
+  setVehicleData: (d: VehicleLookupResult | null) => void
+  setVehicleNotFound: (v: boolean) => void
+  setManualManufacturer: (s: string) => void
+  setManualColor: (s: string) => void
+  setManualWeight: (s: string) => void
+}
+
+/** Mirror single-tow edit hydration for one exchange side (working or defective). */
+function hydrateExchangeVehicleFromTowRow(
+  row: TowVehicleEditRow | undefined,
+  targets: ExchangeVehicleHydrationTargets
+) {
+  if (!row?.plate_number) return
+
+  if (isManualCommercialVehicle(row)) {
+    targets.setVehicleType('van' as VehicleType)
+    targets.setVehicleData(null)
+    targets.setVehicleNotFound(true)
+    targets.setManualManufacturer(row.manufacturer || '')
+    targets.setManualColor(row.color || '')
+    targets.setManualWeight(
+      row.total_weight != null ? String(row.total_weight) : ''
+    )
+    return
+  }
+
+  const savedType = (row.vehicle_type || '') as VehicleType | ''
+  targets.setVehicleType(savedType)
+
+  const lookupResult = buildVehicleLookupResultFromTowVehicle(row)
+  if (lookupResult) {
+    targets.setVehicleData(lookupResult)
+    targets.setVehicleNotFound(false)
+    if (!savedType && lookupResult.source) {
+      targets.setVehicleType(lookupResult.source)
+    }
+    targets.setManualManufacturer('')
+    targets.setManualColor('')
+    targets.setManualWeight('')
+    return
+  }
+
+  targets.setVehicleData(null)
+  targets.setVehicleNotFound(true)
+  targets.setManualManufacturer(row.manufacturer || '')
+  targets.setManualColor(row.color || '')
+  targets.setManualWeight(
+    row.total_weight != null ? String(row.total_weight) : ''
+  )
+}
+
+function exchangeRouteDistanceSignatureFromAddresses(
+  working: AddressData,
+  workingDest: AddressData,
+  exchange: AddressData,
+  defective: AddressData,
+  layout: 'four_point' | 'hub' | null
+): string {
+  const part = (a: AddressData) => `${a.address}|${a.lat ?? ''}|${a.lng ?? ''}`
+  return [part(working), part(workingDest), part(exchange), part(defective), layout ?? ''].join(
+    ';;'
+  )
+}
+
+function commercialTypeUsesWeightBrackets(type: string): boolean {
+  return type === 'van'
+}
+
+function buildExchangeDistanceWaypoints(
+  layout: 'four_point' | 'hub' | null,
+  editMode: boolean,
+  working: AddressData,
+  workingDest: AddressData,
+  exchange: AddressData,
+  defective: AddressData,
+  stopsBefore: ExchangeRouteStop[],
+  stopsAfter: ExchangeRouteStop[]
+): AddressData[] {
+  const workingDestDistinct =
+    !!workingDest.address.trim() && workingDest.address !== exchange.address
+
+  if (editMode && layout === 'four_point' && workingDestDistinct) {
+    return [
+      working,
+      ...stopsBefore.map((s) => s.address),
+      workingDest,
+      exchange,
+      ...stopsAfter.map((s) => s.address),
+      defective,
+    ]
+  }
+
+  if (editMode && layout === 'hub') {
+    const chain: AddressData[] = [
+      working,
+      ...stopsBefore.map((s) => s.address),
+      exchange,
+      ...stopsAfter.map((s) => s.address),
+      defective,
+    ]
+    if (workingDestDistinct) {
+      chain.push(workingDest)
+    }
+    return chain
+  }
+
+  return [
+    working,
+    ...stopsBefore.map((s) => s.address),
+    exchange,
+    ...stopsAfter.map((s) => s.address),
+    defective,
+  ]
+}
+
 function buildVehicleLookupResultFromTowVehicle(
   v: TowVehicleEditRow
 ): VehicleLookupResult | null {
@@ -321,6 +438,9 @@ export function useTowForm(editTowId?: string) {
   const editRouteBaselineRef = useRef<string | null>(null)
   const loadedEditPriceModeRef = useRef<string | null>(null)
   const editSeededDistanceRef = useRef<number | null>(null)
+  const editSeededExchangeBaseRef = useRef<number | null>(null)
+  const editExchangeRouteLayoutRef = useRef<'four_point' | 'hub' | null>(null)
+  const editExchangeRouteBaselineRef = useRef<string | null>(null)
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
@@ -433,6 +553,9 @@ export function useTowForm(editTowId?: string) {
     editRouteBaselineRef.current = null
     loadedEditPriceModeRef.current = null
     editSeededDistanceRef.current = null
+    editSeededExchangeBaseRef.current = null
+    editExchangeRouteLayoutRef.current = null
+    editExchangeRouteBaselineRef.current = null
     setEditHydrationSettled(false)
   }, [editTowId])
 
@@ -552,33 +675,66 @@ export function useTowForm(editTowId?: string) {
   // Calculate exchange total distance
   useEffect(() => {
     if (!workingVehicleAddress.address || !exchangeAddress.address || !defectiveDestinationAddress.address) {
-      setExchangeTotalDistance(null)
+      if (
+        !(
+          editTowId &&
+          editSeededDistanceRef.current != null &&
+          editExchangeRouteBaselineRef.current
+        )
+      ) {
+        setExchangeTotalDistance(null)
+      }
       return
     }
+
+    const signatureAtStart = exchangeRouteDistanceSignatureFromAddresses(
+      workingVehicleAddress,
+      workingVehicleDestinationAddress,
+      exchangeAddress,
+      defectiveDestinationAddress,
+      editTowId ? editExchangeRouteLayoutRef.current : null
+    )
+    const preserveSeededOnFailure = () =>
+      !!(
+        editTowId &&
+        editSeededDistanceRef.current != null &&
+        editExchangeRouteBaselineRef.current &&
+        signatureAtStart === editExchangeRouteBaselineRef.current
+      )
+
     const calcExchangeDistance = async () => {
       setExchangeDistanceLoading(true)
       try {
-        // Build ordered waypoints
-        const waypoints: AddressData[] = [
+        await loadGoogleMaps()
+        const waypoints = buildExchangeDistanceWaypoints(
+          editTowId ? editExchangeRouteLayoutRef.current : null,
+          !!editTowId,
           workingVehicleAddress,
-          ...stopsBeforeExchange.map(s => s.address),
+          workingVehicleDestinationAddress,
           exchangeAddress,
-          ...stopsAfterExchange.map(s => s.address),
           defectiveDestinationAddress,
-        ]
-        // Chain calculateDistance calls and sum results
+          stopsBeforeExchange,
+          stopsAfterExchange
+        )
         let totalKm = 0
         let totalMinutes = 0
         for (let i = 0; i < waypoints.length - 1; i++) {
           const result = await calculateDistance(waypoints[i], waypoints[i + 1])
-          if (!result) { setExchangeTotalDistance(null); return }
+          if (!result) {
+            if (!preserveSeededOnFailure()) setExchangeTotalDistance(null)
+            return
+          }
           totalKm += result.distanceKm
           totalMinutes += result.durationMinutes
         }
-        setExchangeTotalDistance({ distanceKm: totalKm, durationMinutes: totalMinutes })
+        editSeededDistanceRef.current = null
+        setExchangeTotalDistance({
+          distanceKm: Math.round(totalKm * 10) / 10,
+          durationMinutes: totalMinutes,
+        })
       } catch (err) {
         console.error('Exchange distance calculation error:', err)
-        setExchangeTotalDistance(null)
+        if (!preserveSeededOnFailure()) setExchangeTotalDistance(null)
       } finally {
         setExchangeDistanceLoading(false)
       }
@@ -586,9 +742,19 @@ export function useTowForm(editTowId?: string) {
     const timeout = setTimeout(calcExchangeDistance, 500)
     return () => clearTimeout(timeout)
   }, [
-    workingVehicleAddress.address, workingVehicleAddress.lat, workingVehicleAddress.lng,
-    exchangeAddress.address, exchangeAddress.lat, exchangeAddress.lng,
-    defectiveDestinationAddress.address, defectiveDestinationAddress.lat, defectiveDestinationAddress.lng,
+    editTowId,
+    workingVehicleAddress.address,
+    workingVehicleAddress.lat,
+    workingVehicleAddress.lng,
+    workingVehicleDestinationAddress.address,
+    workingVehicleDestinationAddress.lat,
+    workingVehicleDestinationAddress.lng,
+    exchangeAddress.address,
+    exchangeAddress.lat,
+    exchangeAddress.lng,
+    defectiveDestinationAddress.address,
+    defectiveDestinationAddress.lat,
+    defectiveDestinationAddress.lng,
     stopsBeforeExchange,
     stopsAfterExchange,
   ])
@@ -716,6 +882,7 @@ export function useTowForm(editTowId?: string) {
       setEditHydrationSettled(false)
       editRouteBaselineRef.current = null
       editSeededDistanceRef.current = null
+      editSeededExchangeBaseRef.current = null
       try {
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
@@ -831,12 +998,32 @@ export function useTowForm(editTowId?: string) {
 
           setWorkingVehiclePlate(working?.plate_number ?? '')
           setWorkingVehicleCode((working as any)?.vehicle_code ?? '')
-          setWorkingVehicleType((working?.vehicle_type as VehicleType) ?? '')
           setDefectiveVehiclePlate(defective?.plate_number ?? '')
           setDefectiveVehicleCode((defective as any)?.vehicle_code ?? '')
-          setDefectiveVehicleType((defective?.vehicle_type as VehicleType) ?? '')
           setSelectedDefects((defective?.tow_reason ?? '').split(', ').filter(Boolean))
           setDefectiveFaultDescription(defective?.tow_reason ?? '')
+
+          if (editTowId) {
+            hydrateExchangeVehicleFromTowRow(working as TowVehicleEditRow | undefined, {
+              setVehicleType: setWorkingVehicleType,
+              setVehicleData: setWorkingVehicleData,
+              setVehicleNotFound: setWorkingVehicleNotFound,
+              setManualManufacturer: setWorkingManualManufacturer,
+              setManualColor: setWorkingManualColor,
+              setManualWeight: setWorkingManualWeight,
+            })
+            hydrateExchangeVehicleFromTowRow(defective as TowVehicleEditRow | undefined, {
+              setVehicleType: setDefectiveVehicleType,
+              setVehicleData: setDefectiveVehicleData,
+              setVehicleNotFound: setDefectiveVehicleNotFound,
+              setManualManufacturer: setDefectiveManualManufacturer,
+              setManualColor: setDefectiveManualColor,
+              setManualWeight: setDefectiveManualWeight,
+            })
+          } else {
+            setWorkingVehicleType((working?.vehicle_type as VehicleType) ?? '')
+            setDefectiveVehicleType((defective?.vehicle_type as VehicleType) ?? '')
+          }
 
           const sortedPoints = [...(tow.points ?? [])].sort(
             (a: any, b: any) => a.point_order - b.point_order
@@ -856,8 +1043,14 @@ export function useTowForm(editTowId?: string) {
           }
 
           const hasExchangeHub = sortedPoints.some((p: any) => p.point_type === 'exchange')
+          let exchangeRouteLayout: 'four_point' | 'hub' = 'hub'
+          let sigWorking: AddressData = { address: '' }
+          let sigWorkingDest: AddressData = { address: '' }
+          let sigExchange: AddressData = { address: '' }
+          let sigDefective: AddressData = { address: '' }
 
           if (hasExchangeHub) {
+            exchangeRouteLayout = 'hub'
             const workingSource = sortedPoints.find(
               (p: any) => p.point_type === 'pickup' && linksOnlyWorking(p)
             )
@@ -870,7 +1063,8 @@ export function useTowForm(editTowId?: string) {
             )
 
             if (workingSource) {
-              setWorkingVehicleAddress(pointToAddressData(workingSource))
+              sigWorking = pointToAddressData(workingSource)
+              setWorkingVehicleAddress(sigWorking)
               setWorkingVehicleContact(workingSource.contact_name || '')
               setWorkingVehicleContactPhone(workingSource.contact_phone || '')
               if (workingSource.is_storage) {
@@ -878,17 +1072,20 @@ export function useTowForm(editTowId?: string) {
               }
             }
             if (exchangeHub) {
-              setExchangeAddress(pointToAddressData(exchangeHub))
+              sigExchange = pointToAddressData(exchangeHub)
+              setExchangeAddress(sigExchange)
               setExchangeContactName(exchangeHub.contact_name || '')
               setExchangeContactPhone(exchangeHub.contact_phone || '')
             }
             if (defectiveDest) {
-              setDefectiveDestinationAddress(pointToAddressData(defectiveDest))
+              sigDefective = pointToAddressData(defectiveDest)
+              setDefectiveDestinationAddress(sigDefective)
               setDefectiveDestinationContact(defectiveDest.contact_name || '')
               setDefectiveDestinationContactPhone(defectiveDest.contact_phone || '')
             }
             if (workingDest) {
-              setWorkingVehicleDestinationAddress(pointToAddressData(workingDest))
+              sigWorkingDest = pointToAddressData(workingDest)
+              setWorkingVehicleDestinationAddress(sigWorkingDest)
               setWorkingDestinationContact(workingDest.contact_name || '')
               setWorkingDestinationContactPhone(workingDest.contact_phone || '')
               if (workingDest.is_storage) {
@@ -899,17 +1096,22 @@ export function useTowForm(editTowId?: string) {
               setDefectiveDestination('storage')
             }
           } else if (sortedPoints.length === 4) {
+            exchangeRouteLayout = 'four_point'
             const [p0, p1, p2, p3] = sortedPoints
-            setWorkingVehicleAddress(pointToAddressData(p0))
+            sigWorking = pointToAddressData(p0)
+            sigWorkingDest = pointToAddressData(p1)
+            sigExchange = pointToAddressData(p2)
+            sigDefective = pointToAddressData(p3)
+            setWorkingVehicleAddress(sigWorking)
             setWorkingVehicleContact(p0.contact_name || '')
             setWorkingVehicleContactPhone(p0.contact_phone || '')
-            setWorkingVehicleDestinationAddress(pointToAddressData(p1))
+            setWorkingVehicleDestinationAddress(sigWorkingDest)
             setWorkingDestinationContact(p1.contact_name || '')
             setWorkingDestinationContactPhone(p1.contact_phone || '')
-            setExchangeAddress(pointToAddressData(p2))
+            setExchangeAddress(sigExchange)
             setExchangeContactName(p2.contact_name || '')
             setExchangeContactPhone(p2.contact_phone || '')
-            setDefectiveDestinationAddress(pointToAddressData(p3))
+            setDefectiveDestinationAddress(sigDefective)
             setDefectiveDestinationContact(p3.contact_name || '')
             setDefectiveDestinationContactPhone(p3.contact_phone || '')
             if (p0.is_storage) {
@@ -920,6 +1122,31 @@ export function useTowForm(editTowId?: string) {
             }
             if (p3.is_storage) {
               setDefectiveDestination('storage')
+            }
+          }
+
+          if (editTowId) {
+            editExchangeRouteLayoutRef.current = exchangeRouteLayout
+            editExchangeRouteBaselineRef.current = exchangeRouteDistanceSignatureFromAddresses(
+              sigWorking,
+              sigWorkingDest,
+              sigExchange,
+              sigDefective,
+              exchangeRouteLayout
+            )
+            if (
+              loadedMode === 'recommended' ||
+              loadedMode === 'recommended_customer'
+            ) {
+              const savedKm = Number(tow.price_breakdown?.distance_km ?? 0)
+              if (savedKm > 0) {
+                editSeededDistanceRef.current = savedKm
+                setExchangeTotalDistance({ distanceKm: savedKm, durationMinutes: 0 })
+              }
+              const savedBase = Number(tow.price_breakdown?.base_price ?? 0)
+              if (savedBase > 0) {
+                editSeededExchangeBaseRef.current = savedBase
+              }
             }
           }
 
@@ -1236,9 +1463,59 @@ export function useTowForm(editTowId?: string) {
   const basePriceOverride = useMemo(() => {
     const flat = extractBasePrices(basePriceList)
     if (towType === 'exchange') {
-      if (!workingVehicleType || !defectiveVehicleType) return undefined
-      return resolveVehicleBasePrice(workingVehicleType as string, parseWeight(workingManualWeight), weightBrackets, flat)
-           + resolveVehicleBasePrice(defectiveVehicleType as string, parseWeight(defectiveManualWeight), weightBrackets, flat)
+      const seededBase =
+        editTowId && editSeededExchangeBaseRef.current != null
+          ? editSeededExchangeBaseRef.current
+          : undefined
+
+      if (!workingVehicleType || !defectiveVehicleType) {
+        return seededBase
+      }
+
+      const workingWeight =
+        parseWeight(workingManualWeight) ??
+        (workingVehicleData?.data?.totalWeight != null &&
+        Number(workingVehicleData.data.totalWeight) > 0
+          ? Number(workingVehicleData.data.totalWeight)
+          : null)
+      const defectiveWeight =
+        parseWeight(defectiveManualWeight) ??
+        (defectiveVehicleData?.data?.totalWeight != null &&
+        Number(defectiveVehicleData.data.totalWeight) > 0
+          ? Number(defectiveVehicleData.data.totalWeight)
+          : null)
+
+      const workingType = workingVehicleType as string
+      const defectiveType = defectiveVehicleType as string
+      const needsBrackets =
+        commercialTypeUsesWeightBrackets(workingType) ||
+        commercialTypeUsesWeightBrackets(defectiveType)
+
+      if (editTowId && !editHydrationSettled) {
+        return seededBase
+      }
+
+      if (commercialTypeUsesWeightBrackets(workingType) && !workingWeight) {
+        return editTowId ? seededBase : undefined
+      }
+      if (commercialTypeUsesWeightBrackets(defectiveType) && !defectiveWeight) {
+        return editTowId ? seededBase : undefined
+      }
+
+      if (needsBrackets && weightBrackets.length === 0) {
+        return editTowId ? seededBase : undefined
+      }
+
+      const sum =
+        resolveVehicleBasePrice(workingType, workingWeight, weightBrackets, flat) +
+        resolveVehicleBasePrice(defectiveType, defectiveWeight, weightBrackets, flat)
+
+      if (sum > 0) {
+        if (editTowId) editSeededExchangeBaseRef.current = null
+        return sum
+      }
+
+      return editTowId ? seededBase : undefined
     }
     if ((vehicleType as string) === 'van') {
       const w = parseWeight(manualWeight)
@@ -1246,7 +1523,21 @@ export function useTowForm(editTowId?: string) {
       return resolveVehicleBasePrice('van', w, weightBrackets, flat)
     }
     return undefined
-  }, [towType, vehicleType, manualWeight, workingVehicleType, defectiveVehicleType, workingManualWeight, defectiveManualWeight, basePriceList, weightBrackets])
+  }, [
+    towType,
+    editTowId,
+    editHydrationSettled,
+    vehicleType,
+    manualWeight,
+    workingVehicleType,
+    defectiveVehicleType,
+    workingManualWeight,
+    defectiveManualWeight,
+    workingVehicleData,
+    defectiveVehicleData,
+    basePriceList,
+    weightBrackets,
+  ])
 
   // ==================== Price Calculations ====================
   const { recommendedPrice, finalPrice, priceResult } = useTowPricing({
