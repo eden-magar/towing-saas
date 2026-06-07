@@ -220,6 +220,12 @@ export function useTowForm(editTowId?: string) {
     useState<StoredVehicleWithCustomer | null>(null)
   const [loadedTowStatus, setLoadedTowStatus] = useState<string | null>(null)
   const [editTowSnapshot, setEditTowSnapshot] = useState<EditTowSnapshot | null>(null)
+  const [editExistingVehicles, setEditExistingVehicles] = useState<
+    { id: string; plateNumber: string; orderIndex: number }[]
+  >([])
+  const [editExistingPoints, setEditExistingPoints] = useState<
+    { id: string; pointOrder: number; pointType: string }[]
+  >([])
 
   // Storage
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
@@ -548,6 +554,20 @@ export function useTowForm(editTowId?: string) {
         const tow = await getTowWithPoints(editTowId)
         if (!tow) return
         setLoadedTowStatus(tow.status)
+        setEditExistingVehicles(
+          (tow.vehicles ?? []).map((v, i) => ({
+            id: v.id,
+            plateNumber: v.plate_number,
+            orderIndex: v.order_index ?? i,
+          }))
+        )
+        setEditExistingPoints(
+          (tow.points ?? []).map((p) => ({
+            id: p.id,
+            pointOrder: p.point_order,
+            pointType: p.point_type,
+          }))
+        )
         setEditTowSnapshot({
           final_price: tow.final_price,
           payment_method: tow.payment_method,
@@ -1603,6 +1623,8 @@ export function useTowForm(editTowId?: string) {
     user,
     editTowId,
     editTowSnapshot,
+    editExistingVehicles: editTowId ? editExistingVehicles : undefined,
+    editExistingPoints: editTowId ? editExistingPoints : undefined,
     towType,
     requiredTruckTypes,
     setTruckTypeError,
@@ -1742,6 +1764,8 @@ export function useTowForm(editTowId?: string) {
     customerOrderNumber, setCustomerOrderNumber,
     orderNumber,
     loadedTowStatus,
+    editExistingVehicles,
+    editExistingPoints,
     department, setDepartment,
     orderedBy, setOrderedBy,
     customerName, setCustomerName,

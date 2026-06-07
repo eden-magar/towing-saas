@@ -14,6 +14,10 @@ import type {
   PointType,
 } from '../types'
 import { normalizePlate } from '../utils/plate-number'
+import {
+  assignExistingPointIds,
+  assignExistingVehicleIds,
+} from '../utils/tow-reconcile-match'
 
 // ==================== טיפוסים ====================
 
@@ -559,6 +563,7 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
 
 // NEW: טייפ לנקודה מוכנה לשמירה
 export interface PreparedTowPoint {
+  id?: string
   point_order: number
   point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   address: string | null
@@ -601,6 +606,7 @@ interface CreateTowInput {
   priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles: {
+    id?: string
     plateNumber: string
     vehicleCode?: string
     manufacturer?: string
@@ -679,9 +685,9 @@ export async function createTow(input: CreateTowInput) {
     throw towError
   }
 
-  // Precompute IDs and bulk payloads
-  const vehicleIds = input.vehicles.map(() => crypto.randomUUID())
-  const pointIds = (input.points || []).map(() => crypto.randomUUID())
+  // Precompute IDs and bulk payloads (preserve ids from edit prep when provided)
+  const vehicleIds = input.vehicles.map((v) => v.id ?? crypto.randomUUID())
+  const pointIds = (input.points || []).map((p) => p.id ?? crypto.randomUUID())
 
   const vehicleRows = input.vehicles.map((v, i) => ({
     id: vehicleIds[i],
@@ -1191,6 +1197,11 @@ interface UpdateTowInput {
     isWorking?: boolean
     towReason?: string
     notes?: string
+    driveType?: string
+    fuelType?: string
+    totalWeight?: number
+    gearType?: string
+    driveTechnology?: string
     registrySource?: string | null
   }[]
   legs?: {
@@ -1213,6 +1224,231 @@ interface UpdateTowInput {
   truckId?: string | null
   status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
 
+}
+
+type UpdateTowVehicleInput = NonNullable<UpdateTowInput['vehicles']>[number]
+
+function buildVehicleOfficeRow(v: UpdateTowVehicleInput, orderIndex: number) {
+  return {
+    plate_number: v.plateNumber,
+    manufacturer: v.manufacturer || null,
+    model: v.model || null,
+    year: v.year || null,
+    vehicle_type: v.vehicleType || null,
+    color: v.color || null,
+    is_working: v.isWorking ?? true,
+    tow_reason: v.towReason || null,
+    notes: v.notes || null,
+    order_index: orderIndex,
+    vehicle_code: v.vehicleCode || null,
+    registry_source: v.registrySource ?? null,
+    drive_type: v.driveType || null,
+    fuel_type: v.fuelType || null,
+    total_weight: v.totalWeight || null,
+    gear_type: v.gearType || null,
+    drive_technology: v.driveTechnology || null,
+  }
+}
+
+function buildPointOfficeRow(point: PreparedTowPoint, towId: string, forInsert: boolean) {
+  const row: Record<string, unknown> = {
+    tow_id: towId,
+    point_order: point.point_order,
+    point_type: point.point_type,
+    address: point.address,
+    lat: point.lat,
+    lng: point.lng,
+    contact_name: point.contact_name,
+    contact_phone: point.contact_phone,
+    order_notes: point.order_notes ?? null,
+    is_storage: point.isStorage || false,
+    stop_subtype: point.stop_subtype ?? null,
+  }
+  // Office notes on insert only — driver may write to `notes` during task flow
+  if (forInsert) {
+    row.notes = point.notes
+  }
+  return row
+}
+
+async function reconcileTowVehicles(
+  towId: string,
+  vehicles: UpdateTowVehicleInput[]
+): Promise<string[]> {
+  const { data: existing, error: fetchError } = await supabase
+    .from('tow_vehicles')
+    .select('id, plate_number, order_index')
+    .eq('tow_id', towId)
+
+  if (fetchError) throw fetchError
+
+  const existingRows = existing ?? []
+  const existingIds = new Set(existingRows.map((row) => row.id))
+
+  const vehiclesResolved = assignExistingVehicleIds(
+    vehicles,
+    existingRows.map((row) => ({
+      id: row.id,
+      plateNumber: row.plate_number,
+      orderIndex: row.order_index,
+    }))
+  )
+
+  const incomingIds = new Set(
+    vehiclesResolved.map((v) => v.id).filter((id): id is string => !!id)
+  )
+
+  const toDelete = [...existingIds].filter((id) => !incomingIds.has(id))
+  if (toDelete.length > 0) {
+    const { error: junctionError } = await supabase
+      .from('tow_point_vehicles')
+      .delete()
+      .in('tow_vehicle_id', toDelete)
+    if (junctionError) throw junctionError
+    const { error } = await supabase.from('tow_vehicles').delete().in('id', toDelete)
+    if (error) throw error
+  }
+
+  const resolvedIds: string[] = []
+
+  for (let i = 0; i < vehiclesResolved.length; i++) {
+    const v = vehiclesResolved[i]
+    const officeRow = buildVehicleOfficeRow(v, i)
+
+    if (v.id && existingIds.has(v.id)) {
+      const { error } = await supabase
+        .from('tow_vehicles')
+        .update(officeRow)
+        .eq('id', v.id)
+      if (error) throw error
+      resolvedIds.push(v.id)
+    } else {
+      const newId = v.id ?? crypto.randomUUID()
+      const { error } = await supabase.from('tow_vehicles').insert({
+        id: newId,
+        tow_id: towId,
+        ...officeRow,
+      })
+      if (error) throw error
+      resolvedIds.push(newId)
+    }
+  }
+
+  return resolvedIds
+}
+
+async function reconcileTowPoints(
+  towId: string,
+  points: PreparedTowPoint[]
+): Promise<string[]> {
+  const { data: existing, error: fetchError } = await supabase
+    .from('tow_points')
+    .select('id, point_order, point_type')
+    .eq('tow_id', towId)
+
+  if (fetchError) throw fetchError
+
+  const existingRows = existing ?? []
+  const existingIds = new Set(existingRows.map((row) => row.id))
+
+  const pointsResolved = assignExistingPointIds(points, existingRows)
+
+  const incomingIds = new Set(
+    pointsResolved.map((p) => p.id).filter((id): id is string => !!id)
+  )
+
+  const toDelete = [...existingIds].filter((id) => !incomingIds.has(id))
+  if (toDelete.length > 0) {
+    const { error: junctionError } = await supabase
+      .from('tow_point_vehicles')
+      .delete()
+      .in('tow_point_id', toDelete)
+    if (junctionError) throw junctionError
+    const { error } = await supabase.from('tow_points').delete().in('id', toDelete)
+    if (error) throw error
+  }
+
+  const resolvedIds: string[] = []
+
+  for (const point of pointsResolved) {
+    if (point.id && existingIds.has(point.id)) {
+      const officeRow = buildPointOfficeRow(point, towId, false)
+      const { error } = await supabase
+        .from('tow_points')
+        .update(officeRow)
+        .eq('id', point.id)
+      if (error) throw error
+      resolvedIds.push(point.id)
+    } else {
+      const newId = point.id ?? crypto.randomUUID()
+      const officeRow = buildPointOfficeRow(point, towId, true)
+      const { error } = await supabase.from('tow_points').insert({
+        id: newId,
+        ...officeRow,
+        status: 'pending',
+      })
+      if (error) throw error
+      resolvedIds.push(newId)
+    }
+  }
+
+  return resolvedIds
+}
+
+async function reconcileTowPointVehicles(
+  points: PreparedTowPoint[],
+  resolvedPointIds: string[],
+  vehicleIdsByIndex: string[]
+) {
+  const pointIds = resolvedPointIds.filter(Boolean)
+  if (pointIds.length === 0) return
+
+  const desired = points.flatMap((point, pointIndex) => {
+    const pointId = resolvedPointIds[pointIndex]
+    if (!pointId) return []
+    return (point.vehicleIndices || [])
+      .map((vehicleIndex) => {
+        const vehicleId = vehicleIdsByIndex[vehicleIndex]
+        if (!vehicleId) return null
+        return {
+          tow_point_id: pointId,
+          tow_vehicle_id: vehicleId,
+          action: point.point_type,
+        }
+      })
+      .filter(
+        (row): row is { tow_point_id: string; tow_vehicle_id: string; action: PreparedTowPoint['point_type'] } =>
+          row !== null
+      )
+  })
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('tow_point_vehicles')
+    .select('id, tow_point_id, tow_vehicle_id, action')
+    .in('tow_point_id', pointIds)
+
+  if (fetchError) throw fetchError
+
+  const key = (row: { tow_point_id: string; tow_vehicle_id: string; action: string }) =>
+    `${row.tow_point_id}:${row.tow_vehicle_id}:${row.action}`
+
+  const desiredKeys = new Set(desired.map(key))
+  const toDelete = (existing ?? [])
+    .filter((row) => !desiredKeys.has(key(row)))
+    .map((row) => row.id)
+
+  if (toDelete.length > 0) {
+    const { error } = await supabase.from('tow_point_vehicles').delete().in('id', toDelete)
+    if (error) throw error
+  }
+
+  const existingKeys = new Set((existing ?? []).map(key))
+  const toInsert = desired.filter((row) => !existingKeys.has(key(row)))
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('tow_point_vehicles').insert(toInsert)
+    if (error) throw error
+  }
 }
 
 export async function updateTow(input: UpdateTowInput) {
@@ -1255,38 +1491,19 @@ export async function updateTow(input: UpdateTowInput) {
     }
   }
 
+  let vehicleIdsByIndex: string[] = []
+
   if (input.vehicles) {
-    await supabase.from('tow_vehicles').delete().eq('tow_id', input.towId)
-
-    const vehicleRows = input.vehicles.map((v, i) => ({
-      id: crypto.randomUUID(),
-      tow_id: input.towId,
-      plate_number: v.plateNumber,
-      manufacturer: v.manufacturer || null,
-      model: v.model || null,
-      year: v.year || null,
-      vehicle_type: v.vehicleType || null,
-      color: v.color || null,
-      is_working: v.isWorking ?? true,
-      tow_reason: v.towReason || null,
-      notes: v.notes || null,
-      order_index: i,
-      vehicle_code: v.vehicleCode || null,
-      registry_source: v.registrySource ?? null,
-    }))
-
-    if (vehicleRows.length > 0) {
-      const { error: vehicleError } = await supabase
-        .from('tow_vehicles')
-        .insert(vehicleRows)
-
-      if (vehicleError) {
-        console.error('Error updating tow vehicle:', vehicleError)
-        throw vehicleError
-      }
+    try {
+      vehicleIdsByIndex = await reconcileTowVehicles(input.towId, input.vehicles)
+    } catch (vehicleError) {
+      console.error('Error updating tow vehicle:', vehicleError)
+      throw vehicleError
     }
   }
 
+  // tow_legs: legacy display/fallback only — driver progress uses tow_points.
+  // Keep delete+reinsert; legs are not read by the driver task flow by id.
   if (input.legs) {
     await supabase.from('tow_legs').delete().eq('tow_id', input.towId)
 
@@ -1311,83 +1528,26 @@ export async function updateTow(input: UpdateTowInput) {
     }
   }
 
-  // NEW: עדכון נקודות
   if (input.points) {
-    // מחיקת רכבים בנקודות קודם
-    const { data: existingPoints } = await supabase
-      .from('tow_points')
-      .select('id')
-      .eq('tow_id', input.towId)
-    
-    if (existingPoints && existingPoints.length > 0) {
-      const pointIds = existingPoints.map(p => p.id)
-      await supabase.from('tow_point_vehicles').delete().in('tow_point_id', pointIds)
-    }
-    
-    // מחיקת נקודות קיימות
-    await supabase.from('tow_points').delete().eq('tow_id', input.towId)
-
-    // שליפת מיפוי רכבים
-    const { data: vehicles } = await supabase
-      .from('tow_vehicles')
-      .select('id, plate_number')
-      .eq('tow_id', input.towId)
-      .order('order_index', { ascending: true })
-    
-    const vehicleIds = vehicles?.map(v => v.id) || []
-
-    const pointIds = input.points.map(() => crypto.randomUUID())
-    const pointRows = input.points.map((point, i) => ({
-      id: pointIds[i],
-      tow_id: input.towId,
-      point_order: point.point_order,
-      point_type: point.point_type,
-      address: point.address,
-      lat: point.lat,
-      lng: point.lng,
-      contact_name: point.contact_name,
-      contact_phone: point.contact_phone,
-      notes: point.notes,
-      order_notes: point.order_notes ?? null,
-      driver_visited_at: point.driver_visited_at ?? null,
-      driver_notes: point.driver_notes ?? null,
-      is_storage: point.isStorage || false,
-      stop_subtype: point.stop_subtype ?? null,
-      status: 'pending',
-    }))
-    const pointVehicleRows = input.points.flatMap((point, pointIndex) =>
-      (point.vehicleIndices || [])
-        .map((vehicleIndex) => {
-          const vehicleId = vehicleIds[vehicleIndex]
-          const pointId = pointIds[pointIndex]
-          if (!vehicleId || !pointId) return null
-          return {
-            tow_point_id: pointId,
-            tow_vehicle_id: vehicleId,
-            action: point.point_type,
-          }
-        })
-        .filter((row): row is { tow_point_id: string; tow_vehicle_id: string; action: PreparedTowPoint['point_type'] } => row !== null)
-    )
-
-    const [pointsInsertResult] = await Promise.all([
-      pointRows.length > 0
-        ? supabase.from('tow_points').insert(pointRows)
-        : Promise.resolve({ error: null } as { error: any }),
-    ])
-
-    if (pointsInsertResult.error) {
-      throw pointsInsertResult.error
+    if (vehicleIdsByIndex.length === 0) {
+      const { data: vehicles } = await supabase
+        .from('tow_vehicles')
+        .select('id')
+        .eq('tow_id', input.towId)
+        .order('order_index', { ascending: true })
+      vehicleIdsByIndex = vehicles?.map((v) => v.id) ?? []
     }
 
-    if (pointVehicleRows.length > 0) {
-      const { error: pointVehiclesError } = await supabase
-        .from('tow_point_vehicles')
-        .insert(pointVehicleRows)
-
-      if (pointVehiclesError) {
-        throw pointVehiclesError
-      }
+    try {
+      const resolvedPointIds = await reconcileTowPoints(input.towId, input.points)
+      await reconcileTowPointVehicles(
+        input.points,
+        resolvedPointIds,
+        vehicleIdsByIndex
+      )
+    } catch (pointsError) {
+      console.error('Error updating tow points:', pointsError)
+      throw pointsError
     }
   }
 

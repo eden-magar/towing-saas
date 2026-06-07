@@ -284,6 +284,8 @@ function CreateTowForm({
     setOrderedBy,
     orderNumber,
     loadedTowStatus,
+    editExistingVehicles,
+    editExistingPoints,
     notes,
     setNotes,
     selectedDefects,
@@ -844,14 +846,18 @@ function CreateTowForm({
         routeStops:
           towType === 'single'
             ? routeStops.map((s) => ({
+                id: s.id,
                 role: s.role,
                 stopSubtype: s.stopSubtype,
                 address: s.address,
                 contactName: s.contactName,
                 contactPhone: s.contactPhone,
                 notes: s.notes,
+                orderNotes: s.orderNotes,
               }))
             : undefined,
+        existingTowVehicles: editTowId ? editExistingVehicles : undefined,
+        existingTowPoints: editTowId ? editExistingPoints : undefined,
         distance:
           towType === 'custom'
             ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 }

@@ -221,6 +221,8 @@ function CreateExchangeTowForm({
     setOrderedBy,
     orderNumber,
     loadedTowStatus,
+    editExistingVehicles,
+    editExistingPoints,
     notes,
     setNotes,
     selectedDefects,
@@ -474,6 +476,8 @@ function CreateExchangeTowForm({
         manualManufacturer,
         manualColor,
         manualWeight,
+        existingTowVehicles: editTowId ? editExistingVehicles : undefined,
+        existingTowPoints: editTowId ? editExistingPoints : undefined,
       })
       let quoteTowId = editTowId
       if (editTowId) {

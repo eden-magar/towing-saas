@@ -5,6 +5,10 @@ import { SelectedService } from '../../components/tow-forms/shared'
 import { calculateTowPrice, extractBasePrices, resolveVehicleBasePrice } from './price-calculator'
 import { VehicleType } from '../types'
 import { normalizePlate } from './plate-number'
+import {
+  assignExistingPointIds,
+  assignExistingVehicleIds,
+} from './tow-reconcile-match'
 import type { AddressData } from '../google-maps'
 
 function round2(n: number): number {
@@ -68,6 +72,7 @@ export interface SaveTowInput {
   weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   /** Regular tow: ordered route list (pickup / stop / dropoff in list order) */
   routeStops?: {
+    id?: string
     role: 'pickup' | 'dropoff' | 'stop'
     stopSubtype?: 'key' | 'customer_pickup' | 'customer_dropoff' | 'other'
     address: AddressData
@@ -76,6 +81,9 @@ export interface SaveTowInput {
     notes?: string
     orderNotes?: string
   }[]
+  /** Loaded on edit — used to preserve stable vehicle/point row IDs when the form has no per-field id */
+  existingTowVehicles?: { id: string; plateNumber: string; orderIndex: number }[]
+  existingTowPoints?: { id: string; pointOrder: number; pointType: string }[]
   distance?: DistanceResult | null
   startFromBase?: boolean
   baseToPickupDistance?: DistanceResult | null
@@ -144,6 +152,8 @@ export interface SaveTowInput {
 // ==================== NEW: TowPoint Types ====================
 
 export interface PreparedTowPoint {
+  /** Existing DB id when editing; omit for genuinely new points (insert generates id) */
+  id?: string
   point_order: number
   point_type: 'pickup' | 'dropoff' | 'exchange' | 'stop'
   address: string | null
@@ -197,6 +207,7 @@ export interface PreparedTowData {
   priceBreakdown?: PriceBreakdown | null
   requiredTruckTypes?: string[]
   vehicles: {
+    id?: string
     plateNumber: string
     manufacturer?: string
     model?: string
@@ -251,6 +262,26 @@ export interface PreparedTowData {
 }
 
 // ==================== Helper Functions ====================
+
+function mapExistingVehiclesForMatch(
+  existing?: SaveTowInput['existingTowVehicles']
+) {
+  return existing?.map((v) => ({
+    id: v.id,
+    plateNumber: v.plateNumber,
+    orderIndex: v.orderIndex,
+  }))
+}
+
+function mapExistingPointsForMatch(
+  existing?: SaveTowInput['existingTowPoints']
+) {
+  return existing?.map((p) => ({
+    id: p.id,
+    point_order: p.pointOrder,
+    point_type: p.pointType,
+  }))
+}
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
   if (!services?.length) return []
@@ -331,7 +362,8 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
   }
   
   // המרה לפורמט של createTow
-  return Array.from(vehiclesMap.values()).map(v => ({
+  return Array.from(vehiclesMap.values()).map((v, i) => ({
+    id: v.id,
     plateNumber: normalizePlate(v.plateNumber),
     manufacturer: v.vehicleData?.manufacturer,
     model: v.vehicleData?.model,
@@ -381,6 +413,7 @@ export function convertRoutePointsToTowPoints(
 
     if (rp.isStopOnly) {
       points.push({
+        id: rp.id,
         point_order: pointOrder++,
         point_type: 'stop',
         address: rp.address || null,
@@ -451,6 +484,7 @@ export function convertRoutePointsToTowPoints(
         .filter((idx): idx is number => idx !== undefined)
       
       points.push({
+        id: rp.id,
         point_order: pointOrder++,
         point_type: 'pickup',
         address: rp.address || null,
@@ -475,6 +509,7 @@ export function convertRoutePointsToTowPoints(
         .filter((idx): idx is number => idx !== undefined)
       
       points.push({
+        id: rp.id,
         point_order: pointOrder++,
         point_type: 'dropoff',
         address: rp.address || null,
@@ -548,7 +583,8 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
       }
     }
 
-    points.push({
+    const point: PreparedTowPoint = {
+      id: row.id,
       point_order: pointOrder++,
       point_type: row.role,
       stop_subtype: row.role === 'stop' ? normalizeStopSubtype(row.stopSubtype) : null,
@@ -565,10 +601,14 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
         : isDropoff && dropoffIsLast
           ? input.dropoffToStorage === true
           : undefined,
-    })
+    }
+    points.push(point)
   }
 
-  return points
+  return assignExistingPointIds(
+    points,
+    mapExistingPointsForMatch(input.existingTowPoints)
+  )
 }
 
 function buildExchangeServiceSurchargesBreakdown(
@@ -915,7 +955,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       : null)
   : buildSingleTowPriceBreakdown(input)
     
-    const vehicles: PreparedTowData['vehicles'] = [{
+    const vehicles: PreparedTowData['vehicles'] = assignExistingVehicleIds(
+      [{
       plateNumber: normalizePlate(input.vehiclePlate || ''),
       vehicleType: mapVehicleType(input.vehicleType || ''),
       manufacturer: input.vehicleData?.data?.manufacturer || input.manualManufacturer,
@@ -931,7 +972,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       driveTechnology: input.vehicleData?.data?.driveTechnology,
       vehicleCode: input.vehicleCode || undefined,
       registrySource: input.vehicleData?.source ?? null,
-    }]
+    }],
+      mapExistingVehiclesForMatch(input.existingTowVehicles)
+    )
 
     const { pickup: legPickup, dropoff: legDropoff } = findPrimaryPickupDropoffForLegs(
       input.routeStops ?? []
@@ -992,11 +1035,17 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
             }
           : null)
       : buildCustomTowPriceBreakdown(input, input.routePoints)
-    const vehicles = collectVehiclesFromRoutePoints(input.routePoints)
+    const vehicles = assignExistingVehicleIds(
+      collectVehiclesFromRoutePoints(input.routePoints),
+      mapExistingVehiclesForMatch(input.existingTowVehicles)
+    )
     const legs = convertRoutePointsToLegs(input.routePoints)
     
     // NEW: יצירת נקודות גרירה
-    const points = convertRoutePointsToTowPoints(input.routePoints, vehicles)
+    const points = assignExistingPointIds(
+      convertRoutePointsToTowPoints(input.routePoints, vehicles),
+      mapExistingPointsForMatch(input.existingTowPoints)
+    )
 
     return {
       companyId: input.companyId,
@@ -1087,8 +1136,13 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     })
   }
 
-  const workingIdx = vehicles.findIndex(v => v.isWorking)
-  const defectiveIdx = vehicles.findIndex(v => !v.isWorking)
+  const vehiclesWithIds = assignExistingVehicleIds(
+    vehicles,
+    mapExistingVehiclesForMatch(input.existingTowVehicles)
+  )
+
+  const workingIdx = vehiclesWithIds.findIndex(v => v.isWorking)
+  const defectiveIdx = vehiclesWithIds.findIndex(v => !v.isWorking)
 
   const points: PreparedTowPoint[] = []
 
@@ -1254,6 +1308,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     toLng: input.defectiveDestinationAddress?.lng
   }]
 
+  const pointsWithIds = assignExistingPointIds(
+    points,
+    mapExistingPointsForMatch(input.existingTowPoints)
+  )
+
   return {
     companyId: input.companyId,
     createdBy: input.userId,
@@ -1272,9 +1331,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     finalPrice: input.finalPrice || undefined,
     priceMode: input.priceMode,
     priceBreakdown,
-    vehicles,
+    vehicles: vehiclesWithIds,
     legs,
-    points,
+    points: pointsWithIds,
     paymentMethod: input.paymentMethod || undefined,
     invoiceName: input.invoiceName || undefined,
     startFromBase: input.startFromBase || false,

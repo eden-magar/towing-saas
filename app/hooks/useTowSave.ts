@@ -29,6 +29,8 @@ interface UseTowSaveParams {
   editTowId?: string
   /** Values loaded at edit open — avoids re-fetching the tow on save. */
   editTowSnapshot?: EditTowSnapshot | null
+  editExistingVehicles?: { id: string; plateNumber: string; orderIndex: number }[]
+  editExistingPoints?: { id: string; pointOrder: number; pointType: string }[]
   towType: TowType
   // Validation refs/state
   requiredTruckTypes: string[]
@@ -145,6 +147,8 @@ export function useTowSave(params: UseTowSaveParams) {
     user,
     editTowId,
     editTowSnapshot,
+    editExistingVehicles,
+    editExistingPoints,
     towType,
     requiredTruckTypes,
     setTruckTypeError,
@@ -339,6 +343,7 @@ export function useTowSave(params: UseTowSaveParams) {
       routeStops:
         towType === 'single'
           ? routeStops.map((s) => ({
+              id: s.id,
               role: s.role,
               stopSubtype: s.stopSubtype,
               address: s.address,
@@ -348,6 +353,8 @@ export function useTowSave(params: UseTowSaveParams) {
               orderNotes: s.orderNotes,
             }))
           : undefined,
+      existingTowVehicles: editExistingVehicles,
+      existingTowPoints: editExistingPoints,
       distance:
         towType === 'custom'
           ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 }
