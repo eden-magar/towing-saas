@@ -6,6 +6,8 @@ import { Save, RefreshCw, X, Plus, Trash2 } from 'lucide-react'
 import {
   getFullPriceList,
   upsertBasePriceList,
+  getWeightBrackets,
+  saveWeightBrackets,
   saveTimeSurcharges,
   saveLocationSurcharges,
   saveServiceSurcharges,
@@ -36,6 +38,13 @@ interface VehiclePrice {
   label: string
   field: string
   price: number
+}
+
+type WeightBracketRow = {
+  id: string
+  min_kg: number
+  max_kg: number | null
+  base_price: number
 }
 
 interface TimeSurcharge {
@@ -125,6 +134,7 @@ export default function PriceListsPage() {
   ])
   const [pricePerKm, setPricePerKm] = useState(12)
   const [minimumPrice, setMinimumPrice] = useState(250)
+  const [weightBrackets, setWeightBrackets] = useState<WeightBracketRow[]>([])
 
   // Fixed prices state
   const [fixedPriceItems, setFixedPriceItems] = useState<FixedPriceItem[]>([])
@@ -143,6 +153,7 @@ export default function PriceListsPage() {
     if (!companyId) return
 
     try {
+      setLoading(true)
       const data = await getFullPriceList(companyId)
 
       // Base prices
@@ -163,6 +174,16 @@ export default function PriceListsPage() {
             lng: bp.base_lng ?? undefined
           })
         }
+      }
+
+      try {
+        const brackets = await getWeightBrackets(companyId)
+        setWeightBrackets(
+          brackets.map(b => ({ id: b.id, min_kg: b.min_kg, max_kg: b.max_kg, base_price: b.base_price }))
+        )
+      } catch (bracketError) {
+        console.error('Error loading weight brackets:', bracketError)
+        setWeightBrackets([])
       }
 
       // Fixed prices
@@ -235,11 +256,9 @@ export default function PriceListsPage() {
   }
 
   useEffect(() => {
-    if (!authLoading && companyId) {
-      loadData()
-    } else if (!authLoading) {
-      setLoading(false)
-    }
+    if (authLoading) return
+    if (!companyId) { setLoading(false); return }
+    loadData()
   }, [companyId, authLoading])
 
   // ==================== Save ====================
@@ -261,6 +280,16 @@ export default function PriceListsPage() {
         basePriceData[v.field] = v.price
       })
       await upsertBasePriceList(companyId, basePriceData)
+
+      await saveWeightBrackets(
+        companyId,
+        weightBrackets.map((b, i) => ({
+          min_kg: b.min_kg,
+          max_kg: b.max_kg,
+          base_price: b.base_price,
+          sort_order: i,
+        }))
+      )
 
       // Fixed prices
       await saveFixedPriceItems(companyId, fixedPriceItems.map((f, index) => ({
@@ -315,6 +344,27 @@ export default function PriceListsPage() {
   // Vehicle prices
   const handleVehiclePriceChange = (id: string, price: number) => {
     setVehiclePrices(prev => prev.map(v => v.id === id ? { ...v, price } : v))
+    markChanged()
+  }
+
+  // Weight brackets
+  const handleWeightBracketAdd = () => {
+    setWeightBrackets(prev => [...prev, {
+      id: `new_${Date.now()}`,
+      min_kg: 0,
+      max_kg: null,
+      base_price: 0,
+    }])
+    markChanged()
+  }
+
+  const handleWeightBracketUpdate = (id: string, updates: Partial<WeightBracketRow>) => {
+    setWeightBrackets(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b))
+    markChanged()
+  }
+
+  const handleWeightBracketRemove = (id: string) => {
+    setWeightBrackets(prev => prev.filter(b => b.id !== id))
     markChanged()
   }
 
@@ -589,6 +639,10 @@ export default function PriceListsPage() {
           onPricePerKmChange={(v) => { setPricePerKm(v); markChanged() }}
           minimumPrice={minimumPrice}
           onMinimumPriceChange={(v) => { setMinimumPrice(v); markChanged() }}
+          weightBrackets={weightBrackets}
+          onWeightBracketAdd={handleWeightBracketAdd}
+          onWeightBracketUpdate={handleWeightBracketUpdate}
+          onWeightBracketRemove={handleWeightBracketRemove}
         />
       )}
 

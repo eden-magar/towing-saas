@@ -68,6 +68,9 @@ interface UseTowSaveParams {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
+  workingManualWeight?: string
+  defectiveManualWeight?: string
+  weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   // Route - single
   routeStops: RouteStop[]
   distance: DistanceResult | null
@@ -130,7 +133,6 @@ interface UseTowSaveParams {
   defectiveDestination?: 'storage' | 'address'
   defectiveManualManufacturer?: string
   defectiveManualColor?: string
-  defectiveManualWeight?: string
   // Post-save
   setSavedTowId: (id: string) => void
   setShowAssignNowModal: (v: boolean) => void
@@ -177,6 +179,9 @@ export function useTowSave(params: UseTowSaveParams) {
     manualManufacturer,
     manualColor,
     manualWeight,
+    workingManualWeight,
+    defectiveManualWeight,
+    weightBrackets,
     routeStops,
     distance,
     startFromBase,
@@ -232,7 +237,6 @@ export function useTowSave(params: UseTowSaveParams) {
     defectiveDestination,
     defectiveManualManufacturer,
     defectiveManualColor,
-    defectiveManualWeight,
     setSavedTowId,
     setShowAssignNowModal,
   } = params
@@ -329,6 +333,9 @@ export function useTowSave(params: UseTowSaveParams) {
       manualManufacturer,
       manualColor,
       manualWeight,
+      workingManualWeight,
+      defectiveManualWeight,
+      weightBrackets,
       routeStops:
         towType === 'single'
           ? routeStops.map((s) => ({

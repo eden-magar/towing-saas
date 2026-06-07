@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
 import { getTowWithPoints, type EditTowSnapshot } from '../lib/queries/tows'
@@ -13,11 +13,13 @@ import {
   getTimeSurcharges, 
   getLocationSurcharges, 
   getServiceSurcharges, 
+  getWeightBrackets,
   CustomerWithPricing, 
   FixedPriceItem, 
   TimeSurcharge, 
   LocationSurcharge, 
-  ServiceSurcharge 
+  ServiceSurcharge,
+  WeightBracket,
 } from '../lib/queries/price-lists'
 import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../lib/types'
 import {
@@ -27,7 +29,7 @@ import {
   StoredVehicleWithCustomer,
 } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
-import { extractBasePrices } from '../lib/utils/price-calculator'
+import { extractBasePrices, resolveVehicleBasePrice } from '../lib/utils/price-calculator'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
@@ -104,6 +106,7 @@ export function useTowForm(editTowId?: string) {
   
   // Price list
   const [basePriceList, setBasePriceList] = useState<any>(null)
+  const [weightBrackets, setWeightBrackets] = useState<WeightBracket[]>([])
   const [fixedPriceItems, setFixedPriceItems] = useState<FixedPriceItem[]>([])
   const [customersWithPricing, setCustomersWithPricing] = useState<CustomerWithPricing[]>([])
   const [selectedCustomerPricing, setSelectedCustomerPricing] = useState<CustomerWithPricing | null>(null)
@@ -881,6 +884,7 @@ export function useTowForm(editTowId?: string) {
         getDrivers(companyId),
         getTrucks(companyId),
         getBasePriceList(companyId),
+        getWeightBrackets(companyId),
         getFixedPriceItems(companyId),
         getCustomersWithPricing(companyId),
         getTimeSurcharges(companyId),
@@ -893,6 +897,7 @@ export function useTowForm(editTowId?: string) {
         driversResult,
         trucksResult,
         basePriceListResult,
+        weightBracketsResult,
         fixedPriceItemsResult,
         customersWithPricingResult,
         timeSurchargesResult,
@@ -919,6 +924,12 @@ export function useTowForm(editTowId?: string) {
         setBasePriceList(basePriceListResult.value)
       } else {
         console.error('Error loading basePriceList:', basePriceListResult.reason)
+      }
+
+      if (weightBracketsResult.status === 'fulfilled') {
+        setWeightBrackets(weightBracketsResult.value)
+      } else {
+        console.error('Error loading weightBrackets:', weightBracketsResult.reason)
       }
 
       if (fixedPriceItemsResult.status === 'fulfilled') {
@@ -964,16 +975,33 @@ export function useTowForm(editTowId?: string) {
     }
   }
 
+  const parseWeight = (m?: string) => {
+    const n = m ? Number(m) : NaN
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+
+  const basePriceOverride = useMemo(() => {
+    const flat = extractBasePrices(basePriceList)
+    if (towType === 'exchange') {
+      if (!workingVehicleType || !defectiveVehicleType) return undefined
+      return resolveVehicleBasePrice(workingVehicleType as string, parseWeight(workingManualWeight), weightBrackets, flat)
+           + resolveVehicleBasePrice(defectiveVehicleType as string, parseWeight(defectiveManualWeight), weightBrackets, flat)
+    }
+    if ((vehicleType as string) === 'van') {
+      const w = parseWeight(manualWeight)
+      if (!w) return undefined
+      return resolveVehicleBasePrice('van', w, weightBrackets, flat)
+    }
+    return undefined
+  }, [towType, vehicleType, manualWeight, workingVehicleType, defectiveVehicleType, workingManualWeight, defectiveManualWeight, basePriceList, weightBrackets])
+
   // ==================== Price Calculations ====================
   const { recommendedPrice, finalPrice, priceResult } = useTowPricing({
     towType,
     vehicleType: towType === 'exchange'
       ? (workingVehicleType || defectiveVehicleType ? (workingVehicleType || 'private') : '')
       : vehicleType,
-    basePriceOverride: towType === 'exchange' && basePriceList && workingVehicleType && defectiveVehicleType
-      ? (extractBasePrices(basePriceList)[workingVehicleType as VehicleType] ?? 0) +
-        (extractBasePrices(basePriceList)[defectiveVehicleType as VehicleType] ?? 0)
-      : undefined,
+    basePriceOverride,
     distance: towType === 'exchange' ? exchangeTotalDistance : distance,
     startFromBase,
     baseToPickupDistance,
@@ -1606,6 +1634,7 @@ export function useTowForm(editTowId?: string) {
     manualManufacturer,
     manualColor,
     manualWeight,
+    workingManualWeight,
     routeStops,
     distance,
     exchangeTotalDistance,
@@ -1619,6 +1648,7 @@ export function useTowForm(editTowId?: string) {
     manualAdjustmentPercent,
     manualAdjustmentType,
     basePriceList,
+    weightBrackets,
     selectedCustomerPricing,
     activeTimeSurchargesList,
     selectedLocationSurcharges,

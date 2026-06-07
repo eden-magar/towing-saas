@@ -311,3 +311,33 @@ export function extractBasePrices(priceList: Record<string, any> | null): Record
     machinery: priceList.base_price_machinery ?? 500
   }
 }
+
+export function resolveWeightBracketBase(
+  weightKg: number,
+  brackets: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
+): number | null {
+  if (!brackets.length || !(weightKg > 0)) return null
+  const sorted = [...brackets].sort((a, b) => (a.sort_order - b.sort_order) || (a.min_kg - b.min_kg))
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  if (weightKg < first.min_kg) return first.base_price
+  for (const b of sorted) {
+    if (weightKg >= b.min_kg && (b.max_kg == null || weightKg <= b.max_kg)) return b.base_price
+  }
+  return last.base_price
+}
+
+export function resolveVehicleBasePrice(
+  type: string,
+  weightKg: number | null,
+  brackets: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[],
+  flatPrices: Record<string, number>
+): number {
+  if (type === 'van' && weightKg != null && weightKg > 0) {
+    return resolveWeightBracketBase(weightKg, brackets) ?? 0
+  }
+  if (type === 'private' || type === 'motorcycle' || type === 'heavy' || type === 'machinery') {
+    return flatPrices[type] ?? 0
+  }
+  return flatPrices.private ?? 0
+}

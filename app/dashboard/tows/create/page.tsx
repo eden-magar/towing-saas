@@ -1380,11 +1380,16 @@ function CreateTowForm({
                                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 mb-1">משקל (ק&quot;ג)</label>
+                                <label className="block text-xs text-gray-600 mb-1">
+                                  {(vehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
+                                </label>
                                 <input type="number" value={manualWeight}
                                   onChange={(e) => setManualWeight(e.target.value)}
-                                  placeholder="אופציונלי"
+                                  placeholder={(vehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'}
                                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                {(vehicleType as string) === 'van' && (!manualWeight || Number(manualWeight) === 0) && (
+                                  <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -2024,10 +2029,15 @@ function CreateTowForm({
                                       placeholder="למשל: לבן" />
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">משקל (ק"ג)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                      {(workingVehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
+                                    </label>
                                     <Input type="number" value={workingManualWeight}
                                       onChange={(e) => setWorkingManualWeight(e.target.value)}
-                                      placeholder="אופציונלי" />
+                                      placeholder={(workingVehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'} />
+                                    {(workingVehicleType as string) === 'van' && (!workingManualWeight || Number(workingManualWeight) === 0) && (
+                                      <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -2237,10 +2247,15 @@ function CreateTowForm({
                                           placeholder="למשל: לבן" />
                                       </div>
                                       <div>
-                                        <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
+                                        <label className="block text-xs text-gray-600 mb-1">
+                                          {(defectiveVehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
+                                        </label>
                                         <Input type="number" value={defectiveManualWeight}
                                           onChange={(e) => setDefectiveManualWeight(e.target.value)}
-                                          placeholder="אופציונלי" />
+                                          placeholder={(defectiveVehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'} />
+                                        {(defectiveVehicleType as string) === 'van' && (!defectiveManualWeight || Number(defectiveManualWeight) === 0) && (
+                                          <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
+                                        )}
                                       </div>
                                     </div>
                                   </div>

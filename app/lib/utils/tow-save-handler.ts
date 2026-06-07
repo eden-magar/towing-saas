@@ -2,7 +2,7 @@ import { PriceBreakdown } from '../queries/tows'
 import { CustomerWithPricing, TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../queries/price-lists'
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
-import { calculateTowPrice, extractBasePrices } from './price-calculator'
+import { calculateTowPrice, extractBasePrices, resolveVehicleBasePrice } from './price-calculator'
 import { VehicleType } from '../types'
 import { normalizePlate } from './plate-number'
 import type { AddressData } from '../google-maps'
@@ -63,6 +63,9 @@ export interface SaveTowInput {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
+  workingManualWeight?: string
+  defectiveManualWeight?: string
+  weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   /** Regular tow: ordered route list (pickup / stop / dropoff in list order) */
   routeStops?: {
     role: 'pickup' | 'dropoff' | 'stop'
@@ -667,11 +670,18 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     })
     .filter(x => x.amount > 0)
 
-  const exchangeBasePriceOverride =
-    input.towType === 'exchange' && input.workingVehicleType && input.defectiveVehicleType
-      ? (extractBasePrices(activePriceList)[input.workingVehicleType as VehicleType] ?? 0) +
-        (extractBasePrices(activePriceList)[input.defectiveVehicleType as VehicleType] ?? 0)
-      : undefined
+  const flat = extractBasePrices(activePriceList)
+  const brackets = input.weightBrackets ?? []
+  const parseW = (m?: string) => { const n = m ? Number(m) : NaN; return Number.isFinite(n) && n > 0 ? n : null }
+  let basePriceOverride: number | undefined
+  if (input.towType === 'exchange' && input.workingVehicleType && input.defectiveVehicleType) {
+    basePriceOverride =
+      resolveVehicleBasePrice(input.workingVehicleType as string, parseW(input.workingManualWeight), brackets, flat) +
+      resolveVehicleBasePrice(input.defectiveVehicleType as string, parseW(input.defectiveManualWeight), brackets, flat)
+  } else if ((input.vehicleType as string) === 'van') {
+    const w = parseW(input.manualWeight)
+    if (w) basePriceOverride = resolveVehicleBasePrice('van', w, brackets, flat)
+  }
 
   const result = calculateTowPrice({
     priceList: {
@@ -681,7 +691,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     },
     vehicleType: (input.vehicleType as VehicleType) || 'private',
     distanceKm,
-    ...(exchangeBasePriceOverride !== undefined ? { basePriceOverride: exchangeBasePriceOverride } : {}),
+    ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
     timeSurcharges: input.activeTimeSurcharges || [],
     towDate: input.towDate || '',
     towTime: input.towTime || '',
@@ -1049,7 +1059,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       isWorking: true,
       driveType: input.workingVehicleData?.data?.driveType,
       fuelType: input.workingVehicleData?.data?.fuelType,
-      totalWeight: input.workingVehicleData?.data?.totalWeight,
+      totalWeight: input.workingVehicleData?.data?.totalWeight ?? (input.workingManualWeight ? Number(input.workingManualWeight) : undefined),
       gearType: input.workingVehicleData?.data?.gearType,
       driveTechnology: input.workingVehicleData?.data?.driveTechnology,
       registrySource: input.workingVehicleData?.source ?? null,
@@ -1070,7 +1080,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       towReason: input.selectedDefects?.join(', ') || undefined,
       driveType: input.defectiveVehicleData?.data?.driveType,
       fuelType: input.defectiveVehicleData?.data?.fuelType,
-      totalWeight: input.defectiveVehicleData?.data?.totalWeight,
+      totalWeight: input.defectiveVehicleData?.data?.totalWeight ?? (input.defectiveManualWeight ? Number(input.defectiveManualWeight) : undefined),
       gearType: input.defectiveVehicleData?.data?.gearType,
       driveTechnology: input.defectiveVehicleData?.data?.driveTechnology,
       registrySource: input.defectiveVehicleData?.source ?? null,

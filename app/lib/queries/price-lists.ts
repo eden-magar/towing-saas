@@ -16,6 +16,15 @@ export interface DistanceTier {
   price_per_km: number
 }
 
+export interface WeightBracket {
+  id: string
+  company_id: string
+  min_kg: number
+  max_kg: number | null
+  base_price: number
+  sort_order: number
+}
+
 export interface TruckTypeSurcharge {
   id: string
   company_id: string
@@ -185,6 +194,39 @@ export async function saveDistanceTiers(companyId: string, tiers: Omit<DistanceT
     const { error } = await supabase
       .from('distance_tiers')
       .insert(tiers.map(t => ({ ...t, company_id: companyId })))
+
+    if (error) throw error
+  }
+
+  return true
+}
+
+// ==================== מדרגות משקל (רכב מסחרי) ====================
+
+export async function getWeightBrackets(companyId: string): Promise<WeightBracket[]> {
+  const { data, error } = await supabase
+    .from('weight_base_brackets')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching weight brackets:', error)
+    throw error
+  }
+
+  return data || []
+}
+
+export async function saveWeightBrackets(companyId: string, brackets: Omit<WeightBracket, 'id' | 'company_id'>[]) {
+  // מחיקת קיימים
+  await supabase.from('weight_base_brackets').delete().eq('company_id', companyId)
+
+  // הוספת חדשים
+  if (brackets.length > 0) {
+    const { error } = await supabase
+      .from('weight_base_brackets')
+      .insert(brackets.map(b => ({ ...b, company_id: companyId })))
 
     if (error) throw error
   }
