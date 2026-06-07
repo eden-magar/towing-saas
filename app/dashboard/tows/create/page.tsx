@@ -299,6 +299,7 @@ function CreateTowForm({
     recommendedPrice,
     finalPrice,
     priceResult,
+    vatPercent,
     manualAdjustmentPercent, setManualAdjustmentPercent,
     manualAdjustmentType, setManualAdjustmentType,
     handleCustomerSelect,
@@ -817,7 +818,6 @@ function CreateTowForm({
         })
         finalCustomerId = result.id
       }
-      const dist = distance
       const plate = vehiclePlate
       const vData = vehicleData
       const vType = vehicleType
@@ -839,7 +839,7 @@ function CreateTowForm({
         vehicleCode,
         vehicleType: vType,
         vehicleData: vData,
-        selectedDefects: [],
+        selectedDefects,
         requiredTruckTypes,
         routeStops:
           towType === 'single'
@@ -852,19 +852,32 @@ function CreateTowForm({
                 notes: s.notes,
               }))
             : undefined,
-        distance: dist,
+        distance:
+          towType === 'custom'
+            ? { distanceKm: customRouteData.totalDistanceKm, durationMinutes: 0 }
+            : towType === 'exchange'
+              ? exchangeTotalDistance ?? null
+              : distance,
         startFromBase,
         baseToPickupDistance,
         routePoints,
         customRouteData,
         priceMode,
         finalPrice,
+        vatPercent,
+        manualAdjustmentPercent: (() => {
+          const adj = parseFloat(manualAdjustmentPercent ?? '') || 0
+          return manualAdjustmentType === 'discount' ? -adj : adj
+        })(),
         basePriceList,
         selectedCustomerPricing,
         activeTimeSurcharges: activeTimeSurchargesList,
         selectedLocationSurcharges,
         locationSurchargesData,
-        selectedServices,
+        selectedServices:
+          towType === 'exchange'
+            ? [...(workingSelectedServices ?? []), ...(defectiveSelectedServices ?? [])]
+            : selectedServices,
         serviceSurchargesData,
         notes,
         paymentMethod: paymentMethod || undefined,
@@ -872,13 +885,17 @@ function CreateTowForm({
         dropoffToStorage,
         selectedStoredVehicleId,
         workingVehiclePlate: towType === 'exchange' ? workingVehiclePlate : undefined,
+        workingVehicleCode: towType === 'exchange' ? workingVehicleCode : undefined,
         workingVehicleData: towType === 'exchange' ? workingVehicleData : undefined,
         workingVehicleType: towType === 'exchange' ? workingVehicleType : undefined,
+        defectiveVehicleType:
+          towType === 'exchange' ? defectiveVehicleType || undefined : undefined,
         workingVehicleSourceAddress: towType === 'exchange' ? workingVehicleAddress : undefined,
         workingVehicleDestinationAddress: towType === 'exchange' ? workingVehicleDestinationAddress : undefined,
         workingVehicleContactName: towType === 'exchange' ? workingVehicleContact : undefined,
         workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
         defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
+        defectiveVehicleCode: towType === 'exchange' ? defectiveVehicleCode : undefined,
         defectiveVehicleData: towType === 'exchange' ? defectiveVehicleData : undefined,
         exchangePointAddress: towType === 'exchange' ? exchangeAddress : undefined,
         exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
@@ -892,6 +909,10 @@ function CreateTowForm({
         workingVehicleDestinationIsStorage:
           towType === 'exchange' ? workingVehicleDestinationIsStorage : undefined,
         defectiveDestination: towType === 'exchange' ? defectiveDestination : undefined,
+        workingSelectedServices:
+          towType === 'exchange' ? workingSelectedServices : undefined,
+        defectiveSelectedServices:
+          towType === 'exchange' ? defectiveSelectedServices : undefined,
         manualManufacturer,
         manualColor,
         manualWeight,
@@ -973,24 +994,32 @@ function CreateTowForm({
     vehicleCode,
     vehicleType,
     vehicleData,
+    selectedDefects,
     defectiveVehiclePlate,
     defectiveVehicleData,
+    defectiveVehicleType,
     routeStops,
     exchangeAddress,
     defectiveDestinationAddress,
     distance,
+    exchangeTotalDistance,
     startFromBase,
     baseToPickupDistance,
     routePoints,
     customRouteData,
     priceMode,
     finalPrice,
+    vatPercent,
+    manualAdjustmentPercent,
+    manualAdjustmentType,
     basePriceList,
     selectedCustomerPricing,
     activeTimeSurchargesList,
     selectedLocationSurcharges,
     locationSurchargesData,
     selectedServices,
+    workingSelectedServices,
+    defectiveSelectedServices,
     serviceSurchargesData,
     notes,
     paymentMethod,
@@ -999,6 +1028,7 @@ function CreateTowForm({
     selectedStoredVehicleId,
     workingVehicleSource,
     selectedWorkingVehicleId,
+    workingVehicleCode,
     defectiveDestination,
     defectiveVehicleCode,
     editTowId,
