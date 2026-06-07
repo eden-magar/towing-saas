@@ -84,7 +84,7 @@ type CustomRouteData = {
 export function useTowForm(editTowId?: string) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, companyId } = useAuth()
+  const { user, companyId, loading: authLoading } = useAuth()
   
   // UI State
   const [showAssignNowModal, setShowAssignNowModal] = useState(false)
@@ -454,8 +454,10 @@ export function useTowForm(editTowId?: string) {
 
   // Load data
   useEffect(() => {
-    if (companyId) loadData()
-  }, [companyId])
+    if (authLoading) return
+    if (!companyId) return
+    loadData()
+  }, [companyId, authLoading])
 
   // Load stored vehicle for storage → tow deep link (customer only until towType chosen)
   useEffect(() => {

@@ -638,7 +638,7 @@ function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['s
         id: s!.id,
         label: s!.label,
         percent: s!.surcharge_percent,
-        amount: Math.round(subtotalForLocation * s!.surcharge_percent / 100)
+        amount: round2(subtotalForLocation * s!.surcharge_percent / 100)
       }))
   }
 
@@ -713,7 +713,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
           id: maxS?.id ?? '',
           label: result.maxTimeSurchargeLabel || (maxS?.label ?? ''),
           percent: result.maxTimeSurchargePercent,
-          amount: Math.round(result.subtotal * result.maxTimeSurchargePercent / 100)
+          amount: round2(result.subtotal * result.maxTimeSurchargePercent / 100)
         }]
       })()
     : []
@@ -725,7 +725,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
       id: s!.id,
       label: s!.label,
       percent: s!.surcharge_percent,
-      amount: Math.round(result.subtotal * s!.surcharge_percent / 100)
+      amount: round2(result.subtotal * s!.surcharge_percent / 100)
     }))
 
   const serviceSurchargesBreakdown = (input.selectedServices || [])
@@ -835,7 +835,7 @@ export function buildCustomTowPriceBreakdown(
               id: maxS?.id ?? '',
               label: result.maxTimeSurchargeLabel || maxS?.label || '',
               percent: result.maxTimeSurchargePercent,
-              amount: Math.round(result.subtotal * result.maxTimeSurchargePercent / 100),
+              amount: round2(result.subtotal * result.maxTimeSurchargePercent / 100),
             },
           ]
         })()
@@ -848,7 +848,7 @@ export function buildCustomTowPriceBreakdown(
       id: s!.id,
       label: s!.label,
       percent: s!.surcharge_percent,
-      amount: Math.round(result.subtotal * s!.surcharge_percent / 100),
+      amount: round2(result.subtotal * s!.surcharge_percent / 100),
     }))
 
   const serviceSurchargesBreakdown = routeServices
