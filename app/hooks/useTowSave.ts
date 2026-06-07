@@ -70,7 +70,11 @@ interface UseTowSaveParams {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
+  workingManualManufacturer?: string
+  workingManualColor?: string
   workingManualWeight?: string
+  defectiveManualManufacturer?: string
+  defectiveManualColor?: string
   defectiveManualWeight?: string
   weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   // Route - single
@@ -133,8 +137,6 @@ interface UseTowSaveParams {
   selectedWorkingVehicleId?: string | null
   workingVehicleDestinationIsStorage?: boolean
   defectiveDestination?: 'storage' | 'address'
-  defectiveManualManufacturer?: string
-  defectiveManualColor?: string
   // Post-save
   setSavedTowId: (id: string) => void
   setShowAssignNowModal: (v: boolean) => void
@@ -183,7 +185,11 @@ export function useTowSave(params: UseTowSaveParams) {
     manualManufacturer,
     manualColor,
     manualWeight,
+    workingManualManufacturer,
+    workingManualColor,
     workingManualWeight,
+    defectiveManualManufacturer,
+    defectiveManualColor,
     defectiveManualWeight,
     weightBrackets,
     routeStops,
@@ -239,8 +245,6 @@ export function useTowSave(params: UseTowSaveParams) {
     selectedWorkingVehicleId,
     workingVehicleDestinationIsStorage,
     defectiveDestination,
-    defectiveManualManufacturer,
-    defectiveManualColor,
     setSavedTowId,
     setShowAssignNowModal,
   } = params
@@ -337,7 +341,11 @@ export function useTowSave(params: UseTowSaveParams) {
       manualManufacturer,
       manualColor,
       manualWeight,
+      workingManualManufacturer,
+      workingManualColor,
       workingManualWeight,
+      defectiveManualManufacturer,
+      defectiveManualColor,
       defectiveManualWeight,
       weightBrackets,
       routeStops:

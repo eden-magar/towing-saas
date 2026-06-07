@@ -476,6 +476,12 @@ function CreateExchangeTowForm({
         manualManufacturer,
         manualColor,
         manualWeight,
+        workingManualManufacturer,
+        workingManualColor,
+        workingManualWeight,
+        defectiveManualManufacturer,
+        defectiveManualColor,
+        defectiveManualWeight,
         existingTowVehicles: editTowId ? editExistingVehicles : undefined,
         existingTowPoints: editTowId ? editExistingPoints : undefined,
       })

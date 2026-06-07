@@ -18,6 +18,7 @@ import {
   assignExistingPointIds,
   assignExistingVehicleIds,
 } from '../utils/tow-reconcile-match'
+import type { PersistedVehicleType } from '../utils/tow-save-handler'
 
 // ==================== טיפוסים ====================
 
@@ -612,7 +613,7 @@ interface CreateTowInput {
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van'
+    vehicleType?: PersistedVehicleType
     color?: string
     isWorking?: boolean
     towReason?: string
@@ -1192,7 +1193,7 @@ interface UpdateTowInput {
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van'
+    vehicleType?: PersistedVehicleType
     color?: string
     isWorking?: boolean
     towReason?: string

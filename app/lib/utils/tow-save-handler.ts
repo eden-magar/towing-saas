@@ -67,7 +67,11 @@ export interface SaveTowInput {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
+  workingManualManufacturer?: string
+  workingManualColor?: string
   workingManualWeight?: string
+  defectiveManualManufacturer?: string
+  defectiveManualColor?: string
   defectiveManualWeight?: string
   weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   /** Regular tow: ordered route list (pickup / stop / dropoff in list order) */
@@ -212,7 +216,7 @@ export interface PreparedTowData {
     manufacturer?: string
     model?: string
     year?: number
-    vehicleType?: 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van'
+    vehicleType?: PersistedVehicleType
     color?: string
     isWorking?: boolean
     towReason?: string
@@ -301,13 +305,43 @@ function aggregateRouteServices(services: SelectedService[] | undefined): Select
   return Array.from(map.values())
 }
 
+/** Values the UI or registry lookup can produce — must match public.vehicle_type enum */
+const PERSISTED_VEHICLE_TYPES = [
+  'private',
+  'motorcycle',
+  'heavy',
+  'machinery',
+  'van',
+  'suv',
+  'truck',
+  'bus',
+  'other',
+] as const
+
+export type PersistedVehicleType = (typeof PERSISTED_VEHICLE_TYPES)[number]
+
+const REGISTRY_VEHICLE_SOURCES = ['private', 'motorcycle', 'heavy', 'machinery'] as const
+
 /**
- * מיפוי סוג רכב מקוד לטיפוס DB
+ * Pass through a user-selected or registry-derived vehicle category for DB storage.
+ * Does not affect pricing — unknown-to-pricing types are stored as-is for display.
  */
-function mapVehicleType(vehicleCode?: string): 'motorcycle' | 'private' | 'heavy' | 'machinery' | 'van' | undefined {
+function mapVehicleType(vehicleCode?: string): PersistedVehicleType | undefined {
   if (!vehicleCode) return undefined
-  const validTypes = ['motorcycle', 'private', 'heavy', 'machinery', 'van']
-  return validTypes.includes(vehicleCode) ? vehicleCode as any : undefined
+  if ((PERSISTED_VEHICLE_TYPES as readonly string[]).includes(vehicleCode)) {
+    return vehicleCode as PersistedVehicleType
+  }
+  return undefined
+}
+
+function resolveRouteVehicleRegistrySource(v: VehicleOnTruck): string | null {
+  if (v.registrySource) return v.registrySource
+  if (v.isFound && v.vehicleData && v.vehicleType) {
+    if ((REGISTRY_VEHICLE_SOURCES as readonly string[]).includes(v.vehicleType)) {
+      return v.vehicleType
+    }
+  }
+  return null
 }
 
 /**
@@ -362,22 +396,26 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
   }
   
   // המרה לפורמט של createTow
-  return Array.from(vehiclesMap.values()).map((v, i) => ({
+  return Array.from(vehiclesMap.values()).map((v) => ({
     id: v.id,
     plateNumber: normalizePlate(v.plateNumber),
-    manufacturer: v.vehicleData?.manufacturer,
+    manufacturer: v.vehicleData?.manufacturer || v.manualManufacturer || undefined,
     model: v.vehicleData?.model,
     year: v.vehicleData?.year ? Number(v.vehicleData.year) : undefined,
-    vehicleType: mapVehicleType(v.vehicleType ?? 'private') ?? 'private',
+    vehicleType: mapVehicleType(v.vehicleType),
     vehicleCode: v.vehicleCode || undefined,
-    color: v.vehicleData?.color,
+    color: v.vehicleData?.color || v.manualColor || undefined,
     isWorking: v.isWorking,
     towReason: v.isWorking ? undefined : (v.defects?.filter(Boolean).join(', ') || 'לא נוסע'),
-    registrySource: v.vehicleType ?? null,
+    registrySource: resolveRouteVehicleRegistrySource(v),
     driveType: v.vehicleData?.driveType,
     fuelType: v.vehicleData?.fuelType,
-    totalWeight: v.vehicleData?.totalWeight ? Number(v.vehicleData.totalWeight) : undefined,
-    gearType: v.vehicleData?.gearType
+    totalWeight: v.vehicleData?.totalWeight
+      ? Number(v.vehicleData.totalWeight)
+      : v.manualWeight
+        ? Number(v.manualWeight)
+        : undefined,
+    gearType: v.vehicleData?.gearType,
   }))
 }
 
@@ -1102,10 +1140,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       plateNumber: normalizePlate(input.workingVehiclePlate),
       vehicleCode: input.workingVehicleCode || undefined,
       vehicleType: mapVehicleType(input.workingVehicleType || ''),
-      manufacturer: input.workingVehicleData?.data?.manufacturer,
+      manufacturer:
+        input.workingVehicleData?.data?.manufacturer || input.workingManualManufacturer || undefined,
       model: input.workingVehicleData?.data?.model,
       year: input.workingVehicleData?.data?.year,
-      color: input.workingVehicleData?.data?.color,
+      color: input.workingVehicleData?.data?.color || input.workingManualColor || undefined,
       isWorking: true,
       driveType: input.workingVehicleData?.data?.driveType,
       fuelType: input.workingVehicleData?.data?.fuelType,
@@ -1122,10 +1161,14 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       plateNumber: normalizePlate(input.defectiveVehiclePlate),
       vehicleCode: input.defectiveVehicleCode || undefined,
       vehicleType: mapVehicleType(input.defectiveVehicleType || ''),
-      manufacturer: input.defectiveVehicleData?.data?.manufacturer,
+      manufacturer:
+        input.defectiveVehicleData?.data?.manufacturer ||
+        input.defectiveManualManufacturer ||
+        undefined,
       model: input.defectiveVehicleData?.data?.model,
       year: input.defectiveVehicleData?.data?.year,
-      color: input.defectiveVehicleData?.data?.color,
+      color:
+        input.defectiveVehicleData?.data?.color || input.defectiveManualColor || undefined,
       isWorking: false,
       towReason: input.selectedDefects?.join(', ') || undefined,
       driveType: input.defectiveVehicleData?.data?.driveType,

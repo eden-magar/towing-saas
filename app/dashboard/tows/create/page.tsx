@@ -923,6 +923,12 @@ function CreateTowForm({
         manualManufacturer,
         manualColor,
         manualWeight,
+        workingManualManufacturer: towType === 'exchange' ? workingManualManufacturer : undefined,
+        workingManualColor: towType === 'exchange' ? workingManualColor : undefined,
+        workingManualWeight: towType === 'exchange' ? workingManualWeight : undefined,
+        defectiveManualManufacturer: towType === 'exchange' ? defectiveManualManufacturer : undefined,
+        defectiveManualColor: towType === 'exchange' ? defectiveManualColor : undefined,
+        defectiveManualWeight: towType === 'exchange' ? defectiveManualWeight : undefined,
       })
       let quoteTowId = editTowId
       if (editTowId) {

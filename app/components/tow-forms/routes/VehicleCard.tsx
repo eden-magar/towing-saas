@@ -16,8 +16,10 @@ export interface VehicleOnTruck {
   isWorking: boolean
   defects?: string[]
   vehicleCode?: string
-  /** Pricing category from lookup (`VehicleLookupResult.source`), e.g. private / heavy */
+  /** User-selected category (manual) or registry pricing bucket after lookup */
   vehicleType?: string
+  /** Registry lookup source when plate was found — not the manual category dropdown */
+  registrySource?: string | null
   vehicleData?: VehicleData
   isLoading?: boolean
   isFound?: boolean
@@ -88,6 +90,7 @@ export function VehicleCard({
             manualColor: undefined,
             manualWeight: undefined,
             vehicleType: result.source ?? 'private',
+            registrySource: result.source ?? null,
             vehicleData: {
               manufacturer: result.data.manufacturer || undefined,
               model: result.data.model || undefined,
@@ -109,6 +112,7 @@ export function VehicleCard({
             isFound: false,
             vehicleNotFound: true,
             vehicleType: vehicle.vehicleType ?? 'private',
+            registrySource: null,
             vehicleData: undefined,
             manualManufacturer: undefined,
             manualColor: undefined,
@@ -124,6 +128,7 @@ export function VehicleCard({
         isFound: false,
         vehicleNotFound: true,
         vehicleType: vehicle.vehicleType ?? 'private',
+        registrySource: null,
         vehicleData: undefined,
         manualManufacturer: undefined,
         manualColor: undefined,
@@ -197,6 +202,7 @@ export function VehicleCard({
                   vehicleNotFound: false,
                   vehicleData: undefined,
                   vehicleType: undefined,
+                  registrySource: null,
                   manualManufacturer: undefined,
                   manualColor: undefined,
                   manualWeight: undefined,

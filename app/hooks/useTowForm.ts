@@ -1890,6 +1890,8 @@ export function useTowForm(editTowId?: string) {
     manualManufacturer,
     manualColor,
     manualWeight,
+    workingManualManufacturer,
+    workingManualColor,
     workingManualWeight,
     routeStops,
     distance,
