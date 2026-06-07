@@ -2366,6 +2366,7 @@ export function useTowForm(editTowId?: string) {
     loadedTowStatus,
     editExistingVehicles,
     editExistingPoints,
+    editTowSnapshot,
     department, setDepartment,
     orderedBy, setOrderedBy,
     customerName, setCustomerName,

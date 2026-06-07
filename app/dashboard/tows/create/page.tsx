@@ -288,6 +288,11 @@ function CreateTowForm({
     loadedTowStatus,
     editExistingVehicles,
     editExistingPoints,
+    editTowSnapshot,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+    getExchangeEditPriceBaselineSignature,
+    getExchangeRouteLayout,
     notes,
     setNotes,
     selectedDefects,
@@ -929,6 +934,20 @@ function CreateTowForm({
         defectiveManualManufacturer: towType === 'exchange' ? defectiveManualManufacturer : undefined,
         defectiveManualColor: towType === 'exchange' ? defectiveManualColor : undefined,
         defectiveManualWeight: towType === 'exchange' ? defectiveManualWeight : undefined,
+        ...(editTowId && towType === 'exchange'
+          ? {
+              existingPriceBreakdown: editTowSnapshot?.price_breakdown ?? null,
+              timeSurchargesData,
+              isHoliday,
+              hasManualTimeSurchargeOverride,
+              stopsBeforeExchange,
+              stopsAfterExchange,
+              exchangeRouteLayout: getExchangeRouteLayout?.() ?? null,
+              exchangeEditPriceBaselineSignature:
+                getExchangeEditPriceBaselineSignature?.() ?? null,
+              exchangeEditOriginalFinalPrice: editTowSnapshot?.final_price ?? null,
+            }
+          : {}),
       })
       let quoteTowId = editTowId
       if (editTowId) {
@@ -1045,6 +1064,14 @@ function CreateTowForm({
     defectiveDestination,
     defectiveVehicleCode,
     editTowId,
+    editTowSnapshot,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+    getExchangeEditPriceBaselineSignature,
+    getExchangeRouteLayout,
+    timeSurchargesData,
+    isHoliday,
+    hasManualTimeSurchargeOverride,
     priceMode,
   ])
 
