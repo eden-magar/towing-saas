@@ -72,6 +72,9 @@ import { getActiveTimeSurcharges } from '../../../lib/queries/price-lists'
 import type { TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
 import type { VehicleLookupResult, VehicleType } from '../../../lib/types'
+import { EventTowSection } from '../../../components/event-forms/EventTowSection'
+
+type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
 
 // ==================== Create Tow Form ====================
 
@@ -334,6 +337,7 @@ function CreateTowForm({
     customerTab === 'existing' &&
     !!selectedCustomerId &&
     customers.find((c) => c.id === selectedCustomerId)?.customer_type === 'business'
+  const [entryKind, setEntryKind] = useState<TowEntryKind>(null)
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
   const [quoteSavedId, setQuoteSavedId] = useState<string | null>(null)
@@ -703,9 +707,20 @@ function CreateTowForm({
     setIsToday(true)
   }
 
-  const handleTowTypeSelect = (type: 'single' | 'exchange' | 'custom') => {
-    setTowType(type)
+  const handleEntryKindSelect = (kind: Exclude<TowEntryKind, null>) => {
+    setEntryKind(kind)
+    if (kind === 'events') {
+      setTowType('')
+    } else {
+      setTowType(kind)
+    }
   }
+
+  useEffect(() => {
+    if (towType === 'single' || towType === 'exchange' || towType === 'custom') {
+      setEntryKind(towType)
+    }
+  }, [towType])
 
   const handlePinDropOpen = (field: string) => {
     setPinDropModal({ isOpen: true, field })
@@ -1180,7 +1195,7 @@ function CreateTowForm({
             title="סוג גרירה"
             description="בחר את אופי המשימה"
           >
-            {storedVehicleParam && !editTowId && !towType && (
+            {storedVehicleParam && !editTowId && !entryKind && (
               <div className="mb-4 flex items-start gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
                 <Info size={18} className="shrink-0 mt-0.5 text-cyan-600" />
                 <p>
@@ -1189,19 +1204,20 @@ function CreateTowForm({
                 </p>
               </div>
             )}
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
                 { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B', icon: Truck },
                 { value: 'exchange' as const, label: 'תקין ↔ תקול', sub: '3 שלבים', icon: ArrowLeftRight },
                 { value: 'custom' as const, label: 'מסלול מותאם', sub: 'נקודות חופשיות', icon: Route },
+                { value: 'events' as const, label: 'אירועים מיוחדים', sub: 'פינוי רכבים מאירוע', icon: Calendar },
               ].map((option) => {
                 const Icon = option.icon
-                const isActive = towType === option.value
+                const isActive = entryKind === option.value
                 return (
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => handleTowTypeSelect(option.value)}
+                    onClick={() => handleEntryKindSelect(option.value)}
                     className={
                       isActive
                         ? 'relative p-3 rounded-lg border border-gt-brand bg-gt-brand-subtle ring-1 ring-gt-brand transition-all duration-150'
@@ -1234,6 +1250,10 @@ function CreateTowForm({
               })}
             </div>
           </FormCard>
+
+          {entryKind === 'events' && (
+            <EventTowSection selectedCustomerId={selectedCustomerId} />
+          )}
 
           {/* Section 4 — רכב ומסלול */}
           {towType && (
