@@ -15,6 +15,42 @@ export async function uploadPlateImage(eventId: string, file: File): Promise<str
   return path
 }
 
+export function fileToDownscaledDataUrl(file: File, maxWidth = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+
+      let { width, height } = img
+      if (width > maxWidth) {
+        height = (height / width) * maxWidth
+        width = maxWidth
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Failed to get canvas context'))
+        return
+      }
+
+      ctx.drawImage(img, 0, 0, width, height)
+      resolve(canvas.toDataURL('image/jpeg', 0.7))
+    }
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Failed to load image'))
+    }
+
+    img.src = objectUrl
+  })
+}
+
 export interface PlateRecognitionResult {
   plateNumber: string
   rawResponse: unknown
@@ -31,7 +67,7 @@ type PlateOcrApiErrorBody = {
   error?: string
 }
 
-export async function recognizePlate(imagePath: string): Promise<PlateRecognitionResult> {
+export async function recognizePlate(imageDataUrl: string): Promise<PlateRecognitionResult> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
@@ -46,7 +82,7 @@ export async function recognizePlate(imagePath: string): Promise<PlateRecognitio
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ imagePath }),
+    body: JSON.stringify({ imageDataUrl }),
   })
 
   if (!res.ok) {

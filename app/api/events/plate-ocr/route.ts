@@ -1,18 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorizedResponse } from '@/app/lib/auth'
 
-const EVENT_PLATES_BUCKET = 'event-plates'
-const SIGNED_URL_TTL_SEC = 60
 const OCR_MODEL = 'gpt-4o-mini' as const
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 type PlateOcrRequestBody = {
-  imagePath?: unknown
+  imageDataUrl?: unknown
 }
 
 type OpenAiMessageContentPart = {
@@ -75,26 +67,17 @@ export async function POST(request: NextRequest) {
     try {
       body = (await request.json()) as PlateOcrRequestBody
     } catch {
-      return NextResponse.json({ error: 'imagePath required' }, { status: 400 })
+      return NextResponse.json({ error: 'imageDataUrl required' }, { status: 400 })
     }
 
-    const imagePath = typeof body.imagePath === 'string' ? body.imagePath.trim() : ''
-    if (!imagePath) {
-      return NextResponse.json({ error: 'imagePath required' }, { status: 400 })
+    const imageDataUrl = typeof body.imageDataUrl === 'string' ? body.imageDataUrl.trim() : ''
+    if (!imageDataUrl || !imageDataUrl.startsWith('data:image/')) {
+      return NextResponse.json({ error: 'imageDataUrl required' }, { status: 400 })
     }
 
     if (!process.env.OPENAI_API_KEY) {
       console.error('[plate-ocr] OPENAI_API_KEY not configured')
       return NextResponse.json({ error: 'OCR service unavailable' }, { status: 503 })
-    }
-
-    const { data, error: signedUrlError } = await supabaseAdmin.storage
-      .from(EVENT_PLATES_BUCKET)
-      .createSignedUrl(imagePath, SIGNED_URL_TTL_SEC)
-
-    if (signedUrlError || !data?.signedUrl) {
-      console.error('[plate-ocr] signed URL failed', signedUrlError)
-      return NextResponse.json({ error: 'Failed to access image' }, { status: 400 })
     }
 
     const openAiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -111,7 +94,7 @@ export async function POST(request: NextRequest) {
             role: 'user',
             content: [
               { type: 'text', text: PLATE_OCR_INSTRUCTION },
-              { type: 'image_url', image_url: { url: data.signedUrl, detail: 'low' } },
+              { type: 'image_url', image_url: { url: imageDataUrl, detail: 'low' } },
             ],
           },
         ],

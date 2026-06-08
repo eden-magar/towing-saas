@@ -38,6 +38,7 @@ import { normalizePlate } from '@/app/lib/utils/plate-number'
 import { toWhatsApp } from '@/app/lib/utils/phone'
 import { lookupVehicle } from '@/app/lib/vehicle-lookup'
 import {
+  fileToDownscaledDataUrl,
   recognizePlate,
   savePlateRecognition,
   uploadPlateImage,
@@ -443,12 +444,22 @@ export default function DriverEventDetailPage({
 
     try {
       const position = await captureCurrentPosition()
-      const imagePath = await uploadPlateImage(event.id, file)
-      const result = await recognizePlate(imagePath)
+      const dataUrl = await fileToDownscaledDataUrl(file)
+
+      const uploadPromise = uploadPlateImage(event.id, file).catch((err) => {
+        console.error('Error uploading plate image for dataset:', err)
+        return null
+      })
+
+      const [result, imagePath] = await Promise.all([
+        recognizePlate(dataUrl),
+        uploadPromise,
+      ])
+
       const plate = normalizePlate(result.plateNumber)
 
       const pending: PendingPlateCapture = {
-        imagePath,
+        imagePath: imagePath ?? '',
         rawResponse: result.rawResponse,
         model: result.model,
         gptPlateNumber: result.plateNumber || null,
