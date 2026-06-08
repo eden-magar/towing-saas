@@ -7,19 +7,22 @@ import {
   ArrowRight,
   Calendar,
   Camera,
-  Car,
+  Check,
   ChevronDown,
   ChevronUp,
   Loader2,
+  Lock,
   MapPin,
   MessageCircle,
   Navigation,
+  Pencil,
   Phone,
   Plus,
   Search,
   Sparkles,
   User,
 } from 'lucide-react'
+import { supabase } from '@/app/lib/supabase'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
 import {
@@ -41,9 +44,14 @@ import {
   fileToDownscaledDataUrl,
   recognizePlate,
   savePlateRecognition,
+  saveVehiclePhotoRow,
+  updateEventVehicleLocation,
   uploadPlateImage,
+  uploadVehiclePhoto,
 } from '@/app/lib/queries/event-plate-capture'
+import LicensePlate from './components/LicensePlate'
 import PlateCamera from './components/PlateCamera'
+import VehiclePhotoCamera from './components/VehiclePhotoCamera'
 
 type DriverEventStage = 1 | 2 | 3 | 4 | 'completed'
 
@@ -54,6 +62,65 @@ type PendingPlateCapture = {
   gptPlateNumber: string | null
   lat: number | null
   lng: number | null
+}
+
+type VehicleDocStatus = {
+  beforeCount: number
+  afterCount: number
+  beforeLocationSaved: boolean
+  afterLocationSaved: boolean
+}
+
+type VehiclePhotoPhase = 'before' | 'after'
+
+type VehicleCameraState = {
+  vehicleId: string
+  phase: VehiclePhotoPhase
+}
+
+type EventVehiclePhotoRow = {
+  event_vehicle_id: string
+  phase: VehiclePhotoPhase
+}
+
+async function loadVehicleDocStatuses(
+  eventId: string,
+  vehicleList: EventVehicle[]
+): Promise<Record<string, VehicleDocStatus>> {
+  const statuses: Record<string, VehicleDocStatus> = {}
+
+  for (const vehicle of vehicleList) {
+    statuses[vehicle.id] = {
+      beforeCount: 0,
+      afterCount: 0,
+      beforeLocationSaved:
+        vehicle.pickup_location_lat != null && vehicle.pickup_location_lng != null,
+      afterLocationSaved:
+        vehicle.dropoff_location_lat != null && vehicle.dropoff_location_lng != null,
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('event_vehicle_photos')
+    .select('event_vehicle_id, phase')
+    .eq('event_id', eventId)
+
+  if (error) {
+    console.error('Error loading vehicle photo counts:', JSON.stringify(error, null, 2))
+    return statuses
+  }
+
+  for (const row of (data ?? []) as EventVehiclePhotoRow[]) {
+    const status = statuses[row.event_vehicle_id]
+    if (!status) continue
+    if (row.phase === 'before') {
+      status.beforeCount += 1
+    } else {
+      status.afterCount += 1
+    }
+  }
+
+  return statuses
 }
 
 async function captureCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
@@ -235,6 +302,12 @@ export default function DriverEventDetailPage({
   const [showPlateCamera, setShowPlateCamera] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [pendingPlate, setPendingPlate] = useState<PendingPlateCapture | null>(null)
+  const [plateEditing, setPlateEditing] = useState(false)
+  const [vehicleDocStatus, setVehicleDocStatus] = useState<Record<string, VehicleDocStatus>>({})
+  const [vehicleCamera, setVehicleCamera] = useState<VehicleCameraState | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const [photoSuccessVehicleId, setPhotoSuccessVehicleId] = useState<string | null>(null)
 
   useEffect(() => {
     if (authLoading || !user?.id) return
@@ -244,6 +317,8 @@ export default function DriverEventDetailPage({
   const loadVehicles = async (eventId: string) => {
     const list = await getEventVehicles(eventId)
     setVehicles(list)
+    const statuses = await loadVehicleDocStatuses(eventId, list)
+    setVehicleDocStatus(statuses)
   }
 
   const loadEvent = async (options?: { silent?: boolean }) => {
@@ -372,6 +447,7 @@ export default function DriverEventDetailPage({
     setLookupResult(null)
     setVehicleError('')
     setPendingPlate(null)
+    setPlateEditing(false)
   }
 
   const savePendingPlateDataset = async (
@@ -469,6 +545,7 @@ export default function DriverEventDetailPage({
 
       setPendingPlate(pending)
       setPlateInput(plate)
+      setPlateEditing(false)
       setLookupResult(null)
 
       if (plate.length >= 5) {
@@ -526,6 +603,90 @@ export default function DriverEventDetailPage({
     }
   }
 
+  const handleOpenVehicleCamera = (vehicleId: string, phase: VehiclePhotoPhase) => {
+    setPhotoError('')
+    setVehicleCamera({ vehicleId, phase })
+  }
+
+  const handleVehiclePhotoConfirm = async (files: File[]) => {
+    if (!event || !vehicleCamera || !user) return
+
+    const { vehicleId, phase } = vehicleCamera
+    setVehicleCamera(null)
+    setPhotoUploading(true)
+    setPhotoError('')
+
+    let successCount = 0
+
+    try {
+      const position = await captureCurrentPosition()
+      const lat = position?.lat ?? null
+      const lng = position?.lng ?? null
+
+      for (const file of files) {
+        try {
+          const path = await uploadVehiclePhoto(event.id, vehicleId, phase, file)
+          await saveVehiclePhotoRow({
+            companyId: event.company_id,
+            eventId: event.id,
+            eventVehicleId: vehicleId,
+            uploadedBy: user.id,
+            imagePath: path,
+            phase,
+          })
+          successCount += 1
+        } catch (err) {
+          console.error('Error uploading/saving vehicle photo:', err)
+        }
+      }
+
+      if (successCount === 0) {
+        setPhotoError('שגיאה בהעלאת התמונות, נסה שוב')
+        return
+      }
+
+      try {
+        await updateEventVehicleLocation(vehicleId, phase, lat, lng)
+      } catch (err) {
+        console.error('Error saving vehicle location:', err)
+      }
+
+      const locationSaved = lat != null && lng != null
+
+      setVehicleDocStatus((prev) => {
+        const current = prev[vehicleId] ?? {
+          beforeCount: 0,
+          afterCount: 0,
+          beforeLocationSaved: false,
+          afterLocationSaved: false,
+        }
+        return {
+          ...prev,
+          [vehicleId]:
+            phase === 'before'
+              ? {
+                  ...current,
+                  beforeCount: current.beforeCount + successCount,
+                  beforeLocationSaved: locationSaved || current.beforeLocationSaved,
+                }
+              : {
+                  ...current,
+                  afterCount: current.afterCount + successCount,
+                  afterLocationSaved: locationSaved || current.afterLocationSaved,
+                },
+        }
+      })
+
+      setPhotoSuccessVehicleId(vehicleId)
+      window.setTimeout(() => setPhotoSuccessVehicleId(null), 3000)
+    } catch (err) {
+      console.error('Error in vehicle photo confirm flow:', err)
+      setPhotoError('שגיאה בשמירת התמונות, נסה שוב')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -574,7 +735,7 @@ export default function DriverEventDetailPage({
       <button
         type="button"
         onClick={() => setSummaryOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 p-4 text-right"
+        className="flex w-full items-center justify-between gap-2 p-3 text-right"
       >
         <span className="text-sm font-medium text-gray-800">פרטי קשר ומיקום</span>
         {summaryOpen ? (
@@ -592,7 +753,7 @@ export default function DriverEventDetailPage({
         </div>
       )}
       {summaryOpen && (
-        <div className="border-t border-gray-100 p-4 space-y-3">
+        <div className="border-t border-gray-100 space-y-2 p-3">
           <div>
             <p className="text-xs text-gray-500">לקוח</p>
             <p className="text-sm font-medium text-gray-800">{customerName}</p>
@@ -686,12 +847,12 @@ export default function DriverEventDetailPage({
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 px-4 py-4">
+      <div className="flex flex-col gap-2 px-4 py-3">
         {/* SCREEN 1 — task info */}
         {stage === 1 && (
           <>
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <p className="mb-2 text-xs font-medium text-gray-500">לקוח</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+              <p className="mb-1.5 text-xs font-medium text-gray-500">לקוח</p>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-base font-semibold text-gray-800">{customerName}</p>
@@ -724,8 +885,8 @@ export default function DriverEventDetailPage({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <p className="mb-2 text-xs font-medium text-gray-500">מועד</p>
+            <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+              <p className="mb-1.5 text-xs font-medium text-gray-500">מועד</p>
               <div className="flex items-center gap-3 text-gray-800">
                 <Calendar size={18} className="shrink-0 text-cyan-600" />
                 <div>
@@ -745,15 +906,15 @@ export default function DriverEventDetailPage({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
-              <p className="mb-2 text-xs font-medium text-gray-500">מיקום</p>
+            <div className="rounded-2xl border border-cyan-100 bg-white p-3 shadow-sm">
+              <p className="mb-1.5 text-xs font-medium text-gray-500">מיקום</p>
               {hasLocation ? (
-                <div className="mb-3 flex items-start gap-2 text-gray-700">
+                <div className="mb-2 flex items-start gap-2 text-gray-700">
                   <MapPin size={16} className="mt-0.5 shrink-0 text-cyan-600" />
                   <span className="text-sm leading-relaxed">{event.location_address}</span>
                 </div>
               ) : (
-                <p className="mb-3 text-sm text-gray-400">לא צוין מיקום</p>
+                <p className="mb-2 text-sm text-gray-400">לא צוין מיקום</p>
               )}
               {hasNavigationTarget && (
                 <div className="flex flex-row gap-2">
@@ -778,8 +939,8 @@ export default function DriverEventDetailPage({
             </div>
 
             {(event.contact_name || event.contact_phone) && (
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="mb-2 text-xs font-medium text-gray-500">איש קשר</p>
+              <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+                <p className="mb-1.5 text-xs font-medium text-gray-500">איש קשר</p>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2 text-gray-800">
                     <User size={16} className="shrink-0 text-gray-400" />
@@ -804,8 +965,8 @@ export default function DriverEventDetailPage({
             )}
 
             {event.details?.trim() && (
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <p className="mb-2 text-xs font-medium text-gray-500">הנחיות / פרטים</p>
+              <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+                <p className="mb-1.5 text-xs font-medium text-gray-500">הנחיות / פרטים</p>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
                   {event.details}
                 </p>
@@ -821,7 +982,7 @@ export default function DriverEventDetailPage({
           <>
             {renderCompactSummary()}
 
-            <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm space-y-3">
+            <div className="rounded-2xl border border-cyan-100 bg-white p-3 shadow-sm space-y-2">
               <p className="text-sm font-medium text-gray-800">לפני היציאה</p>
               {contactPhone ? (
                 <button
@@ -865,7 +1026,7 @@ export default function DriverEventDetailPage({
         {stage === 3 && (
           <>
             {renderCompactSummary()}
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
               <p className="text-sm text-gray-700">
                 לאחר ההגעה ליעד, אשר הגעה והמשך לתיעוד הרכבים.
               </p>
@@ -879,37 +1040,125 @@ export default function DriverEventDetailPage({
           <>
             {renderCompactSummary()}
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between gap-2">
+            {photoError && (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{photoError}</p>
+            )}
+
+            <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-gray-800">רכבים באירוע</p>
                 <span className="text-xs text-gray-500">{vehicles.length} רכבים</span>
               </div>
 
               {vehicles.length === 0 ? (
-                <p className="mb-3 text-sm text-gray-500">טרם נוספו רכבים</p>
+                <p className="mb-2 text-sm text-gray-500">טרם נוספו רכבים</p>
               ) : (
-                <ul className="mb-3 space-y-2">
+                <ul className="mb-2 space-y-2">
                   {vehicles.map((vehicle) => {
                     const summary = formatVehicleSummary(vehicle.vehicle_details)
+                    const doc = vehicleDocStatus[vehicle.id] ?? {
+                      beforeCount: 0,
+                      afterCount: 0,
+                      beforeLocationSaved: false,
+                      afterLocationSaved: false,
+                    }
+                    const beforeDone = doc.beforeCount > 0
+                    const afterDone = doc.afterCount > 0
+                    const afterLocked = !beforeDone
+                    const photoButtonLabel = !beforeDone
+                      ? 'צלם את הרכב (לפני)'
+                      : 'צלם אחרי הפריקה'
+                    const photoButtonPhase: VehiclePhotoPhase = !beforeDone ? 'before' : 'after'
+                    const photoButtonDisabled = afterLocked || (beforeDone && afterDone)
+
                     return (
                       <li
                         key={vehicle.id}
-                        className="rounded-xl border border-gray-100 bg-gray-50 p-3"
+                        className="rounded-xl border border-gray-100 bg-gray-50 p-2.5 space-y-2"
                       >
                         <div className="flex items-start gap-2">
-                          <Car size={16} className="mt-0.5 shrink-0 text-cyan-600" />
+                          <LicensePlate plate={vehicle.plate_number} size="sm" />
                           <div className="min-w-0 flex-1">
-                            <p className="font-mono text-sm font-bold text-gray-800 dir-ltr text-right">
-                              {vehicle.plate_number}
-                            </p>
                             {summary && (
-                              <p className="mt-0.5 text-xs text-gray-600">{summary}</p>
+                              <p className="text-xs text-gray-600">{summary}</p>
                             )}
                             {vehicle.notes && (
-                              <p className="mt-1 text-xs text-gray-500">{vehicle.notes}</p>
+                              <p className="mt-0.5 text-xs text-gray-500">{vehicle.notes}</p>
                             )}
                           </div>
                         </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div
+                            className={`rounded-lg px-2 py-1.5 text-center text-xs font-medium ${
+                              beforeDone
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            <p className="mb-0.5 text-[10px] text-gray-500">לפני</p>
+                            {beforeDone ? (
+                              <span className="inline-flex items-center justify-center gap-1">
+                                <Check size={12} />
+                                {doc.beforeCount} תמונות
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center justify-center gap-1">
+                                <Camera size={12} />
+                                ממתין
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            className={`rounded-lg px-2 py-1.5 text-center text-xs font-medium ${
+                              afterLocked
+                                ? 'bg-gray-100 text-gray-400'
+                                : afterDone
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            <p className="mb-0.5 text-[10px] text-gray-500">אחרי</p>
+                            {afterLocked ? (
+                              <span className="inline-flex items-center justify-center gap-1">
+                                <Lock size={12} />
+                                נעול
+                              </span>
+                            ) : afterDone ? (
+                              <span className="inline-flex items-center justify-center gap-1">
+                                <Check size={12} />
+                                {doc.afterCount} תמונות
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center justify-center gap-1">
+                                <Camera size={12} />
+                                ממתין
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {doc.beforeLocationSaved && (
+                          <p className="text-[11px] text-[#33d4ff]">מיקום נשמר (לפני)</p>
+                        )}
+                        {doc.afterLocationSaved && (
+                          <p className="text-[11px] text-emerald-600">מיקום נשמר (אחרי)</p>
+                        )}
+
+                        {photoSuccessVehicleId === vehicle.id && (
+                          <p className="text-xs font-medium text-emerald-600">התמונות נשמרו בהצלחה</p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenVehicleCamera(vehicle.id, photoButtonPhase)}
+                          disabled={photoButtonDisabled || photoUploading}
+                          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] text-sm font-bold text-white disabled:opacity-40"
+                        >
+                          <Camera size={16} />
+                          {photoButtonLabel}
+                        </button>
                       </li>
                     )
                   })}
@@ -923,19 +1172,19 @@ export default function DriverEventDetailPage({
                     resetVehicleForm()
                     setShowVehicleForm(true)
                   }}
-                  className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-200 bg-cyan-50/50 py-2.5 text-sm font-medium text-cyan-700"
+                  className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-200 bg-cyan-50/50 py-2 text-sm font-medium text-cyan-700"
                 >
                   <Plus size={18} />
                   הוסף רכב
                 </button>
               ) : (
-                <div className="rounded-xl border border-cyan-100 bg-cyan-50/30 p-3 space-y-3">
+                <div className="rounded-xl border border-cyan-100 bg-cyan-50/30 p-2.5 space-y-2">
                   <p className="text-sm font-medium text-gray-800">רכב חדש</p>
                   <button
                     type="button"
                     onClick={() => setShowPlateCamera(true)}
                     disabled={ocrLoading}
-                    className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] font-medium text-white disabled:opacity-60"
+                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] font-medium text-white disabled:opacity-60"
                   >
                     <Camera size={18} />
                     צלם לוחית
@@ -946,21 +1195,38 @@ export default function DriverEventDetailPage({
                       מפענח לוחית...
                     </div>
                   )}
-                  <input
-                    type="text"
-                    value={plateInput}
-                    onChange={(e) => {
-                      setPlateInput(e.target.value)
-                      setLookupResult(null)
-                    }}
-                    placeholder="מספר רישוי"
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dir-ltr text-right focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/20"
-                  />
+
+                  {normalizePlate(plateInput).length >= 5 && !plateEditing ? (
+                    <div className="flex items-center gap-2">
+                      <LicensePlate plate={normalizePlate(plateInput)} size="md" />
+                      <button
+                        type="button"
+                        onClick={() => setPlateEditing(true)}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600"
+                        aria-label="ערוך מספר רישוי"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={plateInput}
+                      onChange={(e) => {
+                        setPlateInput(e.target.value)
+                        setPlateEditing(true)
+                        setLookupResult(null)
+                      }}
+                      placeholder="מספר רישוי"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dir-ltr text-right focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/20"
+                    />
+                  )}
+
                   <button
                     type="button"
                     onClick={() => void handleLookupPlate()}
                     disabled={lookupLoading || normalizePlate(plateInput).length < 5}
-                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-white border border-gray-200 py-2.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+                    className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
                   >
                     {lookupLoading ? (
                       <Loader2 size={16} className="animate-spin" />
@@ -971,8 +1237,8 @@ export default function DriverEventDetailPage({
                   </button>
 
                   {lookupResult?.found && lookupResult.data && (
-                    <div className="rounded-xl bg-white border border-gray-100 p-3 text-sm text-gray-700">
-                      <p className="font-medium text-gray-800 mb-1">פרטי הרכב</p>
+                    <div className="rounded-xl border border-gray-100 bg-white p-2.5 text-sm text-gray-700">
+                      <p className="mb-1 font-medium text-gray-800">פרטי הרכב</p>
                       <p>{formatVehicleSummary(lookupResult.data as EventVehicleDetails)}</p>
                     </div>
                   )}
@@ -982,7 +1248,7 @@ export default function DriverEventDetailPage({
                     onChange={(e) => setVehicleNotes(e.target.value)}
                     placeholder="הערות לרכב"
                     rows={2}
-                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm resize-none focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/20"
+                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/20"
                   />
 
                   {vehicleError && (
@@ -996,7 +1262,7 @@ export default function DriverEventDetailPage({
                         setShowVehicleForm(false)
                         resetVehicleForm()
                       }}
-                      className="flex-1 min-h-[44px] rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600"
+                      className="min-h-[40px] flex-1 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600"
                     >
                       ביטול
                     </button>
@@ -1004,7 +1270,7 @@ export default function DriverEventDetailPage({
                       type="button"
                       onClick={() => void handleSaveVehicle()}
                       disabled={vehicleSaveLoading || normalizePlate(plateInput).length < 5}
-                      className="flex-[2] min-h-[44px] rounded-xl bg-[#33d4ff] text-sm font-bold text-white disabled:opacity-60"
+                      className="min-h-[40px] flex-[2] rounded-xl bg-[#33d4ff] text-sm font-bold text-white disabled:opacity-60"
                     >
                       {vehicleSaveLoading ? 'שומר...' : 'שמור רכב'}
                     </button>
@@ -1034,9 +1300,9 @@ export default function DriverEventDetailPage({
                   {vehicles.map((vehicle) => (
                     <li
                       key={vehicle.id}
-                      className="rounded-xl border border-gray-100 bg-gray-50 p-3 font-mono text-sm dir-ltr text-right"
+                      className="rounded-xl border border-gray-100 bg-gray-50 p-2.5"
                     >
-                      {vehicle.plate_number}
+                      <LicensePlate plate={vehicle.plate_number} size="sm" />
                     </li>
                   ))}
                 </ul>
@@ -1053,6 +1319,28 @@ export default function DriverEventDetailPage({
           onConfirm={(file) => void handlePlateCameraConfirm(file)}
           onCancel={() => setShowPlateCamera(false)}
         />
+      )}
+
+      {vehicleCamera && (
+        <VehiclePhotoCamera
+          title={
+            vehicleCamera.phase === 'before'
+              ? 'צילום הרכב — לפני'
+              : 'צילום הרכב — אחרי הפריקה'
+          }
+          minPhotos={4}
+          onConfirm={(files) => void handleVehiclePhotoConfirm(files)}
+          onCancel={() => setVehicleCamera(null)}
+        />
+      )}
+
+      {photoUploading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+          <div className="text-center">
+            <Loader2 size={40} className="mx-auto mb-3 animate-spin text-[#33d4ff]" />
+            <p className="text-sm font-medium text-white">מעלה תמונות...</p>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 import { supabase } from '../supabase'
 
 const EVENT_PLATES_BUCKET = 'event-plates'
+const EVENT_IMAGES_BUCKET = 'event-images'
 
 export async function uploadPlateImage(eventId: string, file: File): Promise<string> {
   const path = `${eventId}/${Date.now()}.jpg`
@@ -137,6 +138,77 @@ export async function savePlateRecognition(input: SavePlateRecognitionInput): Pr
 
   if (error) {
     console.error('Error saving plate recognition:', JSON.stringify(error, null, 2))
+    throw error
+  }
+}
+
+export async function uploadVehiclePhoto(
+  eventId: string,
+  eventVehicleId: string,
+  phase: 'before' | 'after',
+  file: File
+): Promise<string> {
+  const path = `${eventId}/${eventVehicleId}/${phase}_${Date.now()}.jpg`
+
+  const { error } = await supabase.storage.from(EVENT_IMAGES_BUCKET).upload(path, file)
+
+  if (error) {
+    console.error('Error uploading vehicle photo:', error)
+    throw error
+  }
+
+  return path
+}
+
+export interface SaveVehiclePhotoInput {
+  companyId: string
+  eventId: string
+  eventVehicleId: string
+  uploadedBy: string | null
+  imagePath: string
+  phase: 'before' | 'after'
+}
+
+export async function saveVehiclePhotoRow(input: SaveVehiclePhotoInput): Promise<void> {
+  const { error } = await supabase.from('event_vehicle_photos').insert({
+    company_id: input.companyId,
+    event_id: input.eventId,
+    event_vehicle_id: input.eventVehicleId,
+    uploaded_by: input.uploadedBy,
+    image_path: input.imagePath,
+    phase: input.phase,
+  })
+
+  if (error) {
+    console.error('Error saving vehicle photo row:', JSON.stringify(error, null, 2))
+    throw error
+  }
+}
+
+export async function updateEventVehicleLocation(
+  eventVehicleId: string,
+  phase: 'before' | 'after',
+  lat: number | null,
+  lng: number | null,
+  address?: string | null
+): Promise<void> {
+  const update =
+    phase === 'before'
+      ? {
+          pickup_location_lat: lat,
+          pickup_location_lng: lng,
+          pickup_location_address: address ?? null,
+        }
+      : {
+          dropoff_location_lat: lat,
+          dropoff_location_lng: lng,
+          dropoff_location_address: address ?? null,
+        }
+
+  const { error } = await supabase.from('event_vehicles').update(update).eq('id', eventVehicleId)
+
+  if (error) {
+    console.error('Error updating event vehicle location:', error)
     throw error
   }
 }
