@@ -1,14 +1,14 @@
 import { supabase } from '../supabase'
 
-const EVENT_IMAGES_BUCKET = 'event-images'
+const EVENT_PLATES_BUCKET = 'event-plates'
 
-export async function uploadEventImage(eventId: string, file: File): Promise<string> {
+export async function uploadPlateImage(eventId: string, file: File): Promise<string> {
   const path = `${eventId}/${Date.now()}.jpg`
 
-  const { error } = await supabase.storage.from(EVENT_IMAGES_BUCKET).upload(path, file)
+  const { error } = await supabase.storage.from(EVENT_PLATES_BUCKET).upload(path, file)
 
   if (error) {
-    console.error('Error uploading event image:', error)
+    console.error('Error uploading plate image:', error)
     throw error
   }
 
@@ -67,5 +67,40 @@ export async function recognizePlate(imagePath: string): Promise<PlateRecognitio
     plateNumber: body.plateNumber,
     rawResponse: body.rawResponse,
     model: body.model,
+  }
+}
+
+export interface SavePlateRecognitionInput {
+  companyId: string
+  eventId: string
+  driverId: string | null
+  imagePath: string
+  gptRawResponse: unknown
+  gptPlateNumber: string | null
+  gptModel: string | null
+  confirmedPlateNumber: string
+  wasCorrected: boolean
+  captureLat: number | null
+  captureLng: number | null
+}
+
+export async function savePlateRecognition(input: SavePlateRecognitionInput): Promise<void> {
+  const { error } = await supabase.from('event_plate_recognitions').insert({
+    company_id: input.companyId,
+    event_id: input.eventId,
+    driver_id: input.driverId,
+    image_path: input.imagePath,
+    gpt_raw_response: input.gptRawResponse,
+    gpt_plate_number: input.gptPlateNumber,
+    gpt_model: input.gptModel,
+    confirmed_plate_number: input.confirmedPlateNumber,
+    was_corrected: input.wasCorrected,
+    capture_lat: input.captureLat,
+    capture_lng: input.captureLng,
+  })
+
+  if (error) {
+    console.error('Error saving plate recognition:', JSON.stringify(error, null, 2))
+    throw error
   }
 }

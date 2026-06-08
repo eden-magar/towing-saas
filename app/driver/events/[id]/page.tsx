@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowRight,
   Calendar,
+  Camera,
   Car,
   ChevronDown,
   ChevronUp,
@@ -36,9 +37,38 @@ import type { VehicleLookupResult } from '@/app/lib/types'
 import { normalizePlate } from '@/app/lib/utils/plate-number'
 import { toWhatsApp } from '@/app/lib/utils/phone'
 import { lookupVehicle } from '@/app/lib/vehicle-lookup'
+import {
+  recognizePlate,
+  savePlateRecognition,
+  uploadPlateImage,
+} from '@/app/lib/queries/event-plate-capture'
 import PlateCamera from './components/PlateCamera'
 
 type DriverEventStage = 1 | 2 | 3 | 4 | 'completed'
+
+type PendingPlateCapture = {
+  imagePath: string
+  rawResponse: unknown
+  model: string
+  gptPlateNumber: string | null
+  lat: number | null
+  lng: number | null
+}
+
+async function captureCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
+  if (!navigator.geolocation) return null
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 10000 }
+    )
+  })
+}
 
 function getDriverProgressLabel(driverStatus: string | null): string {
   switch (driverStatus) {
@@ -200,8 +230,10 @@ export default function DriverEventDetailPage({
   const [lookupLoading, setLookupLoading] = useState(false)
   const [vehicleSaveLoading, setVehicleSaveLoading] = useState(false)
   const [vehicleError, setVehicleError] = useState('')
-  // TEMP: plate camera test — remove when wiring real flow
+  const [driverId, setDriverId] = useState<string | null>(null)
   const [showPlateCamera, setShowPlateCamera] = useState(false)
+  const [ocrLoading, setOcrLoading] = useState(false)
+  const [pendingPlate, setPendingPlate] = useState<PendingPlateCapture | null>(null)
 
   useEffect(() => {
     if (authLoading || !user?.id) return
@@ -222,10 +254,13 @@ export default function DriverEventDetailPage({
     try {
       const driver = await getDriverByUserId(user.id)
       if (!driver) {
+        setDriverId(null)
         setNotFound(true)
         setEvent(null)
         return
       }
+
+      setDriverId(driver.id)
 
       const data = await getDriverEvent(id, driver.id)
       if (!data) {
@@ -335,14 +370,49 @@ export default function DriverEventDetailPage({
     setVehicleNotes('')
     setLookupResult(null)
     setVehicleError('')
+    setPendingPlate(null)
   }
 
-  const handleLookupPlate = async () => {
-    const plate = normalizePlate(plateInput)
+  const savePendingPlateDataset = async (
+    confirmedPlate: string,
+    ctx: PendingPlateCapture
+  ) => {
+    if (!event) return
+    try {
+      await savePlateRecognition({
+        companyId: event.company_id,
+        eventId: event.id,
+        driverId,
+        imagePath: ctx.imagePath,
+        gptRawResponse: ctx.rawResponse,
+        gptPlateNumber: ctx.gptPlateNumber,
+        gptModel: ctx.model,
+        confirmedPlateNumber: confirmedPlate,
+        wasCorrected:
+          confirmedPlate !== normalizePlate(ctx.gptPlateNumber ?? ''),
+        captureLat: ctx.lat,
+        captureLng: ctx.lng,
+      })
+    } catch (err) {
+      console.error('Error saving plate recognition dataset:', err)
+    }
+  }
+
+  const performPlateLookup = async (
+    plate: string,
+    datasetCtx?: PendingPlateCapture | null
+  ) => {
     if (plate.length < 5) {
       setVehicleError('יש להזין מספר רישוי תקין')
       return
     }
+
+    const ctx = datasetCtx ?? pendingPlate
+    if (ctx) {
+      await savePendingPlateDataset(plate, ctx)
+      setPendingPlate(null)
+    }
+
     setLookupLoading(true)
     setVehicleError('')
     try {
@@ -356,6 +426,48 @@ export default function DriverEventDetailPage({
       setVehicleError('שגיאה בחיפוש פרטי הרכב')
     } finally {
       setLookupLoading(false)
+    }
+  }
+
+  const handleLookupPlate = async () => {
+    const plate = normalizePlate(plateInput)
+    await performPlateLookup(plate)
+  }
+
+  const handlePlateCameraConfirm = async (file: File) => {
+    if (!event) return
+
+    setShowPlateCamera(false)
+    setOcrLoading(true)
+    setVehicleError('')
+
+    try {
+      const position = await captureCurrentPosition()
+      const imagePath = await uploadPlateImage(event.id, file)
+      const result = await recognizePlate(imagePath)
+      const plate = normalizePlate(result.plateNumber)
+
+      const pending: PendingPlateCapture = {
+        imagePath,
+        rawResponse: result.rawResponse,
+        model: result.model,
+        gptPlateNumber: result.plateNumber || null,
+        lat: position?.lat ?? null,
+        lng: position?.lng ?? null,
+      }
+
+      setPendingPlate(pending)
+      setPlateInput(plate)
+      setLookupResult(null)
+
+      if (plate.length >= 5) {
+        await performPlateLookup(plate, pending)
+      }
+    } catch (err) {
+      console.error('Error in plate camera OCR flow:', err)
+      setVehicleError('שגיאה בזיהוי — ניתן להקליד ידנית')
+    } finally {
+      setOcrLoading(false)
     }
   }
 
@@ -808,14 +920,21 @@ export default function DriverEventDetailPage({
               ) : (
                 <div className="rounded-xl border border-cyan-100 bg-cyan-50/30 p-3 space-y-3">
                   <p className="text-sm font-medium text-gray-800">רכב חדש</p>
-                  {/* TEMP: plate camera test — remove when wiring real flow */}
                   <button
                     type="button"
                     onClick={() => setShowPlateCamera(true)}
-                    className="w-full min-h-[48px] rounded-xl bg-[#33d4ff] font-medium text-white"
+                    disabled={ocrLoading}
+                    className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] font-medium text-white disabled:opacity-60"
                   >
-                    צלם לוחית (בדיקה)
+                    <Camera size={18} />
+                    צלם לוחית
                   </button>
+                  {ocrLoading && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                      <Loader2 size={16} className="animate-spin text-cyan-600" />
+                      מפענח לוחית...
+                    </div>
+                  )}
                   <input
                     type="text"
                     value={plateInput}
@@ -918,14 +1037,9 @@ export default function DriverEventDetailPage({
         )}
       </div>
 
-      {/* TEMP: plate camera test — remove when wiring real flow */}
       {showPlateCamera && (
         <PlateCamera
-          onConfirm={(file) => {
-            console.log('[plate-camera test] got file', file.name, file.size, 'bytes')
-            alert(`צולמה תמונה: ${file.name} (${Math.round(file.size / 1024)} KB)`)
-            setShowPlateCamera(false)
-          }}
+          onConfirm={(file) => void handlePlateCameraConfirm(file)}
           onCancel={() => setShowPlateCamera(false)}
         />
       )}

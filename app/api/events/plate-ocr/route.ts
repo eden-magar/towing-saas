@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorizedResponse } from '@/app/lib/auth'
 
-const EVENT_IMAGES_BUCKET = 'event-images'
+const EVENT_PLATES_BUCKET = 'event-plates'
 const SIGNED_URL_TTL_SEC = 60
 const OCR_MODEL = 'gpt-4o' as const
 
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data, error: signedUrlError } = await supabaseAdmin.storage
-      .from(EVENT_IMAGES_BUCKET)
+      .from(EVENT_PLATES_BUCKET)
       .createSignedUrl(imagePath, SIGNED_URL_TTL_SEC)
 
     if (signedUrlError || !data?.signedUrl) {
