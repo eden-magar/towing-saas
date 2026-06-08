@@ -143,6 +143,7 @@ export async function getWeekEvents(
     .from('events')
     .select(CALENDAR_WEEK_EVENT_SELECT)
     .eq('company_id', companyId)
+    .neq('status', 'cancelled')
     .gte('event_date', startDateStr)
     .lte('event_date', endDateStr)
     .order('event_date', { ascending: true })
@@ -169,6 +170,7 @@ export async function getDayEvents(
     .from('events')
     .select(CALENDAR_WEEK_EVENT_SELECT)
     .eq('company_id', companyId)
+    .neq('status', 'cancelled')
     .eq('event_date', dateStr)
     .order('start_time', { ascending: true })
 
