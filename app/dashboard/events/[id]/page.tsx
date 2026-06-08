@@ -11,6 +11,7 @@ import {
   FileText,
   Truck,
   Calendar,
+  Clock,
   Receipt,
   Car,
   Sparkles,
@@ -34,6 +35,22 @@ function formatDateTime(date: string | null | undefined): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function formatEventDate(date: string | null | undefined): string {
+  if (!date) return '—'
+  const normalized = date.includes('T') ? date : `${date}T12:00:00`
+  return new Date(normalized).toLocaleDateString('he-IL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+function formatEventTime(time: string | null | undefined): string {
+  if (!time) return '—'
+  return time.slice(0, 5)
 }
 
 function InfoPanel({
@@ -243,14 +260,32 @@ export default function EventDetailsPage() {
           </InfoPanel>
         </div>
 
-        {/* Row 2 — location */}
+        {/* Row 2 — schedule */}
+        <InfoPanel icon={Clock} title="מועד האירוע">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>תאריך</FieldLabel>
+              <FieldValue>{formatEventDate(event.event_date)}</FieldValue>
+            </div>
+            <div>
+              <FieldLabel>שעות</FieldLabel>
+              <FieldValue>
+                {event.start_time && event.end_time
+                  ? `${formatEventTime(event.start_time)} – ${formatEventTime(event.end_time)}`
+                  : 'לא צוין'}
+              </FieldValue>
+            </div>
+          </div>
+        </InfoPanel>
+
+        {/* Row 3 — location */}
         <InfoPanel icon={MapPin} title="מיקום">
           <p className="text-sm text-gray-800 leading-relaxed">
             {event.location_address?.trim() || 'לא צוין'}
           </p>
         </InfoPanel>
 
-        {/* Row 3 — details */}
+        {/* Row 4 — details */}
         <InfoPanel icon={FileText} title="פרטים">
           <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
             {event.details?.trim() || 'לא צוין'}

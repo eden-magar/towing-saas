@@ -1252,7 +1252,12 @@ function CreateTowForm({
           </FormCard>
 
           {entryKind === 'events' && (
-            <EventTowSection selectedCustomerId={selectedCustomerId} />
+            <EventTowSection
+              selectedCustomerId={selectedCustomerId}
+              towDate={towDate}
+              towTime={towTime}
+              towEndTime={towEndTime}
+            />
           )}
 
           {/* Section 4 — רכב ומסלול */}

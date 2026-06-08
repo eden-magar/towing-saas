@@ -9,11 +9,22 @@ import { getDrivers } from '../../lib/queries/drivers'
 import { createEvent } from '../../lib/queries/events'
 import type { DriverWithDetails } from '../../lib/types'
 
+const selectClassName =
+  'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white disabled:opacity-60'
+
 interface EventTowSectionProps {
   selectedCustomerId: string | null
+  towDate: string
+  towTime: string
+  towEndTime: string
 }
 
-export function EventTowSection({ selectedCustomerId }: EventTowSectionProps) {
+export function EventTowSection({
+  selectedCustomerId,
+  towDate,
+  towTime,
+  towEndTime,
+}: EventTowSectionProps) {
   const router = useRouter()
   const { user, companyId } = useAuth()
 
@@ -55,6 +66,16 @@ export function EventTowSection({ selectedCustomerId }: EventTowSectionProps) {
       return
     }
 
+    if (!towDate || !towTime || !towEndTime) {
+      setError('יש למלא תאריך, שעת התחלה ושעת סיום')
+      return
+    }
+
+    if (towEndTime <= towTime) {
+      setError('שעת הסיום חייבת להיות אחרי שעת ההתחלה')
+      return
+    }
+
     setSaving(true)
     setError('')
 
@@ -68,6 +89,9 @@ export function EventTowSection({ selectedCustomerId }: EventTowSectionProps) {
         contactName: contactName.trim() || null,
         contactPhone: contactPhone.trim() || null,
         details: details.trim() || null,
+        eventDate: towDate,
+        startTime: towTime,
+        endTime: towEndTime,
       })
       router.push(`/dashboard/events/${result.id}`)
     } catch {
@@ -124,7 +148,7 @@ export function EventTowSection({ selectedCustomerId }: EventTowSectionProps) {
             value={selectedDriverId}
             onChange={(e) => setSelectedDriverId(e.target.value)}
             disabled={driversLoading}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white disabled:opacity-60"
+            className={selectClassName}
           >
             <option value="">ללא נהג</option>
             {drivers.map((driver) => (

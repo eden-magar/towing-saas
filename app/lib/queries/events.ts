@@ -45,6 +45,9 @@ export interface EventWithDetails {
   details: string | null
   status: string
   order_number: string | null
+  event_date: string | null
+  start_time: string | null
+  end_time: string | null
   created_by: string
   created_at: string
   updated_at: string
@@ -78,6 +81,9 @@ export interface CreateEventInput {
   contactName?: string | null
   contactPhone?: string | null
   details?: string | null
+  eventDate: string
+  startTime: string
+  endTime: string
 }
 
 export async function createEvent(input: CreateEventInput): Promise<{ id: string }> {
@@ -95,6 +101,9 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
     contact_name: input.contactName ?? null,
     contact_phone: input.contactPhone ?? null,
     details: input.details ?? null,
+    event_date: input.eventDate,
+    start_time: input.startTime,
+    end_time: input.endTime,
   })
 
   if (error) {
