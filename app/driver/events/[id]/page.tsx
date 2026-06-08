@@ -6,24 +6,38 @@ import {
   AlertCircle,
   ArrowRight,
   Calendar,
+  Car,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   MapPin,
   MessageCircle,
   Navigation,
   Phone,
+  Plus,
+  Search,
   Sparkles,
   User,
 } from 'lucide-react'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
 import {
+  addEventVehicle,
   completeEvent,
   getDriverEvent,
+  getEventVehicles,
   saveEventChangeLog,
   updateEventDriverStatus,
+  type EventVehicle,
+  type EventVehicleDetails,
   type EventWithDetails,
 } from '@/app/lib/queries/events'
+import type { VehicleLookupResult } from '@/app/lib/types'
+import { normalizePlate } from '@/app/lib/utils/plate-number'
 import { toWhatsApp } from '@/app/lib/utils/phone'
+import { lookupVehicle } from '@/app/lib/vehicle-lookup'
+
+type DriverEventStage = 1 | 2 | 3 | 4 | 'completed'
 
 function getDriverProgressLabel(driverStatus: string | null): string {
   switch (driverStatus) {
@@ -38,12 +52,29 @@ function getDriverProgressLabel(driverStatus: string | null): string {
   }
 }
 
+function getDriverStage(event: EventWithDetails): DriverEventStage {
+  if (event.status === 'completed') return 'completed'
+  if (!event.driver_status) return 1
+  if (event.driver_status === 'received') return 2
+  if (event.driver_status === 'departed') return 3
+  if (event.driver_status === 'arrived') return 4
+  return 1
+}
+
 const EVENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   draft: { label: 'טיוטה', className: 'bg-cyan-100 text-cyan-700' },
   quote: { label: 'הצעת מחיר', className: 'bg-amber-100 text-amber-700' },
   approved: { label: 'אושר', className: 'bg-green-100 text-green-700' },
   completed: { label: 'הושלם', className: 'bg-emerald-100 text-emerald-700' },
   cancelled: { label: 'בוטל', className: 'bg-red-100 text-red-700' },
+}
+
+const STAGE_TITLES: Record<DriverEventStage, string> = {
+  1: 'פרטי האירוע',
+  2: 'בדרך לאירוע',
+  3: 'הגעה',
+  4: 'תיעוד רכבים',
+  completed: 'האירוע הושלם',
 }
 
 function formatEventDate(dateStr: string | null): string {
@@ -64,14 +95,30 @@ function formatEventTime(timeStr: string | null): string {
   return `${match[1].padStart(2, '0')}:${match[2]}`
 }
 
+function formatVehicleSummary(details: EventVehicleDetails): string {
+  if (!details || typeof details !== 'object') return ''
+  const d = details as {
+    manufacturer?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+  }
+  return [d.manufacturer, d.model, d.year?.toString(), d.color].filter(Boolean).join(' · ')
+}
+
 function openPhone(phone: string) {
   window.open(`tel:${phone}`, '_self')
 }
 
-function openWhatsApp(phone: string, customerName: string) {
+function openWhatsAppToContact(event: EventWithDetails, onTheWay = false) {
+  const phone = event.contact_phone || event.customer?.phone
+  if (!phone) return
+  const name = event.contact_name || event.customer?.name || ''
   const waNumber = toWhatsApp(phone).replace(/^\+/, '')
   if (!waNumber) return
-  const message = `שלום${customerName ? ` ${customerName}` : ''}, אני בדרך לאירוע המיוחד.`
+  const message = onTheWay
+    ? `שלום${name ? ` ${name}` : ''}, אני בדרך אליך`
+    : `שלום${name ? ` ${name}` : ''}, אני בדרך לאירוע המיוחד.`
   window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank')
 }
 
@@ -122,6 +169,12 @@ function openGoogleMapsForEvent(event: EventWithDetails) {
   )
 }
 
+const primaryButtonClass =
+  'flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] px-4 py-3 text-base font-bold text-white shadow-md active:scale-[0.98] transition-transform disabled:opacity-60'
+
+const actionIconButtonClass =
+  'flex h-10 w-10 items-center justify-center rounded-xl bg-[#33d4ff] text-white shadow-sm active:scale-[0.98] transition-transform'
+
 export default function DriverEventDetailPage({
   params,
 }: {
@@ -132,15 +185,30 @@ export default function DriverEventDetailPage({
   const { user, loading: authLoading } = useAuth()
 
   const [event, setEvent] = useState<EventWithDetails | null>(null)
+  const [vehicles, setVehicles] = useState<EventVehicle[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [summaryOpen, setSummaryOpen] = useState(false)
+
+  const [showVehicleForm, setShowVehicleForm] = useState(false)
+  const [plateInput, setPlateInput] = useState('')
+  const [vehicleNotes, setVehicleNotes] = useState('')
+  const [lookupResult, setLookupResult] = useState<VehicleLookupResult | null>(null)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [vehicleSaveLoading, setVehicleSaveLoading] = useState(false)
+  const [vehicleError, setVehicleError] = useState('')
 
   useEffect(() => {
     if (authLoading || !user?.id) return
     void loadEvent()
   }, [authLoading, user?.id, id])
+
+  const loadVehicles = async (eventId: string) => {
+    const list = await getEventVehicles(eventId)
+    setVehicles(list)
+  }
 
   const loadEvent = async (options?: { silent?: boolean }) => {
     if (!user?.id) return
@@ -164,6 +232,11 @@ export default function DriverEventDetailPage({
       }
 
       setEvent(data)
+      if (data.driver_status === 'arrived' && data.status !== 'completed') {
+        await loadVehicles(data.id)
+      } else if (data.status === 'completed') {
+        await loadVehicles(data.id)
+      }
     } catch (err) {
       console.error('Error loading driver event:', err)
       setNotFound(true)
@@ -175,60 +248,23 @@ export default function DriverEventDetailPage({
     }
   }
 
-  const handleDriverAction = async () => {
+  const runStatusAdvance = async (
+    action: () => Promise<void>,
+    log: { fieldName: string; oldValue: string | null; newValue: string }
+  ) => {
     if (!user?.id || !event || actionLoading) return
-    if (event.status === 'completed' || event.status === 'cancelled') return
-
     setActionLoading(true)
     setActionError('')
-
     try {
-      const companyId = event.company_id
-      const changedBy = user.id
-      const previousLabel = getDriverProgressLabel(event.driver_status)
-
-      if (!event.driver_status) {
-        await updateEventDriverStatus(event.id, 'received', 'driver_received_at')
-        await saveEventChangeLog({
-          eventId: event.id,
-          companyId,
-          changedBy,
-          fieldName: 'סטטוס נהג',
-          oldValue: previousLabel,
-          newValue: 'הנהג קיבל את האירוע',
-        })
-      } else if (event.driver_status === 'received') {
-        await updateEventDriverStatus(event.id, 'departed', 'driver_departed_at')
-        await saveEventChangeLog({
-          eventId: event.id,
-          companyId,
-          changedBy,
-          fieldName: 'סטטוס נהג',
-          oldValue: previousLabel,
-          newValue: 'הנהג יצא לדרך',
-        })
-      } else if (event.driver_status === 'departed') {
-        await updateEventDriverStatus(event.id, 'arrived', 'driver_arrived_at')
-        await saveEventChangeLog({
-          eventId: event.id,
-          companyId,
-          changedBy,
-          fieldName: 'סטטוס נהג',
-          oldValue: previousLabel,
-          newValue: 'הנהג הגיע',
-        })
-      } else if (event.driver_status === 'arrived') {
-        await completeEvent(event.id, changedBy)
-        await saveEventChangeLog({
-          eventId: event.id,
-          companyId,
-          changedBy,
-          fieldName: 'סיום',
-          oldValue: null,
-          newValue: 'האירוע הושלם על ידי הנהג',
-        })
-      }
-
+      await action()
+      await saveEventChangeLog({
+        eventId: event.id,
+        companyId: event.company_id,
+        changedBy: user.id,
+        fieldName: log.fieldName,
+        oldValue: log.oldValue,
+        newValue: log.newValue,
+      })
       await loadEvent({ silent: true })
     } catch (err) {
       console.error('Error updating driver event progress:', err)
@@ -238,15 +274,130 @@ export default function DriverEventDetailPage({
     }
   }
 
-  const getNextActionLabel = (): string | null => {
-    if (!event) return null
-    if (event.status === 'completed') return null
-    if (event.status === 'cancelled') return null
-    if (!event.driver_status) return 'קיבלתי את האירוע'
-    if (event.driver_status === 'received') return 'יצאתי לדרך'
-    if (event.driver_status === 'departed') return 'הגעתי'
-    if (event.driver_status === 'arrived') return 'סיים אירוע'
-    return null
+  const handleReceived = () =>
+    runStatusAdvance(
+      () => updateEventDriverStatus(event!.id, 'received', 'driver_received_at'),
+      {
+        fieldName: 'סטטוס נהג',
+        oldValue: getDriverProgressLabel(event?.driver_status ?? null),
+        newValue: 'הנהג קיבל את האירוע',
+      }
+    )
+
+  const handleDeparted = () =>
+    runStatusAdvance(
+      () => updateEventDriverStatus(event!.id, 'departed', 'driver_departed_at'),
+      {
+        fieldName: 'סטטוס נהג',
+        oldValue: getDriverProgressLabel(event?.driver_status ?? null),
+        newValue: 'הנהג יצא לדרך',
+      }
+    )
+
+  const handleArrived = () =>
+    runStatusAdvance(
+      () => updateEventDriverStatus(event!.id, 'arrived', 'driver_arrived_at'),
+      {
+        fieldName: 'סטטוס נהג',
+        oldValue: getDriverProgressLabel(event?.driver_status ?? null),
+        newValue: 'הנהג הגיע',
+      }
+    )
+
+  const handleComplete = async () => {
+    if (!user?.id || !event || actionLoading) return
+    setActionLoading(true)
+    setActionError('')
+    try {
+      await completeEvent(event.id, user.id)
+      await saveEventChangeLog({
+        eventId: event.id,
+        companyId: event.company_id,
+        changedBy: user.id,
+        fieldName: 'סיום',
+        oldValue: null,
+        newValue: 'האירוע הושלם על ידי הנהג',
+      })
+      await loadEvent({ silent: true })
+    } catch (err) {
+      console.error('Error completing event:', err)
+      setActionError('שגיאה בסיום האירוע, נסה שוב')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const resetVehicleForm = () => {
+    setPlateInput('')
+    setVehicleNotes('')
+    setLookupResult(null)
+    setVehicleError('')
+  }
+
+  const handleLookupPlate = async () => {
+    const plate = normalizePlate(plateInput)
+    if (plate.length < 5) {
+      setVehicleError('יש להזין מספר רישוי תקין')
+      return
+    }
+    setLookupLoading(true)
+    setVehicleError('')
+    try {
+      const result = await lookupVehicle(plate)
+      setLookupResult(result)
+      if (!result.found) {
+        setVehicleError('לא נמצאו פרטים — ניתן לשמור עם מספר הרישוי בלבד')
+      }
+    } catch (err) {
+      console.error('Error looking up vehicle:', err)
+      setVehicleError('שגיאה בחיפוש פרטי הרכב')
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  const handleSaveVehicle = async () => {
+    if (!user?.id || !event) return
+    const plate = normalizePlate(plateInput)
+    if (plate.length < 5) {
+      setVehicleError('יש להזין מספר רישוי תקין')
+      return
+    }
+
+    setVehicleSaveLoading(true)
+    setVehicleError('')
+    try {
+      const vehicleDetails: EventVehicleDetails = lookupResult?.data
+        ? (lookupResult.data as unknown as Record<string, unknown>)
+        : null
+
+      await addEventVehicle({
+        eventId: event.id,
+        companyId: event.company_id,
+        plateNumber: plate,
+        vehicleDetails,
+        notes: vehicleNotes.trim() || null,
+        createdBy: user.id,
+      })
+
+      await saveEventChangeLog({
+        eventId: event.id,
+        companyId: event.company_id,
+        changedBy: user.id,
+        fieldName: 'רכב',
+        oldValue: null,
+        newValue: `נוסף רכב ${plate}`,
+      })
+
+      await loadVehicles(event.id)
+      resetVehicleForm()
+      setShowVehicleForm(true)
+    } catch (err) {
+      console.error('Error saving event vehicle:', err)
+      setVehicleError('שגיאה בשמירת הרכב, נסה שוב')
+    } finally {
+      setVehicleSaveLoading(false)
+    }
   }
 
   if (authLoading || loading) {
@@ -276,27 +427,113 @@ export default function DriverEventDetailPage({
     )
   }
 
+  const stage = getDriverStage(event)
   const status = EVENT_STATUS_CONFIG[event.status] ?? {
     label: event.status,
     className: 'bg-gray-100 text-gray-600',
   }
   const customerName = event.customer?.name || 'ללא לקוח'
   const customerPhone = event.customer?.phone
+  const contactPhone = event.contact_phone || customerPhone
   const hasLocation = Boolean(event.location_address?.trim())
   const hasNavigationTarget =
     hasLocation || (event.location_lat != null && event.location_lng != null)
   const startTimeLabel = formatEventTime(event.start_time)
   const endTimeLabel = formatEventTime(event.end_time)
-
-  const actionIconButtonClass =
-    'flex h-10 w-10 items-center justify-center rounded-xl bg-[#33d4ff] text-white shadow-sm active:scale-[0.98] transition-transform'
-  const nextActionLabel = getNextActionLabel()
   const driverProgressLabel =
     event.status === 'completed' ? 'הושלם' : getDriverProgressLabel(event.driver_status)
 
+  const renderCompactSummary = () => (
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setSummaryOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 p-4 text-right"
+      >
+        <span className="text-sm font-medium text-gray-800">פרטי קשר ומיקום</span>
+        {summaryOpen ? (
+          <ChevronUp size={18} className="shrink-0 text-gray-400" />
+        ) : (
+          <ChevronDown size={18} className="shrink-0 text-gray-400" />
+        )}
+      </button>
+      {!summaryOpen && (
+        <div className="border-t border-gray-100 px-4 pb-3 pt-0">
+          <p className="truncate text-xs text-gray-500">{customerName}</p>
+          {hasLocation && (
+            <p className="truncate text-xs text-gray-600">{event.location_address}</p>
+          )}
+        </div>
+      )}
+      {summaryOpen && (
+        <div className="border-t border-gray-100 p-4 space-y-3">
+          <div>
+            <p className="text-xs text-gray-500">לקוח</p>
+            <p className="text-sm font-medium text-gray-800">{customerName}</p>
+          </div>
+          {hasLocation && (
+            <div>
+              <p className="text-xs text-gray-500">מיקום</p>
+              <p className="text-sm text-gray-700">{event.location_address}</p>
+            </div>
+          )}
+          {(event.contact_name || event.contact_phone) && (
+            <div>
+              <p className="text-xs text-gray-500">איש קשר</p>
+              <p className="text-sm text-gray-800">{event.contact_name || '—'}</p>
+              {event.contact_phone && (
+                <p className="text-sm text-gray-500 dir-ltr text-right">{event.contact_phone}</p>
+              )}
+            </div>
+          )}
+          {hasNavigationTarget && (
+            <div className="flex flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => openWazeForEvent(event)}
+                className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 py-2 text-sm font-medium text-blue-600"
+              >
+                <Navigation size={15} />
+                Waze
+              </button>
+              <button
+                type="button"
+                onClick={() => openGoogleMapsForEvent(event)}
+                className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 py-2 text-sm font-medium text-green-700"
+              >
+                <MapPin size={15} />
+                Maps
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderPrimaryButton = (label: string, onClick: () => void) => (
+    <>
+      {actionError && <p className="text-sm text-red-600">{actionError}</p>}
+      <button
+        type="button"
+        onClick={() => void onClick()}
+        disabled={actionLoading}
+        className={primaryButtonClass}
+      >
+        {actionLoading ? (
+          <>
+            <Loader2 size={20} className="animate-spin" />
+            מעדכן...
+          </>
+        ) : (
+          label
+        )}
+      </button>
+    </>
+  )
+
   return (
     <div dir="rtl" className="min-h-screen bg-gray-100 pb-20">
-      {/* Header — compact single row */}
       <div className="bg-gradient-to-l from-cyan-500 to-cyan-600 px-4 py-3 text-white shadow-sm">
         <div className="flex items-center gap-2.5">
           <button
@@ -307,176 +544,367 @@ export default function DriverEventDetailPage({
           >
             <ArrowRight size={20} />
           </button>
-          <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 truncate text-base font-bold">
-            <Sparkles size={16} className="shrink-0" />
-            אירוע מיוחד
-          </span>
+          <div className="min-w-0 flex-1">
+            <span className="inline-flex items-center gap-1.5 truncate text-base font-bold">
+              <Sparkles size={16} className="shrink-0" />
+              אירוע מיוחד
+            </span>
+            <p className="truncate text-xs text-white/85">{STAGE_TITLES[stage]}</p>
+          </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
             {status.label}
           </span>
-          {event.order_number && (
-            <span className="shrink-0 font-mono text-xs text-white/90">#{event.order_number}</span>
-          )}
         </div>
+        <p className="mt-2 text-xs text-white/90">
+          סטטוס נהג: <span className="font-medium">{driverProgressLabel}</span>
+        </p>
       </div>
 
       <div className="flex flex-col gap-3 px-4 py-4">
-        {/* Customer */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-medium text-gray-500">לקוח</p>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-base font-semibold text-gray-800">{customerName}</p>
-              {customerPhone && (
-                <p className="mt-0.5 truncate text-sm text-gray-500 dir-ltr text-right">{customerPhone}</p>
+        {/* SCREEN 1 — task info */}
+        {stage === 1 && (
+          <>
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <p className="mb-2 text-xs font-medium text-gray-500">לקוח</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-gray-800">{customerName}</p>
+                  {customerPhone && (
+                    <p className="mt-0.5 truncate text-sm text-gray-500 dir-ltr text-right">
+                      {customerPhone}
+                    </p>
+                  )}
+                </div>
+                {customerPhone && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openPhone(customerPhone)}
+                      className={actionIconButtonClass}
+                      aria-label="התקשר ללקוח"
+                    >
+                      <Phone size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppToContact(event)}
+                      className={actionIconButtonClass}
+                      aria-label="שלח וואטסאפ"
+                    >
+                      <MessageCircle size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <p className="mb-2 text-xs font-medium text-gray-500">מועד</p>
+              <div className="flex items-center gap-3 text-gray-800">
+                <Calendar size={18} className="shrink-0 text-cyan-600" />
+                <div>
+                  <p className="text-base font-medium">{formatEventDate(event.event_date)}</p>
+                  <p className="text-sm text-gray-500">
+                    {startTimeLabel || endTimeLabel ? (
+                      <span dir="ltr" className="tabular-nums unicode-bidi-isolate">
+                        {startTimeLabel}
+                        {startTimeLabel && endTimeLabel ? '–' : ''}
+                        {endTimeLabel}
+                      </span>
+                    ) : (
+                      '—'
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
+              <p className="mb-2 text-xs font-medium text-gray-500">מיקום</p>
+              {hasLocation ? (
+                <div className="mb-3 flex items-start gap-2 text-gray-700">
+                  <MapPin size={16} className="mt-0.5 shrink-0 text-cyan-600" />
+                  <span className="text-sm leading-relaxed">{event.location_address}</span>
+                </div>
+              ) : (
+                <p className="mb-3 text-sm text-gray-400">לא צוין מיקום</p>
+              )}
+              {hasNavigationTarget && (
+                <div className="flex flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openWazeForEvent(event)}
+                    className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 py-2.5 text-sm font-medium text-blue-600"
+                  >
+                    <Navigation size={16} />
+                    Waze
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openGoogleMapsForEvent(event)}
+                    className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 py-2.5 text-sm font-medium text-green-700"
+                  >
+                    <MapPin size={16} />
+                    Maps
+                  </button>
+                </div>
               )}
             </div>
-            {customerPhone && (
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => openPhone(customerPhone)}
-                  className={actionIconButtonClass}
-                  aria-label="התקשר ללקוח"
-                >
-                  <Phone size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openWhatsApp(customerPhone, customerName)}
-                  className={actionIconButtonClass}
-                  aria-label="שלח וואטסאפ ללקוח"
-                >
-                  <MessageCircle size={18} />
-                </button>
+
+            {(event.contact_name || event.contact_phone) && (
+              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <p className="mb-2 text-xs font-medium text-gray-500">איש קשר</p>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2 text-gray-800">
+                    <User size={16} className="shrink-0 text-gray-400" />
+                    <span className="truncate text-sm font-medium">
+                      {event.contact_name || '—'}
+                    </span>
+                  </div>
+                  {event.contact_phone && (
+                    <button
+                      type="button"
+                      onClick={() => openPhone(event.contact_phone!)}
+                      className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[#33d4ff] px-3 text-sm font-medium text-white shadow-sm"
+                    >
+                      <Phone size={16} />
+                      <span dir="ltr" className="tabular-nums">
+                        {event.contact_phone}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Schedule */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-medium text-gray-500">מועד</p>
-          <div className="flex items-center gap-3 text-gray-800">
-            <Calendar size={18} className="shrink-0 text-cyan-600" />
-            <div className="min-w-0">
-              <p className="text-base font-medium">{formatEventDate(event.event_date)}</p>
-              <p className="text-sm text-gray-500">
-                {startTimeLabel || endTimeLabel ? (
-                  <span dir="ltr" className="tabular-nums unicode-bidi-isolate">
-                    {startTimeLabel}
-                    {startTimeLabel && endTimeLabel ? '–' : ''}
-                    {endTimeLabel}
-                  </span>
-                ) : (
-                  '—'
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Location */}
-        <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-medium text-gray-500">מיקום</p>
-          {hasLocation ? (
-            <div className="mb-3 flex items-start gap-2 text-gray-700">
-              <MapPin size={16} className="mt-0.5 shrink-0 text-cyan-600" />
-              <span className="text-sm leading-relaxed">{event.location_address}</span>
-            </div>
-          ) : (
-            <p className="mb-3 text-sm text-gray-400">לא צוין מיקום</p>
-          )}
-          {hasNavigationTarget && (
-            <div className="flex flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => openWazeForEvent(event)}
-                className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 py-2.5 text-sm font-medium text-blue-600 active:scale-[0.98] transition-transform"
-              >
-                <Navigation size={16} />
-                Waze
-              </button>
-              <button
-                type="button"
-                onClick={() => openGoogleMapsForEvent(event)}
-                className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 py-2.5 text-sm font-medium text-green-700 active:scale-[0.98] transition-transform"
-              >
-                <MapPin size={16} />
-                Maps
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Contact */}
-        {(event.contact_name || event.contact_phone) && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <p className="mb-2 text-xs font-medium text-gray-500">איש קשר</p>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2 text-gray-800">
-                <User size={16} className="shrink-0 text-gray-400" />
-                <span className="truncate text-sm font-medium">{event.contact_name || '—'}</span>
+            {event.details?.trim() && (
+              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <p className="mb-2 text-xs font-medium text-gray-500">הנחיות / פרטים</p>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+                  {event.details}
+                </p>
               </div>
-              {event.contact_phone && (
+            )}
+
+            {renderPrimaryButton('קיבלתי את האירוע', handleReceived)}
+          </>
+        )}
+
+        {/* SCREEN 2 — en route */}
+        {stage === 2 && (
+          <>
+            {renderCompactSummary()}
+
+            <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm space-y-3">
+              <p className="text-sm font-medium text-gray-800">לפני היציאה</p>
+              {contactPhone ? (
                 <button
                   type="button"
-                  onClick={() => openPhone(event.contact_phone!)}
-                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[#33d4ff] px-3 text-sm font-medium text-white shadow-sm active:scale-[0.98] transition-transform"
+                  onClick={() => openWhatsAppToContact(event, true)}
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-50 py-3 text-sm font-medium text-emerald-700"
                 >
-                  <Phone size={16} />
-                  <span dir="ltr" className="tabular-nums">
-                    {event.contact_phone}
-                  </span>
+                  <MessageCircle size={18} />
+                  שלח וואטסאפ — אני בדרך
                 </button>
+              ) : (
+                <p className="text-sm text-gray-500">אין מספר טלפון לאיש קשר</p>
+              )}
+              {hasNavigationTarget && (
+                <div className="flex flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openWazeForEvent(event)}
+                    className="flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 py-2.5 text-sm font-medium text-blue-600"
+                  >
+                    <Navigation size={16} />
+                    נווט עם Waze
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openGoogleMapsForEvent(event)}
+                    className="flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 py-2.5 text-sm font-medium text-green-700"
+                  >
+                    <MapPin size={16} />
+                    Google Maps
+                  </button>
+                </div>
               )}
             </div>
-          </div>
+
+            {renderPrimaryButton('יצאתי לדרך', handleDeparted)}
+          </>
         )}
 
-        {/* Details — content height only */}
-        {event.details?.trim() && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <p className="mb-2 text-xs font-medium text-gray-500">הנחיות / פרטים</p>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
-              {event.details}
-            </p>
-          </div>
-        )}
-
-        {/* Driver progress */}
-        <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
-          <p className="mb-1 text-xs font-medium text-gray-500">התקדמות נהג</p>
-          <p className="text-sm font-medium text-gray-800">
-            סטטוס: <span className="text-cyan-700">{driverProgressLabel}</span>
-          </p>
-          {event.status === 'completed' ? (
-            <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-medium text-emerald-700">
-              האירוע הושלם
+        {/* SCREEN 3 — arrival */}
+        {stage === 3 && (
+          <>
+            {renderCompactSummary()}
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <p className="text-sm text-gray-700">
+                לאחר ההגעה ליעד, אשר הגעה והמשך לתיעוד הרכבים.
+              </p>
             </div>
-          ) : nextActionLabel ? (
-            <>
-              {actionError && (
-                <p className="mt-2 text-sm text-red-600">{actionError}</p>
+            {renderPrimaryButton('הגעתי', handleArrived)}
+          </>
+        )}
+
+        {/* SCREEN 4 — vehicles */}
+        {stage === 4 && (
+          <>
+            {renderCompactSummary()}
+
+            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-800">רכבים באירוע</p>
+                <span className="text-xs text-gray-500">{vehicles.length} רכבים</span>
+              </div>
+
+              {vehicles.length === 0 ? (
+                <p className="mb-3 text-sm text-gray-500">טרם נוספו רכבים</p>
+              ) : (
+                <ul className="mb-3 space-y-2">
+                  {vehicles.map((vehicle) => {
+                    const summary = formatVehicleSummary(vehicle.vehicle_details)
+                    return (
+                      <li
+                        key={vehicle.id}
+                        className="rounded-xl border border-gray-100 bg-gray-50 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <Car size={16} className="mt-0.5 shrink-0 text-cyan-600" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-mono text-sm font-bold text-gray-800 dir-ltr text-right">
+                              {vehicle.plate_number}
+                            </p>
+                            {summary && (
+                              <p className="mt-0.5 text-xs text-gray-600">{summary}</p>
+                            )}
+                            {vehicle.notes && (
+                              <p className="mt-1 text-xs text-gray-500">{vehicle.notes}</p>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
               )}
-              <button
-                type="button"
-                onClick={() => void handleDriverAction()}
-                disabled={actionLoading}
-                className="mt-3 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] px-4 py-3 text-base font-bold text-white shadow-md active:scale-[0.98] transition-transform disabled:opacity-60"
-              >
-                {actionLoading ? (
-                  <>
-                    <Loader2 size={20} className="animate-spin" />
-                    מעדכן...
-                  </>
-                ) : (
-                  nextActionLabel
-                )}
-              </button>
-            </>
-          ) : null}
-        </div>
+
+              {!showVehicleForm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetVehicleForm()
+                    setShowVehicleForm(true)
+                  }}
+                  className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-200 bg-cyan-50/50 py-2.5 text-sm font-medium text-cyan-700"
+                >
+                  <Plus size={18} />
+                  הוסף רכב
+                </button>
+              ) : (
+                <div className="rounded-xl border border-cyan-100 bg-cyan-50/30 p-3 space-y-3">
+                  <p className="text-sm font-medium text-gray-800">רכב חדש</p>
+                  <input
+                    type="text"
+                    value={plateInput}
+                    onChange={(e) => {
+                      setPlateInput(e.target.value)
+                      setLookupResult(null)
+                    }}
+                    placeholder="מספר רישוי"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dir-ltr text-right focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleLookupPlate()}
+                    disabled={lookupLoading || normalizePlate(plateInput).length < 5}
+                    className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-white border border-gray-200 py-2.5 text-sm font-medium text-gray-700 disabled:opacity-50"
+                  >
+                    {lookupLoading ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Search size={16} />
+                    )}
+                    חפש פרטים
+                  </button>
+
+                  {lookupResult?.found && lookupResult.data && (
+                    <div className="rounded-xl bg-white border border-gray-100 p-3 text-sm text-gray-700">
+                      <p className="font-medium text-gray-800 mb-1">פרטי הרכב</p>
+                      <p>{formatVehicleSummary(lookupResult.data as EventVehicleDetails)}</p>
+                    </div>
+                  )}
+
+                  <textarea
+                    value={vehicleNotes}
+                    onChange={(e) => setVehicleNotes(e.target.value)}
+                    placeholder="הערות לרכב"
+                    rows={2}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm resize-none focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/20"
+                  />
+
+                  {vehicleError && (
+                    <p className="text-sm text-red-600">{vehicleError}</p>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVehicleForm(false)
+                        resetVehicleForm()
+                      }}
+                      className="flex-1 min-h-[44px] rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600"
+                    >
+                      ביטול
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveVehicle()}
+                      disabled={vehicleSaveLoading || normalizePlate(plateInput).length < 5}
+                      className="flex-[2] min-h-[44px] rounded-xl bg-[#33d4ff] text-sm font-bold text-white disabled:opacity-60"
+                    >
+                      {vehicleSaveLoading ? 'שומר...' : 'שמור רכב'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {renderPrimaryButton('סיים אירוע', handleComplete)}
+          </>
+        )}
+
+        {/* COMPLETED */}
+        {stage === 'completed' && (
+          <>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
+              <p className="text-lg font-bold text-emerald-800">האירוע הושלם</p>
+              <p className="mt-1 text-sm text-emerald-700">תודה! האירוע נסגר בהצלחה.</p>
+            </div>
+
+            {vehicles.length > 0 && (
+              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <p className="mb-3 text-sm font-semibold text-gray-800">
+                  רכבים שתועדו ({vehicles.length})
+                </p>
+                <ul className="space-y-2">
+                  {vehicles.map((vehicle) => (
+                    <li
+                      key={vehicle.id}
+                      className="rounded-xl border border-gray-100 bg-gray-50 p-3 font-mono text-sm dir-ltr text-right"
+                    >
+                      {vehicle.plate_number}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {renderCompactSummary()}
+          </>
+        )}
       </div>
     </div>
   )

@@ -521,6 +521,86 @@ export interface EventChangeLogEntry {
   user: { full_name: string } | null
 }
 
+export type EventVehicleDetails = Record<string, unknown> | null
+
+export interface EventVehicle {
+  id: string
+  event_id: string
+  company_id: string
+  plate_number: string
+  vehicle_details: EventVehicleDetails
+  notes: string | null
+  pickup_location_address: string | null
+  pickup_location_lat: number | null
+  pickup_location_lng: number | null
+  dropoff_location_address: string | null
+  dropoff_location_lat: number | null
+  dropoff_location_lng: number | null
+  order_index: number
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AddEventVehicleInput {
+  eventId: string
+  companyId: string
+  plateNumber: string
+  vehicleDetails: EventVehicleDetails
+  notes: string | null
+  createdBy: string
+}
+
+export async function getEventVehicles(eventId: string): Promise<EventVehicle[]> {
+  const { data, error } = await supabase
+    .from('event_vehicles')
+    .select('*')
+    .eq('event_id', eventId)
+    .order('order_index', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching event vehicles:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return (data ?? []) as EventVehicle[]
+}
+
+export async function addEventVehicle(input: AddEventVehicleInput): Promise<EventVehicle> {
+  const { count, error: countError } = await supabase
+    .from('event_vehicles')
+    .select('*', { count: 'exact', head: true })
+    .eq('event_id', input.eventId)
+
+  if (countError) {
+    console.error('Error counting event vehicles:', JSON.stringify(countError, null, 2))
+    throw countError
+  }
+
+  const vehicleId = crypto.randomUUID()
+  const { data, error } = await supabase
+    .from('event_vehicles')
+    .insert({
+      id: vehicleId,
+      event_id: input.eventId,
+      company_id: input.companyId,
+      plate_number: input.plateNumber,
+      vehicle_details: input.vehicleDetails,
+      notes: input.notes,
+      order_index: count ?? 0,
+      created_by: input.createdBy,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error adding event vehicle:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return data as EventVehicle
+}
+
 export async function getEventChangeLog(eventId: string): Promise<EventChangeLogEntry[]> {
   const { data: rows, error } = await supabase
     .from('event_change_log')
