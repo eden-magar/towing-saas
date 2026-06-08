@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, MapPin, User, ChevronLeft, Truck, Calendar, Phone } from 'lucide-react'
+import { Plus, Search, MapPin, User, ChevronLeft, Truck, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '../../lib/AuthContext'
 import { getTows, TowWithDetails } from '../../lib/queries/tows'
+import { getEvents, type EventListItem } from '../../lib/queries/events'
 
 export default function TowsPage() {
   const { companyId } = useAuth()
   const router = useRouter()
   
   const [tows, setTows] = useState<TowWithDetails[]>([])
+  const [events, setEvents] = useState<EventListItem[]>([])
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState('')
   
@@ -30,8 +32,13 @@ export default function TowsPage() {
     
     setPageLoading(true)
     try {
-      const data = await getTows(companyId, showAll ? { since: null, limit: null } : {})
-      setTows(data)
+      const listOptions = showAll ? { since: null, limit: null } : {}
+      const [towsData, eventsData] = await Promise.all([
+        getTows(companyId, listOptions),
+        getEvents(companyId, listOptions),
+      ])
+      setTows(towsData)
+      setEvents(eventsData)
     } catch (err) {
       console.error('Error loading tows:', err)
       setError('שגיאה בטעינת הנתונים')
@@ -89,6 +96,48 @@ export default function TowsPage() {
     return true
   })
 
+  const eventStatusConfig: Record<string, { label: string; class: string }> = {
+    draft: { label: 'טיוטה', class: 'bg-cyan-50 text-cyan-700' },
+    quote: { label: 'הצעת מחיר', class: 'bg-amber-100 text-amber-700' },
+    approved: { label: 'אושר', class: 'bg-green-100 text-green-700' },
+    cancelled: { label: 'בוטל', class: 'bg-red-100 text-red-700' },
+    completed: { label: 'הושלם', class: 'bg-emerald-100 text-emerald-700' },
+  }
+
+  const filteredEvents = events.filter((event) => {
+    if (!searchTerm) return true
+
+    const query = searchTerm.toLowerCase()
+    const customerName = event.customer?.name?.toLowerCase() || ''
+    const orderNum = event.order_number?.toLowerCase() || ''
+
+    if (query.startsWith('#')) {
+      const orderQuery = query.slice(1)
+      return orderNum.startsWith(orderQuery)
+    }
+
+    return customerName.includes(query) || orderNum.startsWith(query)
+  })
+
+  type TowsListRow =
+    | { kind: 'tow'; tow: TowWithDetails; sortKey: string }
+    | { kind: 'event'; event: EventListItem; sortKey: string }
+
+  const mergedRows: TowsListRow[] = [
+    ...filteredTows.map((tow) => ({
+      kind: 'tow' as const,
+      tow,
+      sortKey: tow.created_at,
+    })),
+    ...filteredEvents.map((event) => ({
+      kind: 'event' as const,
+      event,
+      sortKey: event.created_at,
+    })),
+  ].sort(
+    (a, b) => new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime()
+  )
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
     const date = new Date(dateStr)
@@ -99,6 +148,16 @@ export default function TowsPage() {
     if (!dateStr) return ''
     const date = new Date(dateStr)
     return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const formatEventListDate = (event: EventListItem) => {
+    if (event.event_date) {
+      const [year, month, day] = event.event_date.split('-').map(Number)
+      if (year && month && day) {
+        return new Date(year, month - 1, day).toLocaleDateString('he-IL')
+      }
+    }
+    return formatDate(event.created_at)
   }
 
   const getFromTo = (tow: TowWithDetails) => {
@@ -225,7 +284,7 @@ export default function TowsPage() {
 
       {/* טבלה */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {filteredTows.length === 0 ? (
+        {mergedRows.length === 0 ? (
           <div className="p-12 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <MapPin size={32} className="text-gray-400" />
@@ -259,41 +318,117 @@ export default function TowsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredTows.map((tow) => {
-                    const { from, to } = getFromTo(tow)
-                    const vehicle = tow.vehicles[0]
-                    return (
-                      <tr key={tow.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/tows/${tow.id}`)}>
+                  {mergedRows.map((row) => {
+                    if (row.kind === 'tow') {
+                      const tow = row.tow
+                      const { from, to } = getFromTo(tow)
+                      const vehicle = tow.vehicles[0]
+                      return (
+                        <tr key={tow.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/tows/${tow.id}`)}>
 
+                          <td className="px-4 py-4">
+                            <span className="font-medium text-gray-800">{formatDate(tow.created_at)}</span>
+                            <p className="text-xs text-gray-500">{formatTime(tow.created_at)}</p>
+                          </td>
+                          <td className="px-4 py-4">
+                            {tow.order_number ? (
+                              <span className="font-mono text-gray-800">{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4">
+                            {vehicle ? (
+                              <>
+                                <span className="font-mono text-gray-800">{vehicle.plate_number}</span>
+                                <p className="text-sm text-gray-500">
+                                  {vehicle.manufacturer} {vehicle.model}
+                                </p>
+                              </>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4">
+                            {tow.customer ? (
+                              <>
+                                <span className="text-gray-800">{tow.customer.name}</span>
+                                {tow.customer.phone && (
+                                  <p className="text-sm text-gray-500">{tow.customer.phone}</p>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-400">לא צוין</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4">
+                            {tow.driver ? (
+                              <span className="text-gray-600">{tow.driver.user.full_name}</span>
+                            ) : (
+                              <span className="text-amber-600 text-sm">לא שויך</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2 text-sm text-gray-600 max-w-[200px]">
+                              <span className="truncate">{from}</span>
+                              <ChevronLeft size={14} className="flex-shrink-0" />
+                              <span className="truncate">{to}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig[tow.status]?.class || 'bg-gray-100 text-gray-600'}`}>
+                              {statusConfig[tow.status]?.label || tow.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            {tow.final_price ? (
+                              <span className="font-medium text-gray-800">{tow.final_price} ש״ח</span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4">
+                            <Link
+                              href={`/dashboard/tows/${tow.id}`}
+                              className="text-[#33d4ff] hover:text-[#21b8e6] text-sm font-medium"
+                            >
+                              פרטים
+                            </Link>
+                          </td>
+                        </tr>
+                      )
+                    }
+
+                    const event = row.event
+                    return (
+                      <tr
+                        key={event.id}
+                        className="hover:bg-cyan-50/40 transition-colors cursor-pointer"
+                        onClick={() => router.push(`/dashboard/events/${event.id}`)}
+                      >
                         <td className="px-4 py-4">
-                          <span className="font-medium text-gray-800">{formatDate(tow.created_at)}</span>
-                          <p className="text-xs text-gray-500">{formatTime(tow.created_at)}</p>
+                          <span className="font-medium text-gray-800">{formatEventListDate(event)}</span>
+                          <p className="text-xs text-gray-500">{formatTime(event.created_at)}</p>
                         </td>
                         <td className="px-4 py-4">
-                          {tow.order_number ? (
-                            <span className="font-mono text-gray-800">{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</span>
+                          {event.order_number ? (
+                            <span className="font-mono text-gray-800">{event.order_number}</span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
                         <td className="px-4 py-4">
-                          {vehicle ? (
-                            <>
-                              <span className="font-mono text-gray-800">{vehicle.plate_number}</span>
-                              <p className="text-sm text-gray-500">
-                                {vehicle.manufacturer} {vehicle.model}
-                              </p>
-                            </>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-400 text-white text-xs font-bold">
+                            <Sparkles size={12} />
+                            אירוע מיוחד
+                          </span>
                         </td>
                         <td className="px-4 py-4">
-                          {tow.customer ? (
+                          {event.customer ? (
                             <>
-                              <span className="text-gray-800">{tow.customer.name}</span>
-                              {tow.customer.phone && (
-                                <p className="text-sm text-gray-500">{tow.customer.phone}</p>
+                              <span className="text-gray-800">{event.customer.name}</span>
+                              {event.customer.phone && (
+                                <p className="text-sm text-gray-500">{event.customer.phone}</p>
                               )}
                             </>
                           ) : (
@@ -301,34 +436,32 @@ export default function TowsPage() {
                           )}
                         </td>
                         <td className="px-4 py-4">
-                          {tow.driver ? (
-                            <span className="text-gray-600">{tow.driver.user.full_name}</span>
+                          {event.driver?.user?.full_name ? (
+                            <span className="text-gray-600">{event.driver.user.full_name}</span>
                           ) : (
                             <span className="text-amber-600 text-sm">לא שויך</span>
                           )}
                         </td>
                         <td className="px-4 py-4">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 max-w-[200px]">
-                            <span className="truncate">{from}</span>
-                            <ChevronLeft size={14} className="flex-shrink-0" />
-                            <span className="truncate">{to}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig[tow.status]?.class || 'bg-gray-100 text-gray-600'}`}>
-                            {statusConfig[tow.status]?.label || tow.status}
+                          <span className="text-sm text-gray-600 truncate block max-w-[200px]">
+                            {event.location_address || '-'}
                           </span>
                         </td>
                         <td className="px-4 py-4">
-                          {tow.final_price ? (
-                            <span className="font-medium text-gray-800">{tow.final_price} ש״ח</span>
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${eventStatusConfig[event.status]?.class || 'bg-gray-100 text-gray-600'}`}>
+                            {eventStatusConfig[event.status]?.label || event.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {event.final_price ? (
+                            <span className="font-medium text-gray-800">{event.final_price} ש״ח</span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
                         </td>
                         <td className="px-4 py-4">
                           <Link
-                            href={`/dashboard/tows/${tow.id}`}
+                            href={`/dashboard/events/${event.id}`}
                             className="text-[#33d4ff] hover:text-[#21b8e6] text-sm font-medium"
                           >
                             פרטים
@@ -343,66 +476,125 @@ export default function TowsPage() {
 
             {/* Mobile Cards */}
             <div className="lg:hidden divide-y divide-gray-100">
-              {filteredTows.map((tow) => {
-                const { from, to } = getFromTo(tow)
-                const vehicle = tow.vehicles[0]
+              {mergedRows.map((row) => {
+                if (row.kind === 'tow') {
+                  const tow = row.tow
+                  const { from, to } = getFromTo(tow)
+                  const vehicle = tow.vehicles[0]
+                  return (
+                    <Link
+                      key={tow.id}
+                      href={`/dashboard/tows/${tow.id}`}
+                      className="block p-4 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-800">
+                              {vehicle?.plate_number || 'ללא רכב'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[tow.status]?.class}`}>
+                              {statusConfig[tow.status]?.label}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 mt-0.5">
+                            {formatDate(tow.created_at)} | {formatTime(tow.created_at)}
+                          </p>
+                          {tow.order_number && (
+                            <p className="text-xs font-mono text-gray-400 mt-0.5">#{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</p>
+                          )}
+                        </div>
+                        {tow.final_price && (
+                          <span className="font-bold text-[#33d4ff]">{tow.final_price} ש״ח</span>
+                        )}
+                      </div>
+
+                      <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                          <span className="text-gray-700 truncate">{from}</span>
+                        </div>
+                        <div className="w-0.5 h-3 bg-gray-300 mr-[3px] my-1"></div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span className="text-gray-700 truncate">{to}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-4">
+                          {tow.customer && (
+                            <div className="flex items-center gap-1.5 text-gray-600">
+                              <User size={14} />
+                              <span>{tow.customer.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {tow.driver && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5 text-sm text-gray-500">
+                          <Truck size={14} />
+                          <span className="text-gray-700">{tow.driver.user.full_name}</span>
+                        </div>
+                      )}
+                    </Link>
+                  )
+                }
+
+                const event = row.event
                 return (
                   <Link
-                    key={tow.id}
-                    href={`/dashboard/tows/${tow.id}`}
-                    className="block p-4 hover:bg-gray-50 transition-colors"
+                    key={event.id}
+                    href={`/dashboard/events/${event.id}`}
+                    className="block p-4 hover:bg-cyan-50/40 transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-gray-800">
-                            {vehicle?.plate_number || 'ללא רכב'}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-400 text-white text-xs font-bold">
+                            <Sparkles size={12} />
+                            אירוע מיוחד
                           </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig[tow.status]?.class}`}>
-                            {statusConfig[tow.status]?.label}
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${eventStatusConfig[event.status]?.class}`}>
+                            {eventStatusConfig[event.status]?.label}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-500 mt-0.5">
-                          {formatDate(tow.created_at)} | {formatTime(tow.created_at)}
+                        <p className="text-sm text-gray-500 mt-1">
+                          {formatEventListDate(event)} | {formatTime(event.created_at)}
                         </p>
-                        {tow.order_number && (
-                          <p className="text-xs font-mono text-gray-400 mt-0.5">#{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</p>
+                        {event.order_number && (
+                          <p className="text-xs font-mono text-gray-400 mt-0.5">#{event.order_number}</p>
                         )}
                       </div>
-                      {tow.final_price && (
-                        <span className="font-bold text-[#33d4ff]">{tow.final_price} ש״ח</span>
+                      {event.final_price && (
+                        <span className="font-bold text-[#33d4ff]">{event.final_price} ש״ח</span>
                       )}
                     </div>
 
-                    <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                    <div className="bg-cyan-50 rounded-lg p-3 mb-3 ring-1 ring-cyan-200">
                       <div className="flex items-center gap-2 text-sm">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                        <span className="text-gray-700 truncate">{from}</span>
-                      </div>
-                      <div className="w-0.5 h-3 bg-gray-300 mr-[3px] my-1"></div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                        <span className="text-gray-700 truncate">{to}</span>
+                        <MapPin size={14} className="text-cyan-600 shrink-0" />
+                        <span className="text-gray-700 truncate">{event.location_address || '-'}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-4">
-                        {tow.customer && (
-                          <div className="flex items-center gap-1.5 text-gray-600">
-                            <User size={14} />
-                            <span>{tow.customer.name}</span>
-                          </div>
+                    {event.customer && (
+                      <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                        <User size={14} />
+                        <span>{event.customer.name}</span>
+                        {event.customer.phone && (
+                          <span className="text-gray-400">· {event.customer.phone}</span>
                         )}
                       </div>
-                    </div>
-
-                    {tow.driver && (
-                      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5 text-sm text-gray-500">
-                        <Truck size={14} />
-                        <span className="text-gray-700">{tow.driver.user.full_name}</span>
-                      </div>
                     )}
+
+                    <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1.5 text-sm text-gray-500">
+                      <Truck size={14} />
+                      <span className="text-gray-700">
+                        {event.driver?.user?.full_name || 'לא שויך'}
+                      </span>
+                    </div>
                   </Link>
                 )
               })}

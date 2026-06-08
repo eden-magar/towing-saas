@@ -118,6 +118,87 @@ export interface CalendarWeekEvent {
   customer: Pick<EventCustomer, 'id' | 'name'> | null
 }
 
+const EVENT_LIST_SELECT = `
+  id,
+  status,
+  event_date,
+  created_at,
+  order_number,
+  final_price,
+  location_address,
+  customer:customers (
+    id,
+    name,
+    phone
+  ),
+  driver:drivers (
+    id,
+    user:users (
+      full_name
+    )
+  )
+`
+
+export interface EventListDriver {
+  id: string
+  user: { full_name: string } | null
+}
+
+export interface EventListItem {
+  id: string
+  status: string
+  event_date: string | null
+  created_at: string
+  order_number: string | null
+  final_price: number | null
+  location_address: string | null
+  customer: EventCustomer | null
+  driver: EventListDriver | null
+}
+
+export interface GetEventsOptions {
+  /** ISO date string. If null, no date filter. Default: 90 days ago. */
+  since?: string | null
+  /** Max rows. If null, no limit. Default: 100. */
+  limit?: number | null
+}
+
+export async function getEvents(
+  companyId: string,
+  options: GetEventsOptions = {}
+): Promise<EventListItem[]> {
+  const defaultSince = new Date()
+  defaultSince.setDate(defaultSince.getDate() - 90)
+  const sinceIso =
+    options.since === null
+      ? null
+      : (options.since ?? defaultSince.toISOString())
+  const limitValue =
+    options.limit === null ? null : (options.limit ?? 100)
+
+  let query = supabase
+    .from('events')
+    .select(EVENT_LIST_SELECT)
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+
+  if (sinceIso) {
+    query = query.gte('created_at', sinceIso)
+  }
+  if (limitValue !== null) {
+    query = query.limit(limitValue)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching events:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return (data ?? []) as unknown as EventListItem[]
+}
+
 function formatLocalDateString(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
