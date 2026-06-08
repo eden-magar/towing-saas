@@ -601,6 +601,30 @@ export async function addEventVehicle(input: AddEventVehicleInput): Promise<Even
   return data as EventVehicle
 }
 
+export interface EventVehiclePhoto {
+  id: string
+  event_id: string
+  event_vehicle_id: string
+  image_path: string
+  phase: 'before' | 'after'
+  created_at: string
+}
+
+export async function getEventVehiclePhotos(eventId: string): Promise<EventVehiclePhoto[]> {
+  const { data, error } = await supabase
+    .from('event_vehicle_photos')
+    .select('id, event_id, event_vehicle_id, image_path, phase, created_at')
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching event vehicle photos:', JSON.stringify(error, null, 2))
+    return []
+  }
+
+  return (data ?? []) as EventVehiclePhoto[]
+}
+
 export async function getEventChangeLog(eventId: string): Promise<EventChangeLogEntry[]> {
   const { data: rows, error } = await supabase
     .from('event_change_log')

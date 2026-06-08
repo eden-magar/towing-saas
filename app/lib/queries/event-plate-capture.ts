@@ -2,6 +2,7 @@ import { supabase } from '../supabase'
 
 const EVENT_PLATES_BUCKET = 'event-plates'
 const EVENT_IMAGES_BUCKET = 'event-images'
+const EVENT_IMAGE_SIGNED_URL_TTL_SEC = 3600
 
 export async function uploadPlateImage(eventId: string, file: File): Promise<string> {
   const path = `${eventId}/${Date.now()}.jpg`
@@ -158,6 +159,19 @@ export async function uploadVehiclePhoto(
   }
 
   return path
+}
+
+export async function getEventImageSignedUrl(imagePath: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from(EVENT_IMAGES_BUCKET)
+    .createSignedUrl(imagePath, EVENT_IMAGE_SIGNED_URL_TTL_SEC)
+
+  if (error) {
+    console.error('Error creating event image signed URL:', error)
+    return null
+  }
+
+  return data.signedUrl
 }
 
 export interface SaveVehiclePhotoInput {

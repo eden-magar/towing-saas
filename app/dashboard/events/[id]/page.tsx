@@ -16,6 +16,7 @@ import {
   Sparkles,
   Edit2,
   History,
+  Image,
   X,
   AlertTriangle,
   CheckCircle,
@@ -24,13 +25,19 @@ import { useAuth } from '../../../lib/AuthContext'
 import {
   getEvent,
   getEventChangeLog,
+  getEventVehiclePhotos,
+  getEventVehicles,
   updateEventPrice,
   cancelEvent,
   completeEvent,
   saveEventChangeLog,
+  type EventVehicle,
+  type EventVehicleDetails,
+  type EventVehiclePhoto,
   type EventWithDetails,
   type EventChangeLogEntry,
 } from '../../../lib/queries/events'
+import { getEventImageSignedUrl } from '../../../lib/queries/event-plate-capture'
 import { getCompanySettings } from '../../../lib/queries/settings'
 import { EventPriceEditor } from '../../../components/event-forms/EventPriceEditor'
 import type { EventPriceResult } from '../../../lib/utils/event-pricing'
@@ -112,6 +119,23 @@ function formatLogPrice(value: number | null | undefined): string {
   if (value == null) return '—'
   return `₪${value.toLocaleString('he-IL')}`
 }
+
+function formatVehicleSummary(details: EventVehicleDetails): string {
+  if (!details || typeof details !== 'object') return ''
+  const d = details as {
+    manufacturer?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+  }
+  return [d.manufacturer, d.model, d.year?.toString(), d.color].filter(Boolean).join(' · ')
+}
+
+function googleMapsDestinationUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+}
+
+type EventTab = 'details' | 'history' | 'documentation'
 
 function EventPricingDisplay({
   breakdown,
@@ -340,6 +364,94 @@ function FieldValue({ children }: { children: ReactNode }) {
   return <p className="text-sm font-medium text-gray-800">{children}</p>
 }
 
+function VehiclePhaseDocumentation({
+  title,
+  photos,
+  signedUrlByPhotoId,
+  signedUrlsLoading,
+  locationLat,
+  locationLng,
+  locationLabel,
+}: {
+  title: string
+  photos: EventVehiclePhoto[]
+  signedUrlByPhotoId: Record<string, string | null>
+  signedUrlsLoading: boolean
+  locationLat: number | null
+  locationLng: number | null
+  locationLabel: string
+}) {
+  const hasLocation = locationLat != null && locationLng != null
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold text-gray-800">{title}</p>
+
+      {photos.length === 0 ? (
+        <p className="text-xs text-gray-400">אין תמונות</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {photos.map((photo) => {
+            const signedUrl = signedUrlByPhotoId[photo.id]
+
+            if (signedUrlsLoading && signedUrl === undefined) {
+              return (
+                <div
+                  key={photo.id}
+                  className="aspect-square rounded-xl border border-gray-200 bg-gray-100 animate-pulse"
+                />
+              )
+            }
+
+            if (!signedUrl) {
+              return (
+                <div
+                  key={photo.id}
+                  className="aspect-square rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center"
+                >
+                  <Image size={20} className="text-gray-300" />
+                </div>
+              )
+            }
+
+            return (
+              <a
+                key={photo.id}
+                href={signedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group"
+              >
+                <div className="aspect-square rounded-xl overflow-hidden border border-gray-200 group-hover:border-[#33d4ff] transition-colors">
+                  <img
+                    src={signedUrl}
+                    alt={title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </a>
+            )
+          })}
+        </div>
+      )}
+
+      {hasLocation ? (
+        <a
+          href={googleMapsDestinationUrl(locationLat, locationLng)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-[#33d4ff] hover:underline"
+        >
+          <MapPin size={14} />
+          {locationLabel}
+        </a>
+      ) : (
+        <p className="text-xs text-gray-400">אין מיקום</p>
+      )}
+    </div>
+  )
+}
+
 export default function EventDetailsPage() {
   const params = useParams()
   const eventId = params.id as string
@@ -354,7 +466,12 @@ export default function EventDetailsPage() {
   const [priceSaving, setPriceSaving] = useState(false)
   const [priceError, setPriceError] = useState('')
 
-  const [activeTab, setActiveTab] = useState<'details' | 'history'>('details')
+  const [activeTab, setActiveTab] = useState<EventTab>('details')
+
+  const [vehicles, setVehicles] = useState<EventVehicle[]>([])
+  const [photos, setPhotos] = useState<EventVehiclePhoto[]>([])
+  const [signedUrlByPhotoId, setSignedUrlByPhotoId] = useState<Record<string, string | null>>({})
+  const [signedUrlsLoading, setSignedUrlsLoading] = useState(false)
 
   const [changeLogs, setChangeLogs] = useState<EventChangeLogEntry[]>([])
   const [changeLogsLoading, setChangeLogsLoading] = useState(false)
@@ -371,7 +488,7 @@ export default function EventDetailsPage() {
   const [completing, setCompleting] = useState(false)
   const [completeError, setCompleteError] = useState('')
 
-  const handleTabChange = (tab: 'details' | 'history') => {
+  const handleTabChange = (tab: EventTab) => {
     setActiveTab(tab)
     if (tab !== 'details') {
       setIsEditingPrice(false)
@@ -401,8 +518,15 @@ export default function EventDetailsPage() {
         setError('')
       }
       try {
-        const data = await getEvent(eventId)
+        const [data, vehiclesData, photosData] = await Promise.all([
+          getEvent(eventId),
+          getEventVehicles(eventId),
+          getEventVehiclePhotos(eventId),
+        ])
         setEvent(data)
+        setVehicles(vehiclesData)
+        setPhotos(photosData)
+        setSignedUrlByPhotoId({})
       } catch (err) {
         console.error('Error loading event:', err)
         if (!silent) setError('שגיאה בטעינת האירוע')
@@ -437,6 +561,9 @@ export default function EventDetailsPage() {
   }, [companyId, eventId, loadEvent])
 
   useEffect(() => {
+    setVehicles([])
+    setPhotos([])
+    setSignedUrlByPhotoId({})
     setChangeLogsLoaded(false)
     setChangeLogs([])
     setIsEditingPrice(false)
@@ -451,6 +578,42 @@ export default function EventDetailsPage() {
       void loadChangeLogs()
     }
   }, [eventId, loadChangeLogs])
+
+  useEffect(() => {
+    if (activeTab !== 'documentation') {
+      return
+    }
+
+    if (photos.length === 0) {
+      setSignedUrlsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setSignedUrlsLoading(true)
+
+    void (async () => {
+      const entries = await Promise.all(
+        photos.map(async (photo) => {
+          const signedUrl = await getEventImageSignedUrl(photo.image_path)
+          return [photo.id, signedUrl] as const
+        })
+      )
+
+      if (cancelled) return
+
+      const next: Record<string, string | null> = {}
+      for (const [id, url] of entries) {
+        next[id] = url
+      }
+      setSignedUrlByPhotoId(next)
+      setSignedUrlsLoading(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, photos])
 
   const closeCancelModal = () => {
     setShowCancelModal(false)
@@ -693,6 +856,18 @@ export default function EventDetailsPage() {
             <Clock size={16} />
             היסטוריה
           </button>
+          <button
+            type="button"
+            onClick={() => handleTabChange('documentation')}
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+              activeTab === 'documentation'
+                ? 'bg-white text-gray-800 shadow-sm'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <Image size={16} />
+            תיעוד רכבים
+          </button>
         </div>
 
         {activeTab === 'details' && (
@@ -867,6 +1042,57 @@ export default function EventDetailsPage() {
                 loading={changeLogsLoading && !changeLogsLoaded}
               />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'documentation' && (
+          <div className="space-y-4">
+            {vehicles.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="p-8 sm:p-12 text-center text-gray-400">
+                  <Image size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>טרם תועדו רכבים</p>
+                </div>
+              </div>
+            ) : (
+              vehicles.map((vehicle) => {
+                const vehiclePhotos = photos.filter((p) => p.event_vehicle_id === vehicle.id)
+                const beforePhotos = vehiclePhotos.filter((p) => p.phase === 'before')
+                const afterPhotos = vehiclePhotos.filter((p) => p.phase === 'after')
+                const summary = formatVehicleSummary(vehicle.vehicle_details)
+
+                return (
+                  <InfoPanel key={vehicle.id} icon={Truck} title={vehicle.plate_number}>
+                    {summary && (
+                      <p className="mb-2 text-sm text-gray-600">{summary}</p>
+                    )}
+                    {vehicle.notes && (
+                      <p className="mb-3 text-sm text-gray-500">{vehicle.notes}</p>
+                    )}
+                    <div className="space-y-4 border-t border-gray-100 pt-3">
+                      <VehiclePhaseDocumentation
+                        title="לפני הגרירה"
+                        photos={beforePhotos}
+                        signedUrlByPhotoId={signedUrlByPhotoId}
+                        signedUrlsLoading={signedUrlsLoading}
+                        locationLat={vehicle.pickup_location_lat}
+                        locationLng={vehicle.pickup_location_lng}
+                        locationLabel="מיקום לפני"
+                      />
+                      <VehiclePhaseDocumentation
+                        title="אחרי הפריקה"
+                        photos={afterPhotos}
+                        signedUrlByPhotoId={signedUrlByPhotoId}
+                        signedUrlsLoading={signedUrlsLoading}
+                        locationLat={vehicle.dropoff_location_lat}
+                        locationLng={vehicle.dropoff_location_lng}
+                        locationLabel="מיקום אחרי"
+                      />
+                    </div>
+                  </InfoPanel>
+                )
+              })
+            )}
           </div>
         )}
       </div>
