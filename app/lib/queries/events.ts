@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import type { EventPriceResult } from '../utils/event-pricing'
 
 const EVENT_WITH_RELATIONS_SELECT = `
   *,
@@ -44,6 +45,10 @@ export interface EventWithDetails {
   contact_phone: string | null
   details: string | null
   status: string
+  list_price: number | null
+  manual_price: number | null
+  final_price: number | null
+  price_breakdown: EventPriceResult | null
   order_number: string | null
   event_date: string | null
   start_time: string | null
@@ -135,6 +140,10 @@ export interface CreateEventInput {
   eventDate: string
   startTime: string
   endTime: string
+  manualPrice?: number | null
+  finalPrice?: number | null
+  priceBreakdown?: EventPriceResult | null
+  status?: string
 }
 
 export async function createEvent(input: CreateEventInput): Promise<{ id: string }> {
@@ -155,6 +164,11 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
     event_date: input.eventDate,
     start_time: input.startTime,
     end_time: input.endTime,
+    list_price: null,
+    manual_price: input.manualPrice ?? null,
+    final_price: input.finalPrice ?? null,
+    price_breakdown: input.priceBreakdown ?? null,
+    status: input.status ?? 'draft',
   })
 
   if (error) {

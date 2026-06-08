@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar, Loader2 } from 'lucide-react'
+import { Calendar, Check, Loader2 } from 'lucide-react'
 import { FormCard, FormSubcard, Input, Button } from '../ui'
 import { DriverCalendarPicker } from '../DriverCalendarPicker'
 import { AddressInput, type AddressData } from '../tow-forms/routes/AddressInput'
@@ -10,7 +10,13 @@ import { PinDropModal } from '../tow-forms/shared/PinDropModal'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers } from '../../lib/queries/drivers'
 import { createEvent } from '../../lib/queries/events'
+import { getCompanySettings } from '../../lib/queries/settings'
+import { calculateEventPrice } from '../../lib/utils/event-pricing'
 import type { DriverWithDetails } from '../../lib/types'
+
+function formatMoney(value: number): string {
+  return `₪${value.toFixed(2)}`
+}
 
 interface EventTowSectionProps {
   selectedCustomerId: string | null
@@ -37,6 +43,12 @@ export function EventTowSection({
   const [driverPickerOpen, setDriverPickerOpen] = useState(false)
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [driversLoading, setDriversLoading] = useState(false)
+  const [priceMode, setPriceMode] = useState<'manual' | 'pricelist'>('manual')
+  const [manualPrice, setManualPrice] = useState('')
+  const [includesVat, setIncludesVat] = useState(true)
+  const [adjustmentType, setAdjustmentType] = useState<'discount' | 'surcharge'>('discount')
+  const [adjustmentPercent, setAdjustmentPercent] = useState('')
+  const [vatRate, setVatRate] = useState(0.18)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -60,9 +72,75 @@ export function EventTowSection({
     }
   }, [companyId])
 
+  useEffect(() => {
+    if (!companyId) return
+    let cancelled = false
+    getCompanySettings(companyId)
+      .then((settings) => {
+        if (cancelled) return
+        const pct = settings?.default_vat_percent ?? 18
+        setVatRate(pct / 100)
+      })
+      .catch((err) => {
+        console.error('Error loading company VAT for event:', err)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [companyId])
+
   const selectedDriver = drivers.find((d) => d.id === selectedDriverId) ?? null
 
-  const handleSave = async () => {
+  const enteredPrice = useMemo(() => {
+    const trimmed = manualPrice.trim()
+    if (!trimmed) return null
+    const parsed = parseFloat(trimmed)
+    return Number.isNaN(parsed) ? null : parsed
+  }, [manualPrice])
+
+  const parsedAdjustment = useMemo(() => {
+    const trimmed = adjustmentPercent.trim()
+    if (!trimmed) return 0
+    const parsed = parseFloat(trimmed)
+    return Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+  }, [adjustmentPercent])
+
+  const priceResult = useMemo(() => {
+    if (enteredPrice == null) return null
+    return calculateEventPrice({
+      enteredPrice,
+      includesVat,
+      discountPercent: adjustmentType === 'discount' ? parsedAdjustment : 0,
+      surchargePercent: adjustmentType === 'surcharge' ? parsedAdjustment : 0,
+      vatRate,
+    })
+  }, [enteredPrice, includesVat, adjustmentType, parsedAdjustment, vatRate])
+
+  const vatPercentLabel = Math.round(vatRate * 100)
+  const displayTotal = priceResult?.total ?? 0
+
+  const eventSummaryLine = useMemo(() => {
+    const parts: string[] = []
+    if (towDate) {
+      parts.push(
+        new Date(`${towDate}T12:00:00`).toLocaleDateString('he-IL', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+      )
+    }
+    if (towTime && towEndTime) {
+      parts.push(`${towTime}–${towEndTime}`)
+    }
+    const loc = location.address.trim()
+    if (loc) {
+      parts.push(loc.length > 40 ? `${loc.slice(0, 40)}…` : loc)
+    }
+    return parts.join(' • ')
+  }, [towDate, towTime, towEndTime, location.address])
+
+  const handleSave = async (status: 'approved' | 'quote') => {
     if (!companyId || !user) return
 
     if (!selectedCustomerId) {
@@ -103,6 +181,10 @@ export function EventTowSection({
         eventDate: towDate,
         startTime: towTime,
         endTime: towEndTime,
+        manualPrice: enteredPrice,
+        finalPrice: priceResult?.total ?? null,
+        priceBreakdown: priceResult,
+        status,
       })
       router.push(`/dashboard/events/${result.id}`)
     } catch {
@@ -203,22 +285,171 @@ export function EventTowSection({
           />
         </FormSubcard>
 
-        <Button
-          type="button"
-          variant="primary"
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-3"
-        >
-          {saving ? (
-            <span className="inline-flex items-center gap-2">
-              <Loader2 size={18} className="animate-spin" />
-              שומר...
-            </span>
-          ) : (
-            'שמור אירוע'
-          )}
-        </Button>
+        {/* מחיר — styled like tow pricing block */}
+        <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-300">
+            <h2 className="font-bold text-gray-800 text-sm">מחיר</h2>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setPriceMode('manual')}
+                className={`px-4 py-2 rounded-xl text-sm ${
+                  priceMode === 'manual' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                ידני
+              </button>
+              <button
+                type="button"
+                disabled
+                title="יחובר בהמשך"
+                className="px-4 py-2 rounded-xl text-sm bg-gray-100 text-gray-400 cursor-not-allowed"
+              >
+                מחירון
+                <span className="mr-1 text-xs opacity-75">(יחובר בהמשך)</span>
+              </button>
+            </div>
+
+            {priceMode === 'manual' && (
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder="מחיר"
+                  disabled={saving}
+                  className="px-4 py-2.5 border border-gray-300 rounded-xl w-32 text-sm dir-ltr text-right"
+                />
+                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includesVat}
+                    onChange={(e) => setIncludesVat(e.target.checked)}
+                    disabled={saving}
+                    className="rounded border-gray-300"
+                  />
+                  המחיר כולל מע״מ
+                </label>
+              </div>
+            )}
+
+            <div className="text-sm space-y-1">
+              {priceResult ? (
+                <>
+                  <p className="text-gray-500">
+                    לפני מע״מ: {formatMoney(priceResult.beforeVat)}
+                  </p>
+                  {priceResult.discountAmount > 0 && (
+                    <p className="text-gray-500">
+                      הנחה ({priceResult.discountPercent}%): -{formatMoney(priceResult.discountAmount)}
+                    </p>
+                  )}
+                  {priceResult.surchargeAmount > 0 && (
+                    <p className="text-gray-500">
+                      תוספת ({priceResult.surchargePercent}%): +{formatMoney(priceResult.surchargeAmount)}
+                    </p>
+                  )}
+                  <p className="text-gray-500">
+                    מע״מ ({vatPercentLabel}%): {formatMoney(priceResult.vatAmount)}
+                  </p>
+                  <p className="font-bold text-base text-gray-900">
+                    סה״כ: {formatMoney(priceResult.total)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-gray-400 text-sm">הזן מחיר ידני לחישוב פירוט</p>
+              )}
+
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-200 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setAdjustmentType('discount')}
+                  disabled={saving}
+                  className={`px-2.5 py-1 rounded-lg text-xs ${
+                    adjustmentType === 'discount'
+                      ? 'bg-red-500 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300'
+                  }`}
+                >
+                  הנחה
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustmentType('surcharge')}
+                  disabled={saving}
+                  className={`px-2.5 py-1 rounded-lg text-xs ${
+                    adjustmentType === 'surcharge'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300'
+                  }`}
+                >
+                  תוספת
+                </button>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={adjustmentPercent}
+                  onChange={(e) => setAdjustmentPercent(e.target.value)}
+                  placeholder="%"
+                  disabled={saving}
+                  className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center dir-ltr"
+                />
+                <span className="text-xs text-gray-500">אחוז</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* הצעת מחיר — אישור טלפוני */}
+        <section className="bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-sm overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 sm:py-5">
+            <h3 className="font-bold text-amber-900 text-lg mb-2">
+              הצעת מחיר — אישור טלפוני
+            </h3>
+            <p className="text-3xl font-bold text-amber-900 mb-2">
+              {formatMoney(displayTotal)}
+            </p>
+            {eventSummaryLine && (
+              <p className="text-sm text-amber-800 mb-4">{eventSummaryLine}</p>
+            )}
+            {!eventSummaryLine && <div className="mb-4" />}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleSave('quote')}
+                disabled={saving}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-medium disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 size={20} className="animate-spin inline" />
+                ) : (
+                  'לא אישר — שמור כהצעה'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave('approved')}
+                disabled={saving}
+                className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <>
+                    <Check size={20} />
+                    הלקוח אישר ✓
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
 
       <PinDropModal

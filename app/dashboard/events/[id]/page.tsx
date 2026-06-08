@@ -18,11 +18,20 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { getEvent, type EventWithDetails } from '../../../lib/queries/events'
+import type { EventPriceResult } from '../../../lib/utils/event-pricing'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   draft: {
     label: 'טיוטה',
     color: 'bg-[#33d4ff]/10 text-[#21b8e6] border-[#33d4ff]/30',
+  },
+  quote: {
+    label: 'הצעת מחיר',
+    color: 'bg-amber-100 text-amber-800 border-amber-200',
+  },
+  approved: {
+    label: 'אושר',
+    color: 'bg-green-100 text-green-800 border-green-200',
   },
 }
 
@@ -51,6 +60,97 @@ function formatEventDate(date: string | null | undefined): string {
 function formatEventTime(time: string | null | undefined): string {
   if (!time) return '—'
   return time.slice(0, 5)
+}
+
+function formatPrice(
+  value: number | null | undefined,
+  emptyLabel: string
+): string {
+  if (value == null) return emptyLabel
+  return `₪${value.toLocaleString('he-IL')}`
+}
+
+function formatMoney(value: number): string {
+  return `₪${value.toFixed(2)}`
+}
+
+function EventPricingDisplay({
+  breakdown,
+  manualPrice,
+  finalPrice,
+  listPrice,
+}: {
+  breakdown: EventPriceResult | null
+  manualPrice: number | null
+  finalPrice: number | null
+  listPrice: number | null
+}) {
+  const vatLabel = breakdown
+    ? Math.round(breakdown.vatRate * 100)
+    : 18
+
+  return (
+    <div className="space-y-2 text-sm">
+      <div className="flex justify-between text-gray-500 text-xs">
+        <span>מחיר מחירון</span>
+        <span>
+          {listPrice != null ? formatMoney(listPrice) : 'יחובר בהמשך'}
+        </span>
+      </div>
+
+      {breakdown ? (
+        <>
+          <div className="flex justify-between">
+            <FieldLabel>מחיר שהוזן</FieldLabel>
+            <FieldValue>
+              {formatMoney(breakdown.enteredPrice)}
+              <span className="text-xs font-normal text-gray-500 mr-1">
+                ({breakdown.includesVat ? 'כולל מע״מ' : 'לפני מע״מ'})
+              </span>
+            </FieldValue>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2 text-xs space-y-0.5">
+            <div className="flex justify-between text-gray-600">
+              <span>לפני מע״מ</span>
+              <span className="font-medium">{formatMoney(breakdown.beforeVat)}</span>
+            </div>
+            {breakdown.discountAmount > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <span>הנחה ({breakdown.discountPercent}%)</span>
+                <span className="font-medium">-{formatMoney(breakdown.discountAmount)}</span>
+              </div>
+            )}
+            {(breakdown.surchargeAmount ?? 0) > 0 && (
+              <div className="flex justify-between text-green-700">
+                <span>תוספת ({breakdown.surchargePercent}%)</span>
+                <span className="font-medium">+{formatMoney(breakdown.surchargeAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-gray-600">
+              <span>מע״מ ({vatLabel}%)</span>
+              <span className="font-medium">{formatMoney(breakdown.vatAmount)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-gray-900 pt-0.5 border-t border-gray-200">
+              <span>סה״כ</span>
+              <span>{formatMoney(breakdown.total)}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex justify-between">
+          <FieldLabel>מחיר ידני</FieldLabel>
+          <FieldValue>{formatPrice(manualPrice, 'לא הוזן')}</FieldValue>
+        </div>
+      )}
+
+      {!breakdown && finalPrice != null && (
+        <div className="flex justify-between">
+          <FieldLabel>מחיר סופי</FieldLabel>
+          <FieldValue>{formatMoney(finalPrice)}</FieldValue>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function InfoPanel({
@@ -292,13 +392,15 @@ export default function EventDetailsPage() {
           </p>
         </InfoPanel>
 
-        {/* Placeholders — coming soon */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-          <PlaceholderPanel
-            icon={Receipt}
-            title="תמחור"
-            message="התמחור יתווסף בקרוב"
-          />
+          <InfoPanel icon={Receipt} title="תמחור">
+            <EventPricingDisplay
+              breakdown={event.price_breakdown}
+              manualPrice={event.manual_price}
+              finalPrice={event.final_price}
+              listPrice={event.list_price}
+            />
+          </InfoPanel>
           <PlaceholderPanel
             icon={Car}
             title="רכבים שנגררו"
