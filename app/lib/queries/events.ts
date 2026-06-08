@@ -78,6 +78,8 @@ export interface CreateEventInput {
   customerId: string
   driverId?: string | null
   locationAddress: string
+  locationLat?: number | null
+  locationLng?: number | null
   contactName?: string | null
   contactPhone?: string | null
   details?: string | null
@@ -96,8 +98,8 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
     customer_id: input.customerId,
     driver_id: input.driverId ?? null,
     location_address: input.locationAddress,
-    location_lat: null,
-    location_lng: null,
+    location_lat: input.locationLat ?? null,
+    location_lng: input.locationLng ?? null,
     contact_name: input.contactName ?? null,
     contact_phone: input.contactPhone ?? null,
     details: input.details ?? null,

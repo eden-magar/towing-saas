@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, Loader2 } from 'lucide-react'
 import { FormCard, FormSubcard, Input, Button } from '../ui'
+import { AddressInput, type AddressData } from '../tow-forms/routes/AddressInput'
+import { PinDropModal } from '../tow-forms/shared/PinDropModal'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers } from '../../lib/queries/drivers'
 import { createEvent } from '../../lib/queries/events'
@@ -28,7 +30,8 @@ export function EventTowSection({
   const router = useRouter()
   const { user, companyId } = useAuth()
 
-  const [location, setLocation] = useState('')
+  const [location, setLocation] = useState<AddressData>({ address: '' })
+  const [pinOpen, setPinOpen] = useState(false)
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [details, setDetails] = useState('')
@@ -76,6 +79,11 @@ export function EventTowSection({
       return
     }
 
+    if (!location.address.trim()) {
+      setError('יש להזין מיקום לאירוע')
+      return
+    }
+
     setSaving(true)
     setError('')
 
@@ -85,7 +93,9 @@ export function EventTowSection({
         createdBy: user.id,
         customerId: selectedCustomerId,
         driverId: selectedDriverId || null,
-        locationAddress: location.trim(),
+        locationAddress: location.address.trim(),
+        locationLat: location.lat ?? null,
+        locationLng: location.lng ?? null,
         contactName: contactName.trim() || null,
         contactPhone: contactPhone.trim() || null,
         details: details.trim() || null,
@@ -115,12 +125,13 @@ export function EventTowSection({
         )}
 
         <FormSubcard title="מיקום">
-          <Input
-            type="text"
+          <AddressInput
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="הזן מיקום האירוע"
-            className="w-full"
+            onChange={(d: AddressData) => setLocation(d)}
+            hideLabel
+            placeholder="הזן כתובת או הדבק קישור..."
+            onPinDropClick={() => setPinOpen(true)}
+            readOnly={saving}
           />
         </FormSubcard>
 
@@ -186,6 +197,17 @@ export function EventTowSection({
           )}
         </Button>
       </div>
+
+      <PinDropModal
+        isOpen={pinOpen}
+        onClose={() => setPinOpen(false)}
+        onConfirm={(d) => {
+          setLocation(d)
+          setPinOpen(false)
+        }}
+        initialAddress={location}
+        title="בחר מיקום אירוע"
+      />
     </FormCard>
   )
 }
