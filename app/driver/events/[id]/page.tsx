@@ -32,10 +32,9 @@ function formatEventDate(dateStr: string | null): string {
   const [year, month, day] = dateStr.split('-').map(Number)
   if (!year || !month || !day) return dateStr
   return new Date(year, month - 1, day).toLocaleDateString('he-IL', {
-    weekday: 'long',
+    weekday: 'short',
     day: '2-digit',
     month: '2-digit',
-    year: 'numeric',
   })
 }
 
@@ -44,15 +43,6 @@ function formatEventTime(timeStr: string | null): string {
   const match = timeStr.match(/^(\d{1,2}):(\d{2})/)
   if (!match) return timeStr
   return `${match[1].padStart(2, '0')}:${match[2]}`
-}
-
-function formatEventTimeRange(start: string | null, end: string | null): string {
-  const startLabel = formatEventTime(start)
-  const endLabel = formatEventTime(end)
-  if (!startLabel && !endLabel) return '—'
-  if (!endLabel) return startLabel
-  if (!startLabel) return endLabel
-  return `${startLabel}–${endLabel}`
 }
 
 function openPhone(phone: string) {
@@ -196,64 +186,63 @@ export default function DriverEventDetailPage({
   const hasLocation = Boolean(event.location_address?.trim())
   const hasNavigationTarget =
     hasLocation || (event.location_lat != null && event.location_lng != null)
+  const startTimeLabel = formatEventTime(event.start_time)
+  const endTimeLabel = formatEventTime(event.end_time)
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-100 pb-24">
-      {/* Header */}
-      <div className="bg-gradient-to-b from-cyan-500 to-cyan-600 px-4 pb-6 pt-4 text-white">
-        <div className="mb-4 flex items-center justify-between">
+    <div dir="rtl" className="flex h-[100dvh] flex-col overflow-hidden bg-gray-100 pb-16">
+      {/* Header — compact single row */}
+      <div className="shrink-0 bg-gradient-to-l from-cyan-500 to-cyan-600 px-3 py-2 text-white">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => router.push('/driver')}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/20"
             aria-label="חזרה לדף הבית"
           >
-            <ArrowRight size={20} />
+            <ArrowRight size={18} />
           </button>
-          {event.order_number && (
-            <span className="font-mono text-sm text-white/90">#{event.order_number}</span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/20 px-2.5 py-1 text-sm font-bold">
-            <Sparkles size={14} />
+          <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm font-bold">
+            <Sparkles size={13} className="shrink-0" />
             אירוע מיוחד
           </span>
-          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${status.className}`}>
             {status.label}
           </span>
+          {event.order_number && (
+            <span className="shrink-0 font-mono text-[11px] text-white/85">#{event.order_number}</span>
+          )}
         </div>
       </div>
 
-      <div className="-mt-3 flex flex-col gap-3 px-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-3 py-2">
         {/* Customer */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-medium text-gray-400">לקוח</p>
-          <div className="flex items-start justify-between gap-3">
+        <div className="shrink-0 rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm">
+          <div className="mb-1 text-[10px] font-medium text-gray-400">לקוח</div>
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-800">{customerName}</p>
+              <p className="truncate text-sm font-semibold text-gray-800">{customerName}</p>
               {customerPhone && (
-                <p className="mt-0.5 text-sm text-gray-500 dir-ltr text-right">{customerPhone}</p>
+                <p className="truncate text-xs text-gray-500 dir-ltr text-right">{customerPhone}</p>
               )}
             </div>
             {customerPhone && (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => openPhone(customerPhone)}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#33d4ff] text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#33d4ff] text-white"
                   aria-label="התקשר ללקוח"
                 >
-                  <Phone size={16} />
+                  <Phone size={15} />
                 </button>
                 <button
                   type="button"
                   onClick={() => openWhatsApp(customerPhone, customerName)}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#33d4ff] text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#33d4ff] text-white"
                   aria-label="שלח וואטסאפ ללקוח"
                 >
-                  <MessageCircle size={16} />
+                  <MessageCircle size={15} />
                 </button>
               </div>
             )}
@@ -261,47 +250,55 @@ export default function DriverEventDetailPage({
         </div>
 
         {/* Schedule */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-medium text-gray-400">מועד</p>
+        <div className="shrink-0 rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm">
+          <div className="mb-1 text-[10px] font-medium text-gray-400">מועד</div>
           <div className="flex items-center gap-2 text-gray-800">
-            <Calendar size={18} className="shrink-0 text-cyan-600" />
-            <div>
-              <p className="font-medium">{formatEventDate(event.event_date)}</p>
-              <p className="text-sm text-gray-500">
-                {formatEventTimeRange(event.start_time, event.end_time)}
+            <Calendar size={15} className="shrink-0 text-cyan-600" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-tight">{formatEventDate(event.event_date)}</p>
+              <p className="text-xs text-gray-500">
+                {startTimeLabel || endTimeLabel ? (
+                  <span dir="ltr" className="tabular-nums unicode-bidi-isolate">
+                    {startTimeLabel}
+                    {startTimeLabel && endTimeLabel ? '–' : ''}
+                    {endTimeLabel}
+                  </span>
+                ) : (
+                  '—'
+                )}
               </p>
             </div>
           </div>
         </div>
 
         {/* Location */}
-        <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-medium text-gray-400">מיקום</p>
+        <div className="shrink-0 rounded-xl border border-cyan-100 bg-white p-2.5 shadow-sm">
+          <div className="mb-1 text-[10px] font-medium text-gray-400">מיקום</div>
           {hasLocation ? (
-            <div className="mb-3 flex items-start gap-2 text-gray-700">
-              <MapPin size={16} className="mt-0.5 shrink-0 text-cyan-600" />
-              <span className="text-sm leading-relaxed">{event.location_address}</span>
+            <div className="mb-2 flex items-start gap-1.5 text-gray-700">
+              <MapPin size={14} className="mt-0.5 shrink-0 text-cyan-600" />
+              <span className="line-clamp-2 text-xs leading-snug">{event.location_address}</span>
             </div>
           ) : (
-            <p className="mb-3 text-sm text-gray-400">לא צוין מיקום</p>
+            <p className="mb-2 text-xs text-gray-400">לא צוין מיקום</p>
           )}
           {hasNavigationTarget && (
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-row gap-1.5">
               <button
                 type="button"
                 onClick={() => openWazeForEvent(event)}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-50 py-2.5 text-sm font-medium text-blue-600"
+                className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg bg-blue-50 px-2 py-2 text-xs font-medium text-blue-600"
               >
-                <Navigation size={16} />
-                נווט עם Waze
+                <Navigation size={14} />
+                Waze
               </button>
               <button
                 type="button"
                 onClick={() => openGoogleMapsForEvent(event)}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-50 py-2.5 text-sm font-medium text-green-700"
+                className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg bg-green-50 px-2 py-2 text-xs font-medium text-green-700"
               >
-                <MapPin size={16} />
-                Google Maps
+                <MapPin size={14} />
+                Maps
               </button>
             </div>
           )}
@@ -309,30 +306,34 @@ export default function DriverEventDetailPage({
 
         {/* Contact */}
         {(event.contact_name || event.contact_phone) && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <p className="mb-2 text-xs font-medium text-gray-400">איש קשר</p>
-            <div className="flex items-start gap-2 text-gray-700">
-              <User size={16} className="mt-0.5 shrink-0 text-gray-400" />
-              <span className="text-sm">{event.contact_name || '—'}</span>
+          <div className="shrink-0 rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm">
+            <div className="mb-1 text-[10px] font-medium text-gray-400">איש קשר</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5 text-gray-700">
+                <User size={14} className="shrink-0 text-gray-400" />
+                <span className="truncate text-xs">{event.contact_name || '—'}</span>
+              </div>
+              {event.contact_phone && (
+                <button
+                  type="button"
+                  onClick={() => openPhone(event.contact_phone!)}
+                  className="flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg bg-green-50 px-3 text-xs font-medium text-green-600"
+                >
+                  <Phone size={14} />
+                  <span dir="ltr" className="tabular-nums">
+                    {event.contact_phone}
+                  </span>
+                </button>
+              )}
             </div>
-            {event.contact_phone && (
-              <button
-                type="button"
-                onClick={() => openPhone(event.contact_phone!)}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-green-50 py-2.5 text-sm font-medium text-green-600"
-              >
-                <Phone size={16} />
-                {event.contact_phone}
-              </button>
-            )}
           </div>
         )}
 
-        {/* Details */}
+        {/* Details — fills remaining space, clamped */}
         {event.details?.trim() && (
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-            <p className="mb-2 text-xs font-medium text-gray-400">הנחיות / פרטים</p>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
+          <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm">
+            <div className="mb-1 shrink-0 text-[10px] font-medium text-gray-400">הנחיות / פרטים</div>
+            <p className="min-h-0 flex-1 overflow-hidden text-xs leading-snug text-gray-700 line-clamp-[6] whitespace-pre-wrap">
               {event.details}
             </p>
           </div>
