@@ -1,4 +1,7 @@
+import type { LegacySpecialEventPayload } from './event-mapper'
 import type { LegacyPayload } from './types'
+
+export type LegacyCalendarPayload = LegacyPayload | LegacySpecialEventPayload
 
 export type LegacyCalendarSendResult = {
   ok: boolean
@@ -12,7 +15,7 @@ export type LegacyCalendarSendResult = {
  */
 export async function sendToLegacyCalendar(
   url: string,
-  payload: LegacyPayload
+  payload: LegacyCalendarPayload
 ): Promise<LegacyCalendarSendResult> {
   try {
     const encodedBody = 'data=' + encodeURIComponent(JSON.stringify(payload))
