@@ -265,3 +265,113 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
 
   return { id: eventId }
 }
+
+export interface UpdateEventPriceFields {
+  manualPrice: number | null
+  finalPrice: number | null
+  priceBreakdown: EventPriceResult | null
+}
+
+export async function updateEventPrice(
+  eventId: string,
+  fields: UpdateEventPriceFields
+): Promise<void> {
+  const { error } = await supabase
+    .from('events')
+    .update({
+      manual_price: fields.manualPrice,
+      final_price: fields.finalPrice,
+      price_breakdown: fields.priceBreakdown,
+    })
+    .eq('id', eventId)
+
+  if (error) {
+    console.error('Error updating event price:', JSON.stringify(error, null, 2))
+    throw error
+  }
+}
+
+export interface SaveEventChangeLogInput {
+  eventId: string
+  companyId: string
+  changedBy: string
+  fieldName: string
+  oldValue: string | null
+  newValue: string | null
+}
+
+export async function saveEventChangeLog(input: SaveEventChangeLogInput): Promise<void> {
+  const { error } = await supabase.from('event_change_log').insert({
+    event_id: input.eventId,
+    company_id: input.companyId,
+    changed_by: input.changedBy,
+    field_name: input.fieldName,
+    old_value: input.oldValue,
+    new_value: input.newValue,
+  })
+
+  if (error) {
+    console.error('Error saving event change log:', JSON.stringify(error, null, 2))
+    throw error
+  }
+}
+
+export interface EventChangeLogEntry {
+  id: string
+  event_id: string
+  company_id: string
+  changed_by: string
+  field_name: string
+  old_value: string | null
+  new_value: string | null
+  changed_at: string
+  user: { full_name: string } | null
+}
+
+export async function getEventChangeLog(eventId: string): Promise<EventChangeLogEntry[]> {
+  const { data: rows, error } = await supabase
+    .from('event_change_log')
+    .select('id, event_id, company_id, field_name, old_value, new_value, changed_by, changed_at')
+    .eq('event_id', eventId)
+    .order('changed_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching event change log:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  const logs = rows ?? []
+  const changedByIds = [...new Set(logs.map((row) => row.changed_by).filter(Boolean))]
+
+  let nameByUserId = new Map<string, string>()
+  if (changedByIds.length > 0) {
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, full_name')
+      .in('id', changedByIds)
+
+    if (usersError) {
+      console.error('Error fetching event change log users:', JSON.stringify(usersError, null, 2))
+      throw usersError
+    }
+
+    nameByUserId = new Map(
+      (users ?? []).map((u) => [u.id, u.full_name as string])
+    )
+  }
+
+  return logs.map((row) => {
+    const fullName = nameByUserId.get(row.changed_by) ?? null
+    return {
+      id: row.id,
+      event_id: row.event_id,
+      company_id: row.company_id,
+      changed_by: row.changed_by,
+      field_name: row.field_name,
+      old_value: row.old_value,
+      new_value: row.new_value,
+      changed_at: row.changed_at,
+      user: fullName != null ? { full_name: fullName } : null,
+    }
+  })
+}
