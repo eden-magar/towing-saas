@@ -273,6 +273,7 @@ export async function getDriverActiveEvents(
     .select(DRIVER_ACTIVE_EVENT_SELECT)
     .eq('driver_id', driverId)
     .neq('status', 'cancelled')
+    .neq('status', 'completed')
     .gte('event_date', today)
     .order('event_date', { ascending: true })
     .order('start_time', { ascending: true })
