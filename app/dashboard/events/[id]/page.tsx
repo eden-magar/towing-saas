@@ -18,6 +18,7 @@ import {
   History,
   X,
   AlertTriangle,
+  CheckCircle,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import {
@@ -25,6 +26,7 @@ import {
   getEventChangeLog,
   updateEventPrice,
   cancelEvent,
+  completeEvent,
   saveEventChangeLog,
   type EventWithDetails,
   type EventChangeLogEntry,
@@ -49,6 +51,10 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   cancelled: {
     label: 'בוטל',
     color: 'bg-gray-100 text-gray-500 border-gray-200',
+  },
+  completed: {
+    label: 'הושלם',
+    color: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   },
 }
 
@@ -361,6 +367,10 @@ export default function EventDetailsPage() {
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState('')
 
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [completing, setCompleting] = useState(false)
+  const [completeError, setCompleteError] = useState('')
+
   const handleTabChange = (tab: 'details' | 'history') => {
     setActiveTab(tab)
     if (tab !== 'details') {
@@ -435,6 +445,8 @@ export default function EventDetailsPage() {
     setSelectedCancellationReason('')
     setCancellationDetails('')
     setCancelError('')
+    setShowCompleteModal(false)
+    setCompleteError('')
     if (eventId) {
       void loadChangeLogs()
     }
@@ -446,6 +458,33 @@ export default function EventDetailsPage() {
     setSelectedCancellationReason('')
     setCancellationDetails('')
     setCancelError('')
+  }
+
+  const handleConfirmComplete = async () => {
+    if (!user || !companyId || !event) return
+
+    setCompleting(true)
+    setCompleteError('')
+    try {
+      const previousStatus = event.status
+      await completeEvent(eventId, user.id)
+      await saveEventChangeLog({
+        eventId,
+        companyId,
+        changedBy: user.id,
+        fieldName: 'סיום',
+        oldValue: getStatusLabel(previousStatus),
+        newValue: 'הושלם',
+      })
+      await loadEvent(true)
+      await loadChangeLogs()
+      setShowCompleteModal(false)
+    } catch (err) {
+      console.error('Error completing event:', err)
+      setCompleteError('שגיאה בסיום האירוע')
+    } finally {
+      setCompleting(false)
+    }
   }
 
   const handleConfirmCancel = async () => {
@@ -543,9 +582,10 @@ export default function EventDetailsPage() {
     ? `אירוע #${event.order_number}`
     : 'אירוע מיוחד'
 
-  const canCancel =
+  const canModify =
     event.status !== 'cancelled' && event.status !== 'completed'
   const isCancelled = event.status === 'cancelled'
+  const isCompleted = event.status === 'completed'
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#33d4ff]/5 via-gray-50 to-gray-50" dir="rtl">
@@ -577,20 +617,35 @@ export default function EventDetailsPage() {
                 נוצר ב-{formatDateTime(event.created_at)}
               </p>
             </div>
-            {canCancel && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCancelError('')
-                  setCancelStep('reason')
-                  setShowCancelModal(true)
-                }}
-                className="p-2 sm:px-3 sm:py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm flex items-center gap-2 shrink-0"
-              >
-                <X size={18} />
-                <span className="hidden sm:inline">בטל אירוע</span>
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {canModify && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompleteError('')
+                    setShowCompleteModal(true)
+                  }}
+                  className="p-2 sm:px-3 sm:py-2 text-emerald-700 hover:bg-emerald-50 rounded-lg text-sm flex items-center gap-2"
+                >
+                  <CheckCircle size={18} />
+                  <span className="hidden sm:inline">סיים אירוע</span>
+                </button>
+              )}
+              {canModify && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelError('')
+                    setCancelStep('reason')
+                    setShowCancelModal(true)
+                  }}
+                  className="p-2 sm:px-3 sm:py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm flex items-center gap-2"
+                >
+                  <X size={18} />
+                  <span className="hidden sm:inline">בטל אירוע</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -735,13 +790,22 @@ export default function EventDetailsPage() {
                 </div>
               </div>
 
+              {isCompleted && event.completed_at && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 text-sm">
+                  <p className="font-medium text-emerald-800 flex items-center gap-2">
+                    <CheckCircle size={16} className="shrink-0" />
+                    הושלם בתאריך {formatDateTime(event.completed_at)}
+                  </p>
+                </div>
+              )}
+
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-800 text-white flex items-center justify-between gap-2">
                   <h2 className="font-bold flex items-center gap-2">
                     <Receipt size={18} />
                     סיכום מחיר
                   </h2>
-                  {canCancel && !isEditingPrice && (
+                  {canModify && !isEditingPrice && (
                     <button
                       type="button"
                       onClick={() => {
@@ -806,6 +870,49 @@ export default function EventDetailsPage() {
           </div>
         )}
       </div>
+
+      {showCompleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div
+            className="bg-white rounded-2xl overflow-hidden w-full max-w-[420px]"
+            dir="rtl"
+          >
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle size={32} className="text-emerald-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">לסיים את האירוע?</h2>
+              <p className="text-gray-600 text-sm">
+                האירוע יסומן כהושלם ולא ניתן יהיה לערוך אותו.
+              </p>
+              {completeError && (
+                <p className="text-sm text-red-600 mt-3">{completeError}</p>
+              )}
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCompleteModal(false)
+                  setCompleteError('')
+                }}
+                disabled={completing}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmComplete()}
+                disabled={completing}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:bg-gray-300 transition-colors"
+              >
+                {completing ? 'מסיים...' : 'סיים אירוע'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCancelModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

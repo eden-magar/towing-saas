@@ -48,6 +48,8 @@ export interface EventWithDetails {
   cancelled_at: string | null
   cancellation_reason: string | null
   cancellation_details: string | null
+  completed_at: string | null
+  completed_by: string | null
   list_price: number | null
   manual_price: number | null
   final_price: number | null
@@ -273,6 +275,25 @@ export interface UpdateEventPriceFields {
   manualPrice: number | null
   finalPrice: number | null
   priceBreakdown: EventPriceResult | null
+}
+
+export async function completeEvent(
+  eventId: string,
+  completedBy: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('events')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      completed_by: completedBy,
+    })
+    .eq('id', eventId)
+
+  if (error) {
+    console.error('Error completing event:', JSON.stringify(error, null, 2))
+    throw error
+  }
 }
 
 export async function cancelEvent(
