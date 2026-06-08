@@ -11,13 +11,15 @@
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTows } from '../lib/queries/calendar'
+  import { getDayEvents } from '../lib/queries/events'
+  import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
   import { supabase } from '../lib/supabase'
   import { getVehicleTypeLabel, isKnownVehicleType } from '../lib/vehicle-lookup'
   import DriversMap, { MAP_STATUS_LEGEND } from '../components/DriversMap'
   import EditShiftModal from '../components/EditShiftModal'
   import { formatOpenShiftDuration, formatShiftStartJerusalem } from '../lib/shift-datetime'
   import Link from 'next/link'
-  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play, X } from 'lucide-react'
+  import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play, X, Sparkles } from 'lucide-react'
   import { getEffectiveTowStartIso, getTowTimeBounds } from '../lib/utils/tow-time-bounds'
   import {
     getOverlapLayout,
@@ -116,6 +118,19 @@
     return d.getHours() + d.getMinutes() / 60
   }
 
+  interface DashEventCalendarItem {
+    id: string
+    startMs: number
+    endMs: number
+    driverId: string
+    label: string
+    status: string
+  }
+
+  function dashEventOverlapKey(eventId: string): string {
+    return `event:${eventId}`
+  }
+
   export default function DashboardPage() {
     const { user, companyId, loading: authLoading } = useAuth()
     const router = useRouter()
@@ -139,6 +154,7 @@
     const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
     const [listDate, setListDate] = useState(() => startOfDay(new Date()))
     const [listTows, setListTows] = useState<TowWithDetails[]>([])
+    const [listEvents, setListEvents] = useState<Awaited<ReturnType<typeof getDayEvents>>>([])
     const [showDriverModal, setShowDriverModal] = useState(false)
     const [pendingSlot, setPendingSlot] = useState<{ date: Date; hour: number } | null>(null)
     const [activeDrivers, setActiveDrivers] = useState<any[]>([])
@@ -349,8 +365,12 @@
     const loadListTows = useCallback(async () => {
       if (!companyId) return
       try {
-        const tows = await getDayTows(companyId, listDate)
+        const [tows, events] = await Promise.all([
+          getDayTows(companyId, listDate),
+          getDayEvents(companyId, listDate),
+        ])
         setListTows(tows || [])
+        setListEvents(events || [])
       } catch (err) {
         console.error('List tows load error:', err)
       }
@@ -472,21 +492,51 @@
       })
     }, [assignedListTows])
 
+    const assignedListEvents = useMemo(
+      () => listEvents.filter((event) => event.driver_id),
+      [listEvents],
+    )
+
+    const normalizedListEvents = useMemo((): DashEventCalendarItem[] => {
+      const items: DashEventCalendarItem[] = []
+      for (const event of assignedListEvents) {
+        const bounds = getEventTimeBounds(event)
+        if (!bounds || !event.driver_id) continue
+        items.push({
+          id: event.id,
+          startMs: bounds.startMs,
+          endMs: bounds.endMs,
+          driverId: event.driver_id,
+          label: event.customer?.name || 'אירוע',
+          status: event.status,
+        })
+      }
+      return items.sort((a, b) => a.startMs - b.startMs)
+    }, [assignedListEvents])
+
     const listDayOverlapLayout = useMemo(() => {
-      const items = sortedAssignedListTows.map((tow) => {
+      const towItems = sortedAssignedListTows.map((tow) => {
         const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: listDate })
         return { id: tow.id, startMs, endMs }
       })
-      return getOverlapLayout(items)
-    }, [sortedAssignedListTows, now, listDate])
+      const eventItems = normalizedListEvents.map((event) => ({
+        id: dashEventOverlapKey(event.id),
+        startMs: event.startMs,
+        endMs: event.endMs,
+      }))
+      return getOverlapLayout([...towItems, ...eventItems])
+    }, [sortedAssignedListTows, normalizedListEvents, now, listDate])
 
     const listDayDrivers = useMemo(() => {
       const driverIds = new Set<string>()
       for (const tow of assignedListTows) {
         if (tow.driver_id) driverIds.add(tow.driver_id)
       }
+      for (const event of normalizedListEvents) {
+        driverIds.add(event.driverId)
+      }
       return allDrivers.filter((d) => driverIds.has(d.id))
-    }, [assignedListTows, allDrivers])
+    }, [assignedListTows, normalizedListEvents, allDrivers])
 
     useEffect(() => {
       if (authLoading || loading) return
@@ -736,7 +786,7 @@
                 </Link>
               </div>
               <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
-                {sortedAssignedListTows.length === 0 && (
+                {sortedAssignedListTows.length === 0 && normalizedListEvents.length === 0 && (
                   <div className="px-3 py-1 text-xs text-gray-400 text-center shrink-0 border-b border-gray-50">
                     אין גרירות משובצות
                   </div>
@@ -798,6 +848,50 @@
                                 <CompactTowBlockStatusBadge status={tow.status} />
                                 <span className="block truncate pr-3">
                                   {tow.customer?.name || 'ללא לקוח'}
+                                </span>
+                              </button>
+                            )
+                          })}
+
+                          {normalizedListEvents.map((event) => {
+                            const pos: OverlapPosition =
+                              listDayOverlapLayout.get(dashEventOverlapKey(event.id)) ?? {
+                                columnIndex: 0,
+                                totalColumns: 1,
+                                span: 1,
+                              }
+                            const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
+                            const eventDate = new Date(event.startMs)
+                            const hour =
+                              eventDate.getHours() + eventDate.getMinutes() / 60
+                            const top = hour * PIXELS_PER_HOUR_DASH
+                            const driverColor = getDriverColor(event.driverId, allDrivers)
+                            const heightPx = Math.max(
+                              16,
+                              ((event.endMs - event.startMs) / 60000 / 60) * PIXELS_PER_HOUR_DASH,
+                            )
+
+                            return (
+                              <button
+                                key={dashEventOverlapKey(event.id)}
+                                type="button"
+                                onClick={() => router.push(`/dashboard/events/${event.id}`)}
+                                className="absolute pointer-events-auto rounded px-1 py-0.5 text-white overflow-hidden text-[10px] leading-tight text-right hover:brightness-95 transition-[filter] ring-1 ring-cyan-300"
+                                style={{
+                                  top: `${top}px`,
+                                  height: `${heightPx}px`,
+                                  left: `calc(${offsetPct}% + 1px)`,
+                                  width: `calc(${widthPct}% - 2px)`,
+                                  backgroundColor: driverColor,
+                                  borderRight: '3px solid #22d3ee',
+                                }}
+                              >
+                                <span className="absolute top-0 left-0 flex items-center gap-px bg-cyan-400 text-white text-[7px] px-0.5 rounded-br font-bold leading-none">
+                                  <Sparkles size={7} />
+                                  אירוע
+                                </span>
+                                <span className="block truncate pr-3 pt-2.5">
+                                  {event.label}
                                 </span>
                               </button>
                             )

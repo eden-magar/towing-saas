@@ -151,6 +151,30 @@ export async function getWeekEvents(
   return (data ?? []) as unknown as CalendarWeekEvent[]
 }
 
+/** Events on a single calendar day (event_date = YYYY-MM-DD). */
+export async function getDayEvents(
+  companyId: string,
+  date: Date
+): Promise<CalendarWeekEvent[]> {
+  const day = new Date(date)
+  day.setHours(0, 0, 0, 0)
+  const dateStr = formatLocalDateString(day)
+
+  const { data, error } = await supabase
+    .from('events')
+    .select(CALENDAR_WEEK_EVENT_SELECT)
+    .eq('company_id', companyId)
+    .eq('event_date', dateStr)
+    .order('start_time', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching calendar day events:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return (data ?? []) as unknown as CalendarWeekEvent[]
+}
+
 export async function getDriverActiveEvents(
   driverId: string
 ): Promise<DriverActiveEvent[]> {
