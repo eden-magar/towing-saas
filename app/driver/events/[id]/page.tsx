@@ -596,7 +596,7 @@ export default function DriverEventDetailPage({
 
       await loadVehicles(event.id)
       resetVehicleForm()
-      setShowVehicleForm(true)
+      setShowVehicleForm(false)
     } catch (err) {
       console.error('Error saving event vehicle:', err)
       setVehicleError('שגיאה בשמירת הרכב, נסה שוב')

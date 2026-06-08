@@ -10,6 +10,24 @@ export interface PlateCameraProps {
 
 type PlateCameraMode = 'live' | 'preview'
 
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean }
+
+type TorchAdvancedConstraint = { torch?: boolean }
+
+async function setTorch(track: MediaStreamTrack, enabled: boolean): Promise<void> {
+  try {
+    const capabilities = track.getCapabilities?.() as TorchCapabilities | undefined
+    if (capabilities && 'torch' in capabilities && capabilities.torch) {
+      const constraints = {
+        advanced: [{ torch: enabled }] as TorchAdvancedConstraint[],
+      } as MediaTrackConstraints
+      await track.applyConstraints(constraints).catch(() => {})
+    }
+  } catch {
+    // best-effort: unsupported devices behave as before
+  }
+}
+
 async function compressImage(file: File, maxSizeMB: number = 1): Promise<File> {
   return new Promise((resolve, reject) => {
     if (file.size <= maxSizeMB * 1024 * 1024) {
@@ -82,6 +100,10 @@ export default function PlateCamera({ onConfirm, onCancel }: PlateCameraProps) {
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
+      const videoTrack = streamRef.current.getVideoTracks()[0]
+      if (videoTrack) {
+        void setTorch(videoTrack, false)
+      }
       streamRef.current.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
@@ -117,6 +139,10 @@ export default function PlateCamera({ onConfirm, onCancel }: PlateCameraProps) {
       }
 
       streamRef.current = stream
+      const videoTrack = stream.getVideoTracks()[0]
+      if (videoTrack) {
+        await setTorch(videoTrack, true)
+      }
       setStreamReady(true)
     } catch (error) {
       console.error('Camera error:', error)
