@@ -16,12 +16,15 @@ import {
   Sparkles,
   Edit2,
   History,
+  X,
+  AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import {
   getEvent,
   getEventChangeLog,
   updateEventPrice,
+  cancelEvent,
   saveEventChangeLog,
   type EventWithDetails,
   type EventChangeLogEntry,
@@ -43,6 +46,21 @@ const statusConfig: Record<string, { label: string; color: string }> = {
     label: 'אושר',
     color: 'bg-green-100 text-green-800 border-green-200',
   },
+  cancelled: {
+    label: 'בוטל',
+    color: 'bg-gray-100 text-gray-500 border-gray-200',
+  },
+}
+
+const CANCELLATION_REASONS = [
+  'הלקוח ביטל',
+  'טעות בהזמנה',
+  'כפילות',
+  'אחר',
+] as const
+
+function getStatusLabel(status: string): string {
+  return statusConfig[status]?.label ?? status
 }
 
 function formatDateTime(date: string | null | undefined): string {
@@ -336,6 +354,13 @@ export default function EventDetailsPage() {
   const [changeLogsLoading, setChangeLogsLoading] = useState(false)
   const [changeLogsLoaded, setChangeLogsLoaded] = useState(false)
 
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelStep, setCancelStep] = useState<'reason' | 'confirm'>('reason')
+  const [selectedCancellationReason, setSelectedCancellationReason] = useState('')
+  const [cancellationDetails, setCancellationDetails] = useState('')
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState('')
+
   const handleTabChange = (tab: 'details' | 'history') => {
     setActiveTab(tab)
     if (tab !== 'details') {
@@ -405,10 +430,51 @@ export default function EventDetailsPage() {
     setChangeLogsLoaded(false)
     setChangeLogs([])
     setIsEditingPrice(false)
+    setShowCancelModal(false)
+    setCancelStep('reason')
+    setSelectedCancellationReason('')
+    setCancellationDetails('')
+    setCancelError('')
     if (eventId) {
       void loadChangeLogs()
     }
   }, [eventId, loadChangeLogs])
+
+  const closeCancelModal = () => {
+    setShowCancelModal(false)
+    setCancelStep('reason')
+    setSelectedCancellationReason('')
+    setCancellationDetails('')
+    setCancelError('')
+  }
+
+  const handleConfirmCancel = async () => {
+    if (!user || !companyId || !event || !selectedCancellationReason) return
+
+    setCancelling(true)
+    setCancelError('')
+    try {
+      const previousStatus = event.status
+      const details = cancellationDetails.trim() || null
+      await cancelEvent(eventId, selectedCancellationReason, details)
+      await saveEventChangeLog({
+        eventId,
+        companyId,
+        changedBy: user.id,
+        fieldName: 'ביטול',
+        oldValue: getStatusLabel(previousStatus),
+        newValue: `בוטל — ${selectedCancellationReason}`,
+      })
+      await loadEvent(true)
+      await loadChangeLogs()
+      closeCancelModal()
+    } catch (err) {
+      console.error('Error cancelling event:', err)
+      setCancelError('שגיאה בביטול האירוע')
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const handleSavePrice = async (result: {
     enteredPrice: number
@@ -477,6 +543,10 @@ export default function EventDetailsPage() {
     ? `אירוע #${event.order_number}`
     : 'אירוע מיוחד'
 
+  const canCancel =
+    event.status !== 'cancelled' && event.status !== 'completed'
+  const isCancelled = event.status === 'cancelled'
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#33d4ff]/5 via-gray-50 to-gray-50" dir="rtl">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -507,9 +577,40 @@ export default function EventDetailsPage() {
                 נוצר ב-{formatDateTime(event.created_at)}
               </p>
             </div>
+            {canCancel && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCancelError('')
+                  setCancelStep('reason')
+                  setShowCancelModal(true)
+                }}
+                className="p-2 sm:px-3 sm:py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm flex items-center gap-2 shrink-0"
+              >
+                <X size={18} />
+                <span className="hidden sm:inline">בטל אירוע</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      {isCancelled && (
+        <div className="max-w-6xl mx-auto px-4 mt-4">
+          <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 border-r-4 border-r-red-500 rounded-xl">
+            <span className="text-red-500 text-lg">✕</span>
+            <div>
+              <p className="font-bold text-red-700 text-sm">אירוע זה בוטל</p>
+              {event.cancellation_reason && (
+                <p className="text-red-500 text-xs mt-0.5">{event.cancellation_reason}</p>
+              )}
+              {event.cancellation_details && (
+                <p className="text-red-400 text-xs mt-0.5">{event.cancellation_details}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto px-4 py-4 sm:py-6">
         <div className="flex gap-1 mb-4 sm:mb-6 bg-gray-100 p-1 rounded-xl w-fit overflow-x-auto">
@@ -640,7 +741,7 @@ export default function EventDetailsPage() {
                     <Receipt size={18} />
                     סיכום מחיר
                   </h2>
-                  {!isEditingPrice && (
+                  {canCancel && !isEditingPrice && (
                     <button
                       type="button"
                       onClick={() => {
@@ -705,6 +806,107 @@ export default function EventDetailsPage() {
           </div>
         )}
       </div>
+
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div
+            className="bg-white rounded-2xl overflow-hidden w-full max-w-[420px]"
+            dir="rtl"
+          >
+            {cancelStep === 'reason' && (
+              <>
+                <div className="px-5 py-4 border-b border-gray-200 bg-red-600 text-white">
+                  <h2 className="font-bold text-lg">ביטול אירוע</h2>
+                </div>
+                <div className="p-5 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      סיבת ביטול *
+                    </label>
+                    <select
+                      value={selectedCancellationReason}
+                      onChange={(e) => setSelectedCancellationReason(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                    >
+                      <option value="">בחר סיבה...</option>
+                      {CANCELLATION_REASONS.map((reason) => (
+                        <option key={reason} value={reason}>
+                          {reason}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      פירוט נוסף (אופציונלי)
+                    </label>
+                    <textarea
+                      value={cancellationDetails}
+                      onChange={(e) => setCancellationDetails(e.target.value)}
+                      placeholder="נא לציין פרטים נוספים..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                    />
+                  </div>
+                  {cancelError && (
+                    <p className="text-sm text-red-600">{cancelError}</p>
+                  )}
+                </div>
+                <div className="flex gap-3 px-5 pb-5">
+                  <button
+                    type="button"
+                    onClick={closeCancelModal}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+                  >
+                    חזור
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCancelStep('confirm')}
+                    disabled={!selectedCancellationReason}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                  >
+                    המשך
+                  </button>
+                </div>
+              </>
+            )}
+
+            {cancelStep === 'confirm' && (
+              <>
+                <div className="p-6 text-center">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertTriangle size={32} className="text-red-600" />
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-800 mb-2">אישור ביטול</h2>
+                  <p className="text-gray-600">האם אתה בטוח שברצונך לבטל את האירוע?</p>
+                  {cancelError && (
+                    <p className="text-sm text-red-600 mt-3">{cancelError}</p>
+                  )}
+                </div>
+                <div className="flex gap-3 px-5 pb-5">
+                  <button
+                    type="button"
+                    onClick={() => setCancelStep('reason')}
+                    disabled={cancelling}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    חזור
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleConfirmCancel()}
+                    disabled={cancelling}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:bg-gray-300 transition-colors"
+                  >
+                    {cancelling ? 'מבטל...' : 'בטל אירוע'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
