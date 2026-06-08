@@ -1069,7 +1069,7 @@ export default function DriverEventDetailPage({
                       ? 'צלם את הרכב (לפני)'
                       : 'צלם אחרי הפריקה'
                     const photoButtonPhase: VehiclePhotoPhase = !beforeDone ? 'before' : 'after'
-                    const photoButtonDisabled = afterLocked || (beforeDone && afterDone)
+                    const photoButtonDisabled = (beforeDone && afterDone) || photoUploading
 
                     return (
                       <li
@@ -1153,7 +1153,7 @@ export default function DriverEventDetailPage({
                         <button
                           type="button"
                           onClick={() => handleOpenVehicleCamera(vehicle.id, photoButtonPhase)}
-                          disabled={photoButtonDisabled || photoUploading}
+                          disabled={photoButtonDisabled}
                           className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] text-sm font-bold text-white disabled:opacity-40"
                         >
                           <Camera size={16} />
