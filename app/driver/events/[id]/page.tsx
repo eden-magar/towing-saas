@@ -36,6 +36,7 @@ import type { VehicleLookupResult } from '@/app/lib/types'
 import { normalizePlate } from '@/app/lib/utils/plate-number'
 import { toWhatsApp } from '@/app/lib/utils/phone'
 import { lookupVehicle } from '@/app/lib/vehicle-lookup'
+import PlateCamera from './components/PlateCamera'
 
 type DriverEventStage = 1 | 2 | 3 | 4 | 'completed'
 
@@ -199,6 +200,8 @@ export default function DriverEventDetailPage({
   const [lookupLoading, setLookupLoading] = useState(false)
   const [vehicleSaveLoading, setVehicleSaveLoading] = useState(false)
   const [vehicleError, setVehicleError] = useState('')
+  // TEMP: plate camera test — remove when wiring real flow
+  const [showPlateCamera, setShowPlateCamera] = useState(false)
 
   useEffect(() => {
     if (authLoading || !user?.id) return
@@ -805,6 +808,14 @@ export default function DriverEventDetailPage({
               ) : (
                 <div className="rounded-xl border border-cyan-100 bg-cyan-50/30 p-3 space-y-3">
                   <p className="text-sm font-medium text-gray-800">רכב חדש</p>
+                  {/* TEMP: plate camera test — remove when wiring real flow */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPlateCamera(true)}
+                    className="w-full min-h-[48px] rounded-xl bg-[#33d4ff] font-medium text-white"
+                  >
+                    צלם לוחית (בדיקה)
+                  </button>
                   <input
                     type="text"
                     value={plateInput}
@@ -906,6 +917,18 @@ export default function DriverEventDetailPage({
           </>
         )}
       </div>
+
+      {/* TEMP: plate camera test — remove when wiring real flow */}
+      {showPlateCamera && (
+        <PlateCamera
+          onConfirm={(file) => {
+            console.log('[plate-camera test] got file', file.name, file.size, 'bytes')
+            alert(`צולמה תמונה: ${file.name} (${Math.round(file.size / 1024)} KB)`)
+            setShowPlateCamera(false)
+          }}
+          onCancel={() => setShowPlateCamera(false)}
+        />
+      )}
     </div>
   )
 }
