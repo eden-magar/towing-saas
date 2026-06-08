@@ -55,6 +55,55 @@ export interface EventWithDetails {
   driver: EventDriver | null
 }
 
+const DRIVER_ACTIVE_EVENT_SELECT = `
+  id,
+  driver_id,
+  status,
+  location_address,
+  event_date,
+  start_time,
+  end_time,
+  order_number,
+  customer:customers (
+    id,
+    name,
+    phone
+  )
+`
+
+export interface DriverActiveEvent {
+  id: string
+  driver_id: string | null
+  status: string
+  location_address: string | null
+  event_date: string | null
+  start_time: string | null
+  end_time: string | null
+  order_number: string | null
+  customer: EventCustomer | null
+}
+
+export async function getDriverActiveEvents(
+  driverId: string
+): Promise<DriverActiveEvent[]> {
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data, error } = await supabase
+    .from('events')
+    .select(DRIVER_ACTIVE_EVENT_SELECT)
+    .eq('driver_id', driverId)
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .order('start_time', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching driver active events:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return (data ?? []) as unknown as DriverActiveEvent[]
+}
+
 export async function getEvent(eventId: string): Promise<EventWithDetails | null> {
   const { data, error } = await supabase
     .from('events')

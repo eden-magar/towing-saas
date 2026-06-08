@@ -4,15 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, Loader2 } from 'lucide-react'
 import { FormCard, FormSubcard, Input, Button } from '../ui'
+import { DriverCalendarPicker } from '../DriverCalendarPicker'
 import { AddressInput, type AddressData } from '../tow-forms/routes/AddressInput'
 import { PinDropModal } from '../tow-forms/shared/PinDropModal'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers } from '../../lib/queries/drivers'
 import { createEvent } from '../../lib/queries/events'
 import type { DriverWithDetails } from '../../lib/types'
-
-const selectClassName =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white disabled:opacity-60'
 
 interface EventTowSectionProps {
   selectedCustomerId: string | null
@@ -36,6 +34,7 @@ export function EventTowSection({
   const [contactPhone, setContactPhone] = useState('')
   const [details, setDetails] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
+  const [driverPickerOpen, setDriverPickerOpen] = useState(false)
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [driversLoading, setDriversLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -60,6 +59,8 @@ export function EventTowSection({
       cancelled = true
     }
   }, [companyId])
+
+  const selectedDriver = drivers.find((d) => d.id === selectedDriverId) ?? null
 
   const handleSave = async () => {
     if (!companyId || !user) return
@@ -155,19 +156,41 @@ export function EventTowSection({
         </FormSubcard>
 
         <FormSubcard title="נהג (אופציונלי)">
-          <select
-            value={selectedDriverId}
-            onChange={(e) => setSelectedDriverId(e.target.value)}
-            disabled={driversLoading}
-            className={selectClassName}
-          >
-            <option value="">ללא נהג</option>
-            {drivers.map((driver) => (
-              <option key={driver.id} value={driver.id}>
-                {driver.user?.full_name || 'נהג ללא שם'}
-              </option>
-            ))}
-          </select>
+          {selectedDriver ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+              <span className="text-sm font-medium text-gray-800">
+                {selectedDriver.user?.full_name || 'נהג ללא שם'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDriverPickerOpen(true)}
+                  disabled={driversLoading || saving}
+                  className="text-sm font-medium text-[#21b8e6] hover:text-[#1a9bc7] disabled:opacity-50"
+                >
+                  שנה
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDriverId('')}
+                  disabled={saving}
+                  className="text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                >
+                  הסר נהג
+                </button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setDriverPickerOpen(true)}
+              disabled={driversLoading || saving}
+              className="w-full"
+            >
+              שבץ נהג
+            </Button>
+          )}
         </FormSubcard>
 
         <FormSubcard title="פרטים">
@@ -208,6 +231,21 @@ export function EventTowSection({
         initialAddress={location}
         title="בחר מיקום אירוע"
       />
+
+      {driverPickerOpen && (
+        <DriverCalendarPicker
+          companyId={companyId || ''}
+          drivers={drivers}
+          requiredTruckTypes={[]}
+          initialDate={towDate}
+          initialTime={towTime}
+          onConfirm={(driverId) => {
+            setSelectedDriverId(driverId)
+            setDriverPickerOpen(false)
+          }}
+          onClose={() => setDriverPickerOpen(false)}
+        />
+      )}
     </FormCard>
   )
 }

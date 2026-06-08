@@ -1,6 +1,6 @@
 'use client'
 import { openWaze } from '../lib/utils/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
@@ -19,6 +19,7 @@ import {
   DriverInfo
 } from '../lib/queries/driver-tasks'
 import { resolveDriverContact } from '../lib/utils/driver-contact'
+import { getDriverActiveEvents, type DriverActiveEvent } from '../lib/queries/events'
 import { 
   MapPin, 
   Clock, 
@@ -32,7 +33,8 @@ import {
   MessageSquare,
   Loader2,
   RefreshCw,
-  Check
+  Check,
+  Sparkles,
 } from 'lucide-react'
 import NewTaskModal from '../components/NewTaskModal'
 
@@ -64,7 +66,7 @@ export default function DriverHomePage() {
   const [shiftLoading, setShiftLoading] = useState(false)
 
   const [driverTasks, setDriverTasks] = useState<DriverTaskWithDetails[]>([])
-  
+  const [driverEvents, setDriverEvents] = useState<DriverActiveEvent[]>([])
 
   const [approvedRejectionNotifications, setApprovedRejectionNotifications] = useState<any[]>([])
 
@@ -90,8 +92,12 @@ export default function DriverHomePage() {
       const shift = await getActiveShift(driver.id)
       setActiveShift(shift)
 
-      const driverTasks = await getDriverTasks(driver.id)
+      const [driverTasks, activeEvents] = await Promise.all([
+        getDriverTasks(driver.id),
+        getDriverActiveEvents(driver.id),
+      ])
       setTasks(driverTasks)
+      setDriverEvents(activeEvents)
       const { getApprovedRejectionRequestsForDriver } = await import('@/app/lib/queries/rejection-requests')
       const approvedRequests = await getApprovedRejectionRequestsForDriver(driver.id)
       const acknowledgedIds: string[] = JSON.parse(localStorage.getItem('acknowledgedRejectionIds') || '[]')
@@ -149,6 +155,28 @@ export default function DriverHomePage() {
   const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
   const currentTask = tasks.find(t => t.status === 'in_progress')
   const hasActiveTask = !!currentTask
+
+  type ScheduleItem =
+    | { kind: 'tow'; sortMs: number; task: DriverTask }
+    | { kind: 'event'; sortMs: number; event: DriverActiveEvent }
+
+  const scheduleItems = useMemo((): ScheduleItem[] => {
+    const items: ScheduleItem[] = [
+      ...activeTasks.map((task) => ({
+        kind: 'tow' as const,
+        sortMs: new Date(task.scheduled_at || task.created_at).getTime(),
+        task,
+      })),
+      ...driverEvents.map((event) => ({
+        kind: 'event' as const,
+        sortMs: new Date(`${event.event_date}T${event.start_time || '00:00'}:00`).getTime(),
+        event,
+      })),
+    ]
+    return items.sort((a, b) => a.sortMs - b.sortMs)
+  }, [activeTasks, driverEvents])
+
+  const hasScheduleItems = scheduleItems.length > 0
 
 
   // פונקציות עזר
@@ -222,6 +250,32 @@ export default function DriverHomePage() {
   const formatTime = (dateStr: string | null) => {
     if (!dateStr) return '--:--'
     return new Date(dateStr).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const formatEventDate = (dateStr: string | null) => {
+    if (!dateStr) return ''
+    return new Date(`${dateStr}T12:00:00`).toLocaleDateString('he-IL', {
+      day: '2-digit',
+      month: '2-digit',
+    })
+  }
+
+  const formatEventTime = (timeStr: string | null) => {
+    if (!timeStr) return '--:--'
+    return timeStr
+  }
+
+  const formatEventTimeRange = (event: DriverActiveEvent) => {
+    const start = formatEventTime(event.start_time)
+    const end = formatEventTime(event.end_time)
+    if (start === '--:--' && end === '--:--') return ''
+    if (end === '--:--') return start
+    return `${start}–${end}`
+  }
+
+  const getEventStatusLabel = (status: string) => {
+    if (status === 'draft') return 'טיוטה'
+    return status
   }
 
   const openPhone = (phone: string) => {
@@ -564,7 +618,7 @@ export default function DriverHomePage() {
           </button>
         </div>
 
-        {activeTasks.length === 0 ? (
+        {!hasScheduleItems ? (
           <div className="bg-white rounded-2xl p-8 text-center">
             <div className="text-4xl mb-3">🎉</div>
             <p className="text-gray-600 font-medium">אין משימות בתור</p>
@@ -596,7 +650,60 @@ export default function DriverHomePage() {
               </button>
             </div>
           ))}
-            {activeTasks.map((task) => {
+            {scheduleItems.map((item) => {
+              if (item.kind === 'event') {
+                const event = item.event
+                const timeRange = formatEventTimeRange(event)
+                return (
+                  <div
+                    key={`event-${event.id}`}
+                    onClick={() => router.push(`/driver/events/${event.id}`)}
+                    className="bg-white rounded-2xl p-4 shadow-sm border border-cyan-200 transition-transform active:scale-[0.98] cursor-pointer"
+                  >
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                        <Sparkles size={12} className="text-cyan-600" />
+                        אירוע מיוחד
+                      </span>
+                      <span className="rounded-full bg-[#33d4ff]/10 px-2 py-0.5 text-xs font-medium text-[#21b8e6]">
+                        {getEventStatusLabel(event.status)}
+                      </span>
+                    </div>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-xl bg-cyan-100 px-3 py-2 text-center font-bold text-cyan-600">
+                          <div>{formatEventTime(event.start_time)}</div>
+                          <div className="text-xs font-normal opacity-70">
+                            {formatEventDate(event.event_date)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-800">
+                            {event.customer?.name || 'ללא לקוח'}
+                          </div>
+                          {event.order_number && (
+                            <div className="text-xs font-mono text-gray-400">#{event.order_number}</div>
+                          )}
+                          {timeRange && (
+                            <div className="mt-1 text-sm text-gray-500">{timeRange}</div>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronLeft className="text-gray-400" size={24} />
+                    </div>
+                    {event.location_address && (
+                      <div className="mt-3 border-t border-gray-100 pt-3">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <MapPin size={14} className="shrink-0 text-cyan-600" />
+                          <span className="truncate">{event.location_address}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              const task = item.task
               const addresses = getAddresses(task)
               const isInProgress = task.status === 'in_progress'
               
