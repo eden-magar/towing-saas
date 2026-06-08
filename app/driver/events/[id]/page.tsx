@@ -4,10 +4,12 @@ import { use, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   Calendar,
   Camera,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -1065,17 +1067,34 @@ export default function DriverEventDetailPage({
                     const beforeDone = doc.beforeCount > 0
                     const afterDone = doc.afterCount > 0
                     const afterLocked = !beforeDone
+                    const fullyDocumented = beforeDone && afterDone
+                    const needsPhotoDocs = !fullyDocumented
                     const photoButtonLabel = !beforeDone
-                      ? 'צלם את הרכב (לפני)'
+                      ? 'צלם את הרכב — לפני הגרירה'
                       : 'צלם אחרי הפריקה'
                     const photoButtonPhase: VehiclePhotoPhase = !beforeDone ? 'before' : 'after'
-                    const photoButtonDisabled = (beforeDone && afterDone) || photoUploading
+                    const photoButtonDisabled = fullyDocumented || photoUploading
 
                     return (
                       <li
                         key={vehicle.id}
-                        className="rounded-xl border border-gray-100 bg-gray-50 p-2.5 space-y-2"
+                        className={
+                          fullyDocumented
+                            ? 'rounded-xl border border-gray-100 bg-gray-50 p-2.5 space-y-2'
+                            : 'rounded-xl border-2 border-[#f59e0b] bg-white p-2.5 space-y-2'
+                        }
+                        style={
+                          needsPhotoDocs
+                            ? { boxShadow: '0 0 0 4px rgba(245,158,11,0.12)' }
+                            : undefined
+                        }
                       >
+                        {needsPhotoDocs && (
+                          <div className="flex items-center gap-1.5 rounded-lg bg-[#fff7ed] px-2 py-1.5 text-[12px] font-medium text-[#b45309]">
+                            <ArrowLeft size={14} className="shrink-0" />
+                            הצעד הבא — תיעוד הרכב
+                          </div>
+                        )}
                         <div className="flex items-start gap-2">
                           <LicensePlate plate={vehicle.plate_number} size="sm" />
                           <div className="min-w-0 flex-1">
@@ -1150,15 +1169,19 @@ export default function DriverEventDetailPage({
                           <p className="text-xs font-medium text-emerald-600">התמונות נשמרו בהצלחה</p>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() => handleOpenVehicleCamera(vehicle.id, photoButtonPhase)}
-                          disabled={photoButtonDisabled}
-                          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] text-sm font-bold text-white disabled:opacity-40"
-                        >
-                          <Camera size={16} />
-                          {photoButtonLabel}
-                        </button>
+                        {fullyDocumented ? (
+                          <p className="text-xs font-semibold text-emerald-600">תועד ✓</p>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVehicleCamera(vehicle.id, photoButtonPhase)}
+                            disabled={photoButtonDisabled}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#f59e0b] py-3.5 text-base font-bold text-white shadow-[0_2px_8px_rgba(245,158,11,0.4)] disabled:opacity-40"
+                          >
+                            <Camera size={18} />
+                            {photoButtonLabel}
+                          </button>
+                        )}
                       </li>
                     )
                   })}
@@ -1286,9 +1309,10 @@ export default function DriverEventDetailPage({
         {/* COMPLETED */}
         {stage === 'completed' && (
           <>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm">
-              <p className="text-lg font-bold text-emerald-800">האירוע הושלם</p>
-              <p className="mt-1 text-sm text-emerald-700">תודה! האירוע נסגר בהצלחה.</p>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center shadow-sm">
+              <CheckCircle2 size={52} className="mx-auto mb-3 text-emerald-600" strokeWidth={1.75} />
+              <p className="text-2xl font-bold text-emerald-800">האירוע הושלם</p>
+              <p className="mt-2 text-sm text-emerald-700">כל הרכבים תועדו בהצלחה</p>
             </div>
 
             {vehicles.length > 0 && (
@@ -1308,6 +1332,14 @@ export default function DriverEventDetailPage({
                 </ul>
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => router.push('/driver')}
+              className={primaryButtonClass}
+            >
+              חזרה למסך הראשי
+            </button>
 
             {renderCompactSummary()}
           </>
