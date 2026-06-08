@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, Check, Loader2 } from 'lucide-react'
 import { FormCard, FormSubcard, Input, Button } from '../ui'
+import { PhoneInput } from '../ui/PhoneInput'
 import { DriverCalendarPicker } from '../DriverCalendarPicker'
 import { AddressInput, type AddressData } from '../tow-forms/routes/AddressInput'
 import { PinDropModal } from '../tow-forms/shared/PinDropModal'
@@ -254,12 +255,11 @@ export function EventTowSection({
               placeholder="שם"
               className="w-full"
             />
-            <Input
-              type="text"
+            <PhoneInput
               value={contactPhone}
-              onChange={(e) => setContactPhone(e.target.value)}
+              onChange={setContactPhone}
               placeholder="טלפון"
-              className="w-full dir-ltr text-right"
+              className="w-full"
             />
           </div>
         </FormSubcard>
