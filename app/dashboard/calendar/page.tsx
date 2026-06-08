@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/AuthContext'
 import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
+import { getWeekEvents } from '../../lib/queries/events'
+import { getEventTimeBounds } from '../../lib/utils/event-time-bounds'
 import { getDrivers } from '../../lib/queries/drivers'
 import { getTrucks } from '../../lib/queries/trucks'
 import { TowWithDetails } from '../../lib/queries/tows'
@@ -28,6 +31,7 @@ import {
   CheckCircle,
   XCircle,
   Play,
+  Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
 import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
@@ -63,6 +67,20 @@ function calendarScrollViewportStyle(viewportMinHeight: number): CSSProperties {
     minHeight: `${viewportMinHeight}px`,
     maxHeight: `max(${viewportMinHeight}px, ${CALENDAR_SCROLL_MAX_HEIGHT})`,
   }
+}
+
+interface EventCalendarItem {
+  id: string
+  kind: 'event'
+  startMs: number
+  endMs: number
+  driverId: string | null
+  label: string
+  status: string
+}
+
+function eventOverlapKey(eventId: string): string {
+  return `event:${eventId}`
 }
 
 function formatTowTimeRange(startMs: number, endMs: number): string {
@@ -427,6 +445,7 @@ function DriverFilterPanel({
 }
 
 export default function CalendarPage() {
+  const router = useRouter()
   const { companyId, loading: authLoading } = useAuth()
   const [view, setView] = useState<'week' | 'day'>('day')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
@@ -456,6 +475,7 @@ export default function CalendarPage() {
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
   const [tows, setTows] = useState<TowWithDetails[]>([])
+  const [events, setEvents] = useState<Awaited<ReturnType<typeof getWeekEvents>>>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   
@@ -510,15 +530,17 @@ export default function CalendarPage() {
     if (!companyId) return
     
     try {
-      const [driversData, trucksData, towsData] = await Promise.all([
+      const [driversData, trucksData, towsData, eventsData] = await Promise.all([
         getDrivers(companyId),
         getTrucks(companyId),
-        getWeekTows(companyId, currentWeekStart)
+        getWeekTows(companyId, currentWeekStart),
+        getWeekEvents(companyId, currentWeekStart),
       ])
       
       setDrivers(driversData)
       setTrucks(trucksData)
       setTows(towsData)
+      setEvents(eventsData)
     } catch (error) {
       console.error('Error loading calendar data:', error)
     } finally {
@@ -657,6 +679,36 @@ export default function CalendarPage() {
     })
   }, [tows, selectedDrivers, showAllDrivers, showUnassigned])
 
+  const eventCalendarItems = useMemo((): EventCalendarItem[] => {
+    const items: EventCalendarItem[] = []
+    for (const event of events) {
+      const bounds = getEventTimeBounds(event)
+      if (!bounds) continue
+      items.push({
+        id: event.id,
+        kind: 'event',
+        startMs: bounds.startMs,
+        endMs: bounds.endMs,
+        driverId: event.driver_id,
+        label: event.customer?.name || 'אירוע',
+        status: event.status,
+      })
+    }
+    return items
+  }, [events])
+
+  const filteredEvents = useMemo(() => {
+    return eventCalendarItems.filter((event) => {
+      if (!event.driverId) {
+        return showUnassigned
+      }
+      if (showAllDrivers) {
+        return true
+      }
+      return selectedDrivers.includes(event.driverId)
+    })
+  }, [eventCalendarItems, selectedDrivers, showAllDrivers, showUnassigned])
+
   const handleSelectAllDrivers = () => {
     setShowAllDrivers(true)
     setSelectedDrivers([])
@@ -700,38 +752,61 @@ export default function CalendarPage() {
     })
   }, [filteredTows, selectedDate])
 
+  const dayFilteredEvents = useMemo(() => {
+    return filteredEvents.filter((event) => {
+      const eventDay = new Date(event.startMs)
+      return eventDay.toDateString() === selectedDate.toDateString()
+    })
+  }, [filteredEvents, selectedDate])
+
   const weekOverlapLayout = useMemo(() => {
     const layout = new Map<string, OverlapPosition>()
-    const byDay = new Map<string, TowWithDetails[]>()
+    const byDay = new Map<string, { tows: TowWithDetails[]; events: EventCalendarItem[] }>()
 
     for (const tow of filteredTows) {
       const cellDay = new Date(getEffectiveTowStartIso(tow))
       const dayKey = cellDay.toDateString()
-      if (!byDay.has(dayKey)) byDay.set(dayKey, [])
-      byDay.get(dayKey)!.push(tow)
+      if (!byDay.has(dayKey)) byDay.set(dayKey, { tows: [], events: [] })
+      byDay.get(dayKey)!.tows.push(tow)
     }
 
-    for (const dayTows of byDay.values()) {
-      const items = dayTows.map((tow) => {
+    for (const event of filteredEvents) {
+      const dayKey = new Date(event.startMs).toDateString()
+      if (!byDay.has(dayKey)) byDay.set(dayKey, { tows: [], events: [] })
+      byDay.get(dayKey)!.events.push(event)
+    }
+
+    for (const { tows: dayTows, events: dayEvents } of byDay.values()) {
+      const towItems = dayTows.map((tow) => {
         const cellDay = new Date(getEffectiveTowStartIso(tow))
         const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: cellDay })
         return { id: tow.id, startMs, endMs }
       })
-      for (const [id, pos] of getOverlapLayout(items)) {
+      const eventItems = dayEvents.map((event) => ({
+        id: eventOverlapKey(event.id),
+        startMs: event.startMs,
+        endMs: event.endMs,
+      }))
+      for (const [id, pos] of getOverlapLayout([...towItems, ...eventItems])) {
         layout.set(id, pos)
       }
     }
 
     return layout
-  }, [filteredTows, now])
+  }, [filteredTows, filteredEvents, now])
 
   const dayOverlapLayout = useMemo(() => {
-    const items = dayFilteredTows.map((tow) => {
+    const towItems = dayFilteredTows.map((tow) => {
       const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: selectedDate })
       return { id: tow.id, startMs, endMs }
     })
-    return getOverlapLayout(items)
-  }, [dayFilteredTows, now, selectedDate])
+    const eventItems = dayFilteredEvents.map((event) => ({
+      id: eventOverlapKey(event.id),
+      startMs: event.startMs,
+      endMs: event.endMs,
+    }))
+    return getOverlapLayout([...towItems, ...eventItems])
+  }, [dayFilteredTows, dayFilteredEvents, now, selectedDate])
 
   // חישוב מיקום גרירה בלוח
   const getTowPosition = (tow: TowWithDetails) => {
@@ -741,6 +816,15 @@ export default function CalendarPage() {
     )
     const hour = towDate.getHours() + towDate.getMinutes() / 60
     
+    return { dayIndex, hour }
+  }
+
+  const getEventWeekPosition = (event: EventCalendarItem) => {
+    const eventDate = new Date(event.startMs)
+    const dayIndex = weekDays.findIndex(
+      (d) => d.fullDate.toDateString() === eventDate.toDateString()
+    )
+    const hour = eventDate.getHours() + eventDate.getMinutes() / 60
     return { dayIndex, hour }
   }
 
@@ -1300,6 +1384,59 @@ const handleSkipPriceUpdate = () => {
                     </div>
                     )
                   })}
+
+                {filteredEvents.map((event) => {
+                  const { dayIndex, hour } = getEventWeekPosition(event)
+                  const displayIndex = displayedDays.findIndex((d) => d.dayIndex === dayIndex)
+                  if (displayIndex === -1) return null
+
+                  const { startMs, endMs } = event
+                  const top = hour * PIXELS_PER_HOUR_WEEK
+                  const elapsedMinutes = (endMs - startMs) / 60000
+                  const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_WEEK
+                  const numDays = isMobile ? 1 : 7
+                  const dayWidth = 100 / numDays
+                  const overlap = weekOverlapLayout.get(eventOverlapKey(event.id)) || {
+                    columnIndex: 0,
+                    totalColumns: 1,
+                    span: 1,
+                  }
+                  const { offsetPct, widthPct } = getOverlapBlockWidthPct(overlap, dayWidth)
+                  const right = displayIndex * dayWidth + offsetPct
+                  const driverColor = event.driverId ? getDriverColor(event.driverId) : '#6b7280'
+
+                  return (
+                    <div
+                      key={eventOverlapKey(event.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/dashboard/events/${event.id}`)
+                      }}
+                      className="absolute pointer-events-auto cursor-pointer rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ring-2 ring-cyan-300 ring-offset-1"
+                      style={{
+                        top: `${top}px`,
+                        height: `${Math.max(heightPx - 4, 20)}px`,
+                        right: `${right + 0.3}%`,
+                        width: `${Math.max(widthPct - 0.6, 0)}%`,
+                        backgroundColor: driverColor,
+                        borderRightColor: '#22d3ee',
+                      }}
+                    >
+                      <div className="absolute top-0 left-0 flex items-center gap-0.5 bg-cyan-400 text-white text-[8px] px-1 rounded-br font-bold">
+                        <Sparkles size={8} />
+                        אירוע
+                      </div>
+                      <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none pt-3">
+                        {formatTowTimeRange(startMs, endMs)}
+                      </div>
+                      <div className="pt-3 min-w-0">
+                        <div className="font-bold truncate text-[10px] sm:text-xs">
+                          {event.label}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
                 </div>
 
                 {/* Current Time Line */}
@@ -1464,6 +1601,53 @@ const handleSkipPriceUpdate = () => {
                         </div>
                       )
                     })}
+
+                    {dayFilteredEvents.map((event) => {
+                      const pos = dayOverlapLayout.get(eventOverlapKey(event.id)) || {
+                        columnIndex: 0,
+                        totalColumns: 1,
+                        span: 1,
+                      }
+                      const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
+                      const eventDate = new Date(event.startMs)
+                      const hour =
+                        eventDate.getHours() + eventDate.getMinutes() / 60
+                      const top = hour * PIXELS_PER_HOUR_DAY
+                      const driverColor = event.driverId ? getDriverColor(event.driverId) : '#6b7280'
+                      const { startMs, endMs } = event
+                      const elapsedMinutes = (endMs - startMs) / 60000
+                      const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_DAY
+
+                      return (
+                        <div
+                          key={eventOverlapKey(event.id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            router.push(`/dashboard/events/${event.id}`)
+                          }}
+                          className="absolute pointer-events-auto cursor-pointer rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ring-2 ring-cyan-300 ring-offset-1"
+                          style={{
+                            top: `${top}px`,
+                            height: `${heightPx}px`,
+                            left: `calc(${offsetPct}% + 2px)`,
+                            width: `calc(${widthPct}% - 4px)`,
+                            backgroundColor: driverColor,
+                            borderRightColor: '#22d3ee',
+                          }}
+                        >
+                          <div className="absolute top-0 left-0 flex items-center gap-0.5 bg-cyan-400 text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold">
+                            <Sparkles size={10} />
+                            אירוע
+                          </div>
+                          <div className="absolute top-1 left-2 text-[10px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none pt-4">
+                            {formatTowTimeRange(startMs, endMs)}
+                          </div>
+                          <div className="pt-4 min-w-0">
+                            <div className="font-bold truncate text-sm">{event.label}</div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
 
                   {selectedDate.toDateString() === new Date().toDateString() && (
@@ -1482,7 +1666,7 @@ const handleSkipPriceUpdate = () => {
       </div>
 
       {/* Empty State */}
-      {tows.length === 0 && !loading && (
+      {tows.length === 0 && events.length === 0 && !loading && (
         <div className="mt-6 text-center py-12 bg-white rounded-xl border border-gray-200">
           <Truck size={48} className="mx-auto text-gray-300 mb-4" />
           <p className="text-gray-500 mb-4">אין גרירות מתוזמנות לשבוע זה</p>

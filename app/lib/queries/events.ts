@@ -88,6 +88,69 @@ export interface DriverActiveEvent {
   customer: EventCustomer | null
 }
 
+const CALENDAR_WEEK_EVENT_SELECT = `
+  id,
+  driver_id,
+  status,
+  event_date,
+  start_time,
+  end_time,
+  location_address,
+  customer:customers (
+    id,
+    name
+  )
+`
+
+export interface CalendarWeekEvent {
+  id: string
+  driver_id: string | null
+  status: string
+  event_date: string
+  start_time: string | null
+  end_time: string | null
+  location_address: string | null
+  customer: Pick<EventCustomer, 'id' | 'name'> | null
+}
+
+function formatLocalDateString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/** Events in the same 7-day window as getWeekTows (Sunday through Saturday). */
+export async function getWeekEvents(
+  companyId: string,
+  weekStart: Date
+): Promise<CalendarWeekEvent[]> {
+  const startOfWeek = new Date(weekStart)
+  startOfWeek.setHours(0, 0, 0, 0)
+
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(endOfWeek.getDate() + 6)
+
+  const startDateStr = formatLocalDateString(startOfWeek)
+  const endDateStr = formatLocalDateString(endOfWeek)
+
+  const { data, error } = await supabase
+    .from('events')
+    .select(CALENDAR_WEEK_EVENT_SELECT)
+    .eq('company_id', companyId)
+    .gte('event_date', startDateStr)
+    .lte('event_date', endDateStr)
+    .order('event_date', { ascending: true })
+    .order('start_time', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching calendar week events:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return (data ?? []) as unknown as CalendarWeekEvent[]
+}
+
 export async function getDriverActiveEvents(
   driverId: string
 ): Promise<DriverActiveEvent[]> {
