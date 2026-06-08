@@ -301,6 +301,28 @@ export async function getEvent(eventId: string): Promise<EventWithDetails | null
   return data as EventWithDetails
 }
 
+/** Assigned-driver fetch — explicit driver_id filter in addition to RLS. */
+export async function getDriverEvent(
+  eventId: string,
+  driverId: string
+): Promise<EventWithDetails | null> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(EVENT_WITH_RELATIONS_SELECT)
+    .eq('id', eventId)
+    .eq('driver_id', driverId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching driver event:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  if (!data) return null
+
+  return data as EventWithDetails
+}
+
 export interface CreateEventInput {
   companyId: string
   createdBy: string
