@@ -16,8 +16,27 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getDriverByUserId } from '@/app/lib/queries/driver-tasks'
-import { getDriverEvent, type EventWithDetails } from '@/app/lib/queries/events'
+import {
+  completeEvent,
+  getDriverEvent,
+  saveEventChangeLog,
+  updateEventDriverStatus,
+  type EventWithDetails,
+} from '@/app/lib/queries/events'
 import { toWhatsApp } from '@/app/lib/utils/phone'
+
+function getDriverProgressLabel(driverStatus: string | null): string {
+  switch (driverStatus) {
+    case 'received':
+      return 'קיבל את האירוע'
+    case 'departed':
+      return 'בדרך'
+    case 'arrived':
+      return 'הגיע'
+    default:
+      return 'טרם התחיל'
+  }
+}
 
 const EVENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   draft: { label: 'טיוטה', className: 'bg-cyan-100 text-cyan-700' },
@@ -115,15 +134,19 @@ export default function DriverEventDetailPage({
   const [event, setEvent] = useState<EventWithDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionError, setActionError] = useState('')
 
   useEffect(() => {
     if (authLoading || !user?.id) return
     void loadEvent()
   }, [authLoading, user?.id, id])
 
-  const loadEvent = async () => {
+  const loadEvent = async (options?: { silent?: boolean }) => {
     if (!user?.id) return
-    setLoading(true)
+    if (!options?.silent) {
+      setLoading(true)
+    }
     setNotFound(false)
     try {
       const driver = await getDriverByUserId(user.id)
@@ -146,8 +169,84 @@ export default function DriverEventDetailPage({
       setNotFound(true)
       setEvent(null)
     } finally {
-      setLoading(false)
+      if (!options?.silent) {
+        setLoading(false)
+      }
     }
+  }
+
+  const handleDriverAction = async () => {
+    if (!user?.id || !event || actionLoading) return
+    if (event.status === 'completed' || event.status === 'cancelled') return
+
+    setActionLoading(true)
+    setActionError('')
+
+    try {
+      const companyId = event.company_id
+      const changedBy = user.id
+      const previousLabel = getDriverProgressLabel(event.driver_status)
+
+      if (!event.driver_status) {
+        await updateEventDriverStatus(event.id, 'received', 'driver_received_at')
+        await saveEventChangeLog({
+          eventId: event.id,
+          companyId,
+          changedBy,
+          fieldName: 'סטטוס נהג',
+          oldValue: previousLabel,
+          newValue: 'הנהג קיבל את האירוע',
+        })
+      } else if (event.driver_status === 'received') {
+        await updateEventDriverStatus(event.id, 'departed', 'driver_departed_at')
+        await saveEventChangeLog({
+          eventId: event.id,
+          companyId,
+          changedBy,
+          fieldName: 'סטטוס נהג',
+          oldValue: previousLabel,
+          newValue: 'הנהג יצא לדרך',
+        })
+      } else if (event.driver_status === 'departed') {
+        await updateEventDriverStatus(event.id, 'arrived', 'driver_arrived_at')
+        await saveEventChangeLog({
+          eventId: event.id,
+          companyId,
+          changedBy,
+          fieldName: 'סטטוס נהג',
+          oldValue: previousLabel,
+          newValue: 'הנהג הגיע',
+        })
+      } else if (event.driver_status === 'arrived') {
+        await completeEvent(event.id, changedBy)
+        await saveEventChangeLog({
+          eventId: event.id,
+          companyId,
+          changedBy,
+          fieldName: 'סיום',
+          oldValue: null,
+          newValue: 'האירוע הושלם על ידי הנהג',
+        })
+      }
+
+      await loadEvent({ silent: true })
+    } catch (err) {
+      console.error('Error updating driver event progress:', err)
+      setActionError('שגיאה בעדכון הסטטוס, נסה שוב')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const getNextActionLabel = (): string | null => {
+    if (!event) return null
+    if (event.status === 'completed') return null
+    if (event.status === 'cancelled') return null
+    if (!event.driver_status) return 'קיבלתי את האירוע'
+    if (event.driver_status === 'received') return 'יצאתי לדרך'
+    if (event.driver_status === 'departed') return 'הגעתי'
+    if (event.driver_status === 'arrived') return 'סיים אירוע'
+    return null
   }
 
   if (authLoading || loading) {
@@ -191,6 +290,9 @@ export default function DriverEventDetailPage({
 
   const actionIconButtonClass =
     'flex h-10 w-10 items-center justify-center rounded-xl bg-[#33d4ff] text-white shadow-sm active:scale-[0.98] transition-transform'
+  const nextActionLabel = getNextActionLabel()
+  const driverProgressLabel =
+    event.status === 'completed' ? 'הושלם' : getDriverProgressLabel(event.driver_status)
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-100 pb-20">
@@ -341,6 +443,40 @@ export default function DriverEventDetailPage({
             </p>
           </div>
         )}
+
+        {/* Driver progress */}
+        <div className="rounded-2xl border border-cyan-100 bg-white p-4 shadow-sm">
+          <p className="mb-1 text-xs font-medium text-gray-500">התקדמות נהג</p>
+          <p className="text-sm font-medium text-gray-800">
+            סטטוס: <span className="text-cyan-700">{driverProgressLabel}</span>
+          </p>
+          {event.status === 'completed' ? (
+            <div className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-medium text-emerald-700">
+              האירוע הושלם
+            </div>
+          ) : nextActionLabel ? (
+            <>
+              {actionError && (
+                <p className="mt-2 text-sm text-red-600">{actionError}</p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleDriverAction()}
+                disabled={actionLoading}
+                className="mt-3 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#33d4ff] px-4 py-3 text-base font-bold text-white shadow-md active:scale-[0.98] transition-transform disabled:opacity-60"
+              >
+                {actionLoading ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    מעדכן...
+                  </>
+                ) : (
+                  nextActionLabel
+                )}
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   )

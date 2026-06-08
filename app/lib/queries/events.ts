@@ -45,6 +45,10 @@ export interface EventWithDetails {
   contact_phone: string | null
   details: string | null
   status: string
+  driver_status: string | null
+  driver_received_at: string | null
+  driver_departed_at: string | null
+  driver_arrived_at: string | null
   cancelled_at: string | null
   cancellation_reason: string | null
   cancellation_details: string | null
@@ -382,6 +386,43 @@ export interface UpdateEventPriceFields {
   manualPrice: number | null
   finalPrice: number | null
   priceBreakdown: EventPriceResult | null
+}
+
+export type EventDriverTimestampField =
+  | 'driver_received_at'
+  | 'driver_departed_at'
+  | 'driver_arrived_at'
+
+const EVENT_DRIVER_TIMESTAMP_FIELDS: EventDriverTimestampField[] = [
+  'driver_received_at',
+  'driver_departed_at',
+  'driver_arrived_at',
+]
+
+export type EventDriverProgressStatus = 'received' | 'departed' | 'arrived'
+
+export async function updateEventDriverStatus(
+  eventId: string,
+  driverStatus: EventDriverProgressStatus,
+  timestampField: EventDriverTimestampField
+): Promise<void> {
+  if (!EVENT_DRIVER_TIMESTAMP_FIELDS.includes(timestampField)) {
+    throw new Error(`Invalid event driver timestamp field: ${timestampField}`)
+  }
+
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('events')
+    .update({
+      driver_status: driverStatus,
+      [timestampField]: now,
+    })
+    .eq('id', eventId)
+
+  if (error) {
+    console.error('Error updating event driver status:', JSON.stringify(error, null, 2))
+    throw error
+  }
 }
 
 export async function completeEvent(
