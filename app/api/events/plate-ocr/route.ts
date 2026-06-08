@@ -4,7 +4,7 @@ import { getAuthUser, unauthorizedResponse } from '@/app/lib/auth'
 
 const EVENT_PLATES_BUCKET = 'event-plates'
 const SIGNED_URL_TTL_SEC = 60
-const OCR_MODEL = 'gpt-4o' as const
+const OCR_MODEL = 'gpt-4o-mini' as const
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
