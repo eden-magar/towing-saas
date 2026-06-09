@@ -132,10 +132,10 @@ export function DriverCalendarPicker({
                 key={d.id}
                 type="button"
                 onClick={() => toggleDriver(d.id)}
-                className="px-2 py-0.5 rounded-lg text-xs border-2 transition-all"
+                className="px-2 py-0.5 rounded-lg text-xs border-2 transition-all font-bold"
                 style={{
                   backgroundColor: selected ? color + '20' : '#f3f4f6',
-                  color: selected ? color : '#9ca3af',
+                  color: '#000',
                   borderColor: selected ? color : 'transparent',
                 }}
               >
@@ -158,7 +158,7 @@ export function DriverCalendarPicker({
                       const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
                       return (
                         <th key={d.id} className="text-center px-1 py-1.5 font-medium border-b border-gray-200 border-l border-gray-200 text-xs align-middle" style={{ width: `${100 / visibleDrivers.length}%` }}>
-                          <span className="inline-block rounded-lg px-2 py-1 font-medium" style={{ backgroundColor: `${color}26`, color }}>
+                          <span className="inline-block rounded-lg px-2 py-1 font-bold" style={{ backgroundColor: `${color}26`, color: '#000' }}>
                             {d.user?.full_name?.split(' ')[0] || 'נהג'}
                           </span>
                         </th>
@@ -257,7 +257,7 @@ export function DriverCalendarPicker({
             />
           </div>
           {pendingDriverId && (
-            <div className="text-sm text-blue-700 font-medium">
+            <div className="text-sm text-black font-bold">
               {drivers.find(d => d.id === pendingDriverId)?.user?.full_name || 'נהג נבחר'}
             </div>
           )}
