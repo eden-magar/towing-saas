@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
@@ -86,6 +86,17 @@ function getRoutePointLabel(
   if (pt === 'dropoff') return 'יעד'
   if (pt === 'exchange') return 'נקודת החלפה'
   return 'עצירה'
+}
+
+function buildVehiclePlateLookup(
+  vehicles: { id: string; plate_number: string }[] | undefined | null
+): Record<string, string> {
+  const lookup: Record<string, string> = {}
+  if (!vehicles) return lookup
+  for (const v of vehicles) {
+    if (v?.id && v.plate_number) lookup[v.id] = v.plate_number
+  }
+  return lookup
 }
 
 interface EditVehicle {
@@ -398,6 +409,11 @@ export default function TowDetailsPage() {
     : false
   const canManualClose =
     tow != null && (tow.status === 'assigned' || tow.status === 'in_progress')
+
+  const vehiclePlateById = useMemo(
+    () => buildVehiclePlateLookup(tow?.vehicles),
+    [tow?.vehicles]
+  )
 
   const showEndTimeEditor =
     tow != null && (tow.status === 'in_progress' || tow.status === 'completed')
@@ -1946,11 +1962,21 @@ export default function TowDetailsPage() {
                                 <div className="mt-2 pt-2 border-t border-gray-200/50">
                                   <div className="text-xs text-gray-400 mb-1">{point.images.length} תמונות</div>
                                   <div className="flex gap-2 overflow-x-auto">
-                                    {point.images.map((img: any) => (
-                                      <a key={img.id} href={img.image_url} target="_blank" rel="noopener noreferrer">
-                                        <img src={img.image_url} alt={img.image_type} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
-                                      </a>
-                                    ))}
+                                    {point.images.map((img: any) => {
+                                      const plate = img.tow_vehicle_id
+                                        ? vehiclePlateById[img.tow_vehicle_id]
+                                        : undefined
+                                      return (
+                                        <div key={img.id} className="flex flex-col items-center shrink-0">
+                                          <a href={img.image_url} target="_blank" rel="noopener noreferrer">
+                                            <img src={img.image_url} alt={img.image_type} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
+                                          </a>
+                                          {plate && (
+                                            <span className="text-xs text-gray-500 mt-0.5">{plate}</span>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
                                   </div>
                                 </div>
                               )}
@@ -2492,14 +2518,22 @@ export default function TowDetailsPage() {
                             </span>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                            {images.map((img: any) => (
-                              <a key={img.id} href={img.image_url} target="_blank" rel="noopener noreferrer" className="group">
-                                <div className="aspect-square rounded-xl overflow-hidden border border-gray-200 group-hover:border-[#33d4ff] transition-colors">
-                                  <img src={img.image_url} alt={img.image_type} className="w-full h-full object-cover" />
-                                </div>
-                                <p className="text-xs text-gray-400 mt-1 text-center">{imageTypeLabels[img.image_type] || img.image_type}</p>
-                              </a>
-                            ))}
+                            {images.map((img: any) => {
+                              const typeLabel = imageTypeLabels[img.image_type] || img.image_type
+                              const plate = img.tow_vehicle_id
+                                ? vehiclePlateById[img.tow_vehicle_id]
+                                : undefined
+                              return (
+                                <a key={img.id} href={img.image_url} target="_blank" rel="noopener noreferrer" className="group">
+                                  <div className="aspect-square rounded-xl overflow-hidden border border-gray-200 group-hover:border-[#33d4ff] transition-colors">
+                                    <img src={img.image_url} alt={img.image_type} className="w-full h-full object-cover" />
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-1 text-center">
+                                    {plate ? `${typeLabel} · ${plate}` : typeLabel}
+                                  </p>
+                                </a>
+                              )
+                            })}
                           </div>
                         </div>
                       )
