@@ -1,6 +1,10 @@
 import { useRouter } from 'next/navigation'
 import { createCustomer, type CustomerListItem } from '@/app/lib/queries/customers'
-import { prepareTowData } from '../lib/utils/tow-save-handler'
+import {
+  CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE,
+  isCustomTowEditWipeBlocked,
+  prepareTowData,
+} from '../lib/utils/tow-save-handler'
 import {
   createTow,
   createStorageFollowUpTow,
@@ -294,7 +298,18 @@ export function useTowSave(params: UseTowSaveParams) {
     }
   }
 
-  
+  if (
+    isCustomTowEditWipeBlocked({
+      editTowId,
+      towType,
+      existingPointCount: editExistingPoints?.length ?? 0,
+      routePointCount: routePoints.length,
+    })
+  ) {
+    setError(CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE)
+    return
+  }
+
   setSaving(true)
   setError('')
   

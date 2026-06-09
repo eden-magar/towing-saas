@@ -1104,6 +1104,24 @@ export function buildCustomTowPriceBreakdown(
   }
 }
 
+export const CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE =
+  'השמירה נחסמה כדי למנוע אובדן נתונים. עריכת גרירה מותאמת אישית עדיין בתהליך תיקון.'
+
+/** Edit-only: block save when hydrated route was wiped to [] but DB still has points. */
+export function isCustomTowEditWipeBlocked(params: {
+  editTowId?: string
+  towType: string
+  existingPointCount: number
+  routePointCount: number
+}): boolean {
+  return (
+    !!params.editTowId &&
+    params.towType === 'custom' &&
+    params.existingPointCount > 0 &&
+    params.routePointCount === 0
+  )
+}
+
 // ==================== Main Function ====================
 
 /**

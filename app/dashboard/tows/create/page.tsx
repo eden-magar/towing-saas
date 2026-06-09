@@ -64,7 +64,11 @@ import {
   getVehiclesReservedForTow,
   isPickableStoredVehicle,
 } from '../../../lib/queries/storage'
-import { prepareTowData } from '../../../lib/utils/tow-save-handler'
+import {
+  CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE,
+  isCustomTowEditWipeBlocked,
+  prepareTowData,
+} from '../../../lib/utils/tow-save-handler'
 import type { AddressData } from '../../../lib/google-maps'
 import type { SelectedService } from '../../../components/tow-forms/shared'
 import type { RoutePoint } from '../../../components/tow-forms/routes/RouteBuilder'
@@ -837,6 +841,17 @@ function CreateTowForm({
       return
     }
     setTruckTypeError(false)
+    if (
+      isCustomTowEditWipeBlocked({
+        editTowId,
+        towType,
+        existingPointCount: editExistingPoints?.length ?? 0,
+        routePointCount: routePoints.length,
+      })
+    ) {
+      setError(CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE)
+      return
+    }
     setSaving(true)
     setError('')
     try {
