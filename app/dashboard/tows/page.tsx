@@ -2,11 +2,102 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, MapPin, User, ChevronLeft, Truck, Sparkles } from 'lucide-react'
+import { Plus, Search, MapPin, User, Truck, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '../../lib/AuthContext'
 import { getTows, TowWithDetails } from '../../lib/queries/tows'
 import { getEvents, type EventListItem } from '../../lib/queries/events'
+
+type LocalYmd = { year: number; month: number; day: number }
+
+function toLocalYmd(date: Date): LocalYmd {
+  return { year: date.getFullYear(), month: date.getMonth(), day: date.getDate() }
+}
+
+function localYmdFromIso(iso: string): LocalYmd | null {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return toLocalYmd(d)
+}
+
+function localYmdFromDateString(dateStr: string): LocalYmd | null {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return { year, month: month - 1, day }
+}
+
+function ymdEquals(a: LocalYmd, b: LocalYmd): boolean {
+  return a.year === b.year && a.month === b.month && a.day === b.day
+}
+
+function formatLocalYmdHe(ymd: LocalYmd): string {
+  return new Date(ymd.year, ymd.month, ymd.day).toLocaleDateString('he-IL')
+}
+
+type ScheduledDateDisplay = {
+  label: string
+  variant: 'today' | 'tomorrow' | 'future'
+}
+
+function getScheduledDateDisplayFromYmd(ymd: LocalYmd): ScheduledDateDisplay {
+  const now = new Date()
+  const today = toLocalYmd(now)
+  const tomorrow = toLocalYmd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))
+
+  if (ymdEquals(ymd, today)) {
+    return { label: 'להיום', variant: 'today' }
+  }
+  if (ymdEquals(ymd, tomorrow)) {
+    return { label: 'למחר', variant: 'tomorrow' }
+  }
+  return { label: formatLocalYmdHe(ymd), variant: 'future' }
+}
+
+function getScheduledDateDisplay(
+  scheduledAt: string | null | undefined
+): ScheduledDateDisplay | null {
+  if (!scheduledAt) return null
+  const scheduled = localYmdFromIso(scheduledAt)
+  if (!scheduled) return null
+  return getScheduledDateDisplayFromYmd(scheduled)
+}
+
+function getScheduledDateDisplayForEventDate(
+  eventDate: string | null | undefined
+): ScheduledDateDisplay | null {
+  if (!eventDate) return null
+  const ymd = localYmdFromDateString(eventDate)
+  if (!ymd) return null
+  return getScheduledDateDisplayFromYmd(ymd)
+}
+
+function ScheduledDateBadge({
+  scheduledAt,
+  eventDate,
+}: {
+  scheduledAt?: string | null
+  eventDate?: string | null
+}) {
+  const display = eventDate != null
+    ? getScheduledDateDisplayForEventDate(eventDate)
+    : getScheduledDateDisplay(scheduledAt)
+  if (!display) return null
+
+  const variantClass =
+    display.variant === 'today'
+      ? 'bg-emerald-100 text-emerald-800 ring-emerald-200'
+      : display.variant === 'tomorrow'
+        ? 'bg-blue-100 text-blue-800 ring-blue-200'
+        : 'bg-gray-100 text-gray-600 ring-gray-200 font-medium'
+
+  return (
+    <span
+      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ring-1 ${variantClass}`}
+    >
+      {display.label}
+    </span>
+  )
+}
 
 export default function TowsPage() {
   const { companyId } = useAuth()
@@ -327,8 +418,12 @@ export default function TowsPage() {
                         <tr key={tow.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/tows/${tow.id}`)}>
 
                           <td className="px-4 py-4">
-                            <span className="font-medium text-gray-800">{formatDate(tow.created_at)}</span>
-                            <p className="text-xs text-gray-500">{formatTime(tow.created_at)}</p>
+                            <ScheduledDateBadge scheduledAt={tow.scheduled_at} />
+                            <div className={tow.scheduled_at ? 'mt-1.5' : ''}>
+                              <p className="text-[10px] text-gray-400 leading-none mb-0.5">הוזמן</p>
+                              <span className="font-medium text-gray-800">{formatDate(tow.created_at)}</span>
+                              <p className="text-xs text-gray-500">{formatTime(tow.created_at)}</p>
+                            </div>
                           </td>
                           <td className="px-4 py-4">
                             {tow.order_number ? (
@@ -369,10 +464,16 @@ export default function TowsPage() {
                             )}
                           </td>
                           <td className="px-4 py-4">
-                            <div className="flex items-center gap-2 text-sm text-gray-600 max-w-[200px]">
-                              <span className="truncate">{from}</span>
-                              <ChevronLeft size={14} className="flex-shrink-0" />
-                              <span className="truncate">{to}</span>
+                            <div className="max-w-[280px]">
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="w-2 h-2 bg-emerald-500 rounded-full shrink-0"></div>
+                                <span className="text-gray-700 truncate">{from}</span>
+                              </div>
+                              <div className="w-0.5 h-3 bg-gray-300 mr-[3px] my-1"></div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <div className="w-2 h-2 bg-red-500 rounded-full shrink-0"></div>
+                                <span className="text-gray-700 truncate">{to}</span>
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-4">
@@ -407,8 +508,11 @@ export default function TowsPage() {
                         onClick={() => router.push(`/dashboard/events/${event.id}`)}
                       >
                         <td className="px-4 py-4">
-                          <span className="font-medium text-gray-800">{formatEventListDate(event)}</span>
-                          <p className="text-xs text-gray-500">{formatTime(event.created_at)}</p>
+                          <ScheduledDateBadge eventDate={event.event_date} />
+                          <div className={event.event_date ? 'mt-1.5' : ''}>
+                            <span className="font-medium text-gray-800">{formatEventListDate(event)}</span>
+                            <p className="text-xs text-gray-500">{formatTime(event.created_at)}</p>
+                          </div>
                         </td>
                         <td className="px-4 py-4">
                           {event.order_number ? (
@@ -497,9 +601,13 @@ export default function TowsPage() {
                               {statusConfig[tow.status]?.label}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-500 mt-0.5">
-                            {formatDate(tow.created_at)} | {formatTime(tow.created_at)}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <ScheduledDateBadge scheduledAt={tow.scheduled_at} />
+                            <p className="text-sm text-gray-500">
+                              <span className="text-xs text-gray-400">הוזמן </span>
+                              {formatDate(tow.created_at)} | {formatTime(tow.created_at)}
+                            </p>
+                          </div>
                           {tow.order_number && (
                             <p className="text-xs font-mono text-gray-400 mt-0.5">#{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</p>
                           )}
@@ -560,9 +668,12 @@ export default function TowsPage() {
                             {eventStatusConfig[event.status]?.label}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {formatEventListDate(event)} | {formatTime(event.created_at)}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <ScheduledDateBadge eventDate={event.event_date} />
+                          <p className="text-sm text-gray-500">
+                            {formatEventListDate(event)} | {formatTime(event.created_at)}
+                          </p>
+                        </div>
                         {event.order_number && (
                           <p className="text-xs font-mono text-gray-400 mt-0.5">#{event.order_number}</p>
                         )}
