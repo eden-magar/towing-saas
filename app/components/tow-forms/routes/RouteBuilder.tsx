@@ -61,6 +61,8 @@ export interface RouteBuilderProps {
   onRequiredTruckTypesChange?: (types: string[]) => void
   truckTypeSectionRef?: React.RefObject<HTMLDivElement> | null
   truckTypeError?: boolean
+  /** Edit-open only: seed internal route once on mount (or first non-empty arrival). */
+  initialPoints?: RoutePoint[]
 }
 
 // ==================== Helper Functions ====================
@@ -103,8 +105,14 @@ export function RouteBuilder({
   onRequiredTruckTypesChange,
   truckTypeSectionRef,
   truckTypeError = false,
+  initialPoints,
 }: RouteBuilderProps) {
-  const [points, setPoints] = useState<RoutePoint[]>([])
+  const [points, setPoints] = useState<RoutePoint[]>(() =>
+    initialPoints?.length ? initialPoints.map((p) => ({ ...p })) : []
+  )
+  const hasAppliedInitialPointsRef = useRef((initialPoints?.length ?? 0) > 0)
+  const isMountPointsNotifyRef = useRef(true)
+  const isMountRouteDataNotifyRef = useRef(true)
   const [expandedPoint, setExpandedPoint] = useState<string | null>(null)
   const [startFromBase, setStartFromBase] = useState(false)
   const [storedVehicles, setStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
@@ -117,6 +125,14 @@ export function RouteBuilder({
   const [servicesModalPointId, setServicesModalPointId] = useState<string | null>(null)
   /** Per point: true = תקין, false = תקול when adding from storage (default true if unset) */
   const [storagePickupIsWorking, setStoragePickupIsWorking] = useState<Record<string, boolean>>({})
+
+  // One-time seed when hydrated points arrive after mount (edit-open race).
+  useEffect(() => {
+    if (hasAppliedInitialPointsRef.current) return
+    if (!initialPoints?.length) return
+    hasAppliedInitialPointsRef.current = true
+    setPoints(initialPoints.map((p) => ({ ...p })))
+  }, [initialPoints])
 
   // Total driving distance (Google Distance Matrix), sequential legs between valid points
   useEffect(() => {
@@ -181,12 +197,23 @@ export function RouteBuilder({
     )
     const services = points.flatMap((p) => p.services ?? [])
 
+    if (isMountRouteDataNotifyRef.current) {
+      isMountRouteDataNotifyRef.current = false
+      const awaitingSeed =
+        points.length === 0 && (initialPoints?.length ?? 0) > 0
+      const awaitingDistanceAfterSeed =
+        (initialPoints?.length ?? 0) > 0 && points.length > 0 && totalDistance === 0
+      if (awaitingSeed || awaitingDistanceAfterSeed) {
+        return
+      }
+    }
+
     onRouteDataChange?.({
       totalDistanceKm: totalDistance,
       vehicles,
       services
     })
-  }, [totalDistance, points, onRouteDataChange])
+  }, [totalDistance, points, onRouteDataChange, initialPoints])
 
   // Handle pin drop result from parent
   useEffect(() => {
@@ -252,8 +279,14 @@ export function RouteBuilder({
 
   // Notify parent of changes
   useEffect(() => {
+    if (isMountPointsNotifyRef.current) {
+      isMountPointsNotifyRef.current = false
+      if (points.length === 0 && (initialPoints?.length ?? 0) > 0) {
+        return
+      }
+    }
     onPointsChange?.(points)
-  }, [points, onPointsChange])
+  }, [points, onPointsChange, initialPoints])
 
   // Get all vehicles currently on truck up to a point
   const getVehiclesOnTruck = (upToPointIndex: number): VehicleOnTruck[] => {

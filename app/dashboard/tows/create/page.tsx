@@ -2596,6 +2596,7 @@ function CreateTowForm({
                       baseAddress={basePriceList?.base_address}
                       baseLat={basePriceList?.base_lat}
                       baseLng={basePriceList?.base_lng}
+                      initialPoints={routePoints}
                       onPointsChange={setRoutePoints}
                       onPinDropClick={(id) =>
                         setPinDropModal({ isOpen: true, field: id })

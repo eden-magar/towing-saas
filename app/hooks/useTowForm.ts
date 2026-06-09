@@ -390,10 +390,17 @@ export function useTowForm(editTowId?: string) {
     services: [],
   })
 
-  // Reset route points when customer changes
+  // Reset route points when the user changes customer (not hydration's first assignment on edit).
   useEffect(() => {
+    if (!selectedCustomerId) return
+    if (editTowId && prevSelectedCustomerIdRef.current === null) {
+      prevSelectedCustomerIdRef.current = selectedCustomerId
+      return
+    }
+    if (prevSelectedCustomerIdRef.current === selectedCustomerId) return
+    prevSelectedCustomerIdRef.current = selectedCustomerId
     setRoutePoints([])
-  }, [selectedCustomerId])
+  }, [selectedCustomerId, editTowId])
 
   // Load customer's stored vehicles when customer changes
   useEffect(() => {
@@ -436,6 +443,7 @@ export function useTowForm(editTowId?: string) {
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
+  const prevSelectedCustomerIdRef = useRef<string | null>(null)
   const editRouteBaselineRef = useRef<string | null>(null)
   const loadedEditPriceModeRef = useRef<string | null>(null)
   const editSeededDistanceRef = useRef<number | null>(null)

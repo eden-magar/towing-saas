@@ -20,6 +20,7 @@ import {
 } from '../utils/tow-reconcile-match'
 import type { PersistedVehicleType } from '../utils/tow-save-handler'
 import { isClosedTowStatus } from '../utils/can-edit-closed-tow'
+import { persistableUuid } from '../utils/persistable-uuid'
 
 // ==================== טיפוסים ====================
 
@@ -688,8 +689,8 @@ export async function createTow(input: CreateTowInput) {
   }
 
   // Precompute IDs and bulk payloads (preserve ids from edit prep when provided)
-  const vehicleIds = input.vehicles.map((v) => v.id ?? crypto.randomUUID())
-  const pointIds = (input.points || []).map((p) => p.id ?? crypto.randomUUID())
+  const vehicleIds = input.vehicles.map((v) => persistableUuid(v.id))
+  const pointIds = (input.points || []).map((p) => persistableUuid(p.id))
 
   const vehicleRows = input.vehicles.map((v, i) => ({
     id: vehicleIds[i],
@@ -1325,7 +1326,7 @@ async function reconcileTowVehicles(
       if (error) throw error
       resolvedIds.push(v.id)
     } else {
-      const newId = v.id ?? crypto.randomUUID()
+      const newId = persistableUuid(v.id)
       const { error } = await supabase.from('tow_vehicles').insert({
         id: newId,
         tow_id: towId,
@@ -1390,7 +1391,7 @@ async function reconcileTowPoints(
       if (error) throw error
       resolvedIds.push(point.id)
     } else {
-      const newId = point.id ?? crypto.randomUUID()
+      const newId = persistableUuid(point.id)
       const officeRow = buildPointOfficeRow(point, towId, true)
       const { error } = await supabase.from('tow_points').insert({
         id: newId,
