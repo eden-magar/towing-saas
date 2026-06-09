@@ -480,7 +480,7 @@ export async function getTow(towId: string): Promise<TowWithDetails | null> {
 // ==================== NEW: שליפת גרירה עם נקודות ====================
 
 export async function getTowWithPoints(towId: string): Promise<TowWithDetails | null> {
-  const [towRes, vehiclesRes, legsRes, pointsRes] = await Promise.all([
+  const [towRes, vehiclesRes, legsRes, pointsRes, imagesRes] = await Promise.all([
     supabase
       .from('tows')
       .select(TOW_WITH_RELATIONS_SELECT)
@@ -513,19 +513,15 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
           vehicle_type,
           tow_reason
         )
-      ),
-      images:tow_images (
-        id,
-        image_url,
-        image_type,
-        tow_point_id,
-        tow_vehicle_id,
-        notes,
-        created_at
       )
     `)
       .eq('tow_id', towId)
       .order('point_order', { ascending: true }),
+    supabase
+      .from('tow_images')
+      .select('id, image_url, image_type, tow_point_id, tow_vehicle_id, notes, created_at')
+      .eq('tow_id', towId)
+      .order('created_at', { ascending: true }),
   ])
 
   if (towRes.error) {
@@ -549,6 +545,41 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     console.error('Error fetching tow points:', pointsRes.error)
   }
 
+  if (imagesRes.error) {
+    console.error('Error fetching tow images:', {
+      message: imagesRes.error.message,
+      code: imagesRes.error.code,
+      details: imagesRes.error.details,
+      hint: imagesRes.error.hint,
+    })
+  }
+
+  type TowPointImageRow = {
+    id: string
+    image_url: string
+    image_type: string
+    tow_point_id: string
+    tow_vehicle_id: string | null
+    notes: string | null
+    created_at: string
+  }
+
+  const imagesByPointId: Record<string, TowPointImageRow[]> = {}
+  if (!imagesRes.error) {
+    for (const img of imagesRes.data ?? []) {
+      if (!img.tow_point_id) continue
+      if (!imagesByPointId[img.tow_point_id]) {
+        imagesByPointId[img.tow_point_id] = []
+      }
+      imagesByPointId[img.tow_point_id].push(img)
+    }
+  }
+
+  const points = (pointsRes.data ?? []).map((point) => ({
+    ...point,
+    images: imagesByPointId[point.id] ?? [],
+  })) as TowPointWithDetails[]
+
   const tow = towRes.data
 
   return {
@@ -558,7 +589,7 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     truck: tow.truck as any,
     vehicles: vehiclesRes.data || [],
     legs: legsRes.data || [],
-    points: pointsRes.data || [],
+    points,
   }
 }
 
