@@ -1337,25 +1337,40 @@ export function useTowForm(editTowId?: string) {
               if (t === 'dropoff') return 'dropoff'
               return 'stop'
             }
-            setRouteStops(
-              sortedSinglePoints.map((p: any) => ({
-                id: p.id || crypto.randomUUID(),
-                role: roleFromPointType(p.point_type),
-                stopSubtype:
-                  p.point_type === 'stop'
-                    ? normalizeStopSubtype(p.stop_subtype)
-                    : undefined,
-                address: {
-                  address: p.address || '',
-                  lat: p.lat ? Number(p.lat) : undefined,
-                  lng: p.lng ? Number(p.lng) : undefined,
-                },
-                contactName: p.contact_name || '',
-                contactPhone: p.contact_phone || '',
-                notes: p.notes || '',
-                orderNotes: p.order_notes || '',
-              }))
-            )
+            const hydratedStops: RouteStop[] = sortedSinglePoints.map((p: any) => ({
+              id: p.id || crypto.randomUUID(),
+              role: roleFromPointType(p.point_type),
+              stopSubtype:
+                p.point_type === 'stop'
+                  ? normalizeStopSubtype(p.stop_subtype)
+                  : undefined,
+              address: {
+                address: p.address || '',
+                lat: p.lat ? Number(p.lat) : undefined,
+                lng: p.lng ? Number(p.lng) : undefined,
+              },
+              contactName: p.contact_name || '',
+              contactPhone: p.contact_phone || '',
+              notes: p.notes || '',
+              orderNotes: p.order_notes || '',
+            }))
+            if (!hydratedStops.some((s) => s.role === 'dropoff')) {
+              const legs = tow.legs ?? []
+              const legWithDestination =
+                legs.find((l: { leg_type: string; to_address?: string | null }) =>
+                  l.leg_type === 'delivery' && l.to_address?.trim()
+                ) ??
+                legs.find((l: { leg_type: string; to_address?: string | null }) =>
+                  l.leg_type === 'pickup' && l.to_address?.trim()
+                )
+              const legToAddress = legWithDestination?.to_address?.trim() || ''
+              hydratedStops.push({
+                id: crypto.randomUUID(),
+                role: 'dropoff',
+                address: { address: legToAddress },
+              })
+            }
+            setRouteStops(hydratedStops)
             editRouteBaselineRef.current =
               routeStopsDistanceSignatureFromPoints(sortedSinglePoints)
             const dropoffPoint = sortedSinglePoints.find(
