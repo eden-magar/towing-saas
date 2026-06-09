@@ -21,6 +21,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
+import { useAuth } from '../../../lib/AuthContext'
+import { canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
 import {
   PinDropModal,
@@ -60,6 +62,7 @@ function CreateExchangeTowForm({
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const form = useTowForm(editTowId)
 
   const {
@@ -258,8 +261,6 @@ function CreateExchangeTowForm({
     selectedStoredVehicleId,
   } = form
 
-  const { user } = form as { user?: { id: string } | null }
-
   const [customerTab, setCustomerTab] = useState<'existing' | 'casual'>('existing')
   const [customerSearch, setCustomerSearch] = useState('')
   const [quoteApproved, setQuoteApproved] = useState(false)
@@ -331,14 +332,22 @@ function CreateExchangeTowForm({
   }, [loadedTowStatus])
 
   useEffect(() => {
-    if (editTowId && (loadedTowStatus === 'completed' || loadedTowStatus === 'cancelled')) {
+    if (
+      editTowId &&
+      isClosedTowStatus(loadedTowStatus) &&
+      !canEditClosedTow(user?.role)
+    ) {
       router.push(`/dashboard/tows/${editTowId}`)
     }
-  }, [loadedTowStatus, editTowId, router])
+  }, [loadedTowStatus, editTowId, router, user?.role])
+
+  const isEditingClosedTow =
+    !!editTowId && isClosedTowStatus(loadedTowStatus)
 
   const storagePickupEditLocked =
     !!editTowId &&
-    (loadedTowStatus === 'in_progress' || loadedTowStatus === 'completed')
+    (loadedTowStatus === 'in_progress' || loadedTowStatus === 'completed') &&
+    !(isEditingClosedTow && canEditClosedTow(user?.role))
 
   const getDriverTrucks = (driverId: string) =>
     trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
@@ -386,6 +395,7 @@ function CreateExchangeTowForm({
   }
 
   const handleSaveAsQuote = useCallback(async () => {
+    if (editTowId && isClosedTowStatus(loadedTowStatus)) return
     if (!companyId || !user || !towType) return
     if (requiredTruckTypes.length === 0) {
       setTruckTypeError(true)
@@ -648,6 +658,7 @@ function CreateExchangeTowForm({
     setTruckTypeError,
     truckTypeSectionRef,
     setQuoteSavedId,
+    loadedTowStatus,
   ])
 
   const storageAddress = basePriceList?.base_address || ''
@@ -1643,7 +1654,7 @@ function CreateExchangeTowForm({
             </section>
           )}
 
-          {showForm && (
+          {showForm && !isEditingClosedTow && (
             <section className="bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-sm overflow-hidden mb-6">
               <div className="px-4 sm:px-5 py-4 sm:py-5">
                 {quoteSavedId ? (

@@ -37,6 +37,7 @@ import {
   Link2,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
+import { canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
 import { getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
@@ -392,7 +393,9 @@ export default function TowDetailsPage() {
     }
   }, [towId, refreshTow])
 
-  const canEdit = tow ? tow.status !== 'completed' && tow.status !== 'cancelled' : false
+  const canEdit = tow
+    ? !isClosedTowStatus(tow.status) || canEditClosedTow(user?.role)
+    : false
   const canManualClose =
     tow != null && (tow.status === 'assigned' || tow.status === 'in_progress')
 

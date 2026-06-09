@@ -19,6 +19,7 @@ import {
   assignExistingVehicleIds,
 } from '../utils/tow-reconcile-match'
 import type { PersistedVehicleType } from '../utils/tow-save-handler'
+import { isClosedTowStatus } from '../utils/can-edit-closed-tow'
 
 // ==================== טיפוסים ====================
 
@@ -1340,17 +1341,19 @@ async function reconcileTowVehicles(
 
 async function reconcileTowPoints(
   towId: string,
-  points: PreparedTowPoint[]
+  points: PreparedTowPoint[],
+  options?: { protectDriverProgress?: boolean }
 ): Promise<string[]> {
   const { data: existing, error: fetchError } = await supabase
     .from('tow_points')
-    .select('id, point_order, point_type')
+    .select('id, point_order, point_type, status')
     .eq('tow_id', towId)
 
   if (fetchError) throw fetchError
 
   const existingRows = existing ?? []
   const existingIds = new Set(existingRows.map((row) => row.id))
+  const existingById = new Map(existingRows.map((row) => [row.id, row]))
 
   const pointsResolved = assignExistingPointIds(points, existingRows)
 
@@ -1358,7 +1361,13 @@ async function reconcileTowPoints(
     pointsResolved.map((p) => p.id).filter((id): id is string => !!id)
   )
 
-  const toDelete = [...existingIds].filter((id) => !incomingIds.has(id))
+  let toDelete = [...existingIds].filter((id) => !incomingIds.has(id))
+  if (options?.protectDriverProgress) {
+    toDelete = toDelete.filter((id) => {
+      const status = existingById.get(id)?.status
+      return status !== 'completed' && status !== 'skipped'
+    })
+  }
   if (toDelete.length > 0) {
     const { error: junctionError } = await supabase
       .from('tow_point_vehicles')
@@ -1453,6 +1462,19 @@ async function reconcileTowPointVehicles(
 }
 
 export async function updateTow(input: UpdateTowInput) {
+  const { data: existingTow, error: existingTowError } = await supabase
+    .from('tows')
+    .select('status')
+    .eq('id', input.towId)
+    .single()
+
+  if (existingTowError) {
+    console.error('Error fetching tow status for update:', existingTowError)
+    throw existingTowError
+  }
+
+  const protectClosedProgress = isClosedTowStatus(existingTow?.status)
+
   const towUpdates: Record<string, any> = {}
   
   if (input.customerId !== undefined) towUpdates.customer_id = input.customerId
@@ -1505,7 +1527,8 @@ export async function updateTow(input: UpdateTowInput) {
 
   // tow_legs: legacy display/fallback only — driver progress uses tow_points.
   // Keep delete+reinsert; legs are not read by the driver task flow by id.
-  if (input.legs) {
+  // Skip leg reset on closed tows so completed leg status is preserved.
+  if (input.legs && !protectClosedProgress) {
     await supabase.from('tow_legs').delete().eq('tow_id', input.towId)
 
     const legRows = input.legs.map((leg, i) => ({
@@ -1540,7 +1563,9 @@ export async function updateTow(input: UpdateTowInput) {
     }
 
     try {
-      const resolvedPointIds = await reconcileTowPoints(input.towId, input.points)
+      const resolvedPointIds = await reconcileTowPoints(input.towId, input.points, {
+        protectDriverProgress: protectClosedProgress,
+      })
       await reconcileTowPointVehicles(
         input.points,
         resolvedPointIds,

@@ -72,6 +72,8 @@ import { getActiveTimeSurcharges } from '../../../lib/queries/price-lists'
 import type { TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
 import type { VehicleLookupResult, VehicleType } from '../../../lib/types'
+import { useAuth } from '../../../lib/AuthContext'
+import { canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
 import { EventTowSection } from '../../../components/event-forms/EventTowSection'
 
 type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
@@ -91,6 +93,7 @@ function CreateTowForm({
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const storedVehicleParam = searchParams.get('storedVehicle')
   const form = useTowForm(editTowId)
 
@@ -326,8 +329,6 @@ function CreateTowForm({
     setSavedTowId,
     setShowAssignNowModal,
   } = form
-
-  const { user } = form as { user?: { id: string } | null }
 
   // Local state for new form
   const [customerTab, setCustomerTab] = useState<'existing' | 'casual'>('existing')
@@ -691,14 +692,22 @@ function CreateTowForm({
   }, [loadedTowStatus])
 
   useEffect(() => {
-    if (editTowId && (loadedTowStatus === 'completed' || loadedTowStatus === 'cancelled')) {
+    if (
+      editTowId &&
+      isClosedTowStatus(loadedTowStatus) &&
+      !canEditClosedTow(user?.role)
+    ) {
       router.push(`/dashboard/tows/${editTowId}`)
     }
-  }, [loadedTowStatus, editTowId, router])
+  }, [loadedTowStatus, editTowId, router, user?.role])
+
+  const isEditingClosedTow =
+    !!editTowId && isClosedTowStatus(loadedTowStatus)
 
   const storagePickupEditLocked =
     !!editTowId &&
-    (loadedTowStatus === 'in_progress' || loadedTowStatus === 'completed')
+    (loadedTowStatus === 'in_progress' || loadedTowStatus === 'completed') &&
+    !(isEditingClosedTow && canEditClosedTow(user?.role))
 
   const handleNowClick = () => {
     const now = new Date()
@@ -819,6 +828,7 @@ function CreateTowForm({
 
   // Custom save for quote declined
   const handleSaveAsQuote = useCallback(async () => {
+    if (editTowId && isClosedTowStatus(loadedTowStatus)) return
     if (!companyId || !user || !towType) return
     if (requiredTruckTypes.length === 0) {
       setTruckTypeError(true)
@@ -1088,6 +1098,7 @@ function CreateTowForm({
     isHoliday,
     hasManualTimeSurchargeOverride,
     priceMode,
+    loadedTowStatus,
   ])
 
   const totalDistanceKm =
@@ -2799,7 +2810,7 @@ function CreateTowForm({
           )}
 
           {/* Section 6 — הצעת מחיר (GATE) */}
-          {towType && (
+          {towType && !isEditingClosedTow && (
             <section className="bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-sm overflow-hidden mb-6">
               <div className="px-4 sm:px-5 py-4 sm:py-5">
                 {quoteSavedId ? (
