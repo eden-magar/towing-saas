@@ -1,5 +1,6 @@
 'use client'
 import { Plus, Trash2, Clock, MapPin, Wrench } from 'lucide-react'
+import { TimeInput } from '../../../components/ui/TimeInput'
 
 interface TimeSurcharge {
   id: string
@@ -179,17 +180,15 @@ export function SurchargesTab({
                     <option value="saturday">שבת</option>
                     <option value="holiday">חג</option>
                   </select>
-                  <input
-                    type="time"
+                  <TimeInput
                     value={item.time_start}
-                    onChange={(e) => onTimeSurchargeUpdate(item.id, { time_start: e.target.value })}
-                    className="px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
+                    onChange={(v) => onTimeSurchargeUpdate(item.id, { time_start: v })}
+                    className="px-2 py-2 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
                   />
-                  <input
-                    type="time"
+                  <TimeInput
                     value={item.time_end}
-                    onChange={(e) => onTimeSurchargeUpdate(item.id, { time_end: e.target.value })}
-                    className="px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
+                    onChange={(v) => onTimeSurchargeUpdate(item.id, { time_end: v })}
+                    className="px-2 py-2 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
                   />
                   <div className="flex items-center gap-2 w-16">
                     <PercentInput

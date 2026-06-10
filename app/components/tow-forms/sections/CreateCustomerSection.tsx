@@ -8,7 +8,7 @@ import {
   getStoredVehicleStatusDisplay,
   type StoredVehicleWithCustomer,
 } from '../../../lib/queries/storage'
-import { Input, Button, FormCard } from '../../ui'
+import { Input, Button, FormCard, TimeInput } from '../../ui'
 import { PhoneInput } from '../../ui/PhoneInput'
 
 export type CreateCustomerTab = 'existing' | 'casual'
@@ -139,10 +139,9 @@ export function CreateCustomerSection({
           onChange={(e) => onTowDateChange(e.target.value)}
           className="flex-1 min-w-[7rem]"
         />
-        <Input
-          type="time"
+        <TimeInput
           value={towTime}
-          onChange={(e) => onTowTimeChange(e.target.value)}
+          onChange={onTowTimeChange}
           className="flex-1 min-w-[7rem]"
         />
         <Input
@@ -155,11 +154,9 @@ export function CreateCustomerSection({
       </div>
       <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
         <span className="text-sm text-gray-600 shrink-0">שעת סיום (אופציונלי)</span>
-        <Input
-          type="time"
+        <TimeInput
           value={towEndTime}
-          onChange={(e) => {
-            const v = e.target.value
+          onChange={(v) => {
             onTowEndTimeChange(v)
             if (v && !towEndDate && towDate) {
               onTowEndDateChange(towDate)

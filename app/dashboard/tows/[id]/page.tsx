@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
+import { TimeInput } from '../../../components/ui/TimeInput'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
 import { normalizePlate } from '../../../lib/utils/plate-number'
@@ -1498,28 +1499,25 @@ export default function TowDetailsPage() {
                         </div>
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">שעה</label>
-                          <input
-                            type="time"
+                          <TimeInput
                             value={editScheduledTime}
-                            onChange={(e) => setEditScheduledTime(e.target.value)}
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            onChange={setEditScheduledTime}
+                            className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]"
                           />
                         </div>
                       </div>
                       <div>
                         <label className="block text-sm text-gray-600 mb-1">שעת סיום (אופציונלי)</label>
                         <div className="grid grid-cols-2 gap-4">
-                          <input
-                            type="time"
+                          <TimeInput
                             value={editScheduledEndTime}
-                            onChange={(e) => {
-                              const v = e.target.value
+                            onChange={(v) => {
                               setEditScheduledEndTime(v)
                               if (v && !editScheduledEndDate && editScheduledDate) {
                                 setEditScheduledEndDate(editScheduledDate)
                               }
                             }}
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]"
                           />
                           <input
                             type="date"
@@ -1607,13 +1605,9 @@ export default function TowDetailsPage() {
                           </div>
                           <div>
                             <label className="block text-sm text-gray-600 mb-1">שעה</label>
-                            <input
-                              type="time"
-                              step={60}
-                              lang="en-GB"
+                            <TimeInput
                               value={endEditTime}
-                              onChange={(e) => {
-                                const v = e.target.value
+                              onChange={(v) => {
                                 setEndEditTime(v)
                                 if (v && !endEditDate) {
                                   const startSource = tow.scheduled_at || tow.created_at
@@ -1622,7 +1616,7 @@ export default function TowDetailsPage() {
                                   }
                                 }
                               }}
-                              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                              className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]"
                             />
                           </div>
                         </div>
@@ -2748,14 +2742,11 @@ export default function TowDetailsPage() {
                     disabled={manualClosing}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
                   />
-                  <input
-                    type="time"
-                    step={60}
-                    lang="en-GB"
+                  <TimeInput
                     value={closeEndTime}
-                    onChange={(e) => setCloseEndTime(e.target.value)}
+                    onChange={setCloseEndTime}
                     disabled={manualClosing}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-violet-400"
                   />
                 </div>
               </div>

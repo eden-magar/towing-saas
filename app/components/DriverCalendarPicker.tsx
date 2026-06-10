@@ -7,6 +7,7 @@ import { getDayTows } from '../lib/queries/calendar'
 import { getDayEvents, CalendarWeekEvent } from '../lib/queries/events'
 import { TowWithDetails } from '../lib/queries/tows'
 import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
+import { TimeInput } from './ui/TimeInput'
 
 const DRIVER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4']
 const PIXELS_PER_HOUR = 40
@@ -315,11 +316,11 @@ export function DriverCalendarPicker({
         <div className="p-4 border-t flex items-center gap-4 justify-between flex-wrap">
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600">שעת תחילת גרירה</label>
-            <input
-              type="time"
+            <TimeInput
               value={pickerTime}
-              onChange={e => setPickerTime(e.target.value)}
-              className="border rounded-lg px-2 py-1 text-sm"
+              onChange={setPickerTime}
+              showNow
+              className="w-28 px-2 py-1 text-sm"
             />
           </div>
           {pendingDriverId && (

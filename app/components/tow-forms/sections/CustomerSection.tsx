@@ -5,6 +5,7 @@ import { Search, User, ArrowLeftRight } from 'lucide-react'
 import { CustomerListItem } from '../../../lib/queries/customers'
 import { CustomerWithPricing } from '../../../lib/queries/price-lists'
 import { PhoneInput } from '../../ui/PhoneInput'
+import { TimeInput } from '../../ui/TimeInput'
 
 interface CustomerSectionProps {
   customers: CustomerListItem[]
@@ -255,11 +256,10 @@ export function CustomerSection({
             }}
             className="min-w-0 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
           />
-          <input
-            type="time"
+          <TimeInput
             value={towTime}
-            onChange={(e) => onTowTimeChange(e.target.value)}
-            className="min-w-0 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+            onChange={onTowTimeChange}
+            className="min-w-0 px-2 py-2 rounded-xl text-sm focus:ring-[#33d4ff]/40"
           />
         </div>
       </div>
