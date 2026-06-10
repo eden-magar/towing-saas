@@ -297,9 +297,15 @@ export function RouteBuilder({
   useEffect(() => {
     if (isMountPointsNotifyRef.current) {
       isMountPointsNotifyRef.current = false
-      if (points.length === 0 && (initialPoints?.length ?? 0) > 0) {
-        return
-      }
+    }
+    // Don't push [] while seeded initialPoints are pending internal apply (mount / edit hydration).
+    // After seed (hasAppliedInitialPointsRef), user clears still propagate via onPointsChange([]).
+    if (
+      points.length === 0 &&
+      (initialPoints?.length ?? 0) > 0 &&
+      !hasAppliedInitialPointsRef.current
+    ) {
+      return
     }
     onPointsChange?.(points)
   }, [points, onPointsChange, initialPoints])

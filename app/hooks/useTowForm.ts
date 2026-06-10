@@ -34,6 +34,10 @@ import { buildExchangePriceAffectingSignature } from '../lib/utils/tow-save-hand
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
+import {
+  buildRoutePointsFromExchangeState,
+  type ExchangeFormState,
+} from '../lib/utils/exchange-to-route-points'
 import { useTowPricing } from './useTowPricing'
 import { useTowSave } from './useTowSave'
 
@@ -2083,6 +2087,63 @@ export function useTowForm(
     }
   }
 
+  const captureExchangeFormState = (): ExchangeFormState => ({
+    workingVehicleSource,
+    selectedWorkingVehicleId,
+    workingVehiclePlate,
+    workingVehicleCode,
+    workingVehicleData,
+    workingVehicleType,
+    workingVehicleAddress,
+    workingVehicleContact,
+    workingVehicleContactPhone,
+    workingManualManufacturer,
+    workingManualColor,
+    workingManualWeight,
+    workingVehicleNotFound,
+    workingVehicleDestinationAddress,
+    workingDestinationContact,
+    workingDestinationContactPhone,
+    workingVehicleDestinationIsStorage,
+    exchangeAddress,
+    exchangeContactName,
+    exchangeContactPhone,
+    defectiveVehiclePlate,
+    defectiveVehicleCode,
+    defectiveVehicleData,
+    defectiveVehicleType,
+    defectiveManualManufacturer,
+    defectiveManualColor,
+    defectiveManualWeight,
+    defectiveVehicleNotFound,
+    defectiveDestination,
+    defectiveDestinationAddress,
+    defectiveDestinationContact,
+    defectiveDestinationContactPhone,
+    selectedDefects,
+    defectiveFaultDescription,
+  })
+
+  /** Create flow: seed custom route from exchange before towType switches to custom. */
+  const applyExchangeToCustomConversion = () => {
+    const mapped = buildRoutePointsFromExchangeState(captureExchangeFormState())
+    setRoutePoints(mapped.routePoints)
+    setCustomRouteData({
+      totalDistanceKm: 0,
+      vehicles: mapped.vehicles,
+      services: [],
+    })
+    resetTypeSpecificFields('exchange')
+  }
+
+  /** Prefer over raw setTowType on create when switching types (exchange→custom runs synchronously). */
+  const selectTowType = (to: TowType) => {
+    if (!isEditMode.current && towType === 'exchange' && to === 'custom') {
+      applyExchangeToCustomConversion()
+    }
+    setTowType(to)
+  }
+
   const handleTowTypeChange = (
     from: 'single' | 'exchange' | 'custom',
     to: TowType,
@@ -2123,6 +2184,11 @@ export function useTowForm(
       }
       resetTypeSpecificFields('exchange')
       copyFieldsBetweenTypes('exchange', 'single', captured)
+      return
+    }
+
+    if (from === 'exchange' && to === 'custom') {
+      // Mapping + exchange reset run synchronously in selectTowType before towType updates.
       return
     }
 
@@ -2410,7 +2476,7 @@ export function useTowForm(
     towEndTime, setTowEndTime,
     isToday, setIsToday,
     // Tow type
-    towType, setTowType,
+    towType, setTowType, selectTowType,
     pendingStoragePrefill,
     routePoints, setRoutePoints,
     customRouteData, setCustomRouteData,

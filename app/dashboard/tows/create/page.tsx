@@ -178,7 +178,7 @@ function CreateTowForm({
     isToday,
     setIsToday,
     towType,
-    setTowType,
+    selectTowType,
     routePoints,
     setRoutePoints,
     customRouteData,
@@ -964,9 +964,9 @@ function CreateTowForm({
   const handleEntryKindSelect = (kind: Exclude<TowEntryKind, null>) => {
     setEntryKind(kind)
     if (kind === 'events') {
-      setTowType('')
+      selectTowType('')
     } else {
-      setTowType(kind)
+      selectTowType(kind)
     }
   }
 
@@ -2863,6 +2863,7 @@ function CreateTowForm({
                 {towType === 'custom' && (
                   <>
                     <RouteBuilder
+                      key={towType}
                       companyId={companyId || ''}
                       customerId={selectedCustomerId}
                       customerName={customerName}
