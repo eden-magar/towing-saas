@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Calendar, Check, Loader2 } from 'lucide-react'
-import { FormCard, FormSubcard, Input, Button } from '../ui'
+import { Calendar, Check, Loader2, Plus } from 'lucide-react'
+import { FormCard, FormSubcard, Button } from '../ui'
 import { PhoneInput } from '../ui/PhoneInput'
 import { DriverCalendarPicker } from '../DriverCalendarPicker'
 import { AddressInput, type AddressData } from '../tow-forms/routes/AddressInput'
@@ -13,8 +13,14 @@ import { getDrivers } from '../../lib/queries/drivers'
 import { createEvent } from '../../lib/queries/events'
 import { syncEventToLegacyCalendar } from '../../lib/integrations/legacy-calendar/client-sync'
 import { getCompanySettings } from '../../lib/queries/settings'
+import {
+  getCustomerContacts,
+  insertCustomerContact,
+  findMatchingCustomerContact,
+} from '../../lib/queries/customer-contacts'
 import { calculateEventPrice } from '../../lib/utils/event-pricing'
-import type { DriverWithDetails } from '../../lib/types'
+import type { CustomerContact, DriverWithDetails } from '../../lib/types'
+import { ContactNameAutocomplete } from '../customer-contacts/ContactNameAutocomplete'
 
 function formatMoney(value: number): string {
   return `₪${value.toFixed(2)}`
@@ -40,6 +46,9 @@ export function EventTowSection({
   const [pinOpen, setPinOpen] = useState(false)
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const [savedContacts, setSavedContacts] = useState<CustomerContact[]>([])
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [saveContactToCustomer, setSaveContactToCustomer] = useState(false)
   const [details, setDetails] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
   const [driverPickerOpen, setDriverPickerOpen] = useState(false)
@@ -73,6 +82,35 @@ export function EventTowSection({
       cancelled = true
     }
   }, [companyId])
+
+  useEffect(() => {
+    setContactName('')
+    setContactPhone('')
+    setSaveContactToCustomer(false)
+
+    if (!companyId || !selectedCustomerId) {
+      setSavedContacts([])
+      return
+    }
+
+    let cancelled = false
+    setContactsLoading(true)
+    getCustomerContacts(companyId, selectedCustomerId)
+      .then((contacts) => {
+        if (!cancelled) setSavedContacts(contacts)
+      })
+      .catch((err) => {
+        console.error('Error loading customer contacts for event:', err)
+        if (!cancelled) setSavedContacts([])
+      })
+      .finally(() => {
+        if (!cancelled) setContactsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, selectedCustomerId])
 
   useEffect(() => {
     if (!companyId) return
@@ -120,6 +158,28 @@ export function EventTowSection({
 
   const vatPercentLabel = Math.round(vatRate * 100)
   const displayTotal = priceResult?.total ?? 0
+
+  const matchingSavedContact = useMemo(
+    () => findMatchingCustomerContact(contactName, contactPhone, savedContacts),
+    [contactName, contactPhone, savedContacts]
+  )
+
+  const showSaveContactOption =
+    Boolean(selectedCustomerId) &&
+    contactName.trim().length > 0 &&
+    !matchingSavedContact
+
+  useEffect(() => {
+    if (!showSaveContactOption) {
+      setSaveContactToCustomer(false)
+    }
+  }, [showSaveContactOption])
+
+  const handleSelectSavedContact = (contact: CustomerContact) => {
+    setContactName(contact.name)
+    setContactPhone(contact.phone ?? '')
+    setSaveContactToCustomer(false)
+  }
 
   const eventSummaryLine = useMemo(() => {
     const parts: string[] = []
@@ -169,6 +229,29 @@ export function EventTowSection({
     setError('')
 
     try {
+      if (
+        saveContactToCustomer &&
+        selectedCustomerId &&
+        companyId &&
+        contactName.trim()
+      ) {
+        try {
+          const created = await insertCustomerContact(companyId, selectedCustomerId, {
+            name: contactName.trim(),
+            phone: contactPhone.trim() || null,
+          })
+          setSavedContacts((prev) =>
+            [...prev, created].sort((a, b) => a.name.localeCompare(b.name, 'he'))
+          )
+        } catch (contactErr) {
+          const message =
+            contactErr instanceof Error ? contactErr.message : ''
+          if (!message.includes('טלפון')) {
+            console.error('Error saving contact to customer:', contactErr)
+          }
+        }
+      }
+
       const result = await createEvent({
         companyId,
         createdBy: user.id,
@@ -227,12 +310,14 @@ export function EventTowSection({
 
         <FormSubcard title="איש קשר">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              type="text"
+            <ContactNameAutocomplete
               value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
+              onChange={setContactName}
+              onSelectContact={handleSelectSavedContact}
+              contacts={savedContacts}
+              loading={contactsLoading}
+              disabled={saving}
               placeholder="שם"
-              className="w-full"
             />
             <PhoneInput
               value={contactPhone}
@@ -241,6 +326,27 @@ export function EventTowSection({
               className="w-full"
             />
           </div>
+          {showSaveContactOption && (
+            <button
+              type="button"
+              onClick={() => setSaveContactToCustomer((prev) => !prev)}
+              disabled={saving}
+              aria-pressed={saveContactToCustomer}
+              className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                saveContactToCustomer
+                  ? 'bg-[#33d4ff]/15 text-[#1a9bc7] border border-[#33d4ff]/40'
+                  : 'bg-transparent text-gray-600 border border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+              }`}
+              dir="rtl"
+            >
+              {saveContactToCustomer ? (
+                <Check size={14} className="shrink-0" aria-hidden />
+              ) : (
+                <Plus size={14} className="shrink-0" aria-hidden />
+              )}
+              שמור לאנשי הקשר של הלקוח
+            </button>
+          )}
         </FormSubcard>
 
         <FormSubcard title="נהג (אופציונלי)">

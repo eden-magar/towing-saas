@@ -75,6 +75,22 @@ export async function getCustomerContacts(
   return (data ?? []) as CustomerContact[]
 }
 
+export function findMatchingCustomerContact(
+  name: string,
+  phone: string,
+  contacts: CustomerContact[]
+): CustomerContact | undefined {
+  const trimmedName = name.trim()
+  if (!trimmedName) return undefined
+
+  const trimmedPhone = normalizePhone(phone)
+
+  return contacts.find((contact) => {
+    if (contact.name.trim() !== trimmedName) return false
+    return normalizePhone(contact.phone) === trimmedPhone
+  })
+}
+
 export async function insertCustomerContact(
   companyId: string,
   customerId: string,
