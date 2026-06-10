@@ -15,6 +15,10 @@ import { VehicleCard, VehicleOnTruck, createEmptyVehicle } from './VehicleCard'
 import { StorageNotification } from './StorageVehicleSelector'
 import { TowTruckTypeSelector, ServiceSurchargeSelector, type SelectedService } from '../shared'
 import { PhoneInput } from '../../ui/PhoneInput'
+import { ContactNameAutocomplete } from '../../customer-contacts/ContactNameAutocomplete'
+import { SaveCustomerContactPill } from '../../customer-contacts/SaveCustomerContactPill'
+import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import type { CustomerContact } from '../../../lib/types'
 
 
 // ==================== Types ====================
@@ -63,6 +67,12 @@ export interface RouteBuilderProps {
   truckTypeError?: boolean
   /** Edit-open only: seed internal route once on mount (or first non-empty arrival). */
   initialPoints?: RoutePoint[]
+  /** Saved customer contacts for autocomplete (optional — omit for legacy plain inputs). */
+  savedCustomerContacts?: CustomerContact[]
+  customerContactsLoading?: boolean
+  saveContactByPointId?: Record<string, boolean>
+  onSaveContactToggle?: (pointId: string) => void
+  onContactSelected?: (pointId: string) => void
 }
 
 // ==================== Helper Functions ====================
@@ -106,7 +116,13 @@ export function RouteBuilder({
   truckTypeSectionRef,
   truckTypeError = false,
   initialPoints,
+  savedCustomerContacts,
+  customerContactsLoading = false,
+  saveContactByPointId = {},
+  onSaveContactToggle,
+  onContactSelected,
 }: RouteBuilderProps) {
+  const customerContactPickerEnabled = savedCustomerContacts !== undefined
   const [points, setPoints] = useState<RoutePoint[]>(() =>
     initialPoints?.length ? initialPoints.map((p) => ({ ...p })) : []
   )
@@ -733,13 +749,35 @@ export function RouteBuilder({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">שם</label>
-                            <input
-                              type="text"
-                              value={point.contactName}
-                              onChange={(e) => updatePoint(point.id, { contactName: e.target.value })}
-                              placeholder="שם איש קשר"
-                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                            />
+                            {customerContactPickerEnabled ? (
+                              <ContactNameAutocomplete
+                                value={point.contactName}
+                                onChange={(contactName) =>
+                                  updatePoint(point.id, { contactName })
+                                }
+                                onSelectContact={(contact) => {
+                                  updatePoint(point.id, {
+                                    contactName: contact.name,
+                                    contactPhone: contact.phone ?? '',
+                                  })
+                                  onContactSelected?.(point.id)
+                                }}
+                                contacts={savedCustomerContacts}
+                                loading={customerContactsLoading}
+                                placeholder="שם איש קשר"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                value={point.contactName}
+                                onChange={(e) =>
+                                  updatePoint(point.id, { contactName: e.target.value })
+                                }
+                                placeholder="שם איש קשר"
+                                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                              />
+                            )}
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">טלפון</label>
@@ -751,6 +789,21 @@ export function RouteBuilder({
                             />
                           </div>
                         </div>
+                        {customerContactPickerEnabled &&
+                          shouldOfferSaveCustomerContact(
+                            customerId,
+                            point.contactName,
+                            point.contactPhone,
+                            savedCustomerContacts
+                          ) &&
+                          onSaveContactToggle && (
+                            <SaveCustomerContactPill
+                              className="mt-2"
+                              visible
+                              active={Boolean(saveContactByPointId[point.id])}
+                              onToggle={() => onSaveContactToggle(point.id)}
+                            />
+                          )}
                       </div>
                     )}
 

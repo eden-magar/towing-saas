@@ -85,11 +85,13 @@ import {
 import { EventTowSection } from '../../../components/event-forms/EventTowSection'
 import { ContactNameAutocomplete } from '../../../components/customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../../components/customer-contacts/SaveCustomerContactPill'
+import { CustomerContactFields } from '../../../components/customer-contacts/CustomerContactFields'
 import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
 import {
   findMatchingCustomerContact,
   insertPendingCustomerContacts,
 } from '../../../lib/queries/customer-contacts'
+import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
 
 type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
 
@@ -373,6 +375,17 @@ function CreateTowForm({
   const [pendingPickerTruckId, setPendingPickerTruckId] = useState<string | null>(null)
   const [savePickupContactToCustomer, setSavePickupContactToCustomer] = useState(false)
   const [saveDropoffContactToCustomer, setSaveDropoffContactToCustomer] = useState(false)
+  const [saveWorkingSourceContactToCustomer, setSaveWorkingSourceContactToCustomer] =
+    useState(false)
+  const [saveWorkingDestinationContactToCustomer, setSaveWorkingDestinationContactToCustomer] =
+    useState(false)
+  const [saveExchangePickupContactToCustomer, setSaveExchangePickupContactToCustomer] =
+    useState(false)
+  const [saveDefectiveDestinationContactToCustomer, setSaveDefectiveDestinationContactToCustomer] =
+    useState(false)
+  const [saveCustomPointContacts, setSaveCustomPointContacts] = useState<Record<string, boolean>>(
+    {}
+  )
 
   const { savedContacts, contactsLoading } = useCustomerContacts(
     companyId,
@@ -396,19 +409,49 @@ function CreateTowForm({
       )
   )
 
-  const showSaveDropoffContactOption = Boolean(
-    selectedCustomerId &&
-      dropoffContactName.trim() &&
-      !findMatchingCustomerContact(
-        dropoffContactName,
-        dropoffContactPhone,
-        savedContacts
-      )
+  const showSaveDropoffContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    dropoffContactName,
+    dropoffContactPhone,
+    savedContacts
+  )
+
+  const showSaveWorkingSourceContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    workingVehicleContact,
+    workingVehicleContactPhone,
+    savedContacts
+  )
+
+  const showSaveWorkingDestinationContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    workingDestinationContact,
+    workingDestinationContactPhone,
+    savedContacts
+  )
+
+  const showSaveExchangePickupContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    exchangeContactName,
+    exchangeContactPhone,
+    savedContacts
+  )
+
+  const showSaveDefectiveDestinationContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    defectiveDestinationContact,
+    defectiveDestinationContactPhone,
+    savedContacts
   )
 
   useEffect(() => {
     setSavePickupContactToCustomer(false)
     setSaveDropoffContactToCustomer(false)
+    setSaveWorkingSourceContactToCustomer(false)
+    setSaveWorkingDestinationContactToCustomer(false)
+    setSaveExchangePickupContactToCustomer(false)
+    setSaveDefectiveDestinationContactToCustomer(false)
+    setSaveCustomPointContacts({})
   }, [selectedCustomerId])
 
   useEffect(() => {
@@ -423,23 +466,101 @@ function CreateTowForm({
     }
   }, [showSaveDropoffContactOption])
 
-  const persistSingleTowCustomerContacts = useCallback(async () => {
-    if (!companyId || !selectedCustomerId || towType !== 'single') return
+  useEffect(() => {
+    if (!showSaveWorkingSourceContactOption) {
+      setSaveWorkingSourceContactToCustomer(false)
+    }
+  }, [showSaveWorkingSourceContactOption])
 
-    const pending = []
+  useEffect(() => {
+    if (!showSaveWorkingDestinationContactOption) {
+      setSaveWorkingDestinationContactToCustomer(false)
+    }
+  }, [showSaveWorkingDestinationContactOption])
 
-    if (savePickupContactToCustomer && pickupContactName.trim()) {
-      pending.push({
-        name: pickupContactName.trim(),
-        phone: pickupContactPhone.trim() || null,
-      })
+  useEffect(() => {
+    if (!showSaveExchangePickupContactOption) {
+      setSaveExchangePickupContactToCustomer(false)
+    }
+  }, [showSaveExchangePickupContactOption])
+
+  useEffect(() => {
+    if (!showSaveDefectiveDestinationContactOption) {
+      setSaveDefectiveDestinationContactToCustomer(false)
+    }
+  }, [showSaveDefectiveDestinationContactOption])
+
+  const toggleCustomPointSaveContact = useCallback((pointId: string) => {
+    setSaveCustomPointContacts((prev) => ({
+      ...prev,
+      [pointId]: !prev[pointId],
+    }))
+  }, [])
+
+  const clearCustomPointSaveContact = useCallback((pointId: string) => {
+    setSaveCustomPointContacts((prev) => ({
+      ...prev,
+      [pointId]: false,
+    }))
+  }, [])
+
+  const persistTowCustomerContacts = useCallback(async () => {
+    if (!companyId || !selectedCustomerId) return
+
+    const pending: { name: string; phone: string | null }[] = []
+
+    if (towType === 'single') {
+      if (savePickupContactToCustomer && pickupContactName.trim()) {
+        pending.push({
+          name: pickupContactName.trim(),
+          phone: pickupContactPhone.trim() || null,
+        })
+      }
+      if (saveDropoffContactToCustomer && dropoffContactName.trim()) {
+        pending.push({
+          name: dropoffContactName.trim(),
+          phone: dropoffContactPhone.trim() || null,
+        })
+      }
     }
 
-    if (saveDropoffContactToCustomer && dropoffContactName.trim()) {
-      pending.push({
-        name: dropoffContactName.trim(),
-        phone: dropoffContactPhone.trim() || null,
-      })
+    if (towType === 'exchange') {
+      if (saveWorkingSourceContactToCustomer && workingVehicleContact.trim()) {
+        pending.push({
+          name: workingVehicleContact.trim(),
+          phone: workingVehicleContactPhone.trim() || null,
+        })
+      }
+      if (saveWorkingDestinationContactToCustomer && workingDestinationContact.trim()) {
+        pending.push({
+          name: workingDestinationContact.trim(),
+          phone: workingDestinationContactPhone.trim() || null,
+        })
+      }
+      if (saveExchangePickupContactToCustomer && exchangeContactName.trim()) {
+        pending.push({
+          name: exchangeContactName.trim(),
+          phone: exchangeContactPhone.trim() || null,
+        })
+      }
+      if (saveDefectiveDestinationContactToCustomer && defectiveDestinationContact.trim()) {
+        pending.push({
+          name: defectiveDestinationContact.trim(),
+          phone: defectiveDestinationContactPhone.trim() || null,
+        })
+      }
+    }
+
+    if (towType === 'custom') {
+      for (const point of routePoints) {
+        if (point.type === 'base') continue
+        if (saveCustomPointContacts[point.id] && point.contactName.trim()) {
+          pending.push({
+            name: point.contactName.trim(),
+            phone: point.contactPhone.trim() || null,
+          })
+        }
+      }
     }
 
     if (pending.length === 0) return
@@ -454,11 +575,25 @@ function CreateTowForm({
     pickupContactPhone,
     dropoffContactName,
     dropoffContactPhone,
+    saveWorkingSourceContactToCustomer,
+    saveWorkingDestinationContactToCustomer,
+    saveExchangePickupContactToCustomer,
+    saveDefectiveDestinationContactToCustomer,
+    workingVehicleContact,
+    workingVehicleContactPhone,
+    workingDestinationContact,
+    workingDestinationContactPhone,
+    exchangeContactName,
+    exchangeContactPhone,
+    defectiveDestinationContact,
+    defectiveDestinationContactPhone,
+    routePoints,
+    saveCustomPointContacts,
   ])
 
   useEffect(() => {
-    persistCustomerContactsRef.current = persistSingleTowCustomerContacts
-  }, [persistSingleTowCustomerContacts])
+    persistCustomerContactsRef.current = persistTowCustomerContacts
+  }, [persistTowCustomerContacts])
 
   const getDriverTrucks = (driverId: string) =>
     trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
@@ -961,7 +1096,7 @@ function CreateTowForm({
     setSaving(true)
     setError('')
     try {
-      await persistSingleTowCustomerContacts()
+      await persistTowCustomerContacts()
 
       let finalCustomerId = selectedCustomerId
       if (!selectedCustomerId && customerName.trim()) {
@@ -1222,7 +1357,7 @@ function CreateTowForm({
     hasManualTimeSurchargeOverride,
     priceMode,
     loadedTowStatus,
-    persistSingleTowCustomerContacts,
+    persistTowCustomerContacts,
   ])
 
   const totalDistanceKm =
@@ -2747,6 +2882,11 @@ function CreateTowForm({
                       onRequiredTruckTypesChange={setRequiredTruckTypes}
                       truckTypeSectionRef={truckTypeSectionRef}
                       truckTypeError={truckTypeError}
+                      savedCustomerContacts={savedContacts}
+                      customerContactsLoading={contactsLoading}
+                      saveContactByPointId={saveCustomPointContacts}
+                      onSaveContactToggle={toggleCustomPointSaveContact}
+                      onContactSelected={clearCustomPointSaveContact}
                     />
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
                       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
@@ -3110,56 +3250,88 @@ function CreateTowForm({
                   {towType === 'exchange' ? (
                     <>
                       <div className="grid grid-cols-2 gap-3">
-                      {/* 1 — איש קשר במוצא תקין */}
-                      <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
-                          <div className="flex gap-1.5 flex-wrap justify-end">
-                            {!selectedCustomerId && (
-                              <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                            )}
+                      <CustomerContactFields
+                        name={workingVehicleContact}
+                        phone={workingVehicleContactPhone}
+                        onNameChange={setWorkingVehicleContact}
+                        onPhoneChange={setWorkingVehicleContactPhone}
+                        savedContacts={savedContacts}
+                        contactsLoading={contactsLoading}
+                        disabled={saving}
+                        showSavePill={showSaveWorkingSourceContactOption}
+                        saveActive={saveWorkingSourceContactToCustomer}
+                        onSaveToggle={() =>
+                          setSaveWorkingSourceContactToCustomer((prev) => !prev)
+                        }
+                        onSelectContact={() => setSaveWorkingSourceContactToCustomer(false)}
+                        header={
+                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                            <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                              {!selectedCustomerId && (
+                                <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={workingVehicleContactPhone} onChange={(phone) => setWorkingVehicleContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
+                        }
+                      />
 
-                      {/* 2 — איש קשר ביעד תקין */}
-                      <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
-                          <div className="flex gap-1.5 flex-wrap justify-end">
-                            {!selectedCustomerId && (
-                              <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                            )}
+                      <CustomerContactFields
+                        name={workingDestinationContact}
+                        phone={workingDestinationContactPhone}
+                        onNameChange={setWorkingDestinationContact}
+                        onPhoneChange={setWorkingDestinationContactPhone}
+                        savedContacts={savedContacts}
+                        contactsLoading={contactsLoading}
+                        disabled={saving}
+                        showSavePill={showSaveWorkingDestinationContactOption}
+                        saveActive={saveWorkingDestinationContactToCustomer}
+                        onSaveToggle={() =>
+                          setSaveWorkingDestinationContactToCustomer((prev) => !prev)
+                        }
+                        onSelectContact={() => setSaveWorkingDestinationContactToCustomer(false)}
+                        header={
+                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                            <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                              {!selectedCustomerId && (
+                                <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={workingDestinationContact} onChange={(e) => setWorkingDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={workingDestinationContactPhone} onChange={(phone) => setWorkingDestinationContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
+                        }
+                      />
 
-                      {/* 3 — איש קשר במוצא תקול */}
                       <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
-                          {!selectedCustomerId && (
-                            <button
-                              type="button"
-                              onClick={() => copyFromCustomer('exchange_pickup')}
-                              className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
-                            >
-                              כמו לקוח 👤
-                            </button>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={exchangeContactPhone} onChange={(phone) => setExchangeContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
+                        <CustomerContactFields
+                          name={exchangeContactName}
+                          phone={exchangeContactPhone}
+                          onNameChange={setExchangeContactName}
+                          onPhoneChange={setExchangeContactPhone}
+                          savedContacts={savedContacts}
+                          contactsLoading={contactsLoading}
+                          disabled={saving}
+                          showSavePill={showSaveExchangePickupContactOption}
+                          saveActive={saveExchangePickupContactToCustomer}
+                          onSaveToggle={() =>
+                            setSaveExchangePickupContactToCustomer((prev) => !prev)
+                          }
+                          onSelectContact={() => setSaveExchangePickupContactToCustomer(false)}
+                          header={
+                            <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                              <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
+                              {!selectedCustomerId && (
+                                <button
+                                  type="button"
+                                  onClick={() => copyFromCustomer('exchange_pickup')}
+                                  className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
+                                >
+                                  כמו לקוח 👤
+                                </button>
+                              )}
+                            </div>
+                          }
+                        />
                         {workingDestinationContact && (
                           <button
                             type="button"
@@ -3174,21 +3346,31 @@ function CreateTowForm({
                         )}
                       </div>
 
-                      {/* 4 — איש קשר ביעד תקול */}
-                      <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
-                          <div className="flex gap-1.5 flex-wrap justify-end">
-                            {!selectedCustomerId && (
-                              <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                            )}
+                      <CustomerContactFields
+                        name={defectiveDestinationContact}
+                        phone={defectiveDestinationContactPhone}
+                        onNameChange={setDefectiveDestinationContact}
+                        onPhoneChange={setDefectiveDestinationContactPhone}
+                        savedContacts={savedContacts}
+                        contactsLoading={contactsLoading}
+                        disabled={saving}
+                        showSavePill={showSaveDefectiveDestinationContactOption}
+                        saveActive={saveDefectiveDestinationContactToCustomer}
+                        onSaveToggle={() =>
+                          setSaveDefectiveDestinationContactToCustomer((prev) => !prev)
+                        }
+                        onSelectContact={() => setSaveDefectiveDestinationContactToCustomer(false)}
+                        header={
+                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                            <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                              {!selectedCustomerId && (
+                                <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={defectiveDestinationContactPhone} onChange={(phone) => setDefectiveDestinationContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
+                        }
+                      />
                       </div>
                     </>
                   ) : towType === 'single' ? (

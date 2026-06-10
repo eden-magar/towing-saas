@@ -51,6 +51,10 @@ import {
   isPickableStoredVehicle,
 } from '../../../lib/queries/storage'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
+import { CustomerContactFields } from '../../../components/customer-contacts/CustomerContactFields'
+import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
+import { insertPendingCustomerContacts } from '../../../lib/queries/customer-contacts'
+import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
 import type { AddressData } from '../../../lib/google-maps'
 import type { TimeSurcharge, LocationSurcharge } from '../../../lib/queries/price-lists'
 import type { VehicleLookupResult, VehicleType } from '../../../lib/types'
@@ -67,7 +71,12 @@ function CreateExchangeTowForm({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const form = useTowForm(editTowId)
+  const persistCustomerContactsRef = useRef<() => Promise<void>>(async () => {})
+  const form = useTowForm(editTowId, {
+    beforeSaveTow: async () => {
+      await persistCustomerContactsRef.current()
+    },
+  })
 
   const {
     companyId,
@@ -285,6 +294,123 @@ function CreateExchangeTowForm({
   const [showDefectiveServicesModal, setShowDefectiveServicesModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
+  const [saveWorkingSourceContactToCustomer, setSaveWorkingSourceContactToCustomer] =
+    useState(false)
+  const [saveWorkingDestinationContactToCustomer, setSaveWorkingDestinationContactToCustomer] =
+    useState(false)
+  const [saveExchangePickupContactToCustomer, setSaveExchangePickupContactToCustomer] =
+    useState(false)
+  const [saveDefectiveDestinationContactToCustomer, setSaveDefectiveDestinationContactToCustomer] =
+    useState(false)
+
+  const { savedContacts, contactsLoading } = useCustomerContacts(
+    companyId,
+    selectedCustomerId
+  )
+
+  const showSaveWorkingSourceContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    workingVehicleContact,
+    workingVehicleContactPhone,
+    savedContacts
+  )
+
+  const showSaveWorkingDestinationContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    workingDestinationContact,
+    workingDestinationContactPhone,
+    savedContacts
+  )
+
+  const showSaveExchangePickupContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    exchangeContactName,
+    exchangeContactPhone,
+    savedContacts
+  )
+
+  const showSaveDefectiveDestinationContactOption = shouldOfferSaveCustomerContact(
+    selectedCustomerId,
+    defectiveDestinationContact,
+    defectiveDestinationContactPhone,
+    savedContacts
+  )
+
+  useEffect(() => {
+    setSaveWorkingSourceContactToCustomer(false)
+    setSaveWorkingDestinationContactToCustomer(false)
+    setSaveExchangePickupContactToCustomer(false)
+    setSaveDefectiveDestinationContactToCustomer(false)
+  }, [selectedCustomerId])
+
+  useEffect(() => {
+    if (!showSaveWorkingSourceContactOption) setSaveWorkingSourceContactToCustomer(false)
+  }, [showSaveWorkingSourceContactOption])
+
+  useEffect(() => {
+    if (!showSaveWorkingDestinationContactOption) setSaveWorkingDestinationContactToCustomer(false)
+  }, [showSaveWorkingDestinationContactOption])
+
+  useEffect(() => {
+    if (!showSaveExchangePickupContactOption) setSaveExchangePickupContactToCustomer(false)
+  }, [showSaveExchangePickupContactOption])
+
+  useEffect(() => {
+    if (!showSaveDefectiveDestinationContactOption) setSaveDefectiveDestinationContactToCustomer(false)
+  }, [showSaveDefectiveDestinationContactOption])
+
+  const persistExchangeCustomerContacts = useCallback(async () => {
+    if (!companyId || !selectedCustomerId) return
+
+    const pending: { name: string; phone: string | null }[] = []
+
+    if (saveWorkingSourceContactToCustomer && workingVehicleContact.trim()) {
+      pending.push({
+        name: workingVehicleContact.trim(),
+        phone: workingVehicleContactPhone.trim() || null,
+      })
+    }
+    if (saveWorkingDestinationContactToCustomer && workingDestinationContact.trim()) {
+      pending.push({
+        name: workingDestinationContact.trim(),
+        phone: workingDestinationContactPhone.trim() || null,
+      })
+    }
+    if (saveExchangePickupContactToCustomer && exchangeContactName.trim()) {
+      pending.push({
+        name: exchangeContactName.trim(),
+        phone: exchangeContactPhone.trim() || null,
+      })
+    }
+    if (saveDefectiveDestinationContactToCustomer && defectiveDestinationContact.trim()) {
+      pending.push({
+        name: defectiveDestinationContact.trim(),
+        phone: defectiveDestinationContactPhone.trim() || null,
+      })
+    }
+
+    if (pending.length === 0) return
+    await insertPendingCustomerContacts(companyId, selectedCustomerId, pending)
+  }, [
+    companyId,
+    selectedCustomerId,
+    saveWorkingSourceContactToCustomer,
+    saveWorkingDestinationContactToCustomer,
+    saveExchangePickupContactToCustomer,
+    saveDefectiveDestinationContactToCustomer,
+    workingVehicleContact,
+    workingVehicleContactPhone,
+    workingDestinationContact,
+    workingDestinationContactPhone,
+    exchangeContactName,
+    exchangeContactPhone,
+    defectiveDestinationContact,
+    defectiveDestinationContactPhone,
+  ])
+
+  useEffect(() => {
+    persistCustomerContactsRef.current = persistExchangeCustomerContacts
+  }, [persistExchangeCustomerContacts])
 
   const isBusinessCustomer =
     customerTab === 'existing' &&
@@ -413,6 +539,8 @@ function CreateExchangeTowForm({
     setSaving(true)
     setError('')
     try {
+      await persistExchangeCustomerContacts()
+
       let finalCustomerId = selectedCustomerId
       if (!selectedCustomerId && customerName.trim()) {
         const result = await createCustomer({
@@ -664,6 +792,7 @@ function CreateExchangeTowForm({
     setTruckTypeError,
     truckTypeSectionRef,
     setQuoteSavedId,
+    persistExchangeCustomerContacts,
     loadedTowStatus,
   ])
 
@@ -1828,56 +1957,88 @@ function CreateExchangeTowForm({
                 </div>
                 <div className="p-4 sm:p-5 space-y-4">
                       <div className="grid grid-cols-2 gap-3">
-                      {/* 1 — איש קשר במוצא תקין */}
-                      <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
-                          <div className="flex gap-1.5 flex-wrap justify-end">
-                            {!selectedCustomerId && (
-                              <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                            )}
+                      <CustomerContactFields
+                        name={workingVehicleContact}
+                        phone={workingVehicleContactPhone}
+                        onNameChange={setWorkingVehicleContact}
+                        onPhoneChange={setWorkingVehicleContactPhone}
+                        savedContacts={savedContacts}
+                        contactsLoading={contactsLoading}
+                        disabled={saving}
+                        showSavePill={showSaveWorkingSourceContactOption}
+                        saveActive={saveWorkingSourceContactToCustomer}
+                        onSaveToggle={() =>
+                          setSaveWorkingSourceContactToCustomer((prev) => !prev)
+                        }
+                        onSelectContact={() => setSaveWorkingSourceContactToCustomer(false)}
+                        header={
+                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                            <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                              {!selectedCustomerId && (
+                                <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={workingVehicleContact} onChange={(e) => setWorkingVehicleContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={workingVehicleContactPhone} onChange={(phone) => setWorkingVehicleContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
+                        }
+                      />
 
-                      {/* 2 — איש קשר ביעד תקין */}
-                      <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
-                          <div className="flex gap-1.5 flex-wrap justify-end">
-                            {!selectedCustomerId && (
-                              <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                            )}
+                      <CustomerContactFields
+                        name={workingDestinationContact}
+                        phone={workingDestinationContactPhone}
+                        onNameChange={setWorkingDestinationContact}
+                        onPhoneChange={setWorkingDestinationContactPhone}
+                        savedContacts={savedContacts}
+                        contactsLoading={contactsLoading}
+                        disabled={saving}
+                        showSavePill={showSaveWorkingDestinationContactOption}
+                        saveActive={saveWorkingDestinationContactToCustomer}
+                        onSaveToggle={() =>
+                          setSaveWorkingDestinationContactToCustomer((prev) => !prev)
+                        }
+                        onSelectContact={() => setSaveWorkingDestinationContactToCustomer(false)}
+                        header={
+                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                            <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                              {!selectedCustomerId && (
+                                <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={workingDestinationContact} onChange={(e) => setWorkingDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={workingDestinationContactPhone} onChange={(phone) => setWorkingDestinationContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
+                        }
+                      />
 
-                      {/* 3 — איש קשר במוצא תקול */}
                       <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
-                          {!selectedCustomerId && (
-                            <button
-                              type="button"
-                              onClick={() => copyFromCustomer('exchange_pickup')}
-                              className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
-                            >
-                              כמו לקוח 👤
-                            </button>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={exchangeContactName} onChange={(e) => setExchangeContactName(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={exchangeContactPhone} onChange={(phone) => setExchangeContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
+                        <CustomerContactFields
+                          name={exchangeContactName}
+                          phone={exchangeContactPhone}
+                          onNameChange={setExchangeContactName}
+                          onPhoneChange={setExchangeContactPhone}
+                          savedContacts={savedContacts}
+                          contactsLoading={contactsLoading}
+                          disabled={saving}
+                          showSavePill={showSaveExchangePickupContactOption}
+                          saveActive={saveExchangePickupContactToCustomer}
+                          onSaveToggle={() =>
+                            setSaveExchangePickupContactToCustomer((prev) => !prev)
+                          }
+                          onSelectContact={() => setSaveExchangePickupContactToCustomer(false)}
+                          header={
+                            <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                              <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
+                              {!selectedCustomerId && (
+                                <button
+                                  type="button"
+                                  onClick={() => copyFromCustomer('exchange_pickup')}
+                                  className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
+                                >
+                                  כמו לקוח 👤
+                                </button>
+                              )}
+                            </div>
+                          }
+                        />
                         {workingDestinationContact && (
                           <button
                             type="button"
@@ -1892,21 +2053,31 @@ function CreateExchangeTowForm({
                         )}
                       </div>
 
-                      {/* 4 — איש קשר ביעד תקול */}
-                      <div>
-                        <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                          <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
-                          <div className="flex gap-1.5 flex-wrap justify-end">
-                            {!selectedCustomerId && (
-                              <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                            )}
+                      <CustomerContactFields
+                        name={defectiveDestinationContact}
+                        phone={defectiveDestinationContactPhone}
+                        onNameChange={setDefectiveDestinationContact}
+                        onPhoneChange={setDefectiveDestinationContactPhone}
+                        savedContacts={savedContacts}
+                        contactsLoading={contactsLoading}
+                        disabled={saving}
+                        showSavePill={showSaveDefectiveDestinationContactOption}
+                        saveActive={saveDefectiveDestinationContactToCustomer}
+                        onSaveToggle={() =>
+                          setSaveDefectiveDestinationContactToCustomer((prev) => !prev)
+                        }
+                        onSelectContact={() => setSaveDefectiveDestinationContactToCustomer(false)}
+                        header={
+                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                            <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                              {!selectedCustomerId && (
+                                <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input type="text" value={defectiveDestinationContact} onChange={(e) => setDefectiveDestinationContact(e.target.value)} placeholder="שם" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                          <PhoneInput value={defectiveDestinationContactPhone} onChange={(phone) => setDefectiveDestinationContactPhone(phone)} placeholder="טלפון" className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm" />
-                        </div>
-                      </div>
+                        }
+                      />
                       </div>
                   <textarea
                     value={notes}
