@@ -6,6 +6,7 @@ import { getDriverHoursReport } from '../../../lib/queries/driver-shifts'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { Clock, Download, ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
+import { DateInput } from '../../../components/ui'
 
 export default function DriverHoursPage() {
   const { companyId } = useAuth()
@@ -79,13 +80,11 @@ export default function DriverHoursPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 flex flex-wrap gap-4 items-end">
         <div>
           <label className="block text-sm text-gray-600 mb-1">מתאריך</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          <DateInput value={startDate} onChange={setStartDate} className="min-w-[10rem]" />
         </div>
         <div>
           <label className="block text-sm text-gray-600 mb-1">עד תאריך</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+          <DateInput value={endDate} onChange={setEndDate} className="min-w-[10rem]" />
         </div>
         <div>
           <label className="block text-sm text-gray-600 mb-1">נהג</label>

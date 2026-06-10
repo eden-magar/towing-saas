@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { loadGoogleMaps } from '@/app/lib/google-maps'
-import { TimeInput } from '@/app/components/ui/TimeInput'
+import { TimeInput, DateInput } from '@/app/components/ui'
 import { useAuth } from '@/app/lib/AuthContext'
 import {
   getDriverTasks,
@@ -448,11 +448,10 @@ export default function TasksPage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-gray-500">תאריך יעד</label>
-                <input
-                  type="date"
+                <DateInput
                   value={fDueDate}
-                  onChange={e => setFDueDate(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  onChange={setFDueDate}
+                  className="w-full"
                 />
               </div>
               <div className="flex flex-col gap-1.5">

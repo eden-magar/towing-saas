@@ -6,6 +6,7 @@ import { Plus, Search, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, AlertT
 import { useAuth } from '../../lib/AuthContext'
 import { getTrucks, createTruck, updateTruck, deleteTruck, checkTruckDuplicate, uploadTruckDocument, getTruckDocumentSignedUrl } from '../../lib/queries/trucks'
 import { TruckWithDetails, TruckAssignedDriver } from '../../lib/types'
+import { DateInput } from '../../components/ui'
 import { getDrivers } from '../../lib/queries/drivers'
 import { DriverWithDetails } from '../../lib/types'
 
@@ -1225,20 +1226,18 @@ export default function TrucksPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">תוקף רישיון רכב</label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.licenseExpiry}
-                        onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        onChange={(licenseExpiry) => setFormData({ ...formData, licenseExpiry })}
+                        className="w-full"
                       />
                     </div>
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">תוקף ביטוח</label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.insuranceExpiry}
-                        onChange={(e) => setFormData({ ...formData, insuranceExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        onChange={(insuranceExpiry) => setFormData({ ...formData, insuranceExpiry })}
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -1261,11 +1260,10 @@ export default function TrucksPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">תוקף כיול טכוגרף</label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.tachographExpiry}
-                        onChange={(e) => setFormData({ ...formData, tachographExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        onChange={(tachographExpiry) => setFormData({ ...formData, tachographExpiry })}
+                        className="w-full"
                       />
                     </div>
                     <FileUploadField
@@ -1278,11 +1276,10 @@ export default function TrucksPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">תוקף תסקיר מהנדס</label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.engineerReportExpiry}
-                        onChange={(e) => setFormData({ ...formData, engineerReportExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        onChange={(engineerReportExpiry) => setFormData({ ...formData, engineerReportExpiry })}
+                        className="w-full"
                       />
                     </div>
                     <FileUploadField
@@ -1303,11 +1300,10 @@ export default function TrucksPage() {
                 </h3>
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">תאריך בדיקת חורף אחרונה</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={formData.lastWinterInspection}
-                    onChange={(e) => setFormData({ ...formData, lastWinterInspection: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                    onChange={(lastWinterInspection) => setFormData({ ...formData, lastWinterInspection })}
+                    className="w-full"
                   />
                   <p className="text-xs text-gray-500 mt-1">תזכורת תופיע מ-1 בספטמבר כל שנה</p>
                 </div>

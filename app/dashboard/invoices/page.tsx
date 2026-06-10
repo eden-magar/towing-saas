@@ -18,6 +18,7 @@ import {
   DollarSign, AlertCircle, ChevronDown, Calendar, Building2, Receipt
 } from 'lucide-react'
 import Link from 'next/link'
+import { DateInput } from '../../components/ui'
 
 const statusConfig: Record<InvoiceStatus, { label: string; color: string; bgColor: string; icon: any }> = {
   draft: { label: 'טיוטה', color: 'text-gray-600', bgColor: 'bg-gray-100', icon: FileText },
@@ -510,11 +511,10 @@ export default function InvoicesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לתשלום</label>
-                <input
-                  type="date"
+                <DateInput
                   value={newInvoice.dueDate}
-                  onChange={(e) => setNewInvoice({ ...newInvoice, dueDate: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  onChange={(dueDate) => setNewInvoice({ ...newInvoice, dueDate })}
+                  className="w-full"
                 />
               </div>
             </div>

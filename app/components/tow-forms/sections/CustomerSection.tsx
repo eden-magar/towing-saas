@@ -5,7 +5,7 @@ import { Search, User, ArrowLeftRight } from 'lucide-react'
 import { CustomerListItem } from '../../../lib/queries/customers'
 import { CustomerWithPricing } from '../../../lib/queries/price-lists'
 import { PhoneInput } from '../../ui/PhoneInput'
-import { TimeInput } from '../../ui/TimeInput'
+import { TimeInput, DateInput } from '../../ui'
 
 interface CustomerSectionProps {
   customers: CustomerListItem[]
@@ -247,14 +247,13 @@ export function CustomerSection({
           >
             עכשיו
           </button>
-          <input
-            type="date"
+          <DateInput
             value={towDate}
-            onChange={(e) => {
-              onTowDateChange(e.target.value)
+            onChange={(v) => {
+              onTowDateChange(v)
               onIsTodayChange(false)
             }}
-            className="min-w-0 px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+            className="min-w-0 flex-1"
           />
           <TimeInput
             value={towTime}

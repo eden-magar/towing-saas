@@ -8,6 +8,7 @@ import {
   approveCashTransfer 
 } from '../../lib/queries/driver-cash'
 import { DriverCashTransaction } from '../../lib/types'
+import { DateInput } from '../../components/ui'
 import { 
   Wallet, 
   Search, 
@@ -204,13 +205,11 @@ const pendingTransfers = transactions.filter(t =>
             <div className="flex gap-3 mt-3 items-end flex-wrap">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">מתאריך</label>
-                <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30" />
+                <DateInput value={filterFrom} onChange={setFilterFrom} className="min-w-[10rem]" />
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">עד תאריך</label>
-                <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30" />
+                <DateInput value={filterTo} onChange={setFilterTo} className="min-w-[10rem]" />
               </div>
               <button onClick={handleFilterApply} className="bg-[#33d4ff] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#21b8e6] transition-colors">סנן</button>
               <button onClick={() => { setFilterFrom(''); setFilterTo(''); handleFilterApply() }} className="text-gray-400 px-2 py-2 text-sm hover:text-gray-600">נקה</button>

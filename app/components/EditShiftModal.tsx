@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { editShift } from '../lib/queries/driver-shifts'
 import { getDriverCashBalance } from '../lib/queries/driver-cash'
 import { supabase } from '../lib/supabase'
+import { DateInput } from './ui'
 import {
   buildLocalDateTime,
   computeEndShiftDefaults,
@@ -323,12 +324,11 @@ export default function EditShiftModal({ open, target, onClose, onSaved }: EditS
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-600">תאריך התחלה</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={startShiftDate}
                     max={todayStr}
-                    onChange={e => setStartShiftDate(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 p-3 text-right focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                    onChange={setStartShiftDate}
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -348,13 +348,12 @@ export default function EditShiftModal({ open, target, onClose, onSaved }: EditS
             <p className="text-sm font-medium text-gray-800">סיום משמרת</p>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-600">תאריך סיום</label>
-              <input
-                type="date"
+              <DateInput
                 value={endShiftDate}
                 min={endMinDate}
                 max={todayStr}
-                onChange={e => setEndShiftDate(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 p-3 text-right focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
+                onChange={setEndShiftDate}
+                className="w-full"
               />
             </div>
             <div>

@@ -8,7 +8,7 @@ import {
   getStoredVehicleStatusDisplay,
   type StoredVehicleWithCustomer,
 } from '../../../lib/queries/storage'
-import { Input, Button, FormCard, TimeInput } from '../../ui'
+import { Input, Button, FormCard, TimeInput, DateInput } from '../../ui'
 import { PhoneInput } from '../../ui/PhoneInput'
 
 export type CreateCustomerTab = 'existing' | 'casual'
@@ -133,10 +133,9 @@ export function CreateCustomerSection({
         >
           עכשיו
         </Button>
-        <Input
-          type="date"
+        <DateInput
           value={towDate}
-          onChange={(e) => onTowDateChange(e.target.value)}
+          onChange={onTowDateChange}
           className="flex-1 min-w-[7rem]"
         />
         <TimeInput
@@ -164,10 +163,9 @@ export function CreateCustomerSection({
           }}
           className="flex-1 min-w-[7rem]"
         />
-        <Input
-          type="date"
+        <DateInput
           value={towEndDate}
-          onChange={(e) => onTowEndDateChange(e.target.value)}
+          onChange={onTowEndDateChange}
           className="flex-1 min-w-[7rem]"
         />
       </div>

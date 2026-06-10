@@ -13,6 +13,7 @@ import EditShiftModal, { type EditShiftModalTarget } from './EditShiftModal'
 import ShiftEditHistoryModal from './ShiftEditHistoryModal'
 import { formatJerusalemDateShort } from '../lib/shift-datetime'
 import { Clock, MapPin, Users, Activity, ChevronDown, Edit2 } from 'lucide-react'
+import { DateInput } from './ui'
 
 interface Props {
   companyId: string
@@ -128,20 +129,18 @@ export default function DriverHoursTab({ companyId }: Props) {
           <div className="flex flex-wrap gap-3 items-end">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">מתאריך</label>
-              <input
-                type="date"
+              <DateInput
                 value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30"
+                onChange={setStartDate}
+                className="min-w-[10rem]"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">עד תאריך</label>
-              <input
-                type="date"
+              <DateInput
                 value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30"
+                onChange={setEndDate}
+                className="min-w-[10rem]"
               />
             </div>
             <div>

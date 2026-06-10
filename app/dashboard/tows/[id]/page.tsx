@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
-import { TimeInput } from '../../../components/ui/TimeInput'
+import { TimeInput, DateInput } from '../../../components/ui'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
 import { normalizePlate } from '../../../lib/utils/plate-number'
@@ -1490,11 +1490,10 @@ export default function TowDetailsPage() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">תאריך</label>
-                          <input
-                            type="date"
+                          <DateInput
                             value={editScheduledDate}
-                            onChange={(e) => setEditScheduledDate(e.target.value)}
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            onChange={setEditScheduledDate}
+                            className="w-full"
                           />
                         </div>
                         <div>
@@ -1519,11 +1518,10 @@ export default function TowDetailsPage() {
                             }}
                             className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]"
                           />
-                          <input
-                            type="date"
+                          <DateInput
                             value={editScheduledEndDate}
-                            onChange={(e) => setEditScheduledEndDate(e.target.value)}
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                            onChange={setEditScheduledEndDate}
+                            className="w-full"
                           />
                         </div>
                       </div>
@@ -1593,14 +1591,13 @@ export default function TowDetailsPage() {
                             ? 'מעדכן את זמן הסיום בפועל (completed_at) — משפיע על תצוגת היומן'
                             : 'מעדכן את שעת הסיום המתוכננת (scheduled_end_at)'}
                         </p>
-                        <div className="grid grid-cols-2 gap-4" lang="en-GB">
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm text-gray-600 mb-1">תאריך</label>
-                            <input
-                              type="date"
+                            <DateInput
                               value={endEditDate}
-                              onChange={(e) => setEndEditDate(e.target.value)}
-                              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                              onChange={setEndEditDate}
+                              className="w-full"
                             />
                           </div>
                           <div>
@@ -2734,13 +2731,12 @@ export default function TowDetailsPage() {
                   שעת סיום בפועל (אופציונלי)
                 </label>
                 <p className="text-xs text-gray-500 mb-2">אם לא תשנה, ייקבע הזמן הנוכחי</p>
-                <div className="grid grid-cols-2 gap-3" lang="en-GB">
-                  <input
-                    type="date"
+                <div className="grid grid-cols-2 gap-3">
+                  <DateInput
                     value={closeEndDate}
-                    onChange={(e) => setCloseEndDate(e.target.value)}
+                    onChange={setCloseEndDate}
                     disabled={manualClosing}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    className="w-full"
                   />
                   <TimeInput
                     value={closeEndTime}

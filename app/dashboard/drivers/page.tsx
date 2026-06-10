@@ -8,7 +8,7 @@ import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates }
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
 import { PhoneInput } from '../../components/ui/PhoneInput'
-import { TimeInput } from '../../components/ui/TimeInput'
+import { TimeInput, DateInput } from '../../components/ui'
 import DriversMap from '../../components/DriversMap'
 import DriverHoursTab from '../../components/DriverHoursTab'
 import ResendInviteModal from '../../components/ResendInviteModal'
@@ -988,11 +988,10 @@ export default function DriversPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">תוקף רישיון *</label>
-                      <input
-                        type="date"
+                      <DateInput
                         value={formData.licenseExpiry}
-                        onChange={(e) => setFormData({ ...formData, licenseExpiry: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        onChange={(licenseExpiry) => setFormData({ ...formData, licenseExpiry })}
+                        className="w-full"
                       />
                     </div>
                     <div>
