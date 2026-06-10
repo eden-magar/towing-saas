@@ -26,6 +26,7 @@ import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
 import { supabase } from '../lib/supabase'
 import { insertDriverTruckAssignments } from '../lib/queries/driver-truck-assignments'
+import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
 
 interface UseTowSaveParams {
   companyId: string | null
@@ -637,26 +638,7 @@ export function useTowSave(params: UseTowSaveParams) {
         (towData as { status?: string; driverId?: string }).status ??
         (towData.driverId ? 'assigned' : 'pending')
       if (createdStatus !== 'quote') {
-        void (async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-            if (!token) return
-            const res = await fetch('/api/integrations/legacy-calendar/sync', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ tow_id: result.id }),
-            })
-            if (!res.ok) {
-              console.warn('[legacy-calendar-sync] sync request failed', res.status)
-            }
-          } catch (err) {
-            console.warn('[legacy-calendar-sync] sync request failed', err)
-          }
-        })()
+        void syncTowToLegacyCalendar(result.id)
       }
 
       setSavedTowId(result.id)

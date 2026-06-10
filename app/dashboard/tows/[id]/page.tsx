@@ -37,8 +37,8 @@ import {
   Link2,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
-import { canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
-import { getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
+import { canApproveQuote, canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
+import { approveTowQuote, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
@@ -146,6 +146,7 @@ export default function TowDetailsPage() {
   const [closeEndDate, setCloseEndDate] = useState('')
   const [closeEndTime, setCloseEndTime] = useState('')
   const [assigning, setAssigning] = useState(false)
+  const [approvingQuote, setApprovingQuote] = useState(false)
   const [showLinkedTowModal, setShowLinkedTowModal] = useState(false)
   const [creatingLinkedTow, setCreatingLinkedTow] = useState(false)
   const [linkedTowDriverId, setLinkedTowDriverId] = useState<string | null>(null)
@@ -409,6 +410,8 @@ export default function TowDetailsPage() {
     : false
   const canManualClose =
     tow != null && (tow.status === 'assigned' || tow.status === 'in_progress')
+  const canApproveQuoteTow =
+    tow?.status === 'quote' && canApproveQuote(user?.role)
 
   const vehiclePlateById = useMemo(
     () => buildVehiclePlateLookup(tow?.vehicles),
@@ -868,6 +871,29 @@ export default function TowDetailsPage() {
     setShowCancelModal(true)
   }
 
+  const handleApproveQuote = async () => {
+    if (!tow || !canApproveQuoteTow) return
+    setApprovingQuote(true)
+    try {
+      const result = await approveTowQuote(tow.id)
+      if (!result.approved) {
+        alert(
+          result.reason === 'not_quote'
+            ? 'ההצעה כבר אושרה או שאינה בהצעת מחיר'
+            : 'הגרירה לא נמצאה'
+        )
+        return
+      }
+      await refreshTow()
+      if (changeLogsLoaded) void loadChangeLogs(true)
+    } catch (err) {
+      console.error('Error approving tow quote:', err)
+      alert('שגיאה באישור ההצעה')
+    } finally {
+      setApprovingQuote(false)
+    }
+  }
+
   const handleConfirmManualClose = async () => {
     if (!tow || !user?.id) return
     setManualClosing(true)
@@ -1177,6 +1203,19 @@ export default function TowDetailsPage() {
                     >
                       <CheckCircle size={18} />
                       <span className="hidden sm:inline">סגור גרירה ידנית</span>
+                    </button>
+                  )}
+                  {canApproveQuoteTow && (
+                    <button
+                      type="button"
+                      onClick={handleApproveQuote}
+                      disabled={approvingQuote}
+                      className="p-2 sm:px-3 sm:py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <CheckCircle size={18} />
+                      <span className="hidden sm:inline">
+                        {approvingQuote ? 'מאשר...' : 'אשר הצעה'}
+                      </span>
                     </button>
                   )}
                   {canEdit && (

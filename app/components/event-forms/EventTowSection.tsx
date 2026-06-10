@@ -11,7 +11,7 @@ import { PinDropModal } from '../tow-forms/shared/PinDropModal'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers } from '../../lib/queries/drivers'
 import { createEvent } from '../../lib/queries/events'
-import { supabase } from '../../lib/supabase'
+import { syncEventToLegacyCalendar } from '../../lib/integrations/legacy-calendar/client-sync'
 import { getCompanySettings } from '../../lib/queries/settings'
 import { calculateEventPrice } from '../../lib/utils/event-pricing'
 import type { DriverWithDetails } from '../../lib/types'
@@ -190,28 +190,7 @@ export function EventTowSection({
       })
 
       if (status === 'approved') {
-        void (async () => {
-          try {
-            const {
-              data: { session },
-            } = await supabase.auth.getSession()
-            const token = session?.access_token
-            if (!token) return
-            const res = await fetch('/api/integrations/legacy-calendar/sync-event', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ event_id: result.id }),
-            })
-            if (!res.ok) {
-              console.warn('[legacy-calendar-sync-event] sync request failed', res.status)
-            }
-          } catch (err) {
-            console.warn('[legacy-calendar-sync-event] sync request failed', err)
-          }
-        })()
+        void syncEventToLegacyCalendar(result.id)
       }
 
       router.push(`/dashboard/events/${result.id}`)

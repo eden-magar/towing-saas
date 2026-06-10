@@ -21,6 +21,7 @@ import {
 import type { PersistedVehicleType } from '../utils/tow-save-handler'
 import { isClosedTowStatus } from '../utils/can-edit-closed-tow'
 import { persistableUuid } from '../utils/persistable-uuid'
+import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-sync'
 
 // ==================== טיפוסים ====================
 
@@ -845,6 +846,58 @@ export async function createTow(input: CreateTowInput) {
 }
 
 // ==================== עדכון סטטוס גרירה ====================
+
+export type ApproveTowQuoteResult =
+  | { approved: true; newStatus: 'pending' | 'assigned' }
+  | { approved: false; reason: 'not_quote' | 'not_found' }
+
+/**
+ * Promote a saved quote tow to pending/assigned and sync to legacy Google Calendar.
+ * No-op when status is not 'quote'.
+ */
+export async function approveTowQuote(towId: string): Promise<ApproveTowQuoteResult> {
+  const { data: existing, error: fetchError } = await supabase
+    .from('tows')
+    .select('status, driver_id')
+    .eq('id', towId)
+    .maybeSingle()
+
+  if (fetchError) {
+    console.error('Error fetching tow for quote approval:', fetchError)
+    throw fetchError
+  }
+
+  if (!existing) {
+    return { approved: false, reason: 'not_found' }
+  }
+
+  if (existing.status !== 'quote') {
+    return { approved: false, reason: 'not_quote' }
+  }
+
+  const newStatus: 'pending' | 'assigned' = existing.driver_id ? 'assigned' : 'pending'
+
+  const { data: updated, error: updateError } = await supabase
+    .from('tows')
+    .update({ status: newStatus })
+    .eq('id', towId)
+    .eq('status', 'quote')
+    .select('id')
+    .maybeSingle()
+
+  if (updateError) {
+    console.error('Error approving tow quote:', updateError)
+    throw updateError
+  }
+
+  if (!updated) {
+    return { approved: false, reason: 'not_quote' }
+  }
+
+  await syncTowToLegacyCalendar(towId)
+
+  return { approved: true, newStatus }
+}
 
 export async function updateTowStatus(
   towId: string,

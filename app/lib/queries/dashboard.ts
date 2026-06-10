@@ -23,6 +23,7 @@ export async function getDashboardStats(companyId: string): Promise<DashboardSta
   const [
     towsTodayRes,
     pendingTowsRes,
+    pendingEventsRes,
     completedTodayRes,
     availableDriversRes,
     inProgressTowsRes,
@@ -35,12 +36,19 @@ export async function getDashboardStats(companyId: string): Promise<DashboardSta
       .eq('company_id', companyId)
       .gte('created_at', `${today}T00:00:00`)
       .neq('status', 'cancelled'),
-    // ממתינות לשיבוץ
+    // ממתינות לשיבוץ (גרירות)
     supabase
       .from('tows')
       .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .eq('status', 'pending'),
+    // ממתינות לשיבוץ (אירועים מאושרים ללא נהג)
+    supabase
+      .from('events')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'approved')
+      .is('driver_id', null),
     // הושלמו היום
     supabase
       .from('tows')
@@ -75,7 +83,7 @@ export async function getDashboardStats(companyId: string): Promise<DashboardSta
 
   return {
     towsToday: towsTodayRes.count || 0,
-    pendingTows: pendingTowsRes.count || 0,
+    pendingTows: (pendingTowsRes.count || 0) + (pendingEventsRes.count || 0),
     completedToday: completedTodayRes.count || 0,
     availableDrivers: availableDriversRes.count || 0,
     inProgressTows: inProgressTowsRes.count || 0,

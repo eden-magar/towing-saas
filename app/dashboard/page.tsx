@@ -11,7 +11,7 @@
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTows } from '../lib/queries/calendar'
-  import { getDayEvents } from '../lib/queries/events'
+  import { getDayEvents, getQuoteEvents, getPendingUnassignedEvents, type EventListItem } from '../lib/queries/events'
   import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
   import { supabase } from '../lib/supabase'
   import { getVehicleTypeLabel, isKnownVehicleType } from '../lib/vehicle-lookup'
@@ -144,7 +144,9 @@
       todayRevenue: 0,
     })
     const [pendingTows, setPendingTows] = useState<TowWithDetails[]>([])
+    const [pendingEvents, setPendingEvents] = useState<EventListItem[]>([])
     const [quoteTows, setQuoteTows] = useState<TowWithDetails[]>([])
+    const [quoteEvents, setQuoteEvents] = useState<EventListItem[]>([])
     const [openTowsByDriver, setOpenTowsByDriver] = useState<Record<string, number>>({})
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
@@ -238,15 +240,19 @@
     const loadEssential = useCallback(async () => {
       if (!companyId) return
       try {
-        const [statsData, pendingData, quoteData, openCountsData] = await Promise.all([
+        const [statsData, pendingData, pendingEventsData, quoteData, quoteEventsData, openCountsData] = await Promise.all([
           getDashboardStats(companyId),
           getPendingUnassignedTows(companyId),
+          getPendingUnassignedEvents(companyId),
           getQuoteTows(companyId),
+          getQuoteEvents(companyId),
           getOpenTowsCountByDriver(companyId),
         ])
         setStats(statsData)
         setPendingTows(pendingData)
+        setPendingEvents(pendingEventsData)
         setQuoteTows(quoteData)
+        setQuoteEvents(quoteEventsData)
         setOpenTowsByDriver(openCountsData)
       } catch (err) {
         console.error('Dashboard essential load error:', err)
@@ -466,6 +472,10 @@
           debouncedRefreshEssential()
           void loadListTows()
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `company_id=eq.${companyId}` }, () => {
+          debouncedRefreshEssential()
+          void loadListTows()
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => { void refreshRejections() })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => {
@@ -624,14 +634,14 @@
 
         {/* קבוצה 4: דחוף */}
         <div className={`rounded-xl px-4 py-2 min-w-[90px] border ${
-          pendingTows.length > 0
+          pendingTows.length + pendingEvents.length > 0
             ? 'bg-red-50 border-red-200'
             : 'bg-white border-gray-200'
         }`}>
-          <div className={`text-xl font-semibold ${pendingTows.length > 0 ? 'text-red-600' : 'text-gray-800'}`}>
-            {pendingTows.length}
+          <div className={`text-xl font-semibold ${pendingTows.length + pendingEvents.length > 0 ? 'text-red-600' : 'text-gray-800'}`}>
+            {pendingTows.length + pendingEvents.length}
           </div>
-          <div className={`text-xs ${pendingTows.length > 0 ? 'text-red-400' : 'text-gray-400'}`}>
+          <div className={`text-xs ${pendingTows.length + pendingEvents.length > 0 ? 'text-red-400' : 'text-gray-400'}`}>
             ממתינות לשיבוץ
           </div>
         </div>
@@ -946,16 +956,18 @@
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                     <span className="leading-snug">ממתינות לשיבוץ</span>
                   </div>
-                  {pendingTows.length > 0 && (
+                  {pendingTows.length + pendingEvents.length > 0 && (
                     <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full shrink-0">
-                      {pendingTows.length}
+                      {pendingTows.length + pendingEvents.length}
                     </span>
                   )}
                 </div>
                 <div className="divide-y divide-gray-50 overflow-y-auto max-h-28 min-h-0">
-                    {pendingTows.length === 0 ? (
+                    {pendingTows.length === 0 && pendingEvents.length === 0 ? (
                       <div className="px-3 py-3 text-xs text-gray-300 text-center">אין ממתינות</div>
-                    ) : pendingTows.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(tow => (
+                    ) : (
+                      <>
+                    {pendingTows.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(tow => (
                     <div key={tow.id} onClick={() => router.push(`/dashboard/tows/${tow.id}`)} className="px-3 py-1.5 flex items-center gap-2 min-w-0 cursor-pointer hover:bg-gray-50 transition-colors">
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-medium text-gray-700 truncate">{tow.customer?.name || '—'} · {tow.vehicles?.[0]?.plate_number || '—'}</div>
@@ -965,30 +977,65 @@
                       <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/tows/${tow.id}`); }} className="text-xs px-2 py-1 bg-gray-900 text-white rounded-lg shrink-0 hover:bg-gray-700">שבץ</button>
                     </div>
                   ))}
+                    {pendingEvents.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(event => (
+                    <div key={event.id} onClick={() => router.push(`/dashboard/events/${event.id}`)} className="px-3 py-1.5 flex items-center gap-2 min-w-0 cursor-pointer hover:bg-cyan-50 transition-colors ring-1 ring-inset ring-cyan-100">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-700 truncate flex items-center gap-1">
+                          <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[9px] px-1 py-px rounded font-bold leading-none shrink-0">
+                            <Sparkles size={8} />
+                            אירוע
+                          </span>
+                          <span className="truncate">{event.customer?.name || '—'}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">{event.location_address?.split(',')[0] || event.order_number || '—'}</div>
+                      </div>
+                      <span className="text-xs text-amber-600 shrink-0">{formatWaitTime(event.created_at)}</span>
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/events/${event.id}`); }} className="text-xs px-2 py-1 bg-gray-900 text-white rounded-lg shrink-0 hover:bg-gray-700">שבץ</button>
+                    </div>
+                  ))}
+                      </>
+                    )}
                 </div>
               </div>
 
               {/* הצעות מחיר ממתינות */}
-              {quoteTows.length > 0 && (
+              {quoteTows.length + quoteEvents.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <span className="text-sm font-medium text-amber-800 leading-snug min-w-0">
                       הצעות מחיר ממתינות
                     </span>
                     <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
-                      {quoteTows.length}
+                      {quoteTows.length + quoteEvents.length}
                     </span>
                   </div>
                   <div className="space-y-1 max-h-20 overflow-y-auto min-h-0">
                     {quoteTows.map(t => (
                       <div
-                        key={t.id}
+                        key={`tow-${t.id}`}
                         onClick={() => router.push(`/dashboard/tows/${t.id}`)}
                         className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs gap-2"
                       >
                         <span className="font-medium shrink-0">{t.order_number || t.id.slice(0, 8)}</span>
                         <span className="text-gray-500 flex-1 min-w-0 truncate">{t.customer?.name || 'לקוח'}</span>
                         <span className="text-amber-600 shrink-0">{formatWaitTime(t.created_at)}</span>
+                      </div>
+                    ))}
+                    {quoteEvents.map(e => (
+                      <div
+                        key={`event-${e.id}`}
+                        onClick={() => router.push(`/dashboard/events/${e.id}`)}
+                        className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-cyan-50 text-xs gap-2 ring-1 ring-cyan-200"
+                      >
+                        <span className="flex items-center gap-1 font-medium shrink-0">
+                          <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[9px] px-1 py-px rounded font-bold leading-none">
+                            <Sparkles size={8} />
+                            אירוע
+                          </span>
+                          {e.order_number || e.id.slice(0, 8)}
+                        </span>
+                        <span className="text-gray-500 flex-1 min-w-0 truncate">{e.customer?.name || 'לקוח'}</span>
+                        <span className="text-amber-600 shrink-0">{formatWaitTime(e.created_at)}</span>
                       </div>
                     ))}
                   </div>

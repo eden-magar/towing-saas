@@ -22,7 +22,10 @@ import {
   CheckCircle,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
+import { canApproveQuote } from '../../../lib/utils/can-edit-closed-tow'
 import {
+  approveEventQuote,
+  assignEventDriver,
   getEvent,
   getEventChangeLog,
   getEventVehiclePhotos,
@@ -37,9 +40,12 @@ import {
   type EventWithDetails,
   type EventChangeLogEntry,
 } from '../../../lib/queries/events'
+import { getDrivers } from '../../../lib/queries/drivers'
 import { getEventImageSignedUrl } from '../../../lib/queries/event-plate-capture'
 import { getCompanySettings } from '../../../lib/queries/settings'
+import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { EventPriceEditor } from '../../../components/event-forms/EventPriceEditor'
+import type { DriverWithDetails } from '../../../lib/types'
 import type { EventPriceResult } from '../../../lib/utils/event-pricing'
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -487,6 +493,14 @@ export default function EventDetailsPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [completeError, setCompleteError] = useState('')
+  const [approvingQuote, setApprovingQuote] = useState(false)
+  const [approveQuoteError, setApproveQuoteError] = useState('')
+
+  const [showDriverPicker, setShowDriverPicker] = useState(false)
+  const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
+  const [driversLoading, setDriversLoading] = useState(false)
+  const [assigningDriver, setAssigningDriver] = useState(false)
+  const [assignDriverError, setAssignDriverError] = useState('')
 
   const handleTabChange = (tab: EventTab) => {
     setActiveTab(tab)
@@ -623,6 +637,40 @@ export default function EventDetailsPage() {
     setCancelError('')
   }
 
+  const handleApproveQuote = async () => {
+    if (!user || !companyId || !event || event.status !== 'quote') return
+    if (!canApproveQuote(user.role)) return
+
+    setApprovingQuote(true)
+    setApproveQuoteError('')
+    try {
+      const result = await approveEventQuote(eventId)
+      if (!result.approved) {
+        setApproveQuoteError(
+          result.reason === 'not_quote'
+            ? 'ההצעה כבר אושרה או שאינה בהצעת מחיר'
+            : 'האירוע לא נמצא'
+        )
+        return
+      }
+      await saveEventChangeLog({
+        eventId,
+        companyId,
+        changedBy: user.id,
+        fieldName: 'סטטוס',
+        oldValue: getStatusLabel('quote'),
+        newValue: getStatusLabel('approved'),
+      })
+      await loadEvent(true)
+      await loadChangeLogs()
+    } catch (err) {
+      console.error('Error approving event quote:', err)
+      setApproveQuoteError('שגיאה באישור ההצעה')
+    } finally {
+      setApprovingQuote(false)
+    }
+  }
+
   const handleConfirmComplete = async () => {
     if (!user || !companyId || !event) return
 
@@ -675,6 +723,51 @@ export default function EventDetailsPage() {
       setCancelError('שגיאה בביטול האירוע')
     } finally {
       setCancelling(false)
+    }
+  }
+
+  const openDriverPicker = useCallback(() => {
+    if (!companyId) return
+    setAssignDriverError('')
+    setShowDriverPicker(true)
+    setDriversLoading(true)
+    void getDrivers(companyId)
+      .then((data) => setDrivers(data))
+      .catch((err) => {
+        console.error('Error loading drivers for event assign:', err)
+        setAssignDriverError('שגיאה בטעינת רשימת הנהגים')
+        setShowDriverPicker(false)
+      })
+      .finally(() => setDriversLoading(false))
+  }, [companyId])
+
+  const handleAssignDriverConfirm = async (driverId: string) => {
+    if (!user || !companyId || !event) return
+
+    setAssigningDriver(true)
+    setAssignDriverError('')
+    try {
+      const oldDriverName = event.driver?.user?.full_name ?? 'לא שובץ'
+      const newDriverName =
+        drivers.find((d) => d.id === driverId)?.user?.full_name ?? driverId
+
+      await assignEventDriver(eventId, driverId)
+      await saveEventChangeLog({
+        eventId,
+        companyId,
+        changedBy: user.id,
+        fieldName: 'נהג',
+        oldValue: oldDriverName,
+        newValue: newDriverName,
+      })
+      setShowDriverPicker(false)
+      await loadEvent(true)
+      await loadChangeLogs()
+    } catch (err) {
+      console.error('Error assigning event driver:', err)
+      setAssignDriverError('שגיאה בשיבוץ הנהג')
+    } finally {
+      setAssigningDriver(false)
     }
   }
 
@@ -747,6 +840,8 @@ export default function EventDetailsPage() {
 
   const canModify =
     event.status !== 'cancelled' && event.status !== 'completed'
+  const canApproveQuoteEvent =
+    event.status === 'quote' && canApproveQuote(user?.role)
   const isCancelled = event.status === 'cancelled'
   const isCompleted = event.status === 'completed'
 
@@ -781,6 +876,19 @@ export default function EventDetailsPage() {
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {canApproveQuoteEvent && (
+                <button
+                  type="button"
+                  onClick={handleApproveQuote}
+                  disabled={approvingQuote}
+                  className="p-2 sm:px-3 sm:py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm flex items-center gap-2 disabled:opacity-50"
+                >
+                  <CheckCircle size={18} />
+                  <span className="hidden sm:inline">
+                    {approvingQuote ? 'מאשר...' : 'אשר הצעה'}
+                  </span>
+                </button>
+              )}
               {canModify && (
                 <button
                   type="button"
@@ -812,6 +920,22 @@ export default function EventDetailsPage() {
           </div>
         </div>
       </header>
+
+      {approveQuoteError && (
+        <div className="max-w-6xl mx-auto px-4 mt-4">
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+            {approveQuoteError}
+          </div>
+        </div>
+      )}
+
+      {assignDriverError && (
+        <div className="max-w-6xl mx-auto px-4 mt-4">
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+            {assignDriverError}
+          </div>
+        </div>
+      )}
 
       {isCancelled && (
         <div className="max-w-6xl mx-auto px-4 mt-4">
@@ -938,28 +1062,50 @@ export default function EventDetailsPage() {
                 </div>
                 <div className="p-4 sm:p-5">
                   {event.driver?.user?.full_name ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
-                        <User size={24} className="text-gray-400" />
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
+                          <User size={24} className="text-gray-400" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800">{event.driver.user.full_name}</p>
+                          {event.driver.user.phone && (
+                            <a
+                              href={`tel:${event.driver.user.phone}`}
+                              className="text-[#33d4ff] text-sm hover:underline"
+                            >
+                              {event.driver.user.phone}
+                            </a>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-800">{event.driver.user.full_name}</p>
-                        {event.driver.user.phone && (
-                          <a
-                            href={`tel:${event.driver.user.phone}`}
-                            className="text-[#33d4ff] text-sm hover:underline"
-                          >
-                            {event.driver.user.phone}
-                          </a>
-                        )}
-                      </div>
+                      {canModify && (
+                        <button
+                          type="button"
+                          onClick={openDriverPicker}
+                          disabled={assigningDriver || driversLoading}
+                          className="mt-4 w-full py-2 border border-gray-200 text-gray-600 rounded-xl text-sm hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          שנה נהג
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="text-center py-4">
                       <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                         <Truck size={32} className="text-gray-300" />
                       </div>
-                      <p className="text-gray-500 text-sm">לא שובץ נהג</p>
+                      <p className="text-gray-500 text-sm mb-4">לא שובץ נהג</p>
+                      {canModify && (
+                        <button
+                          type="button"
+                          onClick={openDriverPicker}
+                          disabled={assigningDriver || driversLoading}
+                          className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] transition-colors disabled:opacity-50"
+                        >
+                          שבץ נהג
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1239,6 +1385,36 @@ export default function EventDetailsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {showDriverPicker && driversLoading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {showDriverPicker && companyId && !driversLoading && event && (
+        <DriverCalendarPicker
+          companyId={companyId}
+          drivers={drivers}
+          requiredTruckTypes={[]}
+          initialDate={
+            event.event_date
+              ? event.event_date.includes('T')
+                ? event.event_date.split('T')[0]
+                : event.event_date
+              : undefined
+          }
+          initialTime={event.start_time ? formatEventTime(event.start_time) : undefined}
+          onConfirm={(driverId) => {
+            if (assigningDriver) return
+            void handleAssignDriverConfirm(driverId)
+          }}
+          onClose={() => {
+            if (assigningDriver) return
+            setShowDriverPicker(false)
+          }}
+        />
       )}
     </div>
   )

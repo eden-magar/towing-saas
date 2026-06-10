@@ -22,7 +22,11 @@ import {
 } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { useAuth } from '../../../lib/AuthContext'
-import { canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
+import {
+  canApproveQuote,
+  canEditClosedTow,
+  isClosedTowStatus,
+} from '../../../lib/utils/can-edit-closed-tow'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
 import {
   PinDropModal,
@@ -38,7 +42,7 @@ import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
-import { createTow, updateTow } from '../../../lib/queries/tows'
+import { approveTowQuote, createTow, updateTow } from '../../../lib/queries/tows'
 import {
   searchStoredVehicle,
   reserveVehicleForTow,
@@ -225,6 +229,7 @@ function CreateExchangeTowForm({
     setOrderedBy,
     orderNumber,
     loadedTowStatus,
+    setLoadedTowStatus,
     editExistingVehicles,
     editExistingPoints,
     editTowSnapshot,
@@ -266,6 +271,7 @@ function CreateExchangeTowForm({
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
   const [quoteSavedId, setQuoteSavedId] = useState<string | null>(null)
+  const [approvingQuote, setApprovingQuote] = useState(false)
   const [showDriverPicker, setShowDriverPicker] = useState(false)
   const [pendingPickerDriverId, setPendingPickerDriverId] = useState<string | null>(null)
   const [pendingPickerDate, setPendingPickerDate] = useState<string | null>(null)
@@ -671,6 +677,36 @@ function CreateExchangeTowForm({
 
   const lockedOpacity = quoteApproved ? 1 : 0.35
   const lockedPointer = quoteApproved ? 'auto' : 'none'
+
+  const handleQuoteApproveClick = useCallback(async () => {
+    if (editTowId && loadedTowStatus === 'quote') {
+      if (!canApproveQuote(user?.role)) {
+        setError('אין הרשאה לאשר הצעות מחיר')
+        return
+      }
+      setApprovingQuote(true)
+      setError('')
+      try {
+        const result = await approveTowQuote(editTowId)
+        if (!result.approved) {
+          setError(
+            result.reason === 'not_quote'
+              ? 'ההצעה כבר אושרה או שאינה בהצעת מחיר'
+              : 'הגרירה לא נמצאה'
+          )
+          return
+        }
+        setLoadedTowStatus(result.newStatus)
+      } catch (err) {
+        console.error('[handleQuoteApproveClick] approve failed:', err)
+        setError('שגיאה באישור ההצעה')
+        return
+      } finally {
+        setApprovingQuote(false)
+      }
+    }
+    setQuoteApproved(true)
+  }, [editTowId, loadedTowStatus, user?.role, setError, setLoadedTowStatus])
 
   const showForm = towType === 'exchange'
 
@@ -1708,10 +1744,15 @@ function CreateExchangeTowForm({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setQuoteApproved(true)}
-                        className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2"
+                        onClick={handleQuoteApproveClick}
+                        disabled={approvingQuote || saving}
+                        className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        <Check size={20} />
+                        {approvingQuote ? (
+                          <Loader2 size={20} className="animate-spin" />
+                        ) : (
+                          <Check size={20} />
+                        )}
                         הלקוח אישר ✓
                       </button>
                     </div>

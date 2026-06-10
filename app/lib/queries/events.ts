@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import type { EventPriceResult } from '../utils/event-pricing'
+import { syncEventToLegacyCalendar } from '../integrations/legacy-calendar/client-sync'
 
 const EVENT_WITH_RELATIONS_SELECT = `
   *,
@@ -125,6 +126,7 @@ export interface CalendarWeekEvent {
 const EVENT_LIST_SELECT = `
   id,
   status,
+  driver_id,
   event_date,
   created_at,
   order_number,
@@ -151,6 +153,7 @@ export interface EventListDriver {
 export interface EventListItem {
   id: string
   status: string
+  driver_id: string | null
   event_date: string | null
   created_at: string
   order_number: string | null
@@ -198,6 +201,51 @@ export async function getEvents(
   if (error) {
     console.error('Error fetching events:', JSON.stringify(error, null, 2))
     throw error
+  }
+
+  return (data ?? []) as unknown as EventListItem[]
+}
+
+/**
+ * Events in 'quote' status (price proposals not yet confirmed).
+ * Used by the dashboard quotes panel alongside getQuoteTows.
+ * Ordered oldest first so stale quotes are visible at the top.
+ */
+export async function getQuoteEvents(companyId: string): Promise<EventListItem[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(EVENT_LIST_SELECT)
+    .eq('company_id', companyId)
+    .eq('status', 'quote')
+    .order('created_at', { ascending: true })
+    .limit(50)
+
+  if (error) {
+    console.error('Error fetching quote events:', JSON.stringify(error, null, 2))
+    return []
+  }
+
+  return (data ?? []) as unknown as EventListItem[]
+}
+
+/**
+ * Approved events with no driver assigned yet.
+ * Used by the dashboard "ממתינות לשיבוץ" panel alongside getPendingUnassignedTows.
+ * Ordered oldest first so stale items are visible at the top.
+ */
+export async function getPendingUnassignedEvents(companyId: string): Promise<EventListItem[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(EVENT_LIST_SELECT)
+    .eq('company_id', companyId)
+    .eq('status', 'approved')
+    .is('driver_id', null)
+    .order('created_at', { ascending: true })
+    .limit(50)
+
+  if (error) {
+    console.error('Error fetching pending unassigned events:', JSON.stringify(error, null, 2))
+    return []
   }
 
   return (data ?? []) as unknown as EventListItem[]
@@ -425,6 +473,26 @@ export async function updateEventDriverStatus(
   }
 }
 
+/** Assign or change the driver on an existing event. Does not change status or sync external calendars. */
+export async function assignEventDriver(
+  eventId: string,
+  driverId: string
+): Promise<{ id: string; driver_id: string }> {
+  const { data, error } = await supabase
+    .from('events')
+    .update({ driver_id: driverId })
+    .eq('id', eventId)
+    .select('id, driver_id')
+    .single()
+
+  if (error) {
+    console.error('Error assigning event driver:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return data as { id: string; driver_id: string }
+}
+
 export async function completeEvent(
   eventId: string,
   completedBy: string
@@ -463,6 +531,56 @@ export async function cancelEvent(
     console.error('Error cancelling event:', JSON.stringify(error, null, 2))
     throw error
   }
+}
+
+export type ApproveEventQuoteResult =
+  | { approved: true }
+  | { approved: false; reason: 'not_quote' | 'not_found' }
+
+/**
+ * Promote a saved quote event to approved and sync to legacy Google Calendar.
+ * No-op when status is not 'quote'.
+ */
+export async function approveEventQuote(eventId: string): Promise<ApproveEventQuoteResult> {
+  const { data: existing, error: fetchError } = await supabase
+    .from('events')
+    .select('status')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (fetchError) {
+    console.error('Error fetching event for quote approval:', JSON.stringify(fetchError, null, 2))
+    throw fetchError
+  }
+
+  if (!existing) {
+    return { approved: false, reason: 'not_found' }
+  }
+
+  if (existing.status !== 'quote') {
+    return { approved: false, reason: 'not_quote' }
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from('events')
+    .update({ status: 'approved' })
+    .eq('id', eventId)
+    .eq('status', 'quote')
+    .select('id')
+    .maybeSingle()
+
+  if (updateError) {
+    console.error('Error approving event quote:', JSON.stringify(updateError, null, 2))
+    throw updateError
+  }
+
+  if (!updated) {
+    return { approved: false, reason: 'not_quote' }
+  }
+
+  await syncEventToLegacyCalendar(eventId)
+
+  return { approved: true }
 }
 
 export async function updateEventPrice(
