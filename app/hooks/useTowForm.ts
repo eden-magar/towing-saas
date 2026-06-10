@@ -305,7 +305,12 @@ type CustomRouteData = {
   services: SelectedService[]
 }
 
-export function useTowForm(editTowId?: string) {
+export function useTowForm(
+  editTowId?: string,
+  options?: { beforeSaveTow?: () => Promise<void> }
+) {
+  const beforeSaveTowRef = useRef(options?.beforeSaveTow)
+  beforeSaveTowRef.current = options?.beforeSaveTow
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, companyId, loading: authLoading } = useAuth()
@@ -2341,6 +2346,7 @@ export function useTowForm(editTowId?: string) {
     getExchangeRouteLayout: () => editExchangeRouteLayoutRef.current,
     setSavedTowId,
     setShowAssignNowModal,
+    beforeSaveTow: () => beforeSaveTowRef.current?.() ?? Promise.resolve(),
   })
 
   return {

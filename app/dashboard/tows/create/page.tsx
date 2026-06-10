@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-import { Suspense, useState, useCallback, useEffect, useRef } from 'react'
+import { Suspense, useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getDayTows } from '../../../lib/queries/calendar'
@@ -83,6 +83,13 @@ import {
   isClosedTowStatus,
 } from '../../../lib/utils/can-edit-closed-tow'
 import { EventTowSection } from '../../../components/event-forms/EventTowSection'
+import { ContactNameAutocomplete } from '../../../components/customer-contacts/ContactNameAutocomplete'
+import { SaveCustomerContactPill } from '../../../components/customer-contacts/SaveCustomerContactPill'
+import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
+import {
+  findMatchingCustomerContact,
+  insertPendingCustomerContacts,
+} from '../../../lib/queries/customer-contacts'
 
 type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
 
@@ -103,7 +110,12 @@ function CreateTowForm({
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const storedVehicleParam = searchParams.get('storedVehicle')
-  const form = useTowForm(editTowId)
+  const persistCustomerContactsRef = useRef<() => Promise<void>>(async () => {})
+  const form = useTowForm(editTowId, {
+    beforeSaveTow: async () => {
+      await persistCustomerContactsRef.current()
+    },
+  })
 
   const {
     router: _router,
@@ -359,6 +371,94 @@ function CreateTowForm({
   const [pendingPickerDate, setPendingPickerDate] = useState<string | null>(null)
   const [pendingPickerTime, setPendingPickerTime] = useState<string | null>(null)
   const [pendingPickerTruckId, setPendingPickerTruckId] = useState<string | null>(null)
+  const [savePickupContactToCustomer, setSavePickupContactToCustomer] = useState(false)
+  const [saveDropoffContactToCustomer, setSaveDropoffContactToCustomer] = useState(false)
+
+  const { savedContacts, contactsLoading } = useCustomerContacts(
+    companyId,
+    selectedCustomerId
+  )
+
+  const pickupStop = useMemo(() => findPickupRouteStop(routeStops), [routeStops])
+  const dropoffStop = useMemo(() => findDropoffRouteStop(routeStops), [routeStops])
+  const pickupContactName = pickupStop?.contactName ?? ''
+  const pickupContactPhone = pickupStop?.contactPhone ?? ''
+  const dropoffContactName = dropoffStop?.contactName ?? ''
+  const dropoffContactPhone = dropoffStop?.contactPhone ?? ''
+
+  const showSavePickupContactOption = Boolean(
+    selectedCustomerId &&
+      pickupContactName.trim() &&
+      !findMatchingCustomerContact(
+        pickupContactName,
+        pickupContactPhone,
+        savedContacts
+      )
+  )
+
+  const showSaveDropoffContactOption = Boolean(
+    selectedCustomerId &&
+      dropoffContactName.trim() &&
+      !findMatchingCustomerContact(
+        dropoffContactName,
+        dropoffContactPhone,
+        savedContacts
+      )
+  )
+
+  useEffect(() => {
+    setSavePickupContactToCustomer(false)
+    setSaveDropoffContactToCustomer(false)
+  }, [selectedCustomerId])
+
+  useEffect(() => {
+    if (!showSavePickupContactOption) {
+      setSavePickupContactToCustomer(false)
+    }
+  }, [showSavePickupContactOption])
+
+  useEffect(() => {
+    if (!showSaveDropoffContactOption) {
+      setSaveDropoffContactToCustomer(false)
+    }
+  }, [showSaveDropoffContactOption])
+
+  const persistSingleTowCustomerContacts = useCallback(async () => {
+    if (!companyId || !selectedCustomerId || towType !== 'single') return
+
+    const pending = []
+
+    if (savePickupContactToCustomer && pickupContactName.trim()) {
+      pending.push({
+        name: pickupContactName.trim(),
+        phone: pickupContactPhone.trim() || null,
+      })
+    }
+
+    if (saveDropoffContactToCustomer && dropoffContactName.trim()) {
+      pending.push({
+        name: dropoffContactName.trim(),
+        phone: dropoffContactPhone.trim() || null,
+      })
+    }
+
+    if (pending.length === 0) return
+    await insertPendingCustomerContacts(companyId, selectedCustomerId, pending)
+  }, [
+    companyId,
+    selectedCustomerId,
+    towType,
+    savePickupContactToCustomer,
+    saveDropoffContactToCustomer,
+    pickupContactName,
+    pickupContactPhone,
+    dropoffContactName,
+    dropoffContactPhone,
+  ])
+
+  useEffect(() => {
+    persistCustomerContactsRef.current = persistSingleTowCustomerContacts
+  }, [persistSingleTowCustomerContacts])
 
   const getDriverTrucks = (driverId: string) =>
     trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
@@ -861,6 +961,8 @@ function CreateTowForm({
     setSaving(true)
     setError('')
     try {
+      await persistSingleTowCustomerContacts()
+
       let finalCustomerId = selectedCustomerId
       if (!selectedCustomerId && customerName.trim()) {
         const result = await createCustomer({
@@ -1120,6 +1222,7 @@ function CreateTowForm({
     hasManualTimeSurchargeOverride,
     priceMode,
     loadedTowStatus,
+    persistSingleTowCustomerContacts,
   ])
 
   const totalDistanceKm =
@@ -3104,26 +3207,44 @@ function CreateTowForm({
                           )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={findPickupRouteStop(routeStops)?.contactName ?? ''}
-                            onChange={(e) => {
-                              const pickup = findPickupRouteStop(routeStops)
-                              if (pickup) updateStop(pickup.id, { contactName: e.target.value })
+                          <ContactNameAutocomplete
+                            value={pickupContactName}
+                            onChange={(name) => {
+                              if (pickupStop) updateStop(pickupStop.id, { contactName: name })
                             }}
+                            onSelectContact={(contact) => {
+                              if (pickupStop) {
+                                updateStop(pickupStop.id, {
+                                  contactName: contact.name,
+                                  contactPhone: contact.phone ?? '',
+                                })
+                              }
+                              setSavePickupContactToCustomer(false)
+                            }}
+                            contacts={savedContacts}
+                            loading={contactsLoading}
+                            disabled={saving}
                             placeholder="שם"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                           <PhoneInput
-                            value={findPickupRouteStop(routeStops)?.contactPhone ?? ''}
+                            value={pickupContactPhone}
                             onChange={(phone) => {
-                              const pickup = findPickupRouteStop(routeStops)
-                              if (pickup) updateStop(pickup.id, { contactPhone: phone })
+                              if (pickupStop) updateStop(pickupStop.id, { contactPhone: phone })
                             }}
                             placeholder="טלפון"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                         </div>
+                        <SaveCustomerContactPill
+                          className="mt-2"
+                          visible={showSavePickupContactOption}
+                          active={savePickupContactToCustomer}
+                          onToggle={() =>
+                            setSavePickupContactToCustomer((prev) => !prev)
+                          }
+                          disabled={saving}
+                        />
                       </div>
                       <div>
                         <div className="flex justify-between items-center mb-2">
@@ -3139,26 +3260,44 @@ function CreateTowForm({
                           )}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={findDropoffRouteStop(routeStops)?.contactName ?? ''}
-                            onChange={(e) => {
-                              const dropoff = findDropoffRouteStop(routeStops)
-                              if (dropoff) updateStop(dropoff.id, { contactName: e.target.value })
+                          <ContactNameAutocomplete
+                            value={dropoffContactName}
+                            onChange={(name) => {
+                              if (dropoffStop) updateStop(dropoffStop.id, { contactName: name })
                             }}
+                            onSelectContact={(contact) => {
+                              if (dropoffStop) {
+                                updateStop(dropoffStop.id, {
+                                  contactName: contact.name,
+                                  contactPhone: contact.phone ?? '',
+                                })
+                              }
+                              setSaveDropoffContactToCustomer(false)
+                            }}
+                            contacts={savedContacts}
+                            loading={contactsLoading}
+                            disabled={saving}
                             placeholder="שם"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                           <PhoneInput
-                            value={findDropoffRouteStop(routeStops)?.contactPhone ?? ''}
+                            value={dropoffContactPhone}
                             onChange={(phone) => {
-                              const dropoff = findDropoffRouteStop(routeStops)
-                              if (dropoff) updateStop(dropoff.id, { contactPhone: phone })
+                              if (dropoffStop) updateStop(dropoffStop.id, { contactPhone: phone })
                             }}
                             placeholder="טלפון"
                             className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
                           />
                         </div>
+                        <SaveCustomerContactPill
+                          className="mt-2"
+                          visible={showSaveDropoffContactOption}
+                          active={saveDropoffContactToCustomer}
+                          onToggle={() =>
+                            setSaveDropoffContactToCustomer((prev) => !prev)
+                          }
+                          disabled={saving}
+                        />
                       </div>
                     </div>
                   ) : null}

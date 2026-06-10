@@ -91,6 +91,38 @@ export function findMatchingCustomerContact(
   })
 }
 
+export interface PendingCustomerContact {
+  name: string
+  phone?: string | null
+}
+
+export async function insertPendingCustomerContacts(
+  companyId: string,
+  customerId: string,
+  pending: PendingCustomerContact[]
+): Promise<void> {
+  const seenKeys = new Set<string>()
+
+  for (const item of pending) {
+    const name = item.name.trim()
+    if (!name) continue
+
+    const phone = normalizePhone(item.phone)
+    const key = `${name}|${phone ?? ''}`
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+
+    try {
+      await insertCustomerContact(companyId, customerId, { name, phone })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      if (!message.includes('טלפון')) {
+        console.error('Error saving customer contact:', err)
+      }
+    }
+  }
+}
+
 export async function insertCustomerContact(
   companyId: string,
   customerId: string,

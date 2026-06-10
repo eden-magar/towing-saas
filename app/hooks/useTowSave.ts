@@ -152,6 +152,8 @@ interface UseTowSaveParams {
   // Post-save
   setSavedTowId: (id: string) => void
   setShowAssignNowModal: (v: boolean) => void
+  /** Runs after validation passes, before persisting the tow. */
+  beforeSaveTow?: () => Promise<void>
 }
 
 export function useTowSave(params: UseTowSaveParams) {
@@ -266,6 +268,7 @@ export function useTowSave(params: UseTowSaveParams) {
     getExchangeRouteLayout,
     setSavedTowId,
     setShowAssignNowModal,
+    beforeSaveTow,
   } = params
 
   const handleSave = async () => {
@@ -315,6 +318,8 @@ export function useTowSave(params: UseTowSaveParams) {
   setError('')
   
   try {
+    await beforeSaveTow?.()
+
     // יצירת לקוח חדש אם צריך
     let finalCustomerId = selectedCustomerId
     if (!selectedCustomerId && customerName.trim()) {

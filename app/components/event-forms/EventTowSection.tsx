@@ -14,13 +14,14 @@ import { createEvent } from '../../lib/queries/events'
 import { syncEventToLegacyCalendar } from '../../lib/integrations/legacy-calendar/client-sync'
 import { getCompanySettings } from '../../lib/queries/settings'
 import {
-  getCustomerContacts,
-  insertCustomerContact,
+  insertPendingCustomerContacts,
   findMatchingCustomerContact,
 } from '../../lib/queries/customer-contacts'
+import { useCustomerContacts } from '../../hooks/useCustomerContacts'
 import { calculateEventPrice } from '../../lib/utils/event-pricing'
-import type { CustomerContact, DriverWithDetails } from '../../lib/types'
+import type { DriverWithDetails } from '../../lib/types'
 import { ContactNameAutocomplete } from '../customer-contacts/ContactNameAutocomplete'
+import { SaveCustomerContactPill } from '../customer-contacts/SaveCustomerContactPill'
 
 function formatMoney(value: number): string {
   return `₪${value.toFixed(2)}`
@@ -46,8 +47,7 @@ export function EventTowSection({
   const [pinOpen, setPinOpen] = useState(false)
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
-  const [savedContacts, setSavedContacts] = useState<CustomerContact[]>([])
-  const [contactsLoading, setContactsLoading] = useState(false)
+  const { savedContacts, contactsLoading } = useCustomerContacts(companyId, selectedCustomerId)
   const [saveContactToCustomer, setSaveContactToCustomer] = useState(false)
   const [details, setDetails] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
@@ -87,30 +87,7 @@ export function EventTowSection({
     setContactName('')
     setContactPhone('')
     setSaveContactToCustomer(false)
-
-    if (!companyId || !selectedCustomerId) {
-      setSavedContacts([])
-      return
-    }
-
-    let cancelled = false
-    setContactsLoading(true)
-    getCustomerContacts(companyId, selectedCustomerId)
-      .then((contacts) => {
-        if (!cancelled) setSavedContacts(contacts)
-      })
-      .catch((err) => {
-        console.error('Error loading customer contacts for event:', err)
-        if (!cancelled) setSavedContacts([])
-      })
-      .finally(() => {
-        if (!cancelled) setContactsLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [companyId, selectedCustomerId])
+  }, [selectedCustomerId])
 
   useEffect(() => {
     if (!companyId) return
@@ -175,7 +152,7 @@ export function EventTowSection({
     }
   }, [showSaveContactOption])
 
-  const handleSelectSavedContact = (contact: CustomerContact) => {
+  const handleSelectSavedContact = (contact: { name: string; phone: string | null }) => {
     setContactName(contact.name)
     setContactPhone(contact.phone ?? '')
     setSaveContactToCustomer(false)
@@ -235,21 +212,12 @@ export function EventTowSection({
         companyId &&
         contactName.trim()
       ) {
-        try {
-          const created = await insertCustomerContact(companyId, selectedCustomerId, {
+        await insertPendingCustomerContacts(companyId, selectedCustomerId, [
+          {
             name: contactName.trim(),
             phone: contactPhone.trim() || null,
-          })
-          setSavedContacts((prev) =>
-            [...prev, created].sort((a, b) => a.name.localeCompare(b.name, 'he'))
-          )
-        } catch (contactErr) {
-          const message =
-            contactErr instanceof Error ? contactErr.message : ''
-          if (!message.includes('טלפון')) {
-            console.error('Error saving contact to customer:', contactErr)
-          }
-        }
+          },
+        ])
       }
 
       const result = await createEvent({
@@ -327,25 +295,13 @@ export function EventTowSection({
             />
           </div>
           {showSaveContactOption && (
-            <button
-              type="button"
-              onClick={() => setSaveContactToCustomer((prev) => !prev)}
+            <SaveCustomerContactPill
+              className="mt-3"
+              visible
+              active={saveContactToCustomer}
+              onToggle={() => setSaveContactToCustomer((prev) => !prev)}
               disabled={saving}
-              aria-pressed={saveContactToCustomer}
-              className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                saveContactToCustomer
-                  ? 'bg-[#33d4ff]/15 text-[#1a9bc7] border border-[#33d4ff]/40'
-                  : 'bg-transparent text-gray-600 border border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-              }`}
-              dir="rtl"
-            >
-              {saveContactToCustomer ? (
-                <Check size={14} className="shrink-0" aria-hidden />
-              ) : (
-                <Plus size={14} className="shrink-0" aria-hidden />
-              )}
-              שמור לאנשי הקשר של הלקוח
-            </button>
+            />
           )}
         </FormSubcard>
 
