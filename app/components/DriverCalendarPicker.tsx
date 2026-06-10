@@ -9,6 +9,9 @@ import { TowWithDetails } from '../lib/queries/tows'
 import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
 
 const DRIVER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4']
+const PIXELS_PER_HOUR = 40
+const HOURS_PER_DAY = 24
+const DRIVER_COL_WIDTH_PX = 120
 
 interface DriverCalendarPickerProps {
   companyId: string
@@ -92,6 +95,15 @@ export function DriverCalendarPicker({
 
   const isPickerToday = pickerDate.toDateString() === new Date().toDateString()
 
+  const singleDriverView = visibleDrivers.length === 1
+  const gridMinWidthPx = singleDriverView
+    ? undefined
+    : 64 + visibleDrivers.length * DRIVER_COL_WIDTH_PX
+
+  const driverColumnClass = singleDriverView
+    ? 'flex-1 min-w-0 border-l border-gray-200'
+    : 'w-[120px] shrink-0 border-l border-gray-200'
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
@@ -154,33 +166,58 @@ export function DriverCalendarPicker({
         </div>
 
         {/* גריד */}
-        <div className="overflow-auto flex-1 p-2 relative">
+        <div className="overflow-y-auto overflow-x-auto flex-1 min-h-0 p-2 relative">
           {calendarLoading && (
             <span className="absolute top-2 right-2 z-20 text-xs text-gray-500">טוען...</span>
           )}
-          <table className={`w-full text-xs border-collapse ${calendarLoading ? 'opacity-50' : ''}`}>
-                <thead>
-                  <tr className="sticky top-0 z-10">
-                    <th className="text-right px-1.5 py-1.5 text-gray-400 font-medium border-b border-gray-200 border-l border-gray-200 w-8 bg-gray-50"></th>
-                    {visibleDrivers.map((d, i) => {
-                      const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
-                      return (
-                        <th key={d.id} className="text-center px-1 py-1.5 font-medium border-b border-gray-200 border-l border-gray-200 text-xs align-middle" style={{ width: `${100 / visibleDrivers.length}%` }}>
-                          <span className="inline-block rounded-lg px-2 py-1 font-bold" style={{ backgroundColor: `${color}26`, color: '#000' }}>
-                            {d.user?.full_name?.split(' ')[0] || 'נהג'}
-                          </span>
-                        </th>
-                      )
-                    })}
-                  </tr>
-                </thead>
-                <tbody style={{ position: 'relative' }}>
-                  {Array.from({ length: 24 }, (_, i) => i).map(hour => (
-                    <tr key={hour} className="border-b border-gray-200" style={{ height: '40px' }}>
-                      <td className="px-1 py-1 text-gray-500 border-l border-gray-200 text-xs font-medium bg-gray-50">{hour}:00</td>
-                      {visibleDrivers.map((driver) => {
-                        const driverIdx = drivers.indexOf(driver)
-                        const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
+          <div
+            className={`flex flex-col w-full text-xs ${calendarLoading ? 'opacity-50' : ''}`}
+            style={gridMinWidthPx !== undefined ? { minWidth: `${gridMinWidthPx}px` } : undefined}
+          >
+            {/* Driver headers — sticky; hour gutter spacer aligns with body gutter (RTL: gutter on right) */}
+            <div className="flex sticky top-0 z-10 bg-white shrink-0">
+              <div className="w-16 shrink-0 border-b border-l border-gray-200 bg-gray-50" />
+              <div className="flex flex-1 min-w-0">
+                {visibleDrivers.map(d => {
+                  const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
+                  return (
+                    <div
+                      key={d.id}
+                      className={`${driverColumnClass} border-b px-1 py-1.5 text-center overflow-hidden`}
+                    >
+                      <span
+                        className="inline-block max-w-full truncate rounded-lg px-2 py-1 font-bold"
+                        style={{ backgroundColor: `${color}26`, color: '#000' }}
+                      >
+                        {d.user?.full_name?.split(' ')[0] || 'נהג'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Hour rows + driver columns */}
+            <div className="relative flex min-w-0">
+              <div className="w-16 shrink-0 border-l border-gray-200 bg-gray-50">
+                {Array.from({ length: HOURS_PER_DAY }, (_, i) => i).map(hour => (
+                  <div
+                    key={hour}
+                    className="px-1 py-1 text-gray-500 text-xs font-medium border-b border-gray-200"
+                    style={{ height: `${PIXELS_PER_HOUR}px` }}
+                  >
+                    {hour}:00
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-1 min-w-0">
+                {visibleDrivers.map(driver => {
+                  const driverIdx = drivers.indexOf(driver)
+                  const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
+                  return (
+                    <div key={driver.id} className={driverColumnClass}>
+                      {Array.from({ length: HOURS_PER_DAY }, (_, i) => i).map(hour => {
                         const cellTows = calendarTows.filter(t =>
                           t.driver_id === driver.id &&
                           new Date(t.scheduled_at ?? '').getHours() === hour
@@ -198,14 +235,14 @@ export function DriverCalendarPicker({
                         const isSelected = pendingDriverId === driver.id &&
                           pickerTime === `${hour.toString().padStart(2, '0')}:00`
                         return (
-                          <td
-                            key={driver.id}
-                            className={`px-0.5 py-0.5 border-l border-gray-200 min-h-6 cursor-pointer transition-colors hover:bg-blue-50/30
+                          <div
+                            key={hour}
+                            className={`px-0.5 py-0.5 border-b border-gray-200 cursor-pointer transition-colors hover:bg-blue-50/30 overflow-hidden
                               ${isSelected ? 'ring-2 ring-inset ring-blue-400 bg-blue-50' : ''}
                               ${!isSelected && !isRelevant ? 'bg-gray-50' : ''}
                               ${!isSelected && isRelevant ? 'bg-white' : ''}
                             `}
-                            style={{ width: `${100 / visibleDrivers.length}%` }}
+                            style={{ height: `${PIXELS_PER_HOUR}px` }}
                             onClick={() => {
                               setPendingDriverId(driver.id)
                               setPickerTime(`${hour.toString().padStart(2, '0')}:00`)
@@ -215,7 +252,7 @@ export function DriverCalendarPicker({
                               <div
                                 key={t.id}
                                 title={`${t.customer?.name || ''} ${t.order_number || ''}`.trim()}
-                                className="rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium"
+                                className="rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium whitespace-nowrap"
                                 style={{
                                   background: color + '25',
                                   color: color,
@@ -229,18 +266,20 @@ export function DriverCalendarPicker({
                               <div
                                 key={e.id}
                                 title={e.customer?.name || 'אירוע'}
-                                className="relative rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium ring-1 ring-cyan-300"
+                                className="relative rounded px-1 py-0.5 mb-0.5 text-xs font-medium overflow-hidden min-w-0"
                                 style={{
                                   background: color + '25',
                                   color: color,
-                                  border: `1px solid #22d3ee`,
+                                  border: '1px solid #22d3ee',
                                 }}
                               >
-                                <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[8px] px-0.5 rounded font-bold mr-0.5 align-middle">
+                                <div className="absolute top-0 left-0 flex items-center gap-0.5 bg-cyan-400 text-white text-[8px] px-1 rounded-br font-bold pointer-events-none">
                                   <Sparkles size={8} />
                                   אירוע
-                                </span>
-                                {e.customer?.name || 'אירוע'}
+                                </div>
+                                <div className="truncate pt-3 min-w-0 font-medium">
+                                  {e.customer?.name || 'אירוע'}
+                                </div>
                               </div>
                             ))}
                             {cellTows.length + cellEvents.length === 0 && (
@@ -251,30 +290,25 @@ export function DriverCalendarPicker({
                                 +
                               </button>
                             )}
-                          </td>
+                          </div>
                         )
                       })}
-                    </tr>
-                  ))}
-                  {isPickerToday && (
-                    <tr
-                      className="pointer-events-none"
-                      style={{
-                        position: 'absolute',
-                        top: `${getCurrentTimePosition() * 40}px`,
-                        left: 0,
-                        right: 0,
-                        height: '2px',
-                        backgroundColor: '#ef4444',
-                        opacity: 0.7,
-                        zIndex: 10,
-                      }}
-                    >
-                      <td colSpan={visibleDrivers.length + 1} style={{ padding: 0, height: '2px', backgroundColor: '#ef4444' }} />
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {isPickerToday && (
+                <div
+                  className="pointer-events-none absolute left-0 right-0 h-0.5 bg-red-500 z-10"
+                  style={{
+                    top: `${getCurrentTimePosition() * PIXELS_PER_HOUR}px`,
+                    opacity: 0.7,
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* שעה + אישור */}
