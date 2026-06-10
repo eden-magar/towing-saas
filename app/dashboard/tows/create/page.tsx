@@ -181,6 +181,7 @@ function CreateTowForm({
     selectTowType,
     routePoints,
     setRoutePoints,
+    routeSeedVersion,
     customRouteData,
     setCustomRouteData,
     vehiclePlate,
@@ -2863,7 +2864,7 @@ function CreateTowForm({
                 {towType === 'custom' && (
                   <>
                     <RouteBuilder
-                      key={towType}
+                      key={`custom-${routeSeedVersion}`}
                       companyId={companyId || ''}
                       customerId={selectedCustomerId}
                       customerName={customerName}

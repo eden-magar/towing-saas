@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
 import { getTowWithPoints, type EditTowSnapshot } from '../lib/queries/tows'
@@ -387,6 +388,8 @@ export function useTowForm(
   const [towType, setTowType] = useState<TowType>('')
   // Route Builder state
   const [routePoints, setRoutePoints] = useState<RoutePoint[]>([])
+  /** Bumped on exchange→custom conversion so RouteBuilder remounts with seeded points. */
+  const [routeSeedVersion, setRouteSeedVersion] = useState(0)
   const [customRouteData, setCustomRouteData] = useState<CustomRouteData>({
     totalDistanceKm: 0,
     vehicles: [],
@@ -2087,6 +2090,23 @@ export function useTowForm(
     }
   }
 
+  const resolveWorkingVehicleAddressForConversion = (): AddressData => {
+    if (workingVehicleAddress?.address?.trim()) {
+      return workingVehicleAddress
+    }
+    if (
+      workingVehicleSource === 'storage' &&
+      basePriceList?.base_address?.trim()
+    ) {
+      return {
+        address: basePriceList.base_address,
+        lat: basePriceList.base_lat,
+        lng: basePriceList.base_lng,
+      }
+    }
+    return workingVehicleAddress
+  }
+
   const captureExchangeFormState = (): ExchangeFormState => ({
     workingVehicleSource,
     selectedWorkingVehicleId,
@@ -2094,7 +2114,7 @@ export function useTowForm(
     workingVehicleCode,
     workingVehicleData,
     workingVehicleType,
-    workingVehicleAddress,
+    workingVehicleAddress: resolveWorkingVehicleAddressForConversion(),
     workingVehicleContact,
     workingVehicleContactPhone,
     workingManualManufacturer,
@@ -2127,11 +2147,14 @@ export function useTowForm(
   /** Create flow: seed custom route from exchange before towType switches to custom. */
   const applyExchangeToCustomConversion = () => {
     const mapped = buildRoutePointsFromExchangeState(captureExchangeFormState())
-    setRoutePoints(mapped.routePoints)
-    setCustomRouteData({
-      totalDistanceKm: 0,
-      vehicles: mapped.vehicles,
-      services: [],
+    flushSync(() => {
+      setRoutePoints(mapped.routePoints)
+      setCustomRouteData({
+        totalDistanceKm: 0,
+        vehicles: mapped.vehicles,
+        services: [],
+      })
+      setRouteSeedVersion((v) => v + 1)
     })
     resetTypeSpecificFields('exchange')
   }
@@ -2140,6 +2163,8 @@ export function useTowForm(
   const selectTowType = (to: TowType) => {
     if (!isEditMode.current && towType === 'exchange' && to === 'custom') {
       applyExchangeToCustomConversion()
+      setTowType(to)
+      return
     }
     setTowType(to)
   }
@@ -2479,6 +2504,7 @@ export function useTowForm(
     towType, setTowType, selectTowType,
     pendingStoragePrefill,
     routePoints, setRoutePoints,
+    routeSeedVersion,
     customRouteData, setCustomRouteData,
     // Vehicle
     vehiclePlate, setVehiclePlate,

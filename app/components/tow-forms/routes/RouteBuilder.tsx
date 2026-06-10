@@ -127,6 +127,8 @@ export function RouteBuilder({
     initialPoints?.length ? initialPoints.map((p) => ({ ...p })) : []
   )
   const hasAppliedInitialPointsRef = useRef((initialPoints?.length ?? 0) > 0)
+  /** Set when user removes the last point; allows onPointsChange([]) despite parent seed. */
+  const userClearedAllRef = useRef(false)
   const isMountPointsNotifyRef = useRef(true)
   const isMountRouteDataNotifyRef = useRef(true)
   const [expandedPoint, setExpandedPoint] = useState<string | null>(null)
@@ -298,12 +300,12 @@ export function RouteBuilder({
     if (isMountPointsNotifyRef.current) {
       isMountPointsNotifyRef.current = false
     }
-    // Don't push [] while seeded initialPoints are pending internal apply (mount / edit hydration).
-    // After seed (hasAppliedInitialPointsRef), user clears still propagate via onPointsChange([]).
+    // Don't push [] while parent still has seeded points internal state hasn't caught up to.
+    // User deleting the last point sets userClearedAllRef so a real clear-all still propagates.
     if (
       points.length === 0 &&
       (initialPoints?.length ?? 0) > 0 &&
-      !hasAppliedInitialPointsRef.current
+      !userClearedAllRef.current
     ) {
       return
     }
@@ -344,6 +346,7 @@ export function RouteBuilder({
   }
 
   const addPoint = () => {
+    userClearedAllRef.current = false
     const newPoint = createEmptyPoint('stop')
     updatePoints([...points, newPoint])
     setExpandedPoint(newPoint.id)
@@ -360,6 +363,9 @@ export function RouteBuilder({
         ...p,
         vehiclesToDropoff: p.vehiclesToDropoff.filter((did) => !removedVehicleIds.has(did)),
       }))
+    if (filtered.length === 0) {
+      userClearedAllRef.current = true
+    }
     updatePoints(filtered)
   }
 
