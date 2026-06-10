@@ -24,7 +24,9 @@ import {
   UserX,
   Copy,
   Check,
-  Settings
+  Settings,
+  Contact2,
+  Briefcase
 } from 'lucide-react'
 import { supabase } from '@/app/lib/supabase'
 import {
@@ -34,7 +36,13 @@ import {
   toggleCustomerUserActive,
   deleteCustomerUser,
 } from '@/app/lib/queries/customer-portal'
-import type { CustomerUserWithDetails } from '@/app/lib/types'
+import {
+  getCustomerContacts,
+  insertCustomerContact,
+  updateCustomerContact,
+  deleteCustomerContact,
+} from '@/app/lib/queries/customer-contacts'
+import type { CustomerContact, CustomerUserWithDetails } from '@/app/lib/types'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
 
 interface CustomerDetail {
@@ -71,13 +79,17 @@ export default function CustomerDetailPage() {
 
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [customerUsers, setCustomerUsers] = useState<CustomerUserWithDetails[]>([])
+  const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'users' | 'settings'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'contacts' | 'users' | 'settings'>('info')
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
 
   // Modal states
   const [showAddUser, setShowAddUser] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [showContactModal, setShowContactModal] = useState(false)
+  const [editingContactId, setEditingContactId] = useState<string | null>(null)
+  const [showDeleteContactConfirm, setShowDeleteContactConfirm] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tempPassword, setTempPassword] = useState<string | null>(null)
@@ -89,6 +101,9 @@ export default function CustomerDetailPage() {
     phone: '',
     role: 'viewer' as 'admin' | 'manager' | 'viewer',
   })
+
+  const emptyContactForm = { name: '', phone: '', role_or_title: '', notes: '' }
+  const [contactForm, setContactForm] = useState(emptyContactForm)
 
   useEffect(() => {
     if (companyId && customerId) {
@@ -129,6 +144,11 @@ export default function CustomerDetailPage() {
       // Load customer users
       const users = await getCustomerUsers(customerId)
       setCustomerUsers(users)
+
+      if (companyId) {
+        const contacts = await getCustomerContacts(companyId, customerId)
+        setCustomerContacts(contacts)
+      }
     } catch (err) {
       console.error('Error loading customer:', err)
     } finally {
@@ -187,6 +207,69 @@ export default function CustomerDetailPage() {
       await loadData()
     } catch (err) {
       console.error('Error deleting user:', err)
+    }
+  }
+
+  const openAddContactModal = () => {
+    setEditingContactId(null)
+    setContactForm(emptyContactForm)
+    setError('')
+    setShowContactModal(true)
+  }
+
+  const openEditContactModal = (contact: CustomerContact) => {
+    setEditingContactId(contact.id)
+    setContactForm({
+      name: contact.name,
+      phone: contact.phone || '',
+      role_or_title: contact.role_or_title || '',
+      notes: contact.notes || '',
+    })
+    setError('')
+    setShowContactModal(true)
+  }
+
+  const handleSaveContact = async () => {
+    if (!companyId || !contactForm.name.trim()) return
+
+    setSaving(true)
+    setError('')
+
+    try {
+      const payload = {
+        name: contactForm.name,
+        phone: contactForm.phone || null,
+        role_or_title: contactForm.role_or_title || null,
+        notes: contactForm.notes || null,
+      }
+
+      if (editingContactId) {
+        await updateCustomerContact(companyId, editingContactId, payload)
+      } else {
+        await insertCustomerContact(companyId, customerId, payload)
+      }
+
+      setShowContactModal(false)
+      setEditingContactId(null)
+      setContactForm(emptyContactForm)
+      await loadData()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'שגיאה בשמירת איש הקשר'
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteContact = async (contactId: string) => {
+    if (!companyId) return
+
+    try {
+      await deleteCustomerContact(companyId, contactId)
+      setShowDeleteContactConfirm(null)
+      await loadData()
+    } catch (err) {
+      console.error('Error deleting contact:', err)
     }
   }
 
@@ -266,6 +349,24 @@ export default function CustomerDetailPage() {
         >
           <FileText size={16} />
           פרטים
+        </button>
+        <button
+          onClick={() => setActiveTab('contacts')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'contacts'
+              ? 'bg-[#33d4ff] text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Contact2 size={16} />
+          אנשי קשר
+          {customerContacts.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+              activeTab === 'contacts' ? 'bg-white/20' : 'bg-gray-200'
+            }`}>
+              {customerContacts.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('users')}
@@ -390,6 +491,90 @@ export default function CustomerDetailPage() {
             <div className="bg-white rounded-xl border border-gray-200 p-5 lg:col-span-2">
               <h2 className="font-bold text-gray-800 mb-2">הערות</h2>
               <p className="text-gray-600 text-sm">{customer.notes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Contacts Tab */}
+      {activeTab === 'contacts' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-500">
+              אנשי קשר תפעוליים ללקוח — יוצעו בטופס גרירה בעת בחירת הלקוח
+            </p>
+            <button
+              onClick={openAddContactModal}
+              className="flex items-center gap-2 bg-[#33d4ff] text-white px-4 py-2.5 rounded-xl hover:bg-[#21b8e6] transition-colors font-medium text-sm"
+            >
+              <Plus size={18} />
+              הוסף איש קשר
+            </button>
+          </div>
+
+          {customerContacts.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <Contact2 size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 mb-1">אין אנשי קשר שמורים</p>
+              <p className="text-sm text-gray-400">הוסף אנשי קשר שחוזרים על עצמם בגרירות מול לקוח זה</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="divide-y divide-gray-100">
+                {customerContacts.map((contact) => (
+                  <div key={contact.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                          <Contact2 size={20} className="text-teal-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-gray-800">{contact.name}</span>
+                            {contact.role_or_title && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                <Briefcase size={12} />
+                                {contact.role_or_title}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                            {contact.phone ? (
+                              <a href={`tel:${contact.phone}`} className="text-[#33d4ff] hover:underline">
+                                {contact.phone}
+                              </a>
+                            ) : (
+                              <span className="text-gray-400">ללא טלפון</span>
+                            )}
+                            {contact.notes && (
+                              <span className="truncate" title={contact.notes}>
+                                {contact.notes}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => openEditContactModal(contact)}
+                          className="p-2 text-gray-400 hover:text-[#33d4ff] hover:bg-blue-50 rounded-lg transition-colors"
+                          title="עריכה"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteContactConfirm(contact.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="מחיקה"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -639,6 +824,128 @@ export default function CustomerDetailPage() {
                   </button>
                 </div>
               </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Contact Modal */}
+      {showContactModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+          <div className="bg-white w-full lg:max-w-md lg:rounded-2xl lg:mx-4 overflow-hidden rounded-t-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white">
+              <h2 className="font-bold text-lg">
+                {editingContactId ? 'עריכת איש קשר' : 'הוספת איש קשר'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowContactModal(false)
+                  setEditingContactId(null)
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">שם *</label>
+                <input
+                  type="text"
+                  value={contactForm.name}
+                  onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">טלפון</label>
+                <PhoneInput
+                  value={contactForm.phone}
+                  onChange={(phone) => setContactForm({ ...contactForm, phone })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">תפקיד / תיאור</label>
+                <input
+                  type="text"
+                  value={contactForm.role_or_title}
+                  onChange={(e) => setContactForm({ ...contactForm, role_or_title: e.target.value })}
+                  placeholder="לדוגמה: מחסן, חשבונות"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">הערות</label>
+                <textarea
+                  value={contactForm.notes}
+                  onChange={(e) => setContactForm({ ...contactForm, notes: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowContactModal(false)
+                    setEditingContactId(null)
+                  }}
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={handleSaveContact}
+                  disabled={!contactForm.name.trim() || saving}
+                  className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 transition-colors font-medium"
+                >
+                  {saving ? (
+                    <Loader2 size={18} className="animate-spin mx-auto" />
+                  ) : (
+                    'שמור'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Contact Confirm Modal */}
+      {showDeleteContactConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">מחיקת איש קשר</h2>
+              <p className="text-gray-600">איש הקשר יוסר מרשימת אנשי הקשר של הלקוח. להמשיך?</p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setShowDeleteContactConfirm(null)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={() => handleDeleteContact(showDeleteContactConfirm)}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+              >
+                מחק
+              </button>
+            </div>
           </div>
         </div>
       )}

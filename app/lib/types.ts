@@ -130,6 +130,25 @@ export interface CustomerCompany {
   created_at: string
 }
 
+export interface CustomerContact {
+  id: string
+  company_id: string
+  customer_id: string
+  name: string
+  phone: string | null
+  role_or_title: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerContactInput {
+  name: string
+  phone?: string | null
+  role_or_title?: string | null
+  notes?: string | null
+}
+
 export interface PriceList {
   id: string
   company_id: string
