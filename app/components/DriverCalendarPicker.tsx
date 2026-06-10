@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Sparkles } from 'lucide-react'
 import { DriverWithDetails } from '../lib/types'
 import { getDayTows } from '../lib/queries/calendar'
+import { getDayEvents, CalendarWeekEvent } from '../lib/queries/events'
 import { TowWithDetails } from '../lib/queries/tows'
+import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
 
 const DRIVER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4']
 
@@ -32,6 +35,7 @@ export function DriverCalendarPicker({
   const [pickerTime, setPickerTime] = useState<string>(initialTime || '')
   const [pendingDriverId, setPendingDriverId] = useState<string | null>(null)
   const [calendarTows, setCalendarTows] = useState<TowWithDetails[]>([])
+  const [calendarEvents, setCalendarEvents] = useState<CalendarWeekEvent[]>([])
   const [calendarLoading, setCalendarLoading] = useState(false)
 
   const [selectedDriverIds, setSelectedDriverIds] = useState<string[]>([])
@@ -55,8 +59,12 @@ export function DriverCalendarPicker({
     if (!companyId) return
     setCalendarLoading(true)
     try {
-      const tows = await getDayTows(companyId, date)
+      const [tows, events] = await Promise.all([
+        getDayTows(companyId, date),
+        getDayEvents(companyId, date),
+      ])
       setCalendarTows(tows)
+      setCalendarEvents(events)
     } catch (e) {
       console.error(e)
     } finally {
@@ -177,6 +185,12 @@ export function DriverCalendarPicker({
                           t.driver_id === driver.id &&
                           new Date(t.scheduled_at ?? '').getHours() === hour
                         )
+                        const cellEvents = calendarEvents.filter(e => {
+                          if (e.driver_id !== driver.id) return false
+                          const bounds = getEventTimeBounds(e)
+                          if (!bounds) return false
+                          return new Date(bounds.startMs).getHours() === hour
+                        })
                         const isRelevant = requiredTruckTypes.length === 0 ||
                           (driver as unknown as { trucks?: { truck_type: string }[] }).trucks?.some(
                             (t: { truck_type: string }) => requiredTruckTypes.includes(t.truck_type)
@@ -211,7 +225,25 @@ export function DriverCalendarPicker({
                                 {t.customer?.name || t.order_number?.slice(-4) || t.id.slice(0, 4)}
                               </div>
                             ))}
-                            {cellTows.length === 0 && (
+                            {cellEvents.map(e => (
+                              <div
+                                key={e.id}
+                                title={e.customer?.name || 'אירוע'}
+                                className="relative rounded px-1 py-0.5 mb-0.5 truncate text-xs font-medium ring-1 ring-cyan-300"
+                                style={{
+                                  background: color + '25',
+                                  color: color,
+                                  border: `1px solid #22d3ee`,
+                                }}
+                              >
+                                <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[8px] px-0.5 rounded font-bold mr-0.5 align-middle">
+                                  <Sparkles size={8} />
+                                  אירוע
+                                </span>
+                                {e.customer?.name || 'אירוע'}
+                              </div>
+                            ))}
+                            {cellTows.length + cellEvents.length === 0 && (
                               <button
                                 type="button"
                                 className="w-full h-5 border border-dashed border-gray-200 rounded text-gray-200 opacity-0 hover:opacity-100 hover:border-gray-300 hover:text-gray-300 flex items-center justify-center text-xs transition-opacity"

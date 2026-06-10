@@ -1,0 +1,8 @@
+[33me88d1a7[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Tows list: scheduled-date badges (today/tomorrow/date) on tows + events, stacked route on desktop
+[33m181f748[m Fix tow detail load timeout: load tow_images in separate parallel query, group in JS
+[33mcbd29d0[m Admin tow photos: show plate number per photo (details + images tabs)
+[33m5b58cb5[m Custom tow: load route on edit (one-time seed) + fix temp-id UUID crash on save
+[33mc83f1f2[m Guard against data loss on custom-tow edit: block empty-route save on both save and save-as-quote
+[33m5a31eb5[m Driver names in tow-form calendar picker now black and bold
+[33me63c922[m Allow company_admin to edit closed/cancelled tows
+[33mb868fda[m Admin: תיעוד רכבים tab — vehicle photos (signed URLs) + before/after locations
