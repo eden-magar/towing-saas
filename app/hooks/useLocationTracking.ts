@@ -1,6 +1,27 @@
 import { useEffect, useRef } from 'react'
 import { insertLocation } from '../lib/queries/driver-shifts'
 
+const GEOLOCATION_ERROR_LABELS: Record<number, string> = {
+  1: 'PERMISSION_DENIED',
+  2: 'POSITION_UNAVAILABLE',
+  3: 'TIMEOUT',
+}
+
+function logGeolocationError(error: GeolocationPositionError) {
+  const code = error?.code
+  const label =
+    code != null && code in GEOLOCATION_ERROR_LABELS
+      ? GEOLOCATION_ERROR_LABELS[code]
+      : 'UNKNOWN'
+  const message = error?.message ?? ''
+
+  if (code === 1 || code === 2 || code === 3) {
+    console.warn('GPS error:', label, `code=${code}`, message)
+  } else {
+    console.error('GPS error:', label, `code=${code}`, message)
+  }
+}
+
 export function useLocationTracking(
   driverId: string | null,
   companyId: string | null,
@@ -66,7 +87,7 @@ export function useLocationTracking(
             position.coords.longitude
           ).catch(console.error)
         },
-        (error) => console.error('GPS error:', error),
+        (error) => logGeolocationError(error),
         { enableHighAccuracy: false, timeout: 10000 }
       )
     }

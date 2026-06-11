@@ -153,7 +153,14 @@ export default function DriverHomePage() {
 
   // פילטור משימות
   const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
-  const currentTask = tasks.find(t => t.status === 'in_progress')
+  const currentTask = tasks
+    .filter(t => t.status === 'in_progress')
+    .sort((a, b) => {
+      const aMs = a.started_at ? new Date(a.started_at).getTime() : 0
+      const bMs = b.started_at ? new Date(b.started_at).getTime() : 0
+      if (aMs !== bMs) return bMs - aMs
+      return 0
+    })[0] ?? null
   const hasActiveTask = !!currentTask
 
   type ScheduleItem =
@@ -173,7 +180,12 @@ export default function DriverHomePage() {
         event,
       })),
     ]
-    return items.sort((a, b) => a.sortMs - b.sortMs)
+    return items.sort((a, b) => {
+      const aInProgress = a.kind === 'tow' && a.task.status === 'in_progress'
+      const bInProgress = b.kind === 'tow' && b.task.status === 'in_progress'
+      if (aInProgress !== bInProgress) return aInProgress ? -1 : 1
+      return a.sortMs - b.sortMs
+    })
   }, [activeTasks, driverEvents])
 
   const hasScheduleItems = scheduleItems.length > 0

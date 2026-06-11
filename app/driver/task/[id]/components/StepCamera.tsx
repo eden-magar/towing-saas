@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import { 
   Camera, 
   X, 
@@ -47,6 +47,11 @@ interface StepCameraProps {
   userId: string
   onComplete: () => Promise<void>
   isAfterDelivery?: boolean
+}
+
+export interface StepCameraHandle {
+  /** Shows unsaved-photos dialog when needed; otherwise runs onProceed immediately. */
+  requestLeave: (onProceed: () => void) => void
 }
 
 // פונקציית compression
@@ -97,14 +102,17 @@ async function compressImage(file: File, maxSizeMB: number = 1): Promise<File> {
   })
 }
 
-export default function StepCamera({
-  towId,
-  point,
-  vehicles,
-  userId,
-  onComplete,
-  isAfterDelivery = false
-}: StepCameraProps) {
+const StepCamera = forwardRef<StepCameraHandle, StepCameraProps>(function StepCamera(
+  {
+    towId,
+    point,
+    vehicles,
+    userId,
+    onComplete,
+    isAfterDelivery = false,
+  },
+  ref
+) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -120,7 +128,21 @@ export default function StepCamera({
   const [cameraReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [streamReady, setStreamReady] = useState(false)
+  const [leaveDialogProceed, setLeaveDialogProceed] = useState<(() => void) | null>(null)
+  const [leaveSaving, setLeaveSaving] = useState(false)
 
+  const hasUnsavedPhotos = useCallback(() => {
+    return Object.values(imagesByVehicle).some((imgs) => imgs.length > 0)
+  }, [imagesByVehicle])
+
+  const clearBufferedImages = useCallback(() => {
+    setImagesByVehicle((prev) => {
+      Object.values(prev).forEach((imgs) => {
+        imgs.forEach((img) => URL.revokeObjectURL(img.url))
+      })
+      return {}
+    })
+  }, [])
 
   const isPickup = point.point_type === 'pickup'
   const isExchange = point.point_type === 'exchange'
@@ -142,6 +164,39 @@ export default function StepCamera({
     }
     return isPickup ? 'before_pickup' : 'before_dropoff'
   }
+
+  const uploadBufferedPhotos = async () => {
+    for (const [vehicleKey, imgs] of Object.entries(imagesByVehicle)) {
+      if (imgs.length === 0) continue
+      const vehicle = vehicles.find((v) => v.plate_number === vehicleKey)
+      const imageType = getImageType(vehicle)
+      for (const img of imgs) {
+        const compressed = await compressImage(img.file)
+        await uploadTowImage(
+          towId,
+          userId,
+          imageType,
+          compressed,
+          point.id,
+          vehicle?.id
+        )
+      }
+    }
+    clearBufferedImages()
+  }
+
+  const requestLeave = useCallback(
+    (onProceed: () => void) => {
+      if (!hasUnsavedPhotos()) {
+        onProceed()
+        return
+      }
+      setLeaveDialogProceed(() => onProceed)
+    },
+    [hasUnsavedPhotos]
+  )
+
+  useImperativeHandle(ref, () => ({ requestLeave }), [requestLeave])
 
   // בדיקה אם כל הרכבים צולמו
   const allVehiclesComplete = vehicles.every(v => {
@@ -271,27 +326,7 @@ export default function StepCamera({
 
     setUploading(true)
     try {
-      for (const [vehicleKey, imgs] of Object.entries(imagesByVehicle)) {
-        const vehicle = vehicles.find(v => v.plate_number === vehicleKey)
-        const imageType = getImageType(vehicle)
-        for (const img of imgs) {
-          const compressed = await compressImage(img.file)
-          await uploadTowImage(
-            towId,
-            userId,
-            imageType,
-            compressed,
-            point.id,
-            vehicle?.id
-          )
-        }
-      }
-
-      // ניקוי URLs
-      Object.values(imagesByVehicle).forEach(imgs => {
-        imgs.forEach(img => URL.revokeObjectURL(img.url))
-      })
-      
+      await uploadBufferedPhotos()
       await onComplete()
     } catch (error) {
       console.error('Error uploading images:', error)
@@ -300,6 +335,44 @@ export default function StepCamera({
       setUploading(false)
     }
   }
+
+  const handleLeaveSaveAndProceed = async () => {
+    if (!leaveDialogProceed) return
+    setLeaveSaving(true)
+    try {
+      await uploadBufferedPhotos()
+      const proceed = leaveDialogProceed
+      setLeaveDialogProceed(null)
+      proceed()
+    } catch (error) {
+      console.error('Error uploading images on leave:', error)
+      alert('שגיאה בשמירת התמונות')
+    } finally {
+      setLeaveSaving(false)
+    }
+  }
+
+  const handleLeaveDiscardAndProceed = () => {
+    if (!leaveDialogProceed) return
+    clearBufferedImages()
+    const proceed = leaveDialogProceed
+    setLeaveDialogProceed(null)
+    proceed()
+  }
+
+  const handleLeaveStay = () => {
+    setLeaveDialogProceed(null)
+  }
+
+  // אזהרה לפני סגירת הדפדפן
+  useEffect(() => {
+    if (!hasUnsavedPhotos()) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedPhotos])
 
   // ניקוי בעת unmount
   useEffect(() => {
@@ -657,6 +730,47 @@ export default function StepCamera({
           </div>
         </div>
       )}
+
+      {/* Unsaved photos leave dialog */}
+      {leaveDialogProceed && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-[60]" dir="rtl">
+          <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl p-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">יש תמונות שלא נשמרו</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              צילמת תמונות שעדיין לא הועלו. מה תרצה לעשות?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={handleLeaveSaveAndProceed}
+                disabled={leaveSaving}
+                className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {leaveSaving ? <Loader2 size={20} className="animate-spin" /> : null}
+                שמור והמשך
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveDiscardAndProceed}
+                disabled={leaveSaving}
+                className="w-full py-3.5 bg-red-50 text-red-700 border border-red-200 rounded-xl font-medium disabled:opacity-50"
+              >
+                צא בלי לשמור
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveStay}
+                disabled={leaveSaving}
+                className="w-full py-3.5 bg-gray-100 text-gray-700 rounded-xl font-medium disabled:opacity-50"
+              >
+                הישאר
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
-}
+})
+
+export default StepCamera

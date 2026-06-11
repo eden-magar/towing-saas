@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
 import { 
@@ -21,7 +21,7 @@ import { ArrowRight, Loader2, AlertCircle, X, AlertTriangle, Phone, MessageCircl
 
 // קומפוננטות השלבים
 import StepOnTheWay from './components/StepOnTheWay'
-import StepCamera from './components/StepCamera'
+import StepCamera, { type StepCameraHandle } from './components/StepCamera'
 import StepDelivery from './components/StepDelivery'
 import StepComplete from './components/StepComplete'
 
@@ -61,6 +61,20 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     cashCollected?: number
   } | null>(null)
 
+  const cameraRef = useRef<StepCameraHandle>(null)
+
+  const guardedNavigate = useCallback((navigate: () => void) => {
+    if (pointStep === 'camera' || pointStep === 'camera_after') {
+      cameraRef.current?.requestLeave(navigate) ?? navigate()
+    } else {
+      navigate()
+    }
+  }, [pointStep])
+
+  const goHome = useCallback(() => {
+    guardedNavigate(() => router.push('/driver'))
+  }, [guardedNavigate, router])
+
   // טעינת המשימה
   useEffect(() => {
     if (authLoading || !user?.id) return
@@ -87,6 +101,10 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   const loadTask = async () => {
     setLoading(true)
+    setIsCompleted(false)
+    setRejectionPending(false)
+    setPendingRejectionRequestId(null)
+    setRejectionDenied(false)
     try {
       const data = await getTaskDetail(id)
       if (data) {
@@ -438,7 +456,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       <div className="relative z-10 shrink-0 px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <button 
-            onClick={() => router.push('/driver')}
+            onClick={goHome}
             className="w-10 h-10 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center"
           >
             <ArrowRight size={20} className="text-white" />
@@ -520,6 +538,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
         {pointStep === 'camera' && currentPoint && (
           <StepCamera
+            ref={cameraRef}
             towId={task.id}
             point={currentPoint}
             vehicles={cameraVehicles}
@@ -530,6 +549,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
         {pointStep === 'camera_after' && currentPoint && (
           <StepCamera
+            ref={cameraRef}
             towId={task.id}
             point={currentPoint}
             vehicles={cameraVehicles}

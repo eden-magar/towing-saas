@@ -64,6 +64,7 @@ export interface DriverTask {
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
   scheduled_at: string | null
+  started_at: string | null
   notes: string | null
   hasPendingRejection?: boolean
   hasDeniedRejection?: boolean
@@ -269,6 +270,7 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
       status,
       tow_type,
       scheduled_at,
+      started_at,
       notes,
       created_at,
       price_breakdown,
@@ -342,6 +344,7 @@ export async function getDriverTasks(driverId: string): Promise<DriverTask[]> {
     status: tow.status,
     tow_type: tow.tow_type,
     scheduled_at: tow.scheduled_at,
+    started_at: tow.started_at ?? null,
     notes: tow.notes,
     hasPendingRejection: Array.isArray((tow as any).tow_rejection_requests)
       ? (tow as any).tow_rejection_requests.some((r: any) => r.status === 'pending')
@@ -439,6 +442,7 @@ export async function getDriverTasksToday(driverId: string): Promise<DriverTask[
     status: tow.status,
     tow_type: tow.tow_type,
     scheduled_at: tow.scheduled_at,
+    started_at: null,
     notes: tow.notes,
     created_at: tow.created_at,
     customer: tow.customer as any,

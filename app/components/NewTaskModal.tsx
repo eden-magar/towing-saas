@@ -170,40 +170,28 @@ export default function NewTaskModal({
   }
 
   // קבלת משימה
-const handleAccept = async () => {
-  console.log('handleAccept started', { taskId: task.id, hasActiveTask })
-  setIsProcessing(true)
-  try {
-    const newStatus = hasActiveTask ? 'assigned' : 'in_progress'
-    console.log('Updating status to:', newStatus)
-    
-    const { data, error } = await supabase
-      .from('tows')
-      .update({ 
-        status: newStatus,
-        ...(newStatus === 'in_progress' ? { started_at: new Date().toISOString() } : {})
-      })
-      .eq('id', task.id)
-      .select()
+  const handleAccept = async () => {
+    setIsProcessing(true)
+    try {
+      const { error } = await supabase
+        .from('tows')
+        .update({
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+        })
+        .eq('id', task.id)
 
-    console.log('Update result:', { data, error })
+      if (error) throw error
 
-    if (error) throw error
-
-    onAccept()
-    
-    if (!hasActiveTask) {
+      onAccept()
       router.push(`/driver/task/${task.id}`)
-    } else {
-      onClose()
+    } catch (err) {
+      console.error('Error accepting task:', err)
+      alert('שגיאה בקבלת המשימה')
+    } finally {
+      setIsProcessing(false)
     }
-  } catch (err) {
-    console.error('Error accepting task:', err)
-    alert('שגיאה בקבלת המשימה')
-  } finally {
-    setIsProcessing(false)
   }
-}
 
   // שליחת בקשת דחייה
   const handleSubmitRejectRequest = async () => {
@@ -451,11 +439,6 @@ const handleAccept = async () => {
               >
                 {isProcessing ? (
                   <Loader2 className="w-6 h-6 animate-spin" />
-                ) : hasActiveTask ? (
-                  <>
-                    <CheckCircle2 className="w-6 h-6" />
-                    קבל לתור
-                  </>
                 ) : (
                   <>
                     <Navigation className="w-6 h-6" />
