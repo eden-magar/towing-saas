@@ -1,7 +1,6 @@
 'use client'
 import { openWaze } from '../lib/utils/navigation'
 import { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
@@ -153,15 +152,7 @@ export default function DriverHomePage() {
 
   // פילטור משימות
   const activeTasks = tasks.filter(t => ['assigned', 'in_progress'].includes(t.status))
-  const currentTask = tasks
-    .filter(t => t.status === 'in_progress')
-    .sort((a, b) => {
-      const aMs = a.started_at ? new Date(a.started_at).getTime() : 0
-      const bMs = b.started_at ? new Date(b.started_at).getTime() : 0
-      if (aMs !== bMs) return bMs - aMs
-      return 0
-    })[0] ?? null
-  const hasActiveTask = !!currentTask
+  const hasActiveTask = tasks.some(t => t.status === 'in_progress')
 
   type ScheduleItem =
     | { kind: 'tow'; sortMs: number; task: DriverTask }
@@ -217,13 +208,16 @@ export default function DriverHomePage() {
     return driverStatuses.find(s => s.id === status) || driverStatuses[3]
   }
 
-  /** גרר מהמשימה הפעילה (לא משיוך נהג–גרר) */
+  /** גרר ממשיוך נהג–גרר */
   const getTruckInfo = () => {
-    const towTruck = currentTask?.truck
-    if (!towTruck) return null
+    const truck = driverInfo?.trucks?.[0]
+    if (!truck) return null
     return {
-      model: 'גרר',
-      plate: towTruck.plate_number,
+      model:
+        truck.manufacturer || truck.model
+          ? `${truck.manufacturer || ''} ${truck.model || ''}`.trim()
+          : 'גרר',
+      plate: truck.plate_number,
     }
   }
 
@@ -569,58 +563,6 @@ export default function DriverHomePage() {
         </div>
       </div>
 
-      {/* Active Task Banner */}
-      {currentTask && (
-        <div className="mx-4 -mt-4 relative z-10">
-          <Link href={`/driver/task/${currentTask.id}`}>
-            <div className="bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-2xl p-4 text-white shadow-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="bg-white/20 rounded-xl p-2">
-                    <Navigation size={24} />
-                  </div>
-                  <div>
-                    <div className="text-sm text-cyan-100">
-                      משימה פעילה {currentTask.order_number && `#${currentTask.order_number}`}
-                    </div>
-                    {currentTask.hasPendingRejection && (
-                      <div className="mt-1 px-2 py-0.5 bg-orange-400/80 text-white text-xs font-medium rounded-lg inline-block">
-                        ממתין לאישור בקשת דחייה
-                      </div>
-                    )}
-                    {currentTask.hasDeniedRejection && (
-                      <div className="mb-2 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-lg text-center">
-                        ❌ בקשת הדחייה נדחתה — יש להמשיך בגרירה
-                      </div>
-                    )}
-                    <div className="font-bold">{getVehicleInfo(currentTask).name}</div>
-                    {getVehicleInfo(currentTask).plate && (
-                      <span className="bg-white/20 text-xs font-mono px-2 py-0.5 rounded">
-                        {getVehicleInfo(currentTask).plate}
-                        {getVehicleInfo(currentTask).vehicleCode && (
-                          <span className="text-xs text-gray-400"> #{getVehicleInfo(currentTask).vehicleCode}</span>
-                        )}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <ChevronLeft size={24} className="text-white/70" />
-              </div>
-              <div className="mt-3 pt-3 border-t border-white/20">
-                <div className="flex items-center gap-2 text-sm">
-                  <div className="w-2 h-2 bg-green-400 rounded-full" />
-                  <span className="truncate">{getAddresses(currentTask).from}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm mt-1">
-                  <div className="w-2 h-2 bg-red-400 rounded-full" />
-                  <span className="truncate">{getAddresses(currentTask).to}</span>
-                </div>
-              </div>
-            </div>
-          </Link>
-        </div>
-      )}
-
       {/* Schedule */}
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
@@ -737,6 +679,17 @@ export default function DriverHomePage() {
                       ❌ בקשת הדחייה נדחתה — יש להמשיך בגרירה
                     </div>
                   )}
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <span
+                      className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${
+                        isInProgress
+                          ? 'bg-cyan-100 text-cyan-700'
+                          : 'bg-blue-100 text-blue-700'
+                      }`}
+                    >
+                      {isInProgress ? 'בביצוע' : 'משובץ'}
+                    </span>
+                  </div>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`rounded-xl px-3 py-2 font-bold text-center ${

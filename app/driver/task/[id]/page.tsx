@@ -3,6 +3,7 @@
 import { useState, useEffect, use, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
+import { useDriverContext } from '../../DriverContext'
 import { 
   getTaskDetail, 
   updateTaskStatus,
@@ -36,6 +37,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params)
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
+  const { driverInfo, driverLoading } = useDriverContext()
   
   // State
   const [task, setTask] = useState<TaskDetailFull | null>(null)
@@ -77,9 +79,9 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
 
   // טעינת המשימה
   useEffect(() => {
-    if (authLoading || !user?.id) return
+    if (authLoading || !user?.id || driverLoading) return
     loadTask()
-  }, [id, authLoading, user?.id])
+  }, [id, authLoading, user?.id, driverLoading, driverInfo?.id])
 
   useEffect(() => {
     if (!pendingRejectionRequestId) return
@@ -106,20 +108,21 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
     setPendingRejectionRequestId(null)
     setRejectionDenied(false)
     try {
-      const data = await getTaskDetail(id)
+      const driverId = driverInfo?.id
+      const { getPendingRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
+
+      const [data, pending] = await Promise.all([
+        getTaskDetail(id),
+        driverId
+          ? getPendingRejectionRequest(id, driverId)
+          : Promise.resolve(null),
+      ])
+
       if (data) {
         setTask(data)
-        // בדוק אם יש בקשת דחייה ממתינה
-        if (user?.id) {
-          const driver = await getDriverByUserId(user.id)
-          if (driver) {
-            const { getPendingRejectionRequest } = await import('@/app/lib/queries/rejection-requests')
-            const pending = await getPendingRejectionRequest(id, driver.id)
-            if (pending) {
-              setRejectionPending(true)
-              setPendingRejectionRequestId(pending.id)
-            }
-          }
+        if (pending) {
+          setRejectionPending(true)
+          setPendingRejectionRequestId(pending.id)
         }
         
         // קביעת המצב הנוכחי

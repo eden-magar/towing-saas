@@ -8,6 +8,7 @@ import { DriverStatus } from '../lib/types'
 import { supabase } from '../lib/supabase'
 import { useLocationTracking } from '../hooks/useLocationTracking'
 import { getActiveShift } from '../lib/queries/driver-shifts'
+import { DriverProvider } from './DriverContext'
 import { 
   Home,
   History,
@@ -212,15 +213,11 @@ export default function DriverLayout({
   const driverStatus = driverInfo?.status || 'unavailable'
 
   // בדף משימה - לא מציגים את הניווט התחתון
-  if (isTaskPage) {
-    return (
-      <div dir="rtl" className="h-screen overflow-hidden">
-        {children}
-      </div>
-    )
-  }
-
-  return (
+  const pageContent = isTaskPage ? (
+    <div dir="rtl" className="h-screen overflow-hidden">
+      {children}
+    </div>
+  ) : (
     <div dir="rtl" className="min-h-screen bg-gray-50 flex flex-col">
       {/* Status Picker Dropdown */}
       {showStatusPicker && (
@@ -313,5 +310,11 @@ export default function DriverLayout({
         </div>
       </nav>
     </div>
+  )
+
+  return (
+    <DriverProvider driverInfo={driverInfo} driverLoading={loading}>
+      {pageContent}
+    </DriverProvider>
   )
 }
