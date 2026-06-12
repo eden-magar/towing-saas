@@ -50,6 +50,7 @@
     in_progress: 'bg-indigo-100 text-indigo-700',
     completed: 'bg-emerald-100 text-emerald-700',
     cancelled: 'bg-red-100 text-red-700',
+    cancelled_charged: 'bg-amber-100 text-amber-800',
   }
 
   const PIXELS_PER_HOUR_DASH = 28
@@ -100,6 +101,13 @@
       return (
         <div className={shell}>
           <XCircle size={iconSize} className="text-gray-600" strokeWidth={2.5} />
+        </div>
+      )
+    }
+    if (status === 'cancelled_charged') {
+      return (
+        <div className={shell}>
+          <XCircle size={iconSize} className="text-amber-600" strokeWidth={2.5} />
         </div>
       )
     }
@@ -830,7 +838,8 @@
                               new Date(effectiveStartIso).getMinutes() / 60
                             const top = hour * PIXELS_PER_HOUR_DASH
                             const driverColor = getDriverColor(tow.driver_id!, allDrivers)
-                            const isCancelled = tow.status === 'cancelled'
+                            const isPlainCancelled = tow.status === 'cancelled'
+                            const isChargedCancel = tow.status === 'cancelled_charged'
                             const { startMs, endMs } = getTowTimeBounds(tow, now, {
                               clampEndToDay: listDate,
                             })
@@ -845,14 +854,21 @@
                                 type="button"
                                 onClick={() => router.push(`/dashboard/tows/${tow.id}`)}
                                 className={`absolute pointer-events-auto rounded px-1 py-0.5 text-white overflow-hidden text-[10px] leading-tight text-right hover:brightness-95 transition-[filter] ${
-                                  isCancelled ? 'opacity-60 line-through' : ''
+                                  isPlainCancelled ? 'opacity-60 line-through' : ''
                                 }`}
                                 style={{
                                   top: `${top}px`,
                                   height: `${heightPx}px`,
                                   left: `calc(${offsetPct}% + 1px)`,
                                   width: `calc(${widthPct}% - 2px)`,
-                                  backgroundColor: driverColor,
+                                  backgroundColor:
+                                    tow.status === 'completed'
+                                      ? '#16a34a'
+                                      : isPlainCancelled
+                                        ? '#9ca3af'
+                                        : isChargedCancel
+                                          ? '#d97706'
+                                          : driverColor,
                                 }}
                               >
                                 <CompactTowBlockStatusBadge status={tow.status} />

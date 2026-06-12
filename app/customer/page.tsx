@@ -25,6 +25,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   in_progress: { label: 'בביצוע', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200', icon: Truck },
   completed: { label: 'הושלמה', color: 'text-green-700', bg: 'bg-green-50 border-green-200', icon: CheckCircle2 },
   cancelled: { label: 'בוטלה', color: 'text-red-700', bg: 'bg-red-50 border-red-200', icon: AlertCircle },
+  cancelled_charged: { label: 'בוטל בחיוב', color: 'text-amber-800', bg: 'bg-amber-50 border-amber-200', icon: AlertCircle },
 }
 
 export default function CustomerDashboard() {

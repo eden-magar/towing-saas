@@ -34,7 +34,15 @@ const statusLabels: Record<string, string> = {
   in_progress: 'בביצוע',
   completed: 'הושלמה',
   cancelled: 'בוטלה',
+  cancelled_charged: 'בוטל בחיוב',
   quote: 'הצעת מחיר',
+}
+
+function getTowCalendarBackgroundColor(status: string, driverColor: string): string {
+  if (status === 'completed') return '#16a34a'
+  if (status === 'cancelled') return '#9ca3af'
+  if (status === 'cancelled_charged') return '#d97706'
+  return driverColor
 }
 
 function getCollisionLayout(towList: TowWithDetails[], TOW_DURATION = 1) {
@@ -809,8 +817,8 @@ const handleSkipPriceUpdate = () => {
                         height: `${Math.max(height - 4, 20)}px`,
                         right: `${right + 0.3}%`,
                         width: `${slotWidth - 0.6}%`,
-                        backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
-                        borderRightColor: driverColor,
+                        backgroundColor: getTowCalendarBackgroundColor(tow.status, driverColor),
+                        borderRightColor: getTowCalendarBackgroundColor(tow.status, driverColor),
                       }}
                     >
                       {tow.status === 'quote' && (
@@ -952,7 +960,7 @@ const handleSkipPriceUpdate = () => {
                             height: '56px',
                             right: `calc(${(collision.columnIndex / collision.totalColumns) * 100}% + 2px)`,
                             left: `calc(${((collision.totalColumns - collision.columnIndex - 1) / collision.totalColumns) * 100}% + 2px)`,
-                            backgroundColor: tow.status === 'completed' ? '#16a34a' : tow.status === 'cancelled' ? '#9ca3af' : driverColor,
+                            backgroundColor: getTowCalendarBackgroundColor(tow.status, driverColor),
                             borderRightColor: driverColor,
                           }}
                         >

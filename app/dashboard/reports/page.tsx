@@ -234,7 +234,7 @@ export default function ReportsPage() {
               <p className="text-sm text-gray-500">סה"כ גרירות</p>
               <p className="text-3xl font-bold text-gray-800 mt-1">{summary?.totalTows || 0}</p>
               <p className="text-xs text-gray-400 mt-1">
-                {summary?.completedTows || 0} הושלמו • {summary?.cancelledTows || 0} בוטלו
+                {summary?.completedTows || 0} הושלמו • {summary?.cancelledTows || 0} בוטלו • {summary?.cancelledChargedTows || 0} בוטלו בחיוב
               </p>
             </div>
             <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">

@@ -12,7 +12,7 @@ export type PaymentTerms = 'immediate' | 'monthly'
 
 export type TowType = 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
 
-export type TowStatus = 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+export type TowStatus = 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
 
 // סוגי רכב - מעודכן לפי מאגרי משרד התחבורה
 export type VehicleType = 'private' | 'motorcycle' | 'heavy' | 'machinery'

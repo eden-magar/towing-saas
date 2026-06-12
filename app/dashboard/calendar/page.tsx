@@ -52,7 +52,17 @@ const statusLabels: Record<string, string> = {
   in_progress: 'בביצוע',
   completed: 'הושלמה',
   cancelled: 'בוטלה',
+  cancelled_charged: 'בוטל בחיוב',
   quote: 'הצעת מחיר',
+}
+
+const CANCELLED_CHARGED_COLOR = '#d97706'
+
+function getTowCalendarBackgroundColor(status: string, driverColor: string): string {
+  if (status === 'completed') return '#16a34a'
+  if (status === 'cancelled') return '#9ca3af'
+  if (status === 'cancelled_charged') return CANCELLED_CHARGED_COLOR
+  return driverColor
 }
 
 const PIXELS_PER_HOUR_WEEK = 40
@@ -112,6 +122,13 @@ function TowBlockStatusBadge({ status, size = 'sm' }: { status: string; size?: '
       </div>
     )
   }
+  if (status === 'cancelled_charged') {
+    return (
+      <div className={shell}>
+        <XCircle size={iconSize} className="text-amber-600" strokeWidth={2.5} />
+      </div>
+    )
+  }
   if (status === 'in_progress') {
     return (
       <div className={shell}>
@@ -129,6 +146,9 @@ function TowModalStatusIcon({ status }: { status: string }) {
   }
   if (status === 'cancelled') {
     return <XCircle size={iconSize} className="text-gray-600 shrink-0" strokeWidth={2.5} />
+  }
+  if (status === 'cancelled_charged') {
+    return <XCircle size={iconSize} className="text-amber-600 shrink-0" strokeWidth={2.5} />
   }
   if (status === 'in_progress') {
     return (
@@ -1335,7 +1355,7 @@ const handleSkipPriceUpdate = () => {
                   const { offsetPct, widthPct } = getOverlapBlockWidthPct(overlap, dayWidth)
                   const right = displayIndex * dayWidth + offsetPct
                   const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                  const isCancelled = tow.status === 'cancelled'
+                  const isPlainCancelled = tow.status === 'cancelled'
 
                   return (
                     <div
@@ -1351,15 +1371,15 @@ const handleSkipPriceUpdate = () => {
                         }
                       }}
                       className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
-                        draggedTow?.id === tow.id ? 'opacity-50' : isCancelled ? 'opacity-60' : ''
+                        draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
                       } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                       style={{
                         top: `${top}px`,
                         height: `${Math.max(heightPx - 4, 20)}px`,
                         right: `${right + 0.3}%`,
                         width: `${Math.max(widthPct - 0.6, 0)}%`,
-                        backgroundColor: driverColor,
-                        borderRightColor: driverColor,
+                        backgroundColor: getTowCalendarBackgroundColor(tow.status, driverColor),
+                        borderRightColor: getTowCalendarBackgroundColor(tow.status, driverColor),
                       }}
                     >
                       <TowBlockStatusBadge status={tow.status} />
@@ -1376,7 +1396,7 @@ const handleSkipPriceUpdate = () => {
                       <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
                         {formatTowTimeRange(startMs, endMs)}
                       </div>
-                      <div className={`pt-3 min-w-0 ${isCancelled ? 'line-through decoration-white/70' : ''}`}>
+                      <div className={`pt-3 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
                         <div className="font-bold truncate text-[10px] sm:text-xs">
                           {tow.customer?.name || 'ללא לקוח'}
                         </div>
@@ -1546,7 +1566,7 @@ const handleSkipPriceUpdate = () => {
                         new Date(effectiveStartIso).getMinutes() / 60
                       const top = hour * PIXELS_PER_HOUR_DAY
                       const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                      const isCancelled = tow.status === 'cancelled'
+                      const isPlainCancelled = tow.status === 'cancelled'
 
                       const { startMs, endMs } = getTowTimeBounds(tow, now, {
                         clampEndToDay: selectedDate,
@@ -1568,15 +1588,15 @@ const handleSkipPriceUpdate = () => {
                             }
                           }}
                           className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
-                            draggedTow?.id === tow.id ? 'opacity-50' : isCancelled ? 'opacity-60' : ''
+                            draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
                           } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
                           style={{
                             top: `${top}px`,
                             height: `${heightPx}px`,
                             left: `calc(${offsetPct}% + 2px)`,
                             width: `calc(${widthPct}% - 4px)`,
-                            backgroundColor: driverColor,
-                            borderRightColor: driverColor,
+                            backgroundColor: getTowCalendarBackgroundColor(tow.status, driverColor),
+                            borderRightColor: getTowCalendarBackgroundColor(tow.status, driverColor),
                           }}
                         >
                           <TowBlockStatusBadge status={tow.status} size="md" />
@@ -1593,7 +1613,7 @@ const handleSkipPriceUpdate = () => {
                           <div className="absolute top-1 left-2 text-[10px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
                             {formatTowTimeRange(startMs, endMs)}
                           </div>
-                          <div className={`pt-4 min-w-0 ${isCancelled ? 'line-through decoration-white/70' : ''}`}>
+                          <div className={`pt-4 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
                             <div className="font-bold truncate text-sm">
                               {tow.customer?.name || 'ללא לקוח'}
                             </div>

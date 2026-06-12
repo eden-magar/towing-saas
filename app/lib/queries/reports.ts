@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { getTowRevenueContribution } from '../utils/cancellation-fee'
 
 // ==================== TYPES ====================
 
@@ -6,6 +7,7 @@ export interface ReportsSummary {
   totalTows: number
   completedTows: number
   cancelledTows: number
+  cancelledChargedTows: number
   pendingTows: number
   completionRate: number
   totalRevenue: number
@@ -72,6 +74,7 @@ export interface DriverReport {
   total_tows: number
   completed_tows: number
   cancelled_tows: number
+  cancelled_charged_tows: number
   completion_rate: number
   total_revenue: number
   avg_revenue_per_tow: number
@@ -194,7 +197,7 @@ export async function getReportsSummary(
   // === תקופה נוכחית ===
   const { data: tows, error: towsError } = await supabase
     .from('tows')
-    .select('id, status, final_price, created_at')
+    .select('id, status, final_price, cancellation_fee, created_at')
     .eq('company_id', companyId)
     .gte('created_at', startDate)
     .lte('created_at', endDate + 'T23:59:59')
@@ -222,7 +225,7 @@ export async function getReportsSummary(
   // === תקופה קודמת ===
   const { data: prevTows } = await supabase
     .from('tows')
-    .select('id, status, final_price')
+    .select('id, status, final_price, cancellation_fee')
     .eq('company_id', companyId)
     .gte('created_at', prevFilters.startDate)
     .lte('created_at', prevFilters.endDate + 'T23:59:59')
@@ -238,11 +241,11 @@ export async function getReportsSummary(
   const totalTows = tows?.length || 0
   const completedTows = tows?.filter(t => t.status === 'completed').length || 0
   const cancelledTows = tows?.filter(t => t.status === 'cancelled').length || 0
+  const cancelledChargedTows = tows?.filter(t => t.status === 'cancelled_charged').length || 0
   const pendingTows = tows?.filter(t => ['pending', 'assigned', 'in_progress'].includes(t.status)).length || 0
 
-  const totalRevenue = tows
-    ?.filter(t => t.status === 'completed')
-    .reduce((sum, t) => sum + (t.final_price || 0), 0) || 0
+  const totalRevenue =
+    tows?.reduce((sum, t) => sum + getTowRevenueContribution(t), 0) || 0
 
   const collectedRevenue = invoices
     ?.filter(i => i.status === 'paid')
@@ -258,9 +261,8 @@ export async function getReportsSummary(
   // === חישובים - תקופה קודמת ===
   const prevTotalTows = prevTows?.length || 0
   const prevCompletedTows = prevTows?.filter(t => t.status === 'completed').length || 0
-  const prevTotalRevenue = prevTows
-    ?.filter(t => t.status === 'completed')
-    .reduce((sum, t) => sum + (t.final_price || 0), 0) || 0
+  const prevTotalRevenue =
+    prevTows?.reduce((sum, t) => sum + getTowRevenueContribution(t), 0) || 0
   const prevAvg = prevCompletedTows > 0 ? Math.round(prevTotalRevenue / prevCompletedTows) : 0
   const prevNewCustomers = prevCustomers?.length || 0
 
@@ -268,6 +270,7 @@ export async function getReportsSummary(
     totalTows,
     completedTows,
     cancelledTows,
+    cancelledChargedTows,
     pendingTows,
     completionRate: totalTows > 0 ? Math.round((completedTows / totalTows) * 100) : 0,
     totalRevenue,
@@ -294,7 +297,7 @@ export async function getTowsOverTime(
 
   const { data: tows, error } = await supabase
     .from('tows')
-    .select('id, status, final_price, created_at')
+    .select('id, status, final_price, cancellation_fee, created_at')
     .eq('company_id', companyId)
     .gte('created_at', startDate)
     .lte('created_at', endDate + 'T23:59:59')
@@ -320,9 +323,7 @@ export async function getTowsOverTime(
       grouped[period] = { tows: 0, revenue: 0 }
     }
     grouped[period].tows++
-    if (tow.status === 'completed') {
-      grouped[period].revenue += tow.final_price || 0
-    }
+    grouped[period].revenue += getTowRevenueContribution(tow)
   })
 
   return Object.entries(grouped)
@@ -503,9 +504,9 @@ export async function getTopDrivers(
   // Get tows
   const { data: tows, error: towsError } = await supabase
     .from('tows')
-    .select('id, driver_id, status, final_price')
+    .select('id, driver_id, status, final_price, cancellation_fee')
     .eq('company_id', companyId)
-    .eq('status', 'completed')
+    .in('status', ['completed', 'cancelled_charged'])
     .gte('created_at', startDate)
     .lte('created_at', endDate + 'T23:59:59')
     .not('driver_id', 'is', null)
@@ -517,11 +518,13 @@ export async function getTopDrivers(
 
   tows?.forEach(tow => {
     if (!tow.driver_id) return
+    const revenue = getTowRevenueContribution(tow)
+    if (revenue <= 0) return
     if (!driverStats[tow.driver_id]) {
       driverStats[tow.driver_id] = { tows: 0, revenue: 0 }
     }
     driverStats[tow.driver_id].tows++
-    driverStats[tow.driver_id].revenue += tow.final_price || 0
+    driverStats[tow.driver_id].revenue += revenue
   })
 
   // Build result
@@ -562,10 +565,11 @@ export async function getTopCustomers(
       id,
       status,
       final_price,
+      cancellation_fee,
       customer:customers(id, name, customer_type)
     `)
     .eq('company_id', companyId)
-    .eq('status', 'completed')
+    .in('status', ['completed', 'cancelled_charged'])
     .gte('created_at', startDate)
     .lte('created_at', endDate + 'T23:59:59')
     .not('customer_id', 'is', null)
@@ -586,6 +590,9 @@ export async function getTopCustomers(
     const customer = Array.isArray(customerData) ? customerData[0] : customerData
     if (!customer) return
 
+    const revenue = getTowRevenueContribution(tow)
+    if (revenue <= 0) return
+
     if (!customerStats[customer.id]) {
       customerStats[customer.id] = {
         name: customer.name,
@@ -595,7 +602,7 @@ export async function getTopCustomers(
       }
     }
     customerStats[customer.id].tows++
-    customerStats[customer.id].revenue += tow.final_price || 0
+    customerStats[customer.id].revenue += revenue
   })
 
   return Object.entries(customerStats)
@@ -645,7 +652,7 @@ export async function getDriverReport(
   // Get tows
   const { data: tows, error: towsError } = await supabase
     .from('tows')
-    .select('id, status, final_price')
+    .select('id, status, final_price, cancellation_fee')
     .eq('company_id', companyId)
     .eq('driver_id', driverId)
     .gte('created_at', startDate)
@@ -661,9 +668,9 @@ export async function getDriverReport(
   const totalTows = tows?.length || 0
   const completedTows = tows?.filter(t => t.status === 'completed').length || 0
   const cancelledTows = tows?.filter(t => t.status === 'cancelled').length || 0
-  const totalRevenue = tows
-    ?.filter(t => t.status === 'completed')
-    .reduce((sum, t) => sum + (t.final_price || 0), 0) || 0
+  const cancelledChargedTows = tows?.filter(t => t.status === 'cancelled_charged').length || 0
+  const totalRevenue =
+    tows?.reduce((sum, t) => sum + getTowRevenueContribution(t), 0) || 0
 
   return {
     driver_id: driver.id,
@@ -674,6 +681,7 @@ export async function getDriverReport(
     total_tows: totalTows,
     completed_tows: completedTows,
     cancelled_tows: cancelledTows,
+    cancelled_charged_tows: cancelledChargedTows,
     completion_rate: totalTows > 0 ? Math.round((completedTows / totalTows) * 100) : 0,
     total_revenue: totalRevenue,
     avg_revenue_per_tow: completedTows > 0 ? Math.round(totalRevenue / completedTows) : 0,
@@ -690,7 +698,7 @@ export async function getDriverTowsOverTime(
 
   const { data: tows, error } = await supabase
     .from('tows')
-    .select('id, status, final_price, created_at')
+    .select('id, status, final_price, cancellation_fee, created_at')
     .eq('company_id', companyId)
     .eq('driver_id', driverId)
     .gte('created_at', startDate)
@@ -710,9 +718,7 @@ export async function getDriverTowsOverTime(
       grouped[period] = { tows: 0, revenue: 0 }
     }
     grouped[period].tows++
-    if (tow.status === 'completed') {
-      grouped[period].revenue += tow.final_price || 0
-    }
+    grouped[period].revenue += getTowRevenueContribution(tow)
   })
 
   return Object.entries(grouped)
@@ -791,7 +797,7 @@ export async function getCustomerReport(
   // Get tows
   const { data: tows, error: towsError } = await supabase
     .from('tows')
-    .select('id, status, final_price')
+    .select('id, status, final_price, cancellation_fee')
     .eq('company_id', companyId)
     .eq('customer_id', customerId)
     .gte('created_at', startDate)
@@ -811,9 +817,8 @@ export async function getCustomerReport(
   if (invoicesError) throw invoicesError
 
   const totalTows = tows?.length || 0
-  const totalRevenue = tows
-    ?.filter(t => t.status === 'completed')
-    .reduce((sum, t) => sum + (t.final_price || 0), 0) || 0
+  const totalRevenue =
+    tows?.reduce((sum, t) => sum + getTowRevenueContribution(t), 0) || 0
 
   const totalInvoiced = invoices?.reduce((sum, i) => sum + (i.total_amount || 0), 0) || 0
   const paidAmount = invoices
@@ -847,7 +852,7 @@ export async function getCustomerTowsOverTime(
 
   const { data: tows, error } = await supabase
     .from('tows')
-    .select('id, status, final_price, created_at')
+    .select('id, status, final_price, cancellation_fee, created_at')
     .eq('company_id', companyId)
     .eq('customer_id', customerId)
     .gte('created_at', startDate)
@@ -867,9 +872,7 @@ export async function getCustomerTowsOverTime(
       grouped[period] = { tows: 0, revenue: 0 }
     }
     grouped[period].tows++
-    if (tow.status === 'completed') {
-      grouped[period].revenue += tow.final_price || 0
-    }
+    grouped[period].revenue += getTowRevenueContribution(tow)
   })
 
   return Object.entries(grouped)

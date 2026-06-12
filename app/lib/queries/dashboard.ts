@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { getTowRevenueContribution } from '../utils/cancellation-fee'
 import { TowWithDetails, TowVehicle, TowLeg } from './tows'
 
 // ==================== טיפוסים ====================
@@ -27,7 +28,8 @@ export async function getDashboardStats(companyId: string): Promise<DashboardSta
     completedTodayRes,
     availableDriversRes,
     inProgressTowsRes,
-    todayRevenueRes,
+    todayCompletedRevenueRes,
+    todayChargedCancelRevenueRes,
   ] = await Promise.all([
     // גרירות היום (כל הסטטוסים מלבד cancelled)
     supabase
@@ -68,18 +70,33 @@ export async function getDashboardStats(companyId: string): Promise<DashboardSta
       .select('id', { count: 'exact', head: true })
       .eq('company_id', companyId)
       .eq('status', 'in_progress'),
-    // הכנסות היום
+    // הכנסות היום — גרירות שהושלמו
     supabase
       .from('tows')
-      .select('final_price')
+      .select('status, final_price, cancellation_fee')
       .eq('company_id', companyId)
       .eq('status', 'completed')
       .gte('completed_at', `${today}T00:00:00Z`)
       .lt('completed_at', `${today}T23:59:59Z`),
+    // דמי ביטול (ביטול בחיוב) שהתקבלו היום
+    supabase
+      .from('tows')
+      .select('status, final_price, cancellation_fee')
+      .eq('company_id', companyId)
+      .eq('status', 'cancelled_charged')
+      .gte('cancelled_at', `${today}T00:00:00Z`)
+      .lt('cancelled_at', `${today}T23:59:59Z`),
   ])
 
   const todayRevenue =
-    todayRevenueRes.data?.reduce((sum, row) => sum + (row.final_price || 0), 0) ?? 0
+    (todayCompletedRevenueRes.data?.reduce(
+      (sum, row) => sum + getTowRevenueContribution(row),
+      0
+    ) ?? 0) +
+    (todayChargedCancelRevenueRes.data?.reduce(
+      (sum, row) => sum + getTowRevenueContribution(row),
+      0
+    ) ?? 0)
 
   return {
     towsToday: towsTodayRes.count || 0,

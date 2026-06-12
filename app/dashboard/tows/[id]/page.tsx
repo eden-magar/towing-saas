@@ -7,6 +7,12 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { TimeInput, DateInput } from '../../../components/ui'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
+import {
+  computeCancellationFee,
+  computeCancellationFeeBreakdown,
+  extractCancellationFeeFromTotal,
+} from '../../../lib/utils/cancellation-fee'
+import { getCompanySettings } from '../../../lib/queries/settings'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
@@ -111,6 +117,41 @@ interface EditVehicle {
   towReason: string
 }
 
+function CancellationFeeBreakdownDisplay({
+  feeBeforeVat,
+  vatAmount,
+  feeTotal,
+  vatPercentLabel,
+}: {
+  feeBeforeVat: number
+  vatAmount: number
+  feeTotal: number
+  vatPercentLabel: number
+}) {
+  const format = (n: number) => `${n.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₪`
+  const rowClass = 'flex items-baseline justify-between gap-3 min-w-0'
+  const labelClass = 'text-gray-600 shrink-0 whitespace-nowrap'
+  const amountClass = 'font-medium tabular-nums shrink-0 text-gray-800'
+  return (
+    <div className="text-sm text-amber-900 min-w-0">
+      <div className="space-y-1">
+        <div className={rowClass}>
+          <span className={labelClass}>עלות ביטול</span>
+          <span className={amountClass}>{format(feeBeforeVat)}</span>
+        </div>
+        <div className={rowClass}>
+          <span className={labelClass}>{`מע"מ (${vatPercentLabel}%)`}</span>
+          <span className={amountClass}>{format(vatAmount)}</span>
+        </div>
+      </div>
+      <div className={`${rowClass} mt-2 pt-2 border-t border-amber-200/80`}>
+        <span className="font-semibold text-amber-900 shrink-0 whitespace-nowrap">סה&quot;כ</span>
+        <span className="font-bold tabular-nums shrink-0 text-amber-900">{format(feeTotal)}</span>
+      </div>
+    </div>
+  )
+}
+
 export default function TowDetailsPage() {
   const params = useParams()
   const router = useRouter()
@@ -140,6 +181,8 @@ export default function TowDetailsPage() {
   const [cancelStep, setCancelStep] = useState<'warning' | 'reason' | 'confirm'>('reason')
   const [selectedCancellationReason, setSelectedCancellationReason] = useState('')
   const [cancellationDetails, setCancellationDetails] = useState('')
+  const [chargeCancellationFee, setChargeCancellationFee] = useState(false)
+  const [cancellationPercent, setCancellationPercent] = useState('')
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
   const [showManualCloseModal, setShowManualCloseModal] = useState(false)
@@ -199,6 +242,7 @@ export default function TowDetailsPage() {
   const [processingRejection, setProcessingRejection] = useState(false)
   const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
   const [basePriceList, setBasePriceList] = useState<any>(null)
+  const [vatRate, setVatRate] = useState(0.18)
 
   const [driversTrucksLoaded, setDriversTrucksLoaded] = useState(false)
   const [driversTrucksLoading, setDriversTrucksLoading] = useState(false)
@@ -225,7 +269,8 @@ export default function TowDetailsPage() {
     loading: { label: 'מעמיס', color: 'bg-blue-100 text-blue-700 border-blue-200' },
     in_progress: { label: 'בדרך ליעד', color: 'bg-blue-100 text-blue-700 border-blue-200' },
     completed: { label: 'הושלם', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-    cancelled: { label: 'בוטל', color: 'bg-gray-100 text-gray-500 border-gray-200' },
+    cancelled: { label: 'בוטל', color: 'bg-red-100 text-red-700 border-red-200' },
+    cancelled_charged: { label: 'בוטל בחיוב', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     quote: { label: 'הצעת מחיר', color: 'bg-amber-100 text-amber-700 border-amber-200' },
   }
 
@@ -234,7 +279,7 @@ export default function TowDetailsPage() {
     if (isInitial) setLoading(true)
     else setIsRefreshing(true)
     try {
-      const [towData, rejections, childrenRes] = await Promise.all([
+      const [towData, rejections, childrenRes, companySettings] = await Promise.all([
         getTowWithPoints(towId),
         getRejectionRequestsForTow(towId),
         supabase
@@ -243,7 +288,11 @@ export default function TowDetailsPage() {
           .eq('linked_tow_id', towId)
           .eq('company_id', companyId)
           .order('created_at', { ascending: true }),
+        getCompanySettings(companyId),
       ])
+      if (companySettings?.default_vat_percent != null) {
+        setVatRate(companySettings.default_vat_percent / 100)
+      }
       setTow(towData)
       setRejectionRequests(rejections)
       setChildTows(childrenRes.error ? [] : childrenRes.data || [])
@@ -859,7 +908,7 @@ export default function TowDetailsPage() {
 
   const handleCancelClick = () => {
     if (!tow) return
-    if (tow.status === 'completed') {
+    if (tow.status === 'completed' || tow.status === 'cancelled' || tow.status === 'cancelled_charged') {
       setShowCantCancelModal(true)
       return
     }
@@ -922,19 +971,40 @@ export default function TowDetailsPage() {
     setShowManualCloseModal(true)
   }
 
+  const parsedCancellationPercent = parseFloat(cancellationPercent)
+  const vatPercentLabel = Math.round(vatRate * 100)
+  const previewCancellationFeeBreakdown =
+    tow && chargeCancellationFee && Number.isFinite(parsedCancellationPercent)
+      ? computeCancellationFeeBreakdown(tow, parsedCancellationPercent, vatRate)
+      : null
+  const storedCancellationFeeDisplay = tow && Number(tow.cancellation_fee) > 0
+    ? extractCancellationFeeFromTotal(Number(tow.cancellation_fee), vatRate)
+    : null
+
   const handleConfirmCancel = async () => {
     if (!tow) return
     try {
+      const fee =
+        chargeCancellationFee && Number.isFinite(parsedCancellationPercent) && parsedCancellationPercent > 0
+          ? computeCancellationFee(tow, parsedCancellationPercent, vatRate)
+          : undefined
+      const cancelStatus = fee && fee > 0 ? 'cancelled_charged' as const : 'cancelled' as const
+
       await updateTowStatus(
         tow.id,
-        'cancelled',
+        cancelStatus,
         selectedCancellationReason,
-        cancellationDetails.trim() || undefined
+        cancellationDetails.trim() || undefined,
+        fee && fee > 0 ? fee : undefined,
+        user?.id
       )
       await refreshTow()
+      if (changeLogsLoaded) void loadChangeLogs(true)
       setShowCancelModal(false)
       setSelectedCancellationReason('')
       setCancellationDetails('')
+      setChargeCancellationFee(false)
+      setCancellationPercent('')
       setCancelStep('reason')
     } catch (err) {
       console.error('Error cancelling tow:', err)
@@ -945,6 +1015,8 @@ export default function TowDetailsPage() {
     setShowCancelModal(false)
     setSelectedCancellationReason('')
     setCancellationDetails('')
+    setChargeCancellationFee(false)
+    setCancellationPercent('')
     setCancelStep('reason')
   }
 
@@ -1244,14 +1316,40 @@ export default function TowDetailsPage() {
 
       {tow.status === 'cancelled' && (
         <div className="max-w-6xl mx-auto px-4 mt-4">
-          <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 border-r-4 border-r-red-500 rounded-xl">
-            <span className="text-red-500 text-lg">✕</span>
-            <div>
+          <div className="flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 border-r-4 border-r-red-500 rounded-xl">
+            <span className="text-red-500 text-lg shrink-0">✕</span>
+            <div className="flex-1 min-w-0">
               <p className="font-bold text-red-700 text-sm">גרירה זו בוטלה</p>
               {(tow as { cancellation_reason?: string | null }).cancellation_reason && (
                 <p className="text-red-500 text-xs mt-0.5">
                   {(tow as { cancellation_reason?: string | null }).cancellation_reason}
                 </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tow.status === 'cancelled_charged' && (
+        <div className="max-w-6xl mx-auto px-4 mt-4">
+          <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 border-r-4 border-r-amber-500 rounded-xl text-amber-900">
+            <span className="text-amber-700 text-lg shrink-0">₪</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-amber-900 text-sm">גרירה זו בוטלה בחיוב</p>
+              {(tow as { cancellation_reason?: string | null }).cancellation_reason && (
+                <p className="text-amber-800 text-sm mt-0.5">
+                  {(tow as { cancellation_reason?: string | null }).cancellation_reason}
+                </p>
+              )}
+              {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
+                <div className="mt-3 pt-3 border-t border-amber-200/80">
+                  <CancellationFeeBreakdownDisplay
+                    feeBeforeVat={storedCancellationFeeDisplay.feeBeforeVat}
+                    vatAmount={storedCancellationFeeDisplay.vatAmount}
+                    feeTotal={storedCancellationFeeDisplay.feeTotal}
+                    vatPercentLabel={vatPercentLabel}
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -2228,6 +2326,16 @@ export default function TowDetailsPage() {
                         <span>סה״כ כולל מע״מ</span>
                         <span className="text-gray-800">₪{((tow.price_mode as string) === 'custom' ? (tow.final_price ?? 0) : tow.price_breakdown.total).toFixed(2)}</span>
                       </div>
+                      {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
+                        <div className="pt-2 border-t border-amber-200 mt-2 bg-amber-50 -mx-4 px-4 py-2 rounded-lg">
+                          <CancellationFeeBreakdownDisplay
+                            feeBeforeVat={storedCancellationFeeDisplay.feeBeforeVat}
+                            vatAmount={storedCancellationFeeDisplay.vatAmount}
+                            feeTotal={storedCancellationFeeDisplay.feeTotal}
+                            vatPercentLabel={vatPercentLabel}
+                          />
+                        </div>
+                      )}
                     </div>
                   ) : tow.price_mode === 'custom' ? (
                     <div className="space-y-2 text-sm">
@@ -2243,6 +2351,16 @@ export default function TowDetailsPage() {
                         <span>סה"כ כולל מע"מ</span>
                         <span className="text-gray-800">₪{tow.final_price ?? 0}</span>
                       </div>
+                      {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
+                        <div className="pt-2 border-t border-amber-200 mt-2 bg-amber-50 -mx-4 px-4 py-2 rounded-lg">
+                          <CancellationFeeBreakdownDisplay
+                            feeBeforeVat={storedCancellationFeeDisplay.feeBeforeVat}
+                            vatAmount={storedCancellationFeeDisplay.vatAmount}
+                            feeTotal={storedCancellationFeeDisplay.feeTotal}
+                            vatPercentLabel={vatPercentLabel}
+                          />
+                        </div>
+                      )}
                     </div>
                   ) : (
                   <div className="space-y-2">
@@ -2254,6 +2372,16 @@ export default function TowDetailsPage() {
                       <span className="font-bold text-gray-800">סה״כ כולל מע"מ</span>
                       <span className="text-2xl font-bold text-gray-800">{tow.final_price || 0} ש״ח</span>
                     </div>
+                    {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
+                      <div className="pt-2 border-t border-amber-200 bg-amber-50 -mx-4 px-4 py-2 mt-2 rounded-lg">
+                        <CancellationFeeBreakdownDisplay
+                          feeBeforeVat={storedCancellationFeeDisplay.feeBeforeVat}
+                          vatAmount={storedCancellationFeeDisplay.vatAmount}
+                          feeTotal={storedCancellationFeeDisplay.feeTotal}
+                          vatPercentLabel={vatPercentLabel}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
                 </div>
@@ -2861,6 +2989,51 @@ export default function TowDetailsPage() {
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setChargeCancellationFee(!chargeCancellationFee)}
+                        className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                          chargeCancellationFee ? 'bg-red-600 border-red-600' : 'border-gray-300'
+                        }`}
+                      >
+                        {chargeCancellationFee && <CheckCircle size={14} className="text-white" />}
+                      </button>
+                      <span className="text-sm font-medium text-gray-700">חיוב דמי ביטול</span>
+                    </div>
+
+                    {chargeCancellationFee && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            אחוז דמי ביטול
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={1}
+                            value={cancellationPercent}
+                            onChange={(e) => setCancellationPercent(e.target.value)}
+                            placeholder="לדוגמה: 50"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                          />
+                        </div>
+                        {previewCancellationFeeBreakdown && previewCancellationFeeBreakdown.feeTotal > 0 && (
+                          <div className="text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                            <CancellationFeeBreakdownDisplay
+                              feeBeforeVat={previewCancellationFeeBreakdown.feeBeforeVat}
+                              vatAmount={previewCancellationFeeBreakdown.vatAmount}
+                              feeTotal={previewCancellationFeeBreakdown.feeTotal}
+                              vatPercentLabel={vatPercentLabel}
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3">

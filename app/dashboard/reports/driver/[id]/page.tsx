@@ -35,7 +35,8 @@ const statusLabels: Record<string, string> = {
   assigned: 'שובץ',
   in_progress: 'בביצוע',
   completed: 'הושלם',
-  cancelled: 'בוטל'
+  cancelled: 'בוטל',
+  cancelled_charged: 'בוטל בחיוב',
 }
 
 const statusColors: Record<string, string> = {
@@ -43,7 +44,8 @@ const statusColors: Record<string, string> = {
   assigned: 'bg-blue-100 text-blue-700',
   in_progress: 'bg-cyan-100 text-cyan-700',
   completed: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-red-100 text-red-700'
+  cancelled: 'bg-red-100 text-red-700',
+  cancelled_charged: 'bg-amber-100 text-amber-800',
 }
 
 const driverStatusLabels: Record<string, string> = {

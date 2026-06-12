@@ -29,6 +29,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   in_progress: { label: 'בביצוע', color: 'text-purple-700', bg: 'bg-purple-50' },
   completed: { label: 'הושלמה', color: 'text-green-700', bg: 'bg-green-50' },
   cancelled: { label: 'בוטלה', color: 'text-red-700', bg: 'bg-red-50' },
+  cancelled_charged: { label: 'בוטל בחיוב', color: 'text-amber-800', bg: 'bg-amber-50' },
 }
 
 const pointStatusConfig: Record<string, { label: string; icon: React.ComponentType<{ size?: number; className?: string }>; color: string }> = {

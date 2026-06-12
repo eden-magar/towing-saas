@@ -61,7 +61,7 @@ export interface DriverTaskPoint {
 export interface DriverTask {
   id: string
   order_number: string | null
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
   scheduled_at: string | null
   started_at: string | null
@@ -131,7 +131,7 @@ export interface TaskDetailFull {
   id: string
   company_id: string
   order_number: string | null
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
   scheduled_at: string | null
   notes: string | null
@@ -641,7 +641,7 @@ export async function rejectTask(
 
 export async function updateTaskStatus(
   towId: string, 
-  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
 ) {
   const updates: Record<string, any> = { 
     status,
@@ -652,6 +652,8 @@ export async function updateTaskStatus(
     updates.started_at = new Date().toISOString()
   } else if (status === 'completed' || status === 'cancelled') {
     updates.completed_at = new Date().toISOString()
+  } else if (status === 'cancelled_charged') {
+    updates.cancelled_at = new Date().toISOString()
   }
 
   const { error } = await supabase
@@ -697,6 +699,8 @@ export async function updateTaskStatusWithHistory(
     updates.started_at = new Date().toISOString()
   } else if (status === 'completed' || status === 'cancelled') {
     updates.completed_at = new Date().toISOString()
+  } else if (status === 'cancelled_charged') {
+    updates.cancelled_at = new Date().toISOString()
   }
 
   const { error } = await supabase

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { getTowRevenueContribution } from '../../lib/utils/cancellation-fee'
 import { getDriverByUserId, getDriverStats, DriverInfo } from '../../lib/queries/driver-tasks'
 import {
   User, Truck, Phone, Mail, ChevronLeft, LogOut, Check,
@@ -100,13 +101,13 @@ export default function DriverProfilePage() {
     const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
 
     const { data: weekTows } = await supabase.from('tows')
-      .select('id, status, created_at, completed_at, final_price')
+      .select('id, status, created_at, completed_at, final_price, cancellation_fee')
       .eq('driver_id', driverId).gte('created_at', `${weekStartStr}T00:00:00`).neq('status', 'cancelled')
     const { data: prevWeekTows } = await supabase.from('tows')
       .select('id, status')
       .eq('driver_id', driverId).gte('created_at', `${prevWeekStartStr}T00:00:00`).lt('created_at', `${weekStartStr}T00:00:00`).neq('status', 'cancelled')
     const { data: monthTows } = await supabase.from('tows')
-      .select('id, status, created_at, completed_at, final_price')
+      .select('id, status, created_at, completed_at, final_price, cancellation_fee')
       .eq('driver_id', driverId).gte('created_at', `${monthStartStr}T00:00:00`).neq('status', 'cancelled')
     const { data: prevMonthTows } = await supabase.from('tows')
       .select('id, status')
@@ -124,8 +125,8 @@ export default function DriverProfilePage() {
       const successRate = total > 0 ? Math.round(completed / total * 100) : 0
       const prevCompleted = prev.filter(t => t.status === 'completed').length
       const prevSuccessRate = prevTotal > 0 ? Math.round(prevCompleted / prevTotal * 100) : 0
-      const income = cur.reduce((s, t) => s + (t.final_price || 0), 0)
-      const prevIncome = prev.reduce((s: number, t: any) => s + (t.final_price || 0), 0)
+      const income = cur.reduce((s, t) => s + getTowRevenueContribution(t), 0)
+      const prevIncome = prev.reduce((s: number, t: any) => s + getTowRevenueContribution(t), 0)
       return {
         tows: total, towsTrend, successRate,
         successTrend: prevSuccessRate > 0 ? successRate - prevSuccessRate : 0,

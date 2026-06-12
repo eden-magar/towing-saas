@@ -155,11 +155,18 @@ export default function TowsPage() {
     in_progress: { label: 'בביצוע', class: 'bg-purple-100 text-purple-700' },
     completed: { label: 'הושלמה', class: 'bg-emerald-100 text-emerald-700' },
     cancelled: { label: 'בוטלה', class: 'bg-red-100 text-red-700' },
+    cancelled_charged: { label: 'בוטל בחיוב', class: 'bg-amber-100 text-amber-800' },
   }
 
   const filteredTows = tows.filter(tow => {
     // סינון לפי סטטוס
-    if (activeStatus !== 'all' && tow.status !== activeStatus) return false
+    if (activeStatus !== 'all') {
+      if (activeStatus === 'cancelled') {
+        if (tow.status !== 'cancelled' && tow.status !== 'cancelled_charged') return false
+      } else if (tow.status !== activeStatus) {
+        return false
+      }
+    }
     
     // סינון לפי חיפוש
     if (searchTerm) {

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../../lib/queries/driver-tasks'
 import { supabase } from '../../lib/supabase'
+import { getTowRevenueContribution } from '../../lib/utils/cancellation-fee'
 import { 
   History, 
   Search, 
@@ -27,7 +28,7 @@ interface HistoryItem {
   vehicle: { name: string; plate: string }
   from: string
   to: string
-  status: 'completed' | 'cancelled'
+  status: 'completed' | 'cancelled' | 'cancelled_charged'
   price: number
   duration: number
   cancelReason?: string
@@ -91,10 +92,11 @@ export default function DriverHistoryPage() {
         created_at,
         completed_at,
         started_at,
-        final_price
+        final_price,
+        cancellation_fee
       `)
       .eq('driver_id', driverId)
-      .in('status', ['completed', 'cancelled'])
+      .in('status', ['completed', 'cancelled', 'cancelled_charged'])
       .gte('created_at', thirtyDaysAgo.toISOString())
       .order('created_at', { ascending: false })
 
@@ -182,10 +184,10 @@ export default function DriverHistoryPage() {
         },
         from: addresses.from || 'לא צוין',
         to: addresses.to || 'לא צוין',
-        status: tow.status as 'completed' | 'cancelled',
-        price: tow.final_price || 0,
+        status: tow.status as HistoryItem['status'],
+        price: getTowRevenueContribution(tow),
         duration,
-        cancelReason: 'בוטלה'
+        cancelReason: tow.status === 'cancelled_charged' ? 'בוטל בחיוב' : 'בוטלה'
       }
     })
   }
@@ -210,7 +212,13 @@ export default function DriverHistoryPage() {
 
   // Filter and group items
   const filteredItems = historyItems
-    .filter(item => filter === 'all' || item.status === filter)
+    .filter(item => {
+      if (filter === 'all') return true
+      if (filter === 'cancelled') {
+        return item.status === 'cancelled' || item.status === 'cancelled_charged'
+      }
+      return item.status === filter
+    })
     .filter(item => 
       !searchQuery || 
       item.vehicle.name.includes(searchQuery) ||
@@ -353,14 +361,18 @@ export default function DriverHistoryPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                          item.status === 'completed' 
-                            ? 'bg-emerald-100' 
-                            : 'bg-red-100'
+                          item.status === 'completed'
+                            ? 'bg-emerald-100'
+                            : item.status === 'cancelled_charged'
+                              ? 'bg-amber-100'
+                              : 'bg-red-100'
                         }`}>
                           <Car className={`w-5 h-5 ${
-                            item.status === 'completed' 
-                              ? 'text-emerald-600' 
-                              : 'text-red-500'
+                            item.status === 'completed'
+                              ? 'text-emerald-600'
+                              : item.status === 'cancelled_charged'
+                                ? 'text-amber-600'
+                                : 'text-red-500'
                           }`} />
                         </div>
                         <div>
@@ -370,8 +382,16 @@ export default function DriverHistoryPage() {
                       </div>
                       <div className="text-left">
                         <div className="text-sm text-gray-400">{item.time}</div>
-                        {item.status === 'completed' && item.price > 0 && (
-                          <div className="text-lg font-bold text-emerald-600">₪{item.price}</div>
+                        {item.price > 0 && (
+                          <div className={`text-lg font-bold ${
+                            item.status === 'completed'
+                              ? 'text-emerald-600'
+                              : item.status === 'cancelled_charged'
+                                ? 'text-amber-700'
+                                : 'text-gray-500'
+                          }`}>
+                            ₪{item.price.toLocaleString('he-IL')}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -399,6 +419,14 @@ export default function DriverHistoryPage() {
                           <div className="flex items-center gap-1 text-emerald-600">
                             <CheckCircle2 className="w-4 h-4" />
                             <span className="text-sm font-medium">הושלמה</span>
+                          </div>
+                        </>
+                      ) : item.status === 'cancelled_charged' ? (
+                        <>
+                          <div className="text-sm text-amber-700">{item.cancelReason}</div>
+                          <div className="flex items-center gap-1 text-amber-700">
+                            <XCircle className="w-4 h-4" />
+                            <span className="text-sm font-medium">בוטל בחיוב</span>
                           </div>
                         </>
                       ) : (

@@ -10,5 +10,5 @@ export function canApproveQuote(role: UserRole | null | undefined): boolean {
 }
 
 export function isClosedTowStatus(status: string | null | undefined): boolean {
-  return status === 'completed' || status === 'cancelled'
+  return status === 'completed' || status === 'cancelled' || status === 'cancelled_charged'
 }

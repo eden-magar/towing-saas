@@ -98,7 +98,7 @@ export interface TowWithDetails {
   truck_id: string | null
   created_by: string | null
   tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
-  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
   scheduled_at: string | null
   scheduled_end_at: string | null
   duration_minutes?: number
@@ -113,6 +113,7 @@ export interface TowWithDetails {
   created_at: string
   updated_at: string
   price_mode: 'recommended' | 'fixed' | 'customer' | 'custom' | null
+  cancellation_fee: number | null
   payment_method: string | null
   invoice_name: string | null
   start_from_base: boolean | null
@@ -674,7 +675,7 @@ interface CreateTowInput {
   linkedTowId?: string
   secondDriverId?: string
   secondDriverScheduledAt?: string
-  status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
 
 }
 
@@ -901,10 +902,24 @@ export async function approveTowQuote(towId: string): Promise<ApproveTowQuoteRes
 
 export async function updateTowStatus(
   towId: string,
-  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled',
+  status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged',
   cancellationReason?: string,
-  cancellationDetails?: string
+  cancellationDetails?: string,
+  cancellationFee?: number,
+  changedBy?: string
 ) {
+  const isTerminalCancel = status === 'cancelled' || status === 'cancelled_charged'
+  let previousStatus: string | null = null
+
+  if (isTerminalCancel) {
+    const { data: existing } = await supabase
+      .from('tows')
+      .select('status')
+      .eq('id', towId)
+      .maybeSingle()
+    previousStatus = existing?.status ?? null
+  }
+
   const updates: Record<string, any> = { status }
 
   if (cancellationReason !== undefined) {
@@ -920,6 +935,13 @@ export async function updateTowStatus(
     updates.completed_at = new Date().toISOString()
   } else if (status === 'cancelled') {
     updates.cancelled_at = new Date().toISOString()
+    updates.driver_id = null
+    updates.truck_id = null
+  } else if (status === 'cancelled_charged') {
+    updates.cancelled_at = new Date().toISOString()
+    if (cancellationFee != null && cancellationFee > 0) {
+      updates.cancellation_fee = cancellationFee
+    }
   }
 
   const { error } = await supabase
@@ -928,11 +950,17 @@ export async function updateTowStatus(
     .eq('id', towId)
 
   if (error) {
-    console.error('Error updating tow status:', error)
+    console.error(
+      'Error updating tow status:',
+      error.message,
+      error.code,
+      error.details,
+      error.hint
+    )
     throw error
   }
 
-  if (status === 'cancelled') {
+  if (isTerminalCancel) {
     try {
       const reserved = await getVehiclesReservedForTow(towId)
       for (const v of reserved) {
@@ -940,6 +968,28 @@ export async function updateTowStatus(
       }
     } catch (err) {
       console.error('[updateTowStatus] failed to unreserve vehicles:', err)
+    }
+
+    if (changedBy) {
+      const logs: { field_name: string; old_value: string | null; new_value: string | null }[] = [
+        {
+          field_name: 'סטטוס',
+          old_value: previousStatus,
+          new_value: status,
+        },
+      ]
+      if (status === 'cancelled_charged' && cancellationFee != null && cancellationFee > 0) {
+        logs.push({
+          field_name: 'דמי ביטול',
+          old_value: null,
+          new_value: String(cancellationFee),
+        })
+      }
+      try {
+        await saveTowChangeLogs(towId, changedBy, logs)
+      } catch (err) {
+        console.error('[updateTowStatus] failed to save change logs:', err)
+      }
     }
   }
 
@@ -1309,7 +1359,7 @@ interface UpdateTowInput {
   towType?: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
   driverId?: string | null
   truckId?: string | null
-  status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled'
+  status?: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
 
 }
 
