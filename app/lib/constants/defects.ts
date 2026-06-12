@@ -12,7 +12,6 @@ export const DEFECT_OPTIONS: readonly DefectOption[] = [
   { value: 'מוגבל מהירות', label: 'מוגבל מהירות', icon: '🚗' },
   { value: 'מניע/נדלק ונוסע', label: 'מניע/נדלק ונוסע', icon: '✓' },
   { value: 'נילת מים/שמן', label: 'נילת מים/שמן', icon: '💧' },
-  { value: "פנצ'ר", label: "פנצ'ר", icon: '⚫' },
   { value: 'תאונה', label: 'תאונה', icon: '🚨' },
   { value: 'תקר', label: 'תקר', icon: '🚗' },
   { value: 'אחר', label: 'אחר', icon: '✏️' },

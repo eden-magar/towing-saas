@@ -5,7 +5,12 @@ import {
   MapPin, Plus, ChevronDown, ChevronUp, GripVertical, Trash2, Home,
   ArrowDown, ArrowUp, User, Check, Package, Loader2, X
 } from 'lucide-react'
-import { getStoredVehicles, StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import {
+  getStoredVehicles,
+  searchStoredVehicle,
+  StoredVehicleWithCustomer,
+} from '../../../lib/queries/storage'
+import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { getServiceSurcharges, type ServiceSurcharge } from '../../../lib/queries/price-lists'
 import { calculateDistance } from '../../../lib/google-maps'
 
@@ -18,6 +23,13 @@ import { PhoneInput } from '../../ui/PhoneInput'
 import { ContactNameAutocomplete } from '../../customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../customer-contacts/SaveCustomerContactPill'
 import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import {
+  STORAGE_OTHER_CUSTOMER_MESSAGE,
+  STORAGE_TAKE_OUT_CANCELLED_MESSAGE,
+  storedVehicleToCondition,
+} from '../../../lib/utils/storage-vehicle'
+import { StorageTakeOutConfirmModal } from '../StorageTakeOutConfirmModal'
+import { buildVehicleOnTruckFromStorage } from './build-vehicle-from-storage'
 import type { CustomerContact } from '../../../lib/types'
 
 
@@ -141,8 +153,14 @@ export function RouteBuilder({
   const [newlyAddedPointId, setNewlyAddedPointId] = useState<string | null>(null)
   const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
   const [servicesModalPointId, setServicesModalPointId] = useState<string | null>(null)
-  /** Per point: true = תקין, false = תקול when adding from storage (default true if unset) */
-  const [storagePickupIsWorking, setStoragePickupIsWorking] = useState<Record<string, boolean>>({})
+  const [vehicleStorageWarnings, setVehicleStorageWarnings] = useState<Record<string, string>>({})
+  const storageTakeOutResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
+  const [storageTakeOutPrompt, setStorageTakeOutPrompt] = useState<{
+    plate: string
+    stored: StoredVehicleWithCustomer
+    pointId: string
+    vehicleId: string
+  } | null>(null)
 
   // One-time seed when hydrated points arrive after mount (edit-open race).
   useEffect(() => {
@@ -383,19 +401,241 @@ export function RouteBuilder({
     }))
   }
 
-  const addVehicleFromStorage = (pointId: string, storedVehicle: StoredVehicleWithCustomer) => {
-    const isWorking = storagePickupIsWorking[pointId] !== false
-    const newVehicle: VehicleOnTruck = {
-      id: `vehicle_${Date.now()}`,
-      plateNumber: storedVehicle.plate_number,
-      isWorking,
-      vehicleCode: '',
-      isLoading: false,
-      isFound: true,
-      fromStorage: true,
-      storedVehicleId: storedVehicle.id,
-      vehicleData: storedVehicle.vehicle_data || undefined
+  const waitForStorageTakeOutConfirm = (
+    plate: string,
+    stored: StoredVehicleWithCustomer,
+    pointId: string,
+    vehicleId: string
+  ) =>
+    new Promise<boolean>((resolve) => {
+      storageTakeOutResolverRef.current = resolve
+      setStorageTakeOutPrompt({ plate, stored, pointId, vehicleId })
+    })
+
+  const confirmStorageTakeOut = () => {
+    const prompt = storageTakeOutPrompt
+    if (!prompt) return
+    replaceVehicleFromStorage(prompt.pointId, prompt.vehicleId, prompt.stored)
+    storageTakeOutResolverRef.current?.(true)
+    storageTakeOutResolverRef.current = null
+    setStorageTakeOutPrompt(null)
+  }
+
+  const cancelStorageTakeOut = () => {
+    storageTakeOutResolverRef.current?.(false)
+    storageTakeOutResolverRef.current = null
+    setStorageTakeOutPrompt(null)
+  }
+
+  const replaceVehicleFromStorage = (
+    pointId: string,
+    vehicleId: string,
+    storedVehicle: StoredVehicleWithCustomer
+  ) => {
+    const hydrated = buildVehicleOnTruckFromStorage(storedVehicle, vehicleId)
+    setPoints((prev) =>
+      prev.map((p) => {
+        if (p.id !== pointId) return p
+        const newAddress = !p.address && baseAddress ? baseAddress : p.address
+        const newAddressData =
+          !p.address && baseLat ? { lat: baseLat, lng: baseLng } : p.addressData
+        return {
+          ...p,
+          address: newAddress,
+          addressData: newAddressData,
+          vehiclesToPickup: p.vehiclesToPickup.map((v) =>
+            v.id === vehicleId ? hydrated : v
+          ),
+        }
+      })
+    )
+    setVehicleStorageWarnings((prev) => {
+      const next = { ...prev }
+      delete next[vehicleId]
+      return next
+    })
+  }
+
+  const applyRegistryLookupToVehicle = (
+    pointId: string,
+    vehicleId: string,
+    plate: string,
+    result: Awaited<ReturnType<typeof lookupVehicle>>
+  ) => {
+    setPoints((prev) =>
+      prev.map((p) => {
+        if (p.id !== pointId) return p
+        return {
+          ...p,
+          vehiclesToPickup: p.vehiclesToPickup.map((v) => {
+            if (v.id !== vehicleId) return v
+            if (result.found && result.data) {
+              return {
+                ...v,
+                plateNumber: plate,
+                isLoading: false,
+                isFound: true,
+                vehicleNotFound: false,
+                manualManufacturer: undefined,
+                manualColor: undefined,
+                manualWeight: undefined,
+                vehicleType: result.source ?? 'private',
+                registrySource: result.source ?? null,
+                vehicleData: {
+                  manufacturer: result.data.manufacturer || undefined,
+                  model: result.data.model || undefined,
+                  year: result.data.year ? String(result.data.year) : undefined,
+                  color: result.data.color || undefined,
+                  gearType: result.data.gearType || undefined,
+                  driveType: result.data.driveType || undefined,
+                  totalWeight: result.data.totalWeight
+                    ? String(result.data.totalWeight)
+                    : undefined,
+                  fuelType: result.data.fuelType || undefined,
+                  ...(result.data.vehicleType
+                    ? { vehicleType: result.data.vehicleType }
+                    : {}),
+                },
+              }
+            }
+            return {
+              ...v,
+              plateNumber: plate,
+              isLoading: false,
+              isFound: false,
+              vehicleNotFound: true,
+              vehicleType: v.vehicleType ?? 'private',
+              registrySource: null,
+              vehicleData: undefined,
+              manualManufacturer: undefined,
+              manualColor: undefined,
+              manualWeight: undefined,
+            }
+          }),
+        }
+      })
+    )
+  }
+
+  const handleVehiclePlateLookup = async (
+    pointId: string,
+    vehicleId: string,
+    plate: string
+  ) => {
+    setVehicleStorageWarnings((prev) => {
+      const next = { ...prev }
+      delete next[vehicleId]
+      return next
+    })
+
+    const runRegistryLookup = async () => {
+      try {
+        const result = await lookupVehicle(plate)
+        applyRegistryLookupToVehicle(pointId, vehicleId, plate, result)
+      } catch (error) {
+        console.error('Vehicle lookup error:', error)
+        setPoints((prev) =>
+          prev.map((p) => {
+            if (p.id !== pointId) return p
+            return {
+              ...p,
+              vehiclesToPickup: p.vehiclesToPickup.map((v) =>
+                v.id === vehicleId
+                  ? {
+                      ...v,
+                      isLoading: false,
+                      isFound: false,
+                      vehicleNotFound: true,
+                      vehicleType: v.vehicleType ?? 'private',
+                      registrySource: null,
+                      vehicleData: undefined,
+                      manualManufacturer: undefined,
+                      manualColor: undefined,
+                      manualWeight: undefined,
+                    }
+                  : v
+              ),
+            }
+          })
+        )
+      }
     }
+
+    if (!companyId) {
+      await runRegistryLookup()
+      return
+    }
+
+    const stored = await searchStoredVehicle(companyId, plate)
+    if (!stored) {
+      await runRegistryLookup()
+      return
+    }
+
+    const isSameCustomer = stored.customer_id === customerId
+    if (!isSameCustomer) {
+      setVehicleStorageWarnings((prev) => ({
+        ...prev,
+        [vehicleId]: STORAGE_OTHER_CUSTOMER_MESSAGE,
+      }))
+      setPoints((prev) =>
+        prev.map((p) => {
+          if (p.id !== pointId) return p
+          return {
+            ...p,
+            vehiclesToPickup: p.vehiclesToPickup.map((v) =>
+              v.id === vehicleId
+                ? {
+                    ...v,
+                    isLoading: false,
+                    isFound: false,
+                    vehicleNotFound: false,
+                    vehicleData: undefined,
+                  }
+                : v
+            ),
+          }
+        })
+      )
+      return
+    }
+
+    const confirmed = await waitForStorageTakeOutConfirm(
+      plate,
+      stored,
+      pointId,
+      vehicleId
+    )
+    if (!confirmed) {
+      setVehicleStorageWarnings((prev) => ({
+        ...prev,
+        [vehicleId]: STORAGE_TAKE_OUT_CANCELLED_MESSAGE,
+      }))
+      setPoints((prev) =>
+        prev.map((p) => {
+          if (p.id !== pointId) return p
+          return {
+            ...p,
+            vehiclesToPickup: p.vehiclesToPickup.map((v) =>
+              v.id === vehicleId
+                ? {
+                    ...v,
+                    isLoading: false,
+                    isFound: false,
+                    vehicleNotFound: false,
+                    vehicleData: undefined,
+                  }
+                : v
+            ),
+          }
+        })
+      )
+      return
+    }
+  }
+
+  const addVehicleFromStorage = (pointId: string, storedVehicle: StoredVehicleWithCustomer) => {
+    const newVehicle = buildVehicleOnTruckFromStorage(storedVehicle)
     updatePoints(points.map(p => {
       if (p.id === pointId) {
         const newAddress = !p.address && baseAddress ? baseAddress : p.address
@@ -859,44 +1099,10 @@ export function RouteBuilder({
                             </div>
                             {storedVehicles.length > 0 && (
                               <div className="space-y-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-medium text-purple-700 mb-0 flex items-center gap-2">
-                                    <Package size={16} />
-                                    בחר רכב מאחסנה:
-                                  </p>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setStoragePickupIsWorking((prev) => ({
-                                        ...prev,
-                                        [point.id]: true
-                                      }))
-                                    }
-                                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      storagePickupIsWorking[point.id] !== false
-                                        ? 'bg-green-500 text-white'
-                                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                                    }`}
-                                  >
-                                    תקין
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setStoragePickupIsWorking((prev) => ({
-                                        ...prev,
-                                        [point.id]: false
-                                      }))
-                                    }
-                                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      storagePickupIsWorking[point.id] === false
-                                        ? 'bg-orange-500 text-white'
-                                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                                    }`}
-                                  >
-                                    תקול
-                                  </button>
-                                </div>
+                                <p className="text-sm font-medium text-purple-700 flex items-center gap-2">
+                                  <Package size={16} />
+                                  בחר רכב מאחסנה:
+                                </p>
                                 {storedVehiclesLoading ? (
                                   <div className="flex items-center gap-2 text-gray-500 text-sm py-2">
                                     <Loader2 size={16} className="animate-spin" />
@@ -909,11 +1115,12 @@ export function RouteBuilder({
                                       (v) => !selectedIds.includes(v.id)
                                     )
                                     if (availableVehicles.length === 0) return null
-                                    const pendingOk = storagePickupIsWorking[point.id] !== false
                                     return (
                                       <div className="border border-purple-200 rounded-lg p-3 bg-purple-50">
                                         <div className="flex flex-wrap gap-2">
-                                          {availableVehicles.map((sv) => (
+                                          {availableVehicles.map((sv) => {
+                                            const isWorking = !storedVehicleToCondition(sv).isFaulty
+                                            return (
                                             <button
                                               key={sv.id}
                                               type="button"
@@ -924,12 +1131,12 @@ export function RouteBuilder({
                                               <span className="font-medium">{sv.plate_number}</span>
                                               <span
                                                 className={
-                                                  pendingOk
+                                                  isWorking
                                                     ? 'bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-md'
                                                     : 'bg-orange-100 text-orange-700 text-xs px-1.5 py-0.5 rounded-md'
                                                 }
                                               >
-                                                {pendingOk ? 'תקין' : 'תקול'}
+                                                {isWorking ? 'תקין' : 'תקול'}
                                               </span>
                                               {sv.vehicle_data && (
                                                 <span className="text-xs text-gray-500">
@@ -937,7 +1144,8 @@ export function RouteBuilder({
                                                 </span>
                                               )}
                                             </button>
-                                          ))}
+                                            )
+                                          })}
                                         </div>
                                       </div>
                                     )
@@ -963,8 +1171,35 @@ export function RouteBuilder({
                                   )}
                                   <VehicleCard
                                     vehicle={vehicle}
-                                    onChange={(updatedVehicle) => updateVehicle(point.id, vehicle.id, updatedVehicle)}
-                                    onRemove={() => removeVehicle(point.id, vehicle.id)}
+                                    onChange={(updatedVehicle) => {
+                                      if (updatedVehicle.plateNumber !== vehicle.plateNumber) {
+                                        setVehicleStorageWarnings((prev) => {
+                                          const next = { ...prev }
+                                          delete next[vehicle.id]
+                                          return next
+                                        })
+                                      }
+                                      updateVehicle(point.id, vehicle.id, updatedVehicle)
+                                    }}
+                                    onRemove={() => {
+                                      setVehicleStorageWarnings((prev) => {
+                                        const next = { ...prev }
+                                        delete next[vehicle.id]
+                                        return next
+                                      })
+                                      removeVehicle(point.id, vehicle.id)
+                                    }}
+                                    onSearch={
+                                      vehicle.fromStorage
+                                        ? undefined
+                                        : (plate) =>
+                                            handleVehiclePlateLookup(
+                                              point.id,
+                                              vehicle.id,
+                                              plate
+                                            )
+                                    }
+                                    storageWarning={vehicleStorageWarnings[vehicle.id]}
                                   />
                                 </div>
                               ))}
@@ -1187,6 +1422,13 @@ export function RouteBuilder({
           </div>
         </div>
       )}
+
+      <StorageTakeOutConfirmModal
+        open={!!storageTakeOutPrompt}
+        plateNumber={storageTakeOutPrompt?.plate}
+        onConfirm={confirmStorageTakeOut}
+        onCancel={cancelStorageTakeOut}
+      />
     </div>
   )
 }

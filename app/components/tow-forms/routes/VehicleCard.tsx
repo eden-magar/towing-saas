@@ -38,6 +38,7 @@ interface VehicleCardProps {
   onChange: (vehicle: VehicleOnTruck) => void
   onRemove: () => void
   onSearch?: (plateNumber: string) => Promise<void>
+  storageWarning?: string | null
   className?: string
 }
 
@@ -48,6 +49,7 @@ export function VehicleCard({
   onChange, 
   onRemove,
   onSearch,
+  storageWarning,
   className = '' 
 }: VehicleCardProps) {
   const [isSearching, setIsSearching] = useState(false)
@@ -239,6 +241,9 @@ export function VehicleCard({
               <Loader2 size={14} className="animate-spin" />
               מחפש במאגר...
             </div>
+          )}
+          {storageWarning && (
+            <p className="text-sm text-red-500 mt-1">{storageWarning}</p>
           )}
         </div>
         

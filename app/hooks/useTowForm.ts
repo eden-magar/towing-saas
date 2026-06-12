@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
@@ -27,11 +27,20 @@ import {
   getCustomerStoredVehiclesForDisplay,
   getStoredVehicleById,
   getVehiclesReservedForTow,
+  searchStoredVehicle,
   StoredVehicleWithCustomer,
 } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
 import { extractBasePrices, resolveVehicleBasePrice } from '../lib/utils/price-calculator'
 import { buildExchangePriceAffectingSignature } from '../lib/utils/tow-save-handler'
+import { normalizePlate } from '../lib/utils/plate-number'
+import {
+  STORAGE_OTHER_CUSTOMER_MESSAGE,
+  STORAGE_TAKE_OUT_CANCELLED_MESSAGE,
+  storedVehicleToCondition,
+  type StoredPlateResolveResult,
+  type StoredVehicleHydrationSlot,
+} from '../lib/utils/storage-vehicle'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
 import { RoutePoint } from '../components/tow-forms/routes'
@@ -491,6 +500,12 @@ export function useTowForm(
   const [followUpContactPhone, setFollowUpContactPhone] = useState('')
   const [storageVehicleCondition, setStorageVehicleCondition] = useState<'operational' | 'faulty'>('operational')
   const [storageLoading, setStorageLoading] = useState(false)
+  const storageTakeOutResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
+  const [storageTakeOutPrompt, setStorageTakeOutPrompt] = useState<{
+    plate: string
+    stored: StoredVehicleWithCustomer
+    slot: StoredVehicleHydrationSlot
+  } | null>(null)
 
   // Exchange specific state
   const [workingVehicleSource, setWorkingVehicleSource] = useState<'storage' | 'address'>('address')
@@ -1703,15 +1718,6 @@ export function useTowForm(
     }
   }
 
-  // Exchange helpers
-  const handleSelectWorkingVehicle = (vehicle: StoredVehicleWithCustomer) => {
-    setSelectedWorkingVehicleId(vehicle.id)
-  }
-
-  const handleClearWorkingVehicle = () => {
-    setSelectedWorkingVehicleId(null)
-  }
-
   const buildStoredVehicleLookupResult = (
     vehicle: StoredVehicleWithCustomer
   ): VehicleLookupResult | null => {
@@ -1760,6 +1766,156 @@ export function useTowForm(
     }
   }
 
+  const hydrateStoredVehicleIntoSlot = (
+    vehicle: StoredVehicleWithCustomer,
+    slot: StoredVehicleHydrationSlot
+  ) => {
+    const vehicleResult = buildStoredVehicleLookupResult(vehicle)
+    const { isFaulty, defects } = storedVehicleToCondition(vehicle)
+
+    if (slot === 'single') {
+      setSelectedStoredVehicleId(vehicle.id)
+      setStorageVehicleCondition(vehicle.vehicle_condition)
+      setVehiclePlate(vehicle.plate_number)
+      setVehicleCode(vehicle.vehicle_code || '')
+      if (vehicleResult) {
+        setVehicleData(vehicleResult)
+        setVehicleType('private')
+      } else {
+        setVehicleData(null)
+        setVehicleType('')
+      }
+      setVehicleLookupNotFound(false)
+      setSelectedDefects(isFaulty ? defects : [])
+      return
+    }
+
+    if (slot === 'exchange-working') {
+      setSelectedWorkingVehicleId(vehicle.id)
+      setWorkingVehicleSource('storage')
+      setWorkingVehiclePlate(vehicle.plate_number)
+      setWorkingVehicleCode(vehicle.vehicle_code || '')
+      if (vehicleResult) {
+        setWorkingVehicleData(vehicleResult)
+        setWorkingVehicleType('private')
+      } else {
+        setWorkingVehicleData(null)
+        setWorkingVehicleType('')
+      }
+      setWorkingVehicleNotFound(false)
+      setSelectedDefects([])
+      applyBaseAddressFromPriceList(
+        setWorkingVehicleAddress,
+        deferStorageWorkingAddressRef
+      )
+      return
+    }
+
+    setDefectiveVehiclePlate(vehicle.plate_number)
+    setDefectiveVehicleCode(vehicle.vehicle_code || '')
+    if (vehicleResult) {
+      setDefectiveVehicleData(vehicleResult)
+      setDefectiveVehicleType('private')
+    } else {
+      setDefectiveVehicleData(null)
+      setDefectiveVehicleType('')
+    }
+    setDefectiveVehicleNotFound(false)
+    setSelectedDefects(isFaulty ? defects : [])
+  }
+
+  const applySingleStoragePickupFromBase = () => {
+    if (!basePriceList?.base_address) return
+    setRouteStops((prev) => {
+      const pickupId = findPickupRouteStop(prev)?.id
+      if (!pickupId) return prev
+      return prev.map((s) =>
+        s.id === pickupId
+          ? {
+              ...s,
+              address: {
+                address: basePriceList.base_address!,
+                lat: basePriceList.base_lat,
+                lng: basePriceList.base_lng,
+              },
+            }
+          : s
+      )
+    })
+    setStartFromBase(true)
+  }
+
+  const completeStorageTakeOut = (
+    stored: StoredVehicleWithCustomer,
+    slot: StoredVehicleHydrationSlot
+  ) => {
+    hydrateStoredVehicleIntoSlot(stored, slot)
+    if (slot === 'single') {
+      applySingleStoragePickupFromBase()
+    } else if (slot === 'exchange-working') {
+      setStartFromBase(true)
+    }
+  }
+
+  const waitForStorageTakeOutConfirm = (
+    plate: string,
+    stored: StoredVehicleWithCustomer,
+    slot: StoredVehicleHydrationSlot
+  ) =>
+    new Promise<boolean>((resolve) => {
+      storageTakeOutResolverRef.current = resolve
+      setStorageTakeOutPrompt({ plate, stored, slot })
+    })
+
+  const confirmStorageTakeOut = () => {
+    const prompt = storageTakeOutPrompt
+    if (!prompt) return
+    completeStorageTakeOut(prompt.stored, prompt.slot)
+    storageTakeOutResolverRef.current?.(true)
+    storageTakeOutResolverRef.current = null
+    setStorageTakeOutPrompt(null)
+  }
+
+  const cancelStorageTakeOut = () => {
+    storageTakeOutResolverRef.current?.(false)
+    storageTakeOutResolverRef.current = null
+    setStorageTakeOutPrompt(null)
+  }
+
+  const tryResolveStoredPlateForSlot = useCallback(
+    async (
+      plate: string,
+      slot: StoredVehicleHydrationSlot
+    ): Promise<StoredPlateResolveResult> => {
+      if (!companyId) return { status: 'not-in-storage' }
+
+      const stored = await searchStoredVehicle(companyId, plate)
+      if (!stored) return { status: 'not-in-storage' }
+
+      const isSameCustomer = stored.customer_id === selectedCustomerId
+      if (!isSameCustomer) {
+        return { status: 'blocked', message: STORAGE_OTHER_CUSTOMER_MESSAGE }
+      }
+
+      const confirmed = await waitForStorageTakeOutConfirm(plate, stored, slot)
+      if (!confirmed) {
+        return { status: 'blocked', message: STORAGE_TAKE_OUT_CANCELLED_MESSAGE }
+      }
+      return { status: 'hydrated' }
+    },
+    [companyId, selectedCustomerId]
+  )
+
+  // Exchange helpers
+  const handleSelectWorkingVehicle = (vehicle: StoredVehicleWithCustomer) => {
+    hydrateStoredVehicleIntoSlot(vehicle, 'exchange-working')
+    setStartFromBase(true)
+  }
+
+  const handleClearWorkingVehicle = () => {
+    setSelectedWorkingVehicleId(null)
+  }
+
   const applyStoragePrefill = (
     vehicle: StoredVehicleWithCustomer,
     type: 'single' | 'exchange' | 'custom'
@@ -1779,49 +1935,16 @@ export function useTowForm(
       deferStorageBaseAddressRef
     )
 
-    const vehicleResult = buildStoredVehicleLookupResult(vehicle)
-
     if (type === 'single') {
-      setVehiclePlate(vehicle.plate_number)
-      setVehicleCode(vehicle.vehicle_code || '')
-      if (vehicleResult) {
-        setVehicleData(vehicleResult)
-        setVehicleType('private')
-      }
-      if (
-        vehicle.vehicle_condition === 'faulty' &&
-        vehicle.defects &&
-        vehicle.defects.length > 0
-      ) {
-        setSelectedDefects(vehicle.defects)
-      }
+      hydrateStoredVehicleIntoSlot(vehicle, 'single')
       return
     }
 
     if (type === 'exchange') {
       if (vehicle.vehicle_condition === 'operational') {
-        setSelectedWorkingVehicleId(vehicle.id)
-        setWorkingVehicleSource('storage')
-        setWorkingVehiclePlate(vehicle.plate_number)
-        setWorkingVehicleCode(vehicle.vehicle_code || '')
-        if (vehicleResult) {
-          setWorkingVehicleData(vehicleResult)
-          setWorkingVehicleType('private')
-        }
-        applyBaseAddressFromPriceList(
-          setWorkingVehicleAddress,
-          deferStorageWorkingAddressRef
-        )
+        hydrateStoredVehicleIntoSlot(vehicle, 'exchange-working')
       } else {
-        setDefectiveVehiclePlate(vehicle.plate_number)
-        setDefectiveVehicleCode(vehicle.vehicle_code || '')
-        if (vehicleResult) {
-          setDefectiveVehicleData(vehicleResult)
-          setDefectiveVehicleType('private')
-        }
-        if (vehicle.defects && vehicle.defects.length > 0) {
-          setSelectedDefects(vehicle.defects)
-        }
+        hydrateStoredVehicleIntoSlot(vehicle, 'exchange-defective')
         applyBaseAddressFromPriceList(
           setExchangeAddress,
           deferStorageExchangeAddressRef
@@ -1838,21 +1961,43 @@ export function useTowForm(
   }
 
   const handleSelectStoredVehicle = (vehicle: StoredVehicleWithCustomer) => {
-    setSelectedStoredVehicleId(vehicle.id)
-    setVehiclePlate(vehicle.plate_number)
+    hydrateStoredVehicleIntoSlot(vehicle, 'single')
+  }
 
-    const vehicleResult = buildStoredVehicleLookupResult(vehicle)
-    if (vehicleResult) {
-      setVehicleData(vehicleResult)
-      setVehicleType('private')
+  const handleVehiclePlateInputChange = (plate: string) => {
+    const normalized = normalizePlate(plate)
+    setVehiclePlate(normalized)
+    setVehicleLookupNotFound(false)
+    if (normalized.replace(/[^0-9]/g, '').length === 0) {
+      setSelectedDefects([])
+      setSelectedStoredVehicleId(null)
+      setVehicleCode('')
+      setStorageVehicleCondition('operational')
+      setVehicleData(null)
+      setVehicleType('')
+    }
+  }
+
+  const handleDefectiveVehiclePlateInputChange = (plate: string) => {
+    const normalized = normalizePlate(plate)
+    setDefectiveVehiclePlate(normalized)
+    setDefectiveVehicleNotFound(false)
+    if (normalized.replace(/[^0-9]/g, '').length === 0) {
+      setSelectedDefects([])
+      setDefectiveVehicleData(null)
+      setDefectiveVehicleType('')
+      setDefectiveVehicleCode('')
     }
   }
 
   const handleClearStoredVehicle = () => {
     setSelectedStoredVehicleId(null)
     setVehiclePlate('')
+    setVehicleCode('')
     setVehicleData(null)
     setVehicleType('')
+    setSelectedDefects([])
+    setStorageVehicleCondition('operational')
     setRouteStops((prev) => {
       const pickupId = findPickupRouteStop(prev)?.id
       if (!pickupId) return prev
@@ -2652,6 +2797,12 @@ export function useTowForm(
     handleClearWorkingVehicle,
     handleSelectStoredVehicle,
     handleClearStoredVehicle,
+    handleVehiclePlateInputChange,
+    handleDefectiveVehiclePlateInputChange,
+    tryResolveStoredPlateForSlot,
+    storageTakeOutPrompt,
+    confirmStorageTakeOut,
+    cancelStorageTakeOut,
     handlePinDropConfirm,
     resetForm,
     copyFromCustomer,

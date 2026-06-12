@@ -47,6 +47,7 @@ import {
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
+import { StorageTakeOutConfirmModal } from '../../../components/tow-forms/StorageTakeOutConfirmModal'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
@@ -58,7 +59,6 @@ import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
 import { approveTowQuote, createTow, updateTow } from '../../../lib/queries/tows'
 import {
-  searchStoredVehicle,
   reserveVehicleForTow,
   unreserveVehicleFromTow,
   getVehiclesReservedForTow,
@@ -344,6 +344,12 @@ function CreateTowForm({
     handleCustomerSelect,
     handleSelectStoredVehicle,
     handleClearStoredVehicle,
+    handleVehiclePlateInputChange,
+    handleDefectiveVehiclePlateInputChange,
+    tryResolveStoredPlateForSlot,
+    storageTakeOutPrompt,
+    confirmStorageTakeOut,
+    cancelStorageTakeOut,
     handleSelectWorkingVehicle,
     handleClearWorkingVehicle,
     handlePinDropConfirm,
@@ -999,21 +1005,21 @@ function CreateTowForm({
     if (vehiclePlate.replace(/[^0-9]/g, '').length < 5) return
     setDefectiveLookupLoading(true)
     try {
-      if (companyId) {
-        const stored = await searchStoredVehicle(companyId, vehiclePlate)
-        if (stored) {
-          const isSameCustomer = stored.customer_id === selectedCustomerId
-          if (isSameCustomer) {
-            setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
-          } else {
-            setPlateStorageWarning('הרכב שייך ללקוח אחר באחסנה ולא ניתן לשבצו לגרירה זו')
-          }
-          setVehicleData(null)
-          return
-        } else {
-          setPlateStorageWarning(null)
-        }
+      const storedResult = await tryResolveStoredPlateForSlot(
+        vehiclePlate,
+        'single'
+      )
+      if (storedResult.status === 'blocked') {
+        setPlateStorageWarning(storedResult.message)
+        setVehicleData(null)
+        setVehicleLookupNotFound(false)
+        return
       }
+      if (storedResult.status === 'hydrated') {
+        setPlateStorageWarning(null)
+        return
+      }
+      setPlateStorageWarning(null)
       const result = await lookupVehicle(vehiclePlate)
       if (result.found && result.data) {
         setVehicleData(result)
@@ -1032,13 +1038,65 @@ function CreateTowForm({
     } finally {
       setDefectiveLookupLoading(false)
     }
-  }, [vehiclePlate, companyId, selectedCustomerId])
+  }, [vehiclePlate, tryResolveStoredPlateForSlot])
+
+  const handleWorkingVehicleLookup = useCallback(async (plate?: string) => {
+    const resolvedPlate = plate ?? workingVehiclePlate
+    if (resolvedPlate.replace(/[^0-9]/g, '').length < 5) return
+    setWorkingLookupLoading(true)
+    try {
+      const storedResult = await tryResolveStoredPlateForSlot(
+        resolvedPlate,
+        'exchange-working'
+      )
+      if (storedResult.status === 'blocked') {
+        setPlateStorageWarning(storedResult.message)
+        setWorkingVehicleData(null)
+        setWorkingVehicleNotFound(false)
+        return
+      }
+      if (storedResult.status === 'hydrated') {
+        setPlateStorageWarning(null)
+        return
+      }
+      setPlateStorageWarning(null)
+      const result = await lookupVehicle(resolvedPlate)
+      if (result.found && result.data) {
+        setWorkingVehicleData(result)
+        setWorkingVehicleType(result.source || 'private')
+        setWorkingVehicleNotFound(false)
+      } else {
+        setWorkingVehicleData(null)
+        setWorkingVehicleType('')
+        setWorkingVehicleNotFound(true)
+      }
+    } catch {
+      setWorkingVehicleData(null)
+    } finally {
+      setWorkingLookupLoading(false)
+    }
+  }, [workingVehiclePlate, tryResolveStoredPlateForSlot])
 
   // Vehicle lookup for defective (exchange)
   const handleDefectiveLookup = useCallback(async () => {
     if (defectiveVehiclePlate.replace(/[^0-9]/g, '').length < 5) return
     setDefectiveLookupLoading(true)
     try {
+      const storedResult = await tryResolveStoredPlateForSlot(
+        defectiveVehiclePlate,
+        'exchange-defective'
+      )
+      if (storedResult.status === 'blocked') {
+        setPlateStorageWarning(storedResult.message)
+        setDefectiveVehicleData(null)
+        setDefectiveVehicleNotFound(false)
+        return
+      }
+      if (storedResult.status === 'hydrated') {
+        setPlateStorageWarning(null)
+        return
+      }
+      setPlateStorageWarning(null)
       const result = await lookupVehicle(defectiveVehiclePlate)
       if (result.found && result.data) {
         setDefectiveVehicleData(result)
@@ -1051,7 +1109,7 @@ function CreateTowForm({
     } finally {
       setDefectiveLookupLoading(false)
     }
-  }, [defectiveVehiclePlate])
+  }, [defectiveVehiclePlate, tryResolveStoredPlateForSlot])
 
   // Vehicle lookup for working (exchange)
   const handleWorkingLookup = useCallback(async () => {
@@ -1583,7 +1641,7 @@ function CreateTowForm({
                               <input
                                 type="text"
                                 value={vehiclePlate}
-                                onChange={(e) => { setVehiclePlate(normalizePlate(e.target.value)); setPlateStorageWarning(null); setVehicleLookupNotFound(false) }}
+                                onChange={(e) => { handleVehiclePlateInputChange(e.target.value); setPlateStorageWarning(null) }}
                                 onBlur={async (e) => {
                                   const val = e.target.value.trim()
                                   if (val && val.replace(/[^0-9]/g, '').length >= 5) {
@@ -2298,26 +2356,11 @@ function CreateTowForm({
                                   <Input
                                     type="text"
                                     value={workingVehiclePlate}
-                                    onChange={(e) => { setWorkingVehiclePlate(e.target.value); setWorkingVehicleNotFound(false) }}
+                                    onChange={(e) => { setWorkingVehiclePlate(normalizePlate(e.target.value)); setWorkingVehicleNotFound(false); setPlateStorageWarning(null) }}
                                     onBlur={async (e) => {
                                       const val = e.target.value.trim()
                                       if (val && val.replace(/[^0-9]/g, '').length >= 5) {
-                                        const stored = companyId ? await searchStoredVehicle(companyId, val) : null
-                                        if (stored) {
-                                          setWorkingVehicleNotFound(false)
-                                          setPlateStorageWarning('הרכב נמצא באחסנה — יש לבחור "איסוף מאחסנה"')
-                                        } else {
-                                          setPlateStorageWarning(null)
-                                          const result = await lookupVehicle(val)
-                                          if (result.found && result.data) {
-                                            setWorkingVehicleData(result)
-                                            setWorkingVehicleType(result.source || 'private')
-                                            setWorkingVehicleNotFound(false)
-                                          } else {
-                                            setWorkingVehicleData(null)
-                                            setWorkingVehicleNotFound(true)
-                                          }
-                                        }
+                                        handleWorkingVehicleLookup(val)
                                       }
                                     }}
                                     placeholder="לוחית תקין"
@@ -2524,19 +2567,11 @@ function CreateTowForm({
                                 <Input
                                   type="text"
                                   value={defectiveVehiclePlate}
-                                  onChange={(e) => { setDefectiveVehiclePlate(normalizePlate(e.target.value)); setDefectiveVehicleNotFound(false) }}
+                                  onChange={(e) => { handleDefectiveVehiclePlateInputChange(e.target.value); setPlateStorageWarning(null) }}
                                   onBlur={async (e) => {
                                     const val = e.target.value.trim()
                                     if (val && val.replace(/[^0-9]/g, '').length >= 5) {
-                                      const result = await lookupVehicle(val)
-                                      if (result.found && result.data) {
-                                        setDefectiveVehicleData(result)
-                                        setDefectiveVehicleType(result.source || 'private')
-                                        setDefectiveVehicleNotFound(false)
-                                      } else {
-                                        setDefectiveVehicleData(null)
-                                        setDefectiveVehicleNotFound(true)
-                                      }
+                                      handleDefectiveLookup()
                                     }
                                   }}
                                   placeholder="לוחית תקול"
@@ -3670,6 +3705,13 @@ function CreateTowForm({
         </div>
       )}
 
+      <StorageTakeOutConfirmModal
+        open={!!storageTakeOutPrompt}
+        plateNumber={storageTakeOutPrompt?.plate}
+        onConfirm={confirmStorageTakeOut}
+        onCancel={cancelStorageTakeOut}
+      />
+
       <PinDropModal
         isOpen={pinDropModal.isOpen}
         onClose={() => setPinDropModal({ isOpen: false, field: null })}
@@ -3711,34 +3753,14 @@ function CreateTowForm({
                   key={v.id}
                   type="button"
                   onClick={() => {
-                    setWorkingVehicleSource('storage')
-                    setSelectedWorkingVehicleId(v.id)
-                    setStartFromBase(true)
-                    setWorkingVehiclePlate(v.plate_number)
-                    if (v.vehicle_data) {
-                      setWorkingVehicleData({
-                        found: true,
-                        source: (v.vehicle_data.source as VehicleLookupResult['source']) || 'private',
-                        sourceLabel: v.vehicle_data.sourceLabel || 'רכב פרטי',
-                        data: {
-                          plateNumber: v.plate_number,
-                          manufacturer: v.vehicle_data.manufacturer || null,
-                          model: v.vehicle_data.model || null,
-                          year: v.vehicle_data.year ? parseInt(v.vehicle_data.year) : null,
-                          color: v.vehicle_data.color || null,
-                          fuelType: null,
-                          totalWeight: v.vehicle_data.totalWeight ? parseInt(v.vehicle_data.totalWeight) : null,
-                          vehicleType: null,
-                          driveType: v.vehicle_data.driveType || null,
-                          driveTechnology: null,
-                          gearType: v.vehicle_data.gearType || null,
-                          machineryType: null,
-                          selfWeight: null,
-                          totalWeightTon: null
-                        }
+                    handleSelectWorkingVehicle(v)
+                    if (storageAddress) {
+                      setWorkingVehicleAddress({
+                        address: storageAddress,
+                        lat: basePriceList?.base_lat,
+                        lng: basePriceList?.base_lng,
                       })
                     }
-                    if (storageAddress) setWorkingVehicleAddress({ address: storageAddress, lat: basePriceList?.base_lat, lng: basePriceList?.base_lng })
                     setShowWorkingStorageModal(false)
                   }}
                   className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:border-gray-300 text-sm font-medium text-right flex items-center justify-between"
