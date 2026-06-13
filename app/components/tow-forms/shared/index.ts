@@ -4,4 +4,5 @@ export { StartFromBase } from './StartFromBase'
 export { PinDropModal } from './PinDropModal'
 export { TowTruckTypeSelector } from './TowTruckTypeSelector'
 export { ServiceSurchargeSelector, type SelectedService } from './ServiceSurchargeSelector'
+export { VehicleCoreLookupChips } from './VehicleCoreLookupChips'
 

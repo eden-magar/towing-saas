@@ -44,6 +44,7 @@ import {
   PinDropModal,
   VehicleLookup,
   ServiceSurchargeSelector,
+  VehicleCoreLookupChips,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
@@ -1736,50 +1737,11 @@ function CreateTowForm({
                                 </span>
                               )}
                             </div>
-                            <div className="flex flex-wrap gap-1.5 p-2.5 bg-gray-50 rounded-xl">
-                              {vehicleData.data.manufacturer && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">יצרן: </span>
-                                  {vehicleData.data.manufacturer}
-                                </span>
-                              )}
-                              {vehicleData.data.model && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">דגם: </span>
-                                  {vehicleData.data.model}
-                                </span>
-                              )}
-                              {vehicleData.data.year != null && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">שנה: </span>
-                                  {vehicleData.data.year}
-                                </span>
-                              )}
-                              {vehicleData.data.color && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">צבע: </span>
-                                  {vehicleData.data.color}
-                                </span>
-                              )}
-                              {vehicleData.data.driveType && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">הנעה: </span>
-                                  {vehicleData.data.driveType}
-                                </span>
-                              )}
-                              {vehicleData.data.gearType && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">גיר: </span>
-                                  {vehicleData.data.gearType}
-                                </span>
-                              )}
-                              {vehicleData.data.totalWeight != null && (
-                                <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                  <span className="text-gray-400">משקל: </span>
-                                  {vehicleData.data.totalWeight} ק״ג
-                                </span>
-                              )}
-                            </div>
+                            <VehicleCoreLookupChips
+                              source={vehicleData.source}
+                              data={vehicleData.data}
+                              vehicleType={vehicleType}
+                            />
                           </div>
                         )}
                         {vehicleLookupNotFound && (
@@ -2399,22 +2361,12 @@ function CreateTowForm({
                                   </span>
                                 )}
                               </div>
-                              <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl content-start">
-                                {[
-                                  { label: 'יצרן', value: workingVehicleData.data.manufacturer },
-                                  { label: 'דגם', value: workingVehicleData.data.model },
-                                  { label: 'שנה', value: workingVehicleData.data.year != null ? String(workingVehicleData.data.year) : null },
-                                  { label: 'צבע', value: workingVehicleData.data.color },
-                                  { label: 'הנעה', value: workingVehicleData.data.driveType },
-                                  { label: 'גיר', value: workingVehicleData.data.gearType },
-                                  { label: 'משקל', value: workingVehicleData.data.totalWeight != null ? `${workingVehicleData.data.totalWeight} ק״ג` : null },
-                                ].filter((f): f is { label: string; value: string } => Boolean(f.value)).map((f) => (
-                                  <span key={f.label}
-                                    className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                    <span className="text-gray-400">{f.label}: </span>{f.value}
-                                  </span>
-                                ))}
-                              </div>
+                              <VehicleCoreLookupChips
+                                source={workingVehicleData.source}
+                                data={workingVehicleData.data}
+                                vehicleType={workingVehicleType}
+                                className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl content-start"
+                              />
                             </div>
                           )}
                           <div className="min-h-0">
@@ -2609,22 +2561,12 @@ function CreateTowForm({
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl content-start">
-                                    {[
-                                      { label: 'יצרן', value: defectiveVehicleData.data.manufacturer },
-                                      { label: 'דגם', value: defectiveVehicleData.data.model },
-                                      { label: 'שנה', value: defectiveVehicleData.data.year != null ? String(defectiveVehicleData.data.year) : null },
-                                      { label: 'צבע', value: defectiveVehicleData.data.color },
-                                      { label: 'הנעה', value: defectiveVehicleData.data.driveType },
-                                      { label: 'גיר', value: defectiveVehicleData.data.gearType },
-                                      { label: 'משקל', value: defectiveVehicleData.data.totalWeight != null ? `${defectiveVehicleData.data.totalWeight} ק״ג` : null },
-                                    ].filter((f): f is { label: string; value: string } => Boolean(f.value)).map((f) => (
-                                      <span key={f.label}
-                                        className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                                        <span className="text-gray-400">{f.label}: </span>{f.value}
-                                      </span>
-                                    ))}
-                                  </div>
+                                  <VehicleCoreLookupChips
+                                    source={defectiveVehicleData.source}
+                                    data={defectiveVehicleData.data}
+                                    vehicleType={defectiveVehicleType}
+                                    className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-xl content-start"
+                                  />
                                 </div>
                               )}
                               <div className="min-h-0">

@@ -17,6 +17,7 @@ import { normalizePlate } from '../../../lib/utils/plate-number'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { getVehicleTypeLabel, isKnownVehicleType } from '../../../lib/vehicle-lookup'
+import { toTowVehicleCoreInfo } from '../../../lib/utils/tow-vehicle-core'
 import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import { 
   ArrowRight, 
@@ -1872,43 +1873,59 @@ export default function TowDetailsPage() {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {tow.vehicles && tow.vehicles.length > 0 ? tow.vehicles.map((vehicle: any, idx: number) => (
+                      {tow.vehicles && tow.vehicles.length > 0 ? tow.vehicles.map((vehicle: any, idx: number) => {
+                        const core = toTowVehicleCoreInfo(vehicle)
+                        return (
                         <div key={vehicle.id} className={idx > 0 ? 'pt-4 border-t border-gray-100' : ''}>
                           <div className="flex items-center gap-4 mb-3">
                             <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
                               <Truck size={24} className="text-gray-400" />
                             </div>
                             <div>
-                              <p className="font-mono text-lg font-bold text-gray-800">{vehicle.plate_number}</p>
-                              {vehicle.is_working === true && (
+                              <p className="font-mono text-lg font-bold text-gray-800">{core.plate}</p>
+                              {core.isWorking === true && (
                                 <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full mr-2">תקין</span>
                               )}
-                              {vehicle.is_working === false && (
+                              {core.isWorking === false && (
                                 <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full mr-2">תקול</span>
                               )}
                               <p className="text-sm text-gray-500">
-                                {vehicle.manufacturer} {vehicle.model}{vehicle.year ? `, ${vehicle.year}` : ''}
+                                {core.manufacturer} {core.model}{core.year ? `, ${core.year}` : ''}
                               </p>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {vehicle.vehicle_type && (
+                            {core.vehicleTypeLabel && (
                               <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
-                                {isKnownVehicleType(vehicle.vehicle_type) ? getVehicleTypeLabel(vehicle.vehicle_type) : '—'}
+                                {core.vehicleTypeLabel}
                               </span>
                             )}
-                            {vehicle.color && (
-                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{vehicle.color}</span>
+                            {core.color && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">{core.color}</span>
                             )}
-                            {vehicle.vehicle_code && (
-                              <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm">#{vehicle.vehicle_code}</span>
+                            {core.vehicleCode && (
+                              <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm">#{core.vehicleCode}</span>
                             )}
+                            {core.machineryType && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
+                                סוג צמ&quot;ה: {core.machineryType}
+                              </span>
+                            )}
+                            {core.weightLines.map((line) => (
+                              <span
+                                key={line.label}
+                                className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm"
+                              >
+                                {line.label}: {line.value}
+                              </span>
+                            ))}
                             {vehicle.tow_reason && (
                               <span className="px-3 py-1 bg-red-50 text-red-600 rounded-lg text-sm">{vehicle.tow_reason}</span>
                             )}
                           </div>
                         </div>
-                      )) : (
+                        )
+                      }) : (
                         <p className="text-gray-500">אין רכבים</p>
                       )}
                     </div>

@@ -9,7 +9,7 @@ import {
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
 import { calculateTowPrice, extractBasePrices, resolveVehicleBasePrice } from './price-calculator'
-import { VehicleType } from '../types'
+import { VehicleType, VehicleLookupResult } from '../types'
 import { normalizePlate } from './plate-number'
 import {
   assignExistingPointIds,
@@ -357,6 +357,12 @@ export interface PreparedTowData {
     driveTechnology?: string
     vehicleCode?: string
     registrySource?: string | null
+    /** צמ"ה — mishkal_ton (tons) */
+    selfWeightTon?: number
+    /** צמ"ה — mishkal_kolel_ton (tons) */
+    totalWeightTon?: number
+    /** צמ"ה — sug_tzama_nm */
+    machineryType?: string
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -473,6 +479,60 @@ function resolveRouteVehicleRegistrySource(v: VehicleOnTruck): string | null {
   return null
 }
 
+function parseOptionalTon(value: string | number | undefined): number | undefined {
+  if (value == null || value === '') return undefined
+  const n = Number(value)
+  return Number.isFinite(n) ? n : undefined
+}
+
+/** Persist machinery ton fields only when source is machinery or ton data is present. */
+function machineryPersistFields(args: {
+  registrySource?: string | null
+  machineryType?: string | null
+  selfWeightTon?: number | null
+  totalWeightTon?: number | null
+}): Pick<
+  PreparedTowData['vehicles'][number],
+  'selfWeightTon' | 'totalWeightTon' | 'machineryType'
+> {
+  const { registrySource, machineryType, selfWeightTon, totalWeightTon } = args
+  const isMachinery =
+    registrySource === 'machinery' ||
+    machineryType != null ||
+    selfWeightTon != null ||
+    totalWeightTon != null
+  if (!isMachinery) return {}
+  return {
+    ...(selfWeightTon != null ? { selfWeightTon } : {}),
+    ...(totalWeightTon != null ? { totalWeightTon } : {}),
+    ...(machineryType ? { machineryType } : {}),
+  }
+}
+
+function machineryFromLookupResult(
+  registrySource: string | null | undefined,
+  data: VehicleLookupResult['data'] | null | undefined
+) {
+  return machineryPersistFields({
+    registrySource,
+    machineryType: data?.machineryType,
+    selfWeightTon: data?.selfWeight ?? null,
+    totalWeightTon: data?.totalWeightTon ?? null,
+  })
+}
+
+function machineryFromRouteVehicleData(
+  registrySource: string | null | undefined,
+  vehicleData: VehicleOnTruck['vehicleData']
+) {
+  return machineryPersistFields({
+    registrySource,
+    machineryType: vehicleData?.machineryType,
+    selfWeightTon: parseOptionalTon(vehicleData?.selfWeight) ?? null,
+    totalWeightTon: parseOptionalTon(vehicleData?.totalWeightTon) ?? null,
+  })
+}
+
 /**
  * המרת נקודות מסלול (RoutePoints) לרגליים (Legs)
  * כל שתי נקודות עוקבות הופכות לרגל אחת
@@ -545,6 +605,7 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
         ? Number(v.manualWeight)
         : undefined,
     gearType: v.vehicleData?.gearType,
+    ...machineryFromRouteVehicleData(resolveRouteVehicleRegistrySource(v), v.vehicleData),
   }))
 }
 
@@ -1158,6 +1219,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       driveTechnology: input.vehicleData?.data?.driveTechnology,
       vehicleCode: input.vehicleCode || undefined,
       registrySource: input.vehicleData?.source ?? null,
+      ...machineryFromLookupResult(
+        input.vehicleData?.source,
+        input.vehicleData?.data
+      ),
     }],
       mapExistingVehiclesForMatch(input.existingTowVehicles)
     )
@@ -1316,6 +1381,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.workingVehicleData?.data?.gearType,
       driveTechnology: input.workingVehicleData?.data?.driveTechnology,
       registrySource: input.workingVehicleData?.source ?? null,
+      ...machineryFromLookupResult(
+        input.workingVehicleData?.source,
+        input.workingVehicleData?.data
+      ),
     })
   }
 
@@ -1341,6 +1410,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.defectiveVehicleData?.data?.gearType,
       driveTechnology: input.defectiveVehicleData?.data?.driveTechnology,
       registrySource: input.defectiveVehicleData?.source ?? null,
+      ...machineryFromLookupResult(
+        input.defectiveVehicleData?.source,
+        input.defectiveVehicleData?.data
+      ),
     })
   }
 

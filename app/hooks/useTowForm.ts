@@ -131,6 +131,9 @@ type TowVehicleEditRow = {
   total_weight?: number | null
   gear_type?: string | null
   drive_technology?: string | null
+  self_weight_ton?: number | null
+  total_weight_ton?: number | null
+  machinery_type?: string | null
 }
 
 function normalizeRegistrySource(
@@ -284,7 +287,10 @@ function buildVehicleLookupResultFromTowVehicle(
     v.fuel_type ||
     v.total_weight ||
     v.gear_type ||
-    v.drive_technology
+    v.drive_technology ||
+    v.self_weight_ton != null ||
+    v.total_weight_ton != null ||
+    v.machinery_type
   )
   if (!hasStoredDetails) return null
 
@@ -306,9 +312,9 @@ function buildVehicleLookupResultFromTowVehicle(
       driveType: v.drive_type || null,
       driveTechnology: v.drive_technology || null,
       gearType: v.gear_type || null,
-      machineryType: null,
-      selfWeight: null,
-      totalWeightTon: null,
+      machineryType: v.machinery_type || null,
+      selfWeight: v.self_weight_ton ?? null,
+      totalWeightTon: v.total_weight_ton ?? null,
     },
   }
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Car, Key, X, Search, Loader2 } from 'lucide-react'
 import { VehicleData } from './VehicleInfoCard'
+import { VehicleCoreLookupChips } from '../shared/VehicleCoreLookupChips'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
@@ -102,6 +103,15 @@ export function VehicleCard({
               driveType: result.data.driveType || undefined,
               totalWeight: result.data.totalWeight ? String(result.data.totalWeight) : undefined,
               fuelType: result.data.fuelType || undefined,
+              machineryType: result.data.machineryType || undefined,
+              selfWeight:
+                result.data.selfWeight != null
+                  ? String(result.data.selfWeight)
+                  : undefined,
+              totalWeightTon:
+                result.data.totalWeightTon != null
+                  ? String(result.data.totalWeightTon)
+                  : undefined,
               ...(result.data.vehicleType
                 ? { vehicleType: result.data.vehicleType }
                 : {}),
@@ -249,56 +259,11 @@ export function VehicleCard({
         
         {/* נתוני רכב מהמאגר — same pill layout as exchange tow (create/page.tsx) */}
         {vehicle.isFound && vehicle.vehicleData && (
-          <div className="flex flex-wrap gap-1.5 p-2.5 bg-gray-50 rounded-xl">
-            {vehicle.vehicleData.manufacturer && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">יצרן: </span>
-                {vehicle.vehicleData.manufacturer}
-              </span>
-            )}
-            {vehicle.vehicleData.model && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">דגם: </span>
-                {vehicle.vehicleData.model}
-              </span>
-            )}
-            {vehicle.vehicleData.year && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">שנה: </span>
-                {vehicle.vehicleData.year}
-              </span>
-            )}
-            {vehicle.vehicleData.color && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">צבע: </span>
-                {vehicle.vehicleData.color}
-              </span>
-            )}
-            {(vehicle.vehicleData as VehicleData & { vehicleType?: string }).vehicleType && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">סוג: </span>
-                {(vehicle.vehicleData as VehicleData & { vehicleType?: string }).vehicleType}
-              </span>
-            )}
-            {vehicle.vehicleData.driveType && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">הנעה: </span>
-                {vehicle.vehicleData.driveType}
-              </span>
-            )}
-            {vehicle.vehicleData.gearType && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">גיר: </span>
-                {vehicle.vehicleData.gearType}
-              </span>
-            )}
-            {vehicle.vehicleData.totalWeight && (
-              <span className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
-                <span className="text-gray-400">משקל: </span>
-                {vehicle.vehicleData.totalWeight} ק&quot;ג
-              </span>
-            )}
-          </div>
+          <VehicleCoreLookupChips
+            source={vehicle.registrySource ?? vehicle.vehicleType ?? null}
+            data={vehicle.vehicleData}
+            vehicleType={vehicle.vehicleType}
+          />
         )}
 
         {/* שדות ידניים אם לא נמצא — same as exchange tow (create/page.tsx) */}

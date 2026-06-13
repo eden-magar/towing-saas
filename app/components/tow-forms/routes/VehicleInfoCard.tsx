@@ -11,6 +11,12 @@ export interface VehicleData {
   driveType?: string
   totalWeight?: string
   fuelType?: string
+  /** צמ"ה — sug_tzama_nm */
+  machineryType?: string
+  /** צמ"ה — mishkal_ton (tons) */
+  selfWeight?: string
+  /** צמ"ה — mishkal_kolel_ton (tons) */
+  totalWeightTon?: string
 }
 
 interface VehicleInfoCardProps {

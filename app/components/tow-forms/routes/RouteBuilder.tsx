@@ -492,6 +492,15 @@ export function RouteBuilder({
                     ? String(result.data.totalWeight)
                     : undefined,
                   fuelType: result.data.fuelType || undefined,
+                  machineryType: result.data.machineryType || undefined,
+                  selfWeight:
+                    result.data.selfWeight != null
+                      ? String(result.data.selfWeight)
+                      : undefined,
+                  totalWeightTon:
+                    result.data.totalWeightTon != null
+                      ? String(result.data.totalWeightTon)
+                      : undefined,
                   ...(result.data.vehicleType
                     ? { vehicleType: result.data.vehicleType }
                     : {}),
