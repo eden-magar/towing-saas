@@ -341,38 +341,94 @@ export async function saveServiceSurcharges(companyId: string, surcharges: Omit<
 
 // ==================== מחירוני לקוחות ====================
 
-export async function getCustomersWithPricing(companyId: string): Promise<CustomerWithPricing[]> {
+const CUSTOMER_PRICING_SELECT = `
+  id,
+  customer_id,
+  company_id,
+  discount_percent,
+  customer:customers (
+    id,
+    name,
+    customer_type
+  )
+`
+
+async function collectCustomerCompanyIdsWithPricing(companyId: string): Promise<string[]> {
+  const [discountRes, priceListRes, priceItemRes] = await Promise.all([
+    supabase
+      .from('customer_company')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .gt('discount_percent', 0),
+    supabase
+      .from('price_lists')
+      .select('customer_company_id')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .not('customer_company_id', 'is', null),
+    supabase
+      .from('customer_price_items')
+      .select('customer_company_id, customer_company!inner(company_id, is_active)')
+      .eq('customer_company.company_id', companyId)
+      .eq('customer_company.is_active', true),
+  ])
+
+  if (discountRes.error) throw discountRes.error
+  if (priceListRes.error) throw priceListRes.error
+  if (priceItemRes.error) throw priceItemRes.error
+
+  const ids = new Set<string>()
+  discountRes.data?.forEach(row => ids.add(row.id))
+  priceListRes.data?.forEach(row => {
+    if (row.customer_company_id) ids.add(row.customer_company_id)
+  })
+  priceItemRes.data?.forEach(row => ids.add(row.customer_company_id))
+  return [...ids]
+}
+
+async function fetchCustomerPricingForCompanyIds(companyId: string, customerCompanyIds: string[]) {
+  if (customerCompanyIds.length === 0) {
+    return {
+      data: [] as Awaited<ReturnType<typeof fetchCustomerPricingBase>>['data'],
+      itemsByCustomer: {} as Record<string, CustomerPriceItem[]>,
+      priceListByCustomer: {} as Record<string, BasePriceList>,
+    }
+  }
+
   const { data, error } = await supabase
     .from('customer_company')
-    .select(`
-      id,
-      customer_id,
-      company_id,
-      discount_percent,
-      customer:customers (
-        id,
-        name,
-        customer_type
-      )
-    `)
+    .select(CUSTOMER_PRICING_SELECT)
     .eq('company_id', companyId)
     .eq('is_active', true)
+    .in('id', customerCompanyIds)
 
   if (error) {
     console.error('Error fetching customers with pricing:', error)
     throw error
   }
 
-  if (!data || data.length === 0) return []
+  if (!data || data.length === 0) {
+    return {
+      data: [] as typeof data,
+      itemsByCustomer: {} as Record<string, CustomerPriceItem[]>,
+      priceListByCustomer: {} as Record<string, BasePriceList>,
+    }
+  }
 
-  // שליפת פריטי מחיר
-  const customerCompanyIds = data.map(c => c.id)
-  const { data: priceItems } = await supabase
-    .from('customer_price_items')
-    .select('*')
-    .in('customer_company_id', customerCompanyIds)
+  const ids = data.map(c => c.id)
+  const [{ data: priceItems }, { data: priceLists }] = await Promise.all([
+    supabase
+      .from('customer_price_items')
+      .select('*')
+      .in('customer_company_id', ids),
+    supabase
+      .from('price_lists')
+      .select('*')
+      .in('customer_company_id', ids)
+      .eq('is_active', true),
+  ])
 
-  // מיפוי
   const itemsByCustomer: Record<string, CustomerPriceItem[]> = {}
   priceItems?.forEach(item => {
     if (!itemsByCustomer[item.customer_company_id]) {
@@ -381,12 +437,53 @@ export async function getCustomersWithPricing(companyId: string): Promise<Custom
     itemsByCustomer[item.customer_company_id].push(item)
   })
 
-  // שליפת מחירוני לקוח (price_lists) - מחירון מלא עם בסיס, מרחק וכו'
-  const { data: priceLists } = await supabase
-    .from('price_lists')
-    .select('*')
-    .in('customer_company_id', customerCompanyIds)
+  const priceListByCustomer: Record<string, BasePriceList> = {}
+  priceLists?.forEach(pl => {
+    if (pl.customer_company_id) {
+      priceListByCustomer[pl.customer_company_id] = pl as BasePriceList
+    }
+  })
+
+  return { data, itemsByCustomer, priceListByCustomer }
+}
+
+async function fetchCustomerPricingBase(companyId: string) {
+  const { data, error } = await supabase
+    .from('customer_company')
+    .select(CUSTOMER_PRICING_SELECT)
+    .eq('company_id', companyId)
     .eq('is_active', true)
+
+  if (error) {
+    console.error('Error fetching customers with pricing:', error)
+    throw error
+  }
+
+  if (!data || data.length === 0) {
+    return { data: [] as typeof data, itemsByCustomer: {} as Record<string, CustomerPriceItem[]>, priceListByCustomer: {} as Record<string, BasePriceList> }
+  }
+
+  const customerCompanyIds = data.map(c => c.id)
+
+  const [{ data: priceItems }, { data: priceLists }] = await Promise.all([
+    supabase
+      .from('customer_price_items')
+      .select('*')
+      .in('customer_company_id', customerCompanyIds),
+    supabase
+      .from('price_lists')
+      .select('*')
+      .in('customer_company_id', customerCompanyIds)
+      .eq('is_active', true),
+  ])
+
+  const itemsByCustomer: Record<string, CustomerPriceItem[]> = {}
+  priceItems?.forEach(item => {
+    if (!itemsByCustomer[item.customer_company_id]) {
+      itemsByCustomer[item.customer_company_id] = []
+    }
+    itemsByCustomer[item.customer_company_id].push(item)
+  })
 
   const priceListByCustomer: Record<string, BasePriceList> = {}
   priceLists?.forEach(pl => {
@@ -394,6 +491,124 @@ export async function getCustomersWithPricing(companyId: string): Promise<Custom
       priceListByCustomer[pl.customer_company_id] = pl as BasePriceList
     }
   })
+
+  return { data, itemsByCustomer, priceListByCustomer }
+}
+
+function mapCustomerPricingRows(
+  data: Awaited<ReturnType<typeof fetchCustomerPricingBase>>['data'],
+  itemsByCustomer: Record<string, CustomerPriceItem[]>,
+  priceListByCustomer: Record<string, BasePriceList>,
+  customerSurchargesMap: Record<string, { time: TimeSurcharge[]; location: LocationSurcharge[]; service: ServiceSurcharge[] }>
+): CustomerWithPricing[] {
+  return data.map(c => ({
+    ...c,
+    discount_percent: c.discount_percent || 0,
+    customer: c.customer as any,
+    price_items: itemsByCustomer[c.id] || [],
+    price_list: priceListByCustomer[c.id] || null,
+    customer_time_surcharges: customerSurchargesMap[c.id]?.time || [],
+    customer_location_surcharges: customerSurchargesMap[c.id]?.location || [],
+    customer_service_surcharges: customerSurchargesMap[c.id]?.service || [],
+  }))
+}
+
+/** Steps 1–3 only (no surcharge queries). For price-lists page list load. */
+export async function getCustomersWithPricingLite(companyId: string): Promise<CustomerWithPricing[]> {
+  const { data, itemsByCustomer, priceListByCustomer } = await fetchCustomerPricingBase(companyId)
+  if (data.length === 0) return []
+  return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, {})
+}
+
+/** Only customers with custom pricing (price_list, price_items, or discount). For price-lists page. */
+export async function getCustomersWithPricingFiltered(companyId: string): Promise<CustomerWithPricing[]> {
+  const customerCompanyIds = await collectCustomerCompanyIdsWithPricing(companyId)
+  const { data, itemsByCustomer, priceListByCustomer } = await fetchCustomerPricingForCompanyIds(
+    companyId,
+    customerCompanyIds
+  )
+  if (data.length === 0) return []
+  return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, {})
+}
+
+/** Load pricing summary for one customer (search → modal). */
+export async function getCustomerPricingByCompanyId(
+  companyId: string,
+  customerCompanyId: string
+): Promise<CustomerWithPricing | null> {
+  const { data, itemsByCustomer, priceListByCustomer } = await fetchCustomerPricingForCompanyIds(
+    companyId,
+    [customerCompanyId]
+  )
+  if (data.length === 0) return null
+  return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, {})[0]
+}
+
+export interface CustomerPricingSearchHit {
+  customer_id: string
+  customer_company_id: string
+  name: string
+  customer_type: string
+  phone: string | null
+  discount_percent: number
+}
+
+/** Search active company customers by name or phone (price-lists page). */
+export async function searchCustomersForPricing(
+  companyId: string,
+  searchText: string,
+  limit = 20
+): Promise<CustomerPricingSearchHit[]> {
+  const q = searchText.trim()
+  if (q.length < 2) return []
+
+  const pattern = `%${q}%`
+  const { data: customers, error: customersError } = await supabase
+    .from('customers')
+    .select('id, name, customer_type, phone')
+    .or(`name.ilike.${pattern},phone.ilike.${pattern}`)
+    .limit(limit)
+
+  if (customersError) {
+    console.error('Error searching customers for pricing:', customersError)
+    throw customersError
+  }
+  if (!customers?.length) return []
+
+  const customerIds = customers.map(c => c.id)
+  const { data: companyRows, error: companyError } = await supabase
+    .from('customer_company')
+    .select('id, customer_id, discount_percent')
+    .eq('company_id', companyId)
+    .eq('is_active', true)
+    .in('customer_id', customerIds)
+
+  if (companyError) {
+    console.error('Error fetching customer_company for pricing search:', companyError)
+    throw companyError
+  }
+  if (!companyRows?.length) return []
+
+  const customerById = new Map(customers.map(c => [c.id, c]))
+  return companyRows
+    .map(row => {
+      const customer = customerById.get(row.customer_id)
+      if (!customer) return null
+      return {
+        customer_id: row.customer_id,
+        customer_company_id: row.id,
+        name: customer.name,
+        customer_type: customer.customer_type,
+        phone: customer.phone,
+        discount_percent: row.discount_percent || 0,
+      }
+    })
+    .filter((row): row is CustomerPricingSearchHit => row !== null)
+}
+
+export async function getCustomersWithPricing(companyId: string): Promise<CustomerWithPricing[]> {
+  const { data, itemsByCustomer, priceListByCustomer } = await fetchCustomerPricingBase(companyId)
+  if (data.length === 0) return []
 
   // שליפת תוספות לקוח
   const priceListIds = Object.values(priceListByCustomer).map(pl => pl.id)
@@ -419,16 +634,7 @@ export async function getCustomersWithPricing(companyId: string): Promise<Custom
     })
   }
 
-  return data.map(c => ({
-    ...c,
-    discount_percent: c.discount_percent || 0,
-    customer: c.customer as any,
-    price_items: itemsByCustomer[c.id] || [],
-    price_list: priceListByCustomer[c.id] || null,
-    customer_time_surcharges: customerSurchargesMap[c.id]?.time || [],
-    customer_location_surcharges: customerSurchargesMap[c.id]?.location || [],
-    customer_service_surcharges: customerSurchargesMap[c.id]?.service || [],
-  }))
+  return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, customerSurchargesMap)
 }
 
 export async function updateCustomerPricing(
@@ -536,7 +742,7 @@ export async function getFullPriceList(companyId: string) {
     getTimeSurcharges(companyId),
     getLocationSurcharges(companyId),
     getServiceSurcharges(companyId),
-    getCustomersWithPricing(companyId),
+    getCustomersWithPricingFiltered(companyId),
     getFixedPriceItems(companyId)
   ])
 

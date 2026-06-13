@@ -17,6 +17,9 @@ import {
   getCustomerPriceList,
   getCustomerSurcharges,
   saveCustomerSurcharges,
+  searchCustomersForPricing,
+  getCustomerPricingByCompanyId,
+  type CustomerWithPricing,
 } from '../../lib/queries/price-lists'
 import { BasePriceTab } from './components/BasePriceTab'
 import { FixedPriceTab } from './components/FixedPriceTab'
@@ -115,6 +118,21 @@ interface CustomerPriceList {
   customer_service_surcharges?: ServiceSurcharge[]
 }
 
+function mapCustomerWithPricingToList(c: CustomerWithPricing): CustomerPriceList {
+  return {
+    id: c.customer_id,
+    customer_company_id: c.id,
+    name: c.customer?.name || '',
+    type: c.customer?.customer_type === 'business' ? 'עסקי' : 'פרטי',
+    discount_percent: c.discount_percent,
+    price_items: c.price_items.map(p => ({
+      id: p.id,
+      label: p.label,
+      price: p.price,
+    })),
+  }
+}
+
 // ==================== Component ====================
 
 export default function PriceListsPage() {
@@ -150,6 +168,17 @@ export default function PriceListsPage() {
 
   // Customer pricing state
   const [customerPriceLists, setCustomerPriceLists] = useState<CustomerPriceList[]>([])
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('')
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('')
+  const [customerSearchResults, setCustomerSearchResults] = useState<Array<{
+    customer_id: string
+    customer_company_id: string
+    name: string
+    type: string
+    phone?: string | null
+    discount_percent: number
+  }>>([])
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false)
 
   // ==================== Load Data ====================
 
@@ -242,20 +271,9 @@ export default function PriceListsPage() {
       }
 
       // Customer pricing
-      if (data.customersWithPricing?.length > 0) {
-        setCustomerPriceLists(data.customersWithPricing.map(c => ({
-          id: c.customer_id,
-          customer_company_id: c.id,
-          name: c.customer?.name || '',
-          type: c.customer?.customer_type === 'business' ? 'עסקי' : 'פרטי',
-          discount_percent: c.discount_percent,
-          price_items: c.price_items.map(p => ({
-            id: p.id,
-            label: p.label,
-            price: p.price
-          }))
-        })))
-      }
+      setCustomerPriceLists(
+        (data.customersWithPricing ?? []).map(mapCustomerWithPricingToList)
+      )
     } catch (error) {
       console.error('Error loading price list:', error)
     } finally {
@@ -268,6 +286,49 @@ export default function PriceListsPage() {
     if (!companyId) { setLoading(false); return }
     loadData()
   }, [companyId, authLoading])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCustomerSearch(customerSearchQuery.trim())
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [customerSearchQuery])
+
+  useEffect(() => {
+    if (!companyId || debouncedCustomerSearch.length < 2) {
+      setCustomerSearchResults([])
+      setCustomerSearchLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setCustomerSearchLoading(true)
+    searchCustomersForPricing(companyId, debouncedCustomerSearch)
+      .then((hits) => {
+        if (cancelled) return
+        setCustomerSearchResults(hits.map(hit => ({
+          customer_id: hit.customer_id,
+          customer_company_id: hit.customer_company_id,
+          name: hit.name,
+          type: hit.customer_type === 'business' ? 'עסקי' : 'פרטי',
+          phone: hit.phone,
+          discount_percent: hit.discount_percent,
+        })))
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error searching customers for pricing:', error)
+          setCustomerSearchResults([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCustomerSearchLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, debouncedCustomerSearch])
 
   // ==================== Save ====================
 
@@ -530,6 +591,27 @@ export default function PriceListsPage() {
     setShowCustomerModal(true)
   }
 
+  const handleSelectSearchCustomer = async (customer: CustomerPriceList) => {
+    setCustomerSearchQuery('')
+    setCustomerSearchResults([])
+
+    let target = customer
+    if (companyId) {
+      try {
+        const full = await getCustomerPricingByCompanyId(companyId, customer.customer_company_id)
+        if (full) target = mapCustomerWithPricingToList(full)
+      } catch (error) {
+        console.error('Error loading customer pricing summary:', error)
+      }
+    }
+
+    setCustomerPriceLists(prev => {
+      if (prev.some(c => c.customer_company_id === target.customer_company_id)) return prev
+      return [...prev, target]
+    })
+    await openCustomerModal(target)
+  }
+
   const saveCustomerPrices = async () => {
     if (!editingCustomer || !companyId) return
 
@@ -594,9 +676,13 @@ export default function PriceListsPage() {
         })
       }
 
-      setCustomerPriceLists(prev => prev.map(c =>
-        c.id === editingCustomer.id ? editingCustomer : c
-      ))
+      setCustomerPriceLists(prev => {
+        const exists = prev.some(c => c.id === editingCustomer.id)
+        if (exists) {
+          return prev.map(c => (c.id === editingCustomer.id ? editingCustomer : c))
+        }
+        return [...prev, editingCustomer]
+      })
       setShowCustomerModal(false)
       setEditingCustomer(null)
     } catch (error) {
@@ -712,6 +798,11 @@ export default function PriceListsPage() {
           <CustomerPricingTab
             customers={customerPriceLists}
             onEdit={openCustomerModal}
+            searchQuery={customerSearchQuery}
+            onSearchQueryChange={setCustomerSearchQuery}
+            searchResults={customerSearchResults}
+            searchLoading={customerSearchLoading}
+            onSelectSearchResult={handleSelectSearchCustomer}
           />
           <PriceSimulator
             vehiclePrices={vehiclePrices}
