@@ -4,14 +4,12 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../../lib/queries/driver-tasks'
 import { supabase } from '../../lib/supabase'
-import { getTowRevenueContribution } from '../../lib/utils/cancellation-fee'
 import { 
   TrendingUp, 
   TrendingDown, 
   Clock, 
   Truck, 
   Award, 
-  DollarSign,
   ChevronRight,
   ChevronLeft,
   Loader2,
@@ -27,8 +25,6 @@ interface PeriodStats {
   successTrend: number
   avgTime: number
   timeTrend: number
-  income: number
-  incomeTrend: number
 }
 
 interface DailyData {
@@ -117,7 +113,7 @@ export default function DriverStatsPage() {
     // Fetch current week stats
     const { data: weekTows } = await supabase
       .from('tows')
-      .select('id, status, created_at, completed_at, final_price, cancellation_fee, tow_type')
+      .select('id, status, created_at, completed_at, tow_type')
       .eq('driver_id', driverId)
       .gte('created_at', `${weekStartStr}T00:00:00`)
       .neq('status', 'cancelled')
@@ -134,7 +130,7 @@ export default function DriverStatsPage() {
     // Fetch current month stats
     const { data: monthTows } = await supabase
       .from('tows')
-      .select('id, status, created_at, completed_at, final_price, cancellation_fee, tow_type')
+      .select('id, status, created_at, completed_at, tow_type')
       .eq('driver_id', driverId)
       .gte('created_at', `${monthStartStr}T00:00:00`)
       .neq('status', 'cancelled')
@@ -192,10 +188,6 @@ export default function DriverStatsPage() {
     const avgTime = 42 // minutes - placeholder
     const timeTrend = -5 // placeholder
 
-    const income = current.reduce((sum, t) => sum + getTowRevenueContribution(t), 0)
-    const prevIncome = previous.reduce((sum: number, t: any) => sum + getTowRevenueContribution(t), 0)
-    const incomeTrend = prevIncome > 0 ? Math.round(((income - prevIncome) / prevIncome) * 100) : 0
-
     return {
       tows: totalTows,
       towsTrend,
@@ -203,8 +195,6 @@ export default function DriverStatsPage() {
       successTrend,
       avgTime,
       timeTrend,
-      income,
-      incomeTrend
     }
   }
 
@@ -418,14 +408,6 @@ export default function DriverStatsPage() {
             label="ממוצע לגרירה"
             trend={currentStats.timeTrend}
             color="orange"
-          />
-          <StatCard
-            icon={DollarSign}
-            value={currentStats.income}
-            prefix="₪"
-            label={period === 'month' ? 'הכנסות החודש' : 'הכנסות השבוע'}
-            trend={currentStats.incomeTrend}
-            color="purple"
           />
         </div>
       </div>

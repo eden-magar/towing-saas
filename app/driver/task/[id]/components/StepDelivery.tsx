@@ -47,6 +47,7 @@ interface StepDeliveryProps {
   onComplete: (recipientName: string, recipientPhone: string, notes?: string, cashCollected?: number) => Promise<void>
   isLastPoint: boolean
   finalPrice?: number | null
+  paymentMethod?: string | null
   dropoffToStorage?: boolean
 }
 
@@ -57,6 +58,7 @@ export default function StepDelivery({
   onComplete,
   isLastPoint,
   finalPrice,
+  paymentMethod,
   dropoffToStorage,
   isStorage = false,
 }: StepDeliveryProps) {
@@ -130,6 +132,7 @@ export default function StepDelivery({
 
   // באיסוף תמיד אפשר להמשיך, בפריקה צריך שם
   const canSubmit = isPickup || isExchange || isStop || recipientName.trim().length > 0
+  const isCashCollect = paymentMethod === 'cash'
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
@@ -158,7 +161,7 @@ export default function StepDelivery({
             </p>
           </div>
         )}
-        {isLastPoint && (
+        {isLastPoint && isCashCollect && (
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4">
             {finalPrice != null && (
               <div className="flex items-center justify-between mb-3 pb-3 border-b border-amber-200">

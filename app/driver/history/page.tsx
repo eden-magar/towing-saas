@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../../lib/queries/driver-tasks'
 import { supabase } from '../../lib/supabase'
-import { getTowRevenueContribution } from '../../lib/utils/cancellation-fee'
 import { 
   History, 
   Search, 
@@ -29,7 +28,6 @@ interface HistoryItem {
   from: string
   to: string
   status: 'completed' | 'cancelled' | 'cancelled_charged'
-  price: number
   duration: number
   cancelReason?: string
 }
@@ -91,9 +89,7 @@ export default function DriverHistoryPage() {
         status,
         created_at,
         completed_at,
-        started_at,
-        final_price,
-        cancellation_fee
+        started_at
       `)
       .eq('driver_id', driverId)
       .in('status', ['completed', 'cancelled', 'cancelled_charged'])
@@ -185,7 +181,6 @@ export default function DriverHistoryPage() {
         from: addresses.from || 'לא צוין',
         to: addresses.to || 'לא צוין',
         status: tow.status as HistoryItem['status'],
-        price: getTowRevenueContribution(tow),
         duration,
         cancelReason: tow.status === 'cancelled_charged' ? 'בוטל בחיוב' : 'בוטלה'
       }
@@ -234,10 +229,6 @@ export default function DriverHistoryPage() {
     return groups
   }, {} as Record<string, HistoryItem[]>)
 
-  const totalEarnings = filteredItems
-    .filter(i => i.status === 'completed')
-    .reduce((sum, i) => sum + i.price, 0)
-
   const totalTows = filteredItems.filter(i => i.status === 'completed').length
 
   // ==================== Loading State ====================
@@ -284,13 +275,9 @@ export default function DriverHistoryPage() {
             </div>
           )}
 
-          {/* Summary Cards */}
-          <div className="flex gap-3 mb-4">
-            <div className="flex-1 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-3 text-white">
-              <div className="text-2xl font-bold">₪{totalEarnings.toLocaleString()}</div>
-              <div className="text-emerald-100 text-sm">סה״כ הכנסות</div>
-            </div>
-            <div className="flex-1 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-3 text-white">
+          {/* Summary */}
+          <div className="mb-4">
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-3 text-white">
               <div className="text-2xl font-bold">{totalTows}</div>
               <div className="text-blue-100 text-sm">גרירות הושלמו</div>
             </div>
@@ -382,17 +369,6 @@ export default function DriverHistoryPage() {
                       </div>
                       <div className="text-left">
                         <div className="text-sm text-gray-400">{item.time}</div>
-                        {item.price > 0 && (
-                          <div className={`text-lg font-bold ${
-                            item.status === 'completed'
-                              ? 'text-emerald-600'
-                              : item.status === 'cancelled_charged'
-                                ? 'text-amber-700'
-                                : 'text-gray-500'
-                          }`}>
-                            ₪{item.price.toLocaleString('he-IL')}
-                          </div>
-                        )}
                       </div>
                     </div>
 

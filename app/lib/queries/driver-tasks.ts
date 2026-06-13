@@ -143,6 +143,7 @@ export interface TaskDetailFull {
   scheduled_at: string | null
   notes: string | null
   final_price: number | null
+  payment_method: string | null
   started_at: string | null
   completed_at: string | null
   created_at: string
@@ -474,6 +475,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
       scheduled_at,
       notes,
       final_price,
+      payment_method,
       started_at,
       completed_at,
       created_at,
@@ -549,6 +551,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     scheduled_at: tow.scheduled_at,
     notes: tow.notes,
     final_price: tow.final_price,
+    payment_method: tow.payment_method,
     started_at: tow.started_at,
     completed_at: tow.completed_at,
     created_at: tow.created_at,

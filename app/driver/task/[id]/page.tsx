@@ -287,7 +287,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
       if (nextIndex >= totalPoints) {
         // סיום המשימה
         // שמירת מזומן אם נגבה
-        if (cashCollected && cashCollected > 0) {
+        if (task.payment_method === 'cash' && cashCollected && cashCollected > 0) {
           await updateTowCashPayment(task.id, 'cash', cashCollected)
           const driver = await getDriverByUserId(user.id)
           if (driver) {
@@ -570,6 +570,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             onComplete={handleDeliveryComplete}
             isLastPoint={currentPointIndex + 1 >= totalPoints}
             finalPrice={task.final_price}
+            paymentMethod={task.payment_method}
             dropoffToStorage={!!task.dropoff_to_storage && currentPointIndex + 1 >= totalPoints}
             isStorage={!!currentPoint.is_storage}
           />
