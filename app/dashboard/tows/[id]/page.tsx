@@ -188,6 +188,7 @@ export default function TowDetailsPage() {
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
   const [showManualCloseModal, setShowManualCloseModal] = useState(false)
   const [manualClosing, setManualClosing] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
   const [closeEndDate, setCloseEndDate] = useState('')
   const [closeEndTime, setCloseEndTime] = useState('')
   const [assigning, setAssigning] = useState(false)
@@ -984,6 +985,7 @@ export default function TowDetailsPage() {
 
   const handleConfirmCancel = async () => {
     if (!tow) return
+    setIsCancelling(true)
     try {
       const fee =
         chargeCancellationFee && Number.isFinite(parsedCancellationPercent) && parsedCancellationPercent > 0
@@ -1009,6 +1011,8 @@ export default function TowDetailsPage() {
       setCancelStep('reason')
     } catch (err) {
       console.error('Error cancelling tow:', err)
+    } finally {
+      setIsCancelling(false)
     }
   }
 
@@ -3102,16 +3106,20 @@ export default function TowDetailsPage() {
                 </div>
                 <div className="flex gap-3 px-5 pb-5">
                   <button
+                    type="button"
                     onClick={() => setCancelStep('reason')}
-                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+                    disabled={isCancelling}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
                   >
                     חזור
                   </button>
                   <button
+                    type="button"
                     onClick={handleConfirmCancel}
-                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                    disabled={isCancelling}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                   >
-                    בטל גרירה
+                    {isCancelling ? 'מבטל...' : 'בטל גרירה'}
                   </button>
                 </div>
               </>
