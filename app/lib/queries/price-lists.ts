@@ -708,37 +708,46 @@ export async function upsertCustomerPriceList(
   companyId: string,
   customerCompanyId: string,
   data: {
-    base_price_private?: number
-    base_price_motorcycle?: number
-    base_price_heavy?: number
-    base_price_machinery?: number
-    price_per_km?: number
-    minimum_price?: number
+    base_price_private?: number | null
+    base_price_motorcycle?: number | null
+    base_price_heavy?: number | null
+    base_price_machinery?: number | null
+    price_per_km?: number | null
+    minimum_price?: number | null
   }
 ): Promise<string> {
+  const row = {
+    base_price_private: data.base_price_private ?? null,
+    base_price_motorcycle: data.base_price_motorcycle ?? null,
+    base_price_heavy: data.base_price_heavy ?? null,
+    base_price_machinery: data.base_price_machinery ?? null,
+    price_per_km: data.price_per_km ?? null,
+    minimum_price: data.minimum_price ?? null,
+  }
+
   const existing = await getCustomerPriceList(customerCompanyId)
   if (existing) {
     const { error } = await supabase
       .from('price_lists')
-      .update(data)
+      .update(row)
       .eq('id', existing.id)
     if (error) throw error
     return existing.id
-  } else {
-    const { data: newList, error } = await supabase
-      .from('price_lists')
-      .insert({
-        company_id: companyId,
-        customer_company_id: customerCompanyId,
-        name: 'מחירון לקוח',
-        is_active: true,
-        ...data
-      })
-      .select()
-      .single()
-    if (error) throw error
-    return newList.id
   }
+
+  const { data: newList, error } = await supabase
+    .from('price_lists')
+    .insert({
+      company_id: companyId,
+      customer_company_id: customerCompanyId,
+      name: 'מחירון לקוח',
+      is_active: true,
+      ...row,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return newList.id
 }
 
 export async function getCustomerSurcharges(priceListId: string) {

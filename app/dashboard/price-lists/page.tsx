@@ -23,6 +23,10 @@ import { FixedPriceTab } from './components/FixedPriceTab'
 import { SurchargesTab } from './components/SurchargesTab'
 import { CustomerPricingTab } from './components/CustomerPricingTab'
 import { PriceSimulator } from './components/PriceSimulator'
+import {
+  TimeSurchargesEditor,
+  createDefaultTimeSurchargeRow,
+} from './components/TimeSurchargesEditor'
 
 // ==================== Types ====================
 
@@ -409,17 +413,7 @@ export default function PriceListsPage() {
 
   // Time surcharges
   const handleTimeSurchargeAdd = () => {
-    const newId = `new_${Date.now()}`
-    setTimeSurcharges(prev => [...prev, {
-      id: newId,
-      name: newId,
-      label: '',
-      time_start: '18:00',
-      time_end: '22:00',
-      day_type: 'all',
-      surcharge_percent: 0,
-      is_active: true
-    }])
+    setTimeSurcharges(prev => [...prev, createDefaultTimeSurchargeRow()])
     markChanged()
   }
 
@@ -477,6 +471,37 @@ export default function PriceListsPage() {
     markChanged()
   }
 
+  const handleCustomerTimeSurchargeAdd = () => {
+    if (!editingCustomer) return
+    setEditingCustomer({
+      ...editingCustomer,
+      customer_time_surcharges: [
+        ...(editingCustomer.customer_time_surcharges || []),
+        { ...createDefaultTimeSurchargeRow(), sort_order: 0 },
+      ],
+    })
+  }
+
+  const handleCustomerTimeSurchargeUpdate = (id: string, updates: Partial<TimeSurcharge>) => {
+    if (!editingCustomer) return
+    setEditingCustomer({
+      ...editingCustomer,
+      customer_time_surcharges: (editingCustomer.customer_time_surcharges || []).map((t) =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
+    })
+  }
+
+  const handleCustomerTimeSurchargeRemove = (id: string) => {
+    if (!editingCustomer) return
+    setEditingCustomer({
+      ...editingCustomer,
+      customer_time_surcharges: (editingCustomer.customer_time_surcharges || []).filter(
+        (t) => t.id !== id
+      ),
+    })
+  }
+
   // Customer pricing
   const openCustomerModal = async (customer: CustomerPriceList) => {
   const base = { ...customer, price_items: [...customer.price_items] }
@@ -516,24 +541,29 @@ export default function PriceListsPage() {
         editingCustomer.price_items.map(p => ({ label: p.label, price: p.price }))
       )
 
-      // שמירת מחירון מלא אם הוגדר
+      // שמירת מחירון מלא / תוספות לקוח (base/km אופציונלי)
       const hasCustomPricing = editingCustomer.base_price_private ||
         editingCustomer.base_price_motorcycle ||
         editingCustomer.base_price_heavy ||
         editingCustomer.base_price_machinery ||
         editingCustomer.price_per_km
 
-      if (hasCustomPricing) {
+      const hasSurcharges =
+        (editingCustomer.customer_time_surcharges?.length ?? 0) > 0 ||
+        (editingCustomer.customer_location_surcharges?.length ?? 0) > 0 ||
+        (editingCustomer.customer_service_surcharges?.length ?? 0) > 0
+
+      if (hasCustomPricing || hasSurcharges) {
         const priceListId = await upsertCustomerPriceList(
           companyId,
           editingCustomer.customer_company_id,
           {
-            base_price_private: editingCustomer.base_price_private || undefined,
-            base_price_motorcycle: editingCustomer.base_price_motorcycle || undefined,
-            base_price_heavy: editingCustomer.base_price_heavy || undefined,
-            base_price_machinery: editingCustomer.base_price_machinery || undefined,
-            price_per_km: editingCustomer.price_per_km || undefined,
-            minimum_price: editingCustomer.minimum_price || undefined,
+            base_price_private: editingCustomer.base_price_private ?? null,
+            base_price_motorcycle: editingCustomer.base_price_motorcycle ?? null,
+            base_price_heavy: editingCustomer.base_price_heavy ?? null,
+            base_price_machinery: editingCustomer.base_price_machinery ?? null,
+            price_per_km: editingCustomer.price_per_km ?? null,
+            minimum_price: editingCustomer.minimum_price ?? null,
           }
         )
 
@@ -782,76 +812,21 @@ export default function PriceListsPage() {
               </div>
 
               {/* תוספות זמן */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-800">תוספות זמן</h3>
-                  <button
-                    onClick={() => setEditingCustomer({
-                      ...editingCustomer,
-                      customer_time_surcharges: [...(editingCustomer.customer_time_surcharges || []), {
-                        id: `new_${Date.now()}`, name: '', label: '', time_start: '', time_end: '',
-                        day_type: 'weekday', surcharge_percent: 0, is_active: true, sort_order: 0
-                      }]
-                    })}
-                    className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
-                  >
-                    <Plus size={14} /> הוסף
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {(editingCustomer.customer_time_surcharges || []).map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
-                      <input
-                        type="text"
-                        value={s.label}
-                        onChange={(e) => {
-                          const updated = [...(editingCustomer.customer_time_surcharges || [])]
-                          updated[i] = { ...updated[i], label: e.target.value, name: e.target.value }
-                          setEditingCustomer({ ...editingCustomer, customer_time_surcharges: updated })
-                        }}
-                        placeholder="שם"
-                        className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                      />
-                      <select
-                        value={s.day_type}
-                        onChange={(e) => {
-                          const updated = [...(editingCustomer.customer_time_surcharges || [])]
-                          updated[i] = { ...updated[i], day_type: e.target.value }
-                          setEditingCustomer({ ...editingCustomer, customer_time_surcharges: updated })
-                        }}
-                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
-                      >
-                        <option value="weekday">ימי חול</option>
-                        <option value="friday">שישי</option>
-                        <option value="saturday">שבת</option>
-                        <option value="holiday">חג</option>
-                      </select>
-                      <div className="relative w-20">
-                        <input
-                          type="number"
-                          value={s.surcharge_percent}
-                          onChange={(e) => {
-                            const updated = [...(editingCustomer.customer_time_surcharges || [])]
-                            updated[i] = { ...updated[i], surcharge_percent: Number(e.target.value) }
-                            setEditingCustomer({ ...editingCustomer, customer_time_surcharges: updated })
-                          }}
-                          className="w-full pl-5 pr-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
-                        />
-                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
-                      </div>
-                      <button
-                        onClick={() => setEditingCustomer({
-                          ...editingCustomer,
-                          customer_time_surcharges: (editingCustomer.customer_time_surcharges || []).filter((_, idx) => idx !== i)
-                        })}
-                        className="p-1 text-gray-400 hover:text-red-500"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <TimeSurchargesEditor
+                rows={(editingCustomer.customer_time_surcharges || []).map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  label: s.label,
+                  time_start: s.time_start || '',
+                  time_end: s.time_end || '',
+                  day_type: s.day_type || 'all',
+                  surcharge_percent: s.surcharge_percent,
+                  is_active: s.is_active,
+                }))}
+                onUpdate={handleCustomerTimeSurchargeUpdate}
+                onAdd={handleCustomerTimeSurchargeAdd}
+                onRemove={handleCustomerTimeSurchargeRemove}
+              />
 
               {/* תוספות מיקום */}
               <div>
