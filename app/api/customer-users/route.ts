@@ -27,6 +27,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
     }
 
+    if (authUser.role !== 'super_admin') {
+      const { data: relation } = await supabaseAdmin
+        .from('customer_company')
+        .select('id')
+        .eq('customer_id', customerId)
+        .eq('company_id', authUser.company_id)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (!relation) {
+        return forbiddenResponse('אין הרשאה ליצור משתמש ללקוח מחברה אחרת')
+      }
+    }
+
     // 1. צור user ב-Auth
     const tempPassword = `Temp${Math.random().toString(36).slice(-8)}!`
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -162,6 +175,7 @@ export async function DELETE(req: NextRequest) {
         .select('id')
         .eq('customer_id', cu.customer_id)
         .eq('company_id', currentUser.company_id)
+        .eq('is_active', true)
         .maybeSingle()
       if (!relation) {
         return forbiddenResponse('אין הרשאה למחוק משתמש מלקוח מחברה אחרת')
@@ -240,6 +254,7 @@ export async function PATCH(req: NextRequest) {
         .select('id')
         .eq('customer_id', targetCu.customer_id)
         .eq('company_id', dashboardUser.company_id)
+        .eq('is_active', true)
         .maybeSingle()
       if (!relation) {
         return forbiddenResponse('אין הרשאה לעדכן משתמש מלקוח מחברה אחרת')
