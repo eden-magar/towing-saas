@@ -1,7 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
-import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+import {
+  getAuthUser,
+  unauthorizedResponse,
+  forbiddenResponse,
+  resolveEffectiveCompanyId,
+} from '@/app/lib/auth'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -20,8 +25,21 @@ export async function POST(request: NextRequest) {
 
     const { email, full_name, phone, role, company_id } = await request.json()
 
-    if (!email || !full_name || !role || !company_id) {
+    if (!email || !full_name || !role) {
       return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
+    }
+
+    if (
+      currentUser.role !== 'super_admin' &&
+      company_id &&
+      company_id !== currentUser.company_id
+    ) {
+      return forbiddenResponse()
+    }
+
+    const effectiveCompanyId = resolveEffectiveCompanyId(currentUser, company_id)
+    if (!effectiveCompanyId) {
+      return NextResponse.json({ error: 'חסר מזהה חברה' }, { status: 400 })
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -54,7 +72,7 @@ export async function POST(request: NextRequest) {
         full_name,
         phone: phone || null,
         role,
-        company_id,
+        company_id: effectiveCompanyId,
         is_active: true,
       })
       .select()
@@ -68,7 +86,7 @@ export async function POST(request: NextRequest) {
     const { data: companyData } = await supabaseAdmin
       .from('companies')
       .select('name')
-      .eq('id', company_id)
+      .eq('id', effectiveCompanyId)
       .single()
 
     const companyName = companyData?.name || 'החברה'

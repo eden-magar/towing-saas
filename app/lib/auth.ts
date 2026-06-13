@@ -44,3 +44,27 @@ export function unauthorizedResponse(message = 'לא מחובר') {
 export function forbiddenResponse(message = 'אין הרשאה') {
   return NextResponse.json({ error: message }, { status: 403 })
 }
+
+type AuthUserRow = {
+  role: string
+  company_id: string | null
+}
+
+/** Non–super-admin always uses session company; super_admin may pass bodyCompanyId. */
+export function resolveEffectiveCompanyId(
+  currentUser: AuthUserRow,
+  bodyCompanyId: string | undefined | null
+): string | null {
+  if (currentUser.role === 'super_admin') {
+    return bodyCompanyId ?? currentUser.company_id ?? null
+  }
+  return currentUser.company_id
+}
+
+export function assertCompanyAccess(
+  currentUser: AuthUserRow,
+  targetCompanyId: string | null
+): boolean {
+  if (currentUser.role === 'super_admin') return true
+  return !!currentUser.company_id && currentUser.company_id === targetCompanyId
+}

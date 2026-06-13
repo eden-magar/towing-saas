@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+import {
+  getAuthUser,
+  unauthorizedResponse,
+  forbiddenResponse,
+  assertCompanyAccess,
+} from '@/app/lib/auth'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,12 +31,16 @@ export async function DELETE(
 
     const { data: driver, error: driverFetchError } = await supabaseAdmin
       .from('drivers')
-      .select('id, user_id')
+      .select('id, user_id, company_id')
       .eq('id', driverId)
       .single()
 
     if (driverFetchError || !driver) {
       return NextResponse.json({ error: 'נהג לא נמצא' }, { status: 404 })
+    }
+
+    if (!assertCompanyAccess(currentUser, driver.company_id)) {
+      return forbiddenResponse()
     }
 
     const { count: towCount, error: towCountError } = await supabaseAdmin

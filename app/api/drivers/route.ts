@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+import {
+  getAuthUser,
+  unauthorizedResponse,
+  forbiddenResponse,
+  resolveEffectiveCompanyId,
+} from '@/app/lib/auth'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -60,6 +65,31 @@ export async function POST(request: NextRequest) {
       ? licensePermits.filter((p: unknown): p is string => typeof p === 'string' && p.length > 0)
       : []
 
+    if (
+      currentUser.role !== 'super_admin' &&
+      companyId &&
+      companyId !== currentUser.company_id
+    ) {
+      return forbiddenResponse()
+    }
+
+    const effectiveCompanyId = resolveEffectiveCompanyId(currentUser, companyId)
+    if (!effectiveCompanyId) {
+      return NextResponse.json({ error: 'חסר מזהה חברה' }, { status: 400 })
+    }
+
+    if (truckIds.length > 0) {
+      const { data: trucks, error: trucksError } = await supabaseAdmin
+        .from('trucks')
+        .select('id')
+        .eq('company_id', effectiveCompanyId)
+        .in('id', truckIds)
+
+      if (trucksError || (trucks?.length ?? 0) !== truckIds.length) {
+        return forbiddenResponse('גרר לא שייך לחברה זו')
+      }
+    }
+
     // 1. יצירת משתמש ב-Auth (עם סיסמה זמנית)
     const tempPassword = Math.random().toString(36).slice(-8) + 'A1!'
     
@@ -85,7 +115,7 @@ export async function POST(request: NextRequest) {
         id_number: idNumber || null,
         address: address || null,
         role: 'driver',
-        company_id: companyId,
+        company_id: effectiveCompanyId,
         is_active: true
       })
 
@@ -101,7 +131,7 @@ export async function POST(request: NextRequest) {
       .from('drivers')
       .insert({
         user_id: authUser.user.id,
-        company_id: companyId,
+        company_id: effectiveCompanyId,
         license_number: licenseNumber,
         license_type: categories[0] ?? licenseType ?? null,
         license_categories: categories,

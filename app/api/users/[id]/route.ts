@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
+import {
+  getAuthUser,
+  unauthorizedResponse,
+  forbiddenResponse,
+  assertCompanyAccess,
+} from '@/app/lib/auth'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,12 +31,16 @@ export async function DELETE(
 
     const { data: targetUser, error: targetUserError } = await supabaseAdmin
       .from('users')
-      .select('id, role')
+      .select('id, role, company_id')
       .eq('id', userId)
       .single()
 
     if (targetUserError || !targetUser) {
       return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
+    }
+
+    if (!assertCompanyAccess(currentUser, targetUser.company_id)) {
+      return forbiddenResponse()
     }
 
     if (targetUser.role === 'driver' || targetUser.role === 'customer') {
