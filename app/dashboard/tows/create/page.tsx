@@ -235,6 +235,8 @@ function CreateTowForm({
     setManualColor,
     manualWeight,
     setManualWeight,
+    manualChassis,
+    setManualChassis,
     customerStoredVehicles,
     selectedStoredVehicleId,
     setSelectedStoredVehicleId,
@@ -1063,6 +1065,7 @@ function CreateTowForm({
         setManualManufacturer('')
         setManualColor('')
         setManualWeight('')
+        setManualChassis('')
       }
     } catch {
       setVehicleData(null)
@@ -1302,6 +1305,7 @@ function CreateTowForm({
         manualManufacturer,
         manualColor,
         manualWeight,
+        manualChassis,
         workingManualManufacturer: towType === 'exchange' ? workingManualManufacturer : undefined,
         workingManualColor: towType === 'exchange' ? workingManualColor : undefined,
         workingManualWeight: towType === 'exchange' ? workingManualWeight : undefined,
@@ -1813,6 +1817,16 @@ function CreateTowForm({
                                   onChange={(e) => setManualColor(e.target.value)}
                                   placeholder="למשל: לבן"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
+                                <input
+                                  type="text"
+                                  value={manualChassis}
+                                  onChange={(e) => setManualChassis(e.target.value)}
+                                  placeholder="אופציונלי"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-mono"
+                                />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">

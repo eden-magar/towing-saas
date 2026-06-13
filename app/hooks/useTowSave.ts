@@ -75,6 +75,7 @@ interface UseTowSaveParams {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
+  manualChassis?: string
   workingManualManufacturer?: string
   workingManualColor?: string
   workingManualWeight?: string
@@ -199,6 +200,7 @@ export function useTowSave(params: UseTowSaveParams) {
     manualManufacturer,
     manualColor,
     manualWeight,
+    manualChassis,
     workingManualManufacturer,
     workingManualColor,
     workingManualWeight,
@@ -376,6 +378,7 @@ export function useTowSave(params: UseTowSaveParams) {
       manualManufacturer,
       manualColor,
       manualWeight,
+      manualChassis,
       workingManualManufacturer,
       workingManualColor,
       workingManualWeight,

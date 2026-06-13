@@ -73,6 +73,7 @@ export interface SaveTowInput {
   manualManufacturer?: string
   manualColor?: string
   manualWeight?: string
+  manualChassis?: string
   workingManualManufacturer?: string
   workingManualColor?: string
   workingManualWeight?: string
@@ -1223,7 +1224,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       driveTechnology: input.vehicleData?.data?.driveTechnology,
       vehicleCode: input.vehicleCode || undefined,
       registrySource: input.vehicleData?.source ?? null,
-      chassis: input.vehicleData?.data?.chassis || undefined,
+      chassis:
+        input.vehicleData?.data?.chassis?.trim() ||
+        input.manualChassis?.trim() ||
+        undefined,
       importType: input.vehicleData?.data?.importType || undefined,
       ...machineryFromLookupResult(
         input.vehicleData?.source,

@@ -164,6 +164,7 @@ type ExchangeVehicleHydrationTargets = {
   setManualManufacturer: (s: string) => void
   setManualColor: (s: string) => void
   setManualWeight: (s: string) => void
+  setManualChassis?: (s: string) => void
 }
 
 /** Mirror single-tow edit hydration for one exchange side (working or defective). */
@@ -182,6 +183,7 @@ function hydrateExchangeVehicleFromTowRow(
     targets.setManualWeight(
       row.total_weight != null ? String(row.total_weight) : ''
     )
+    targets.setManualChassis?.(row.chassis || '')
     return
   }
 
@@ -198,6 +200,7 @@ function hydrateExchangeVehicleFromTowRow(
     targets.setManualManufacturer('')
     targets.setManualColor('')
     targets.setManualWeight('')
+    targets.setManualChassis?.('')
     return
   }
 
@@ -208,6 +211,7 @@ function hydrateExchangeVehicleFromTowRow(
   targets.setManualWeight(
     row.total_weight != null ? String(row.total_weight) : ''
   )
+  targets.setManualChassis?.(row.chassis || '')
 }
 
 function exchangeRouteDistanceSignatureFromAddresses(
@@ -475,6 +479,7 @@ export function useTowForm(
   const [manualManufacturer, setManualManufacturer] = useState('')
   const [manualColor, setManualColor] = useState('')
   const [manualWeight, setManualWeight] = useState('')
+  const [manualChassis, setManualChassis] = useState('')
   const [truckTypeError, setTruckTypeError] = useState(false)
   const truckTypeSectionRef = useRef<HTMLDivElement>(null!)
   const isEditMode = useRef(!!editTowId)
@@ -1339,6 +1344,7 @@ export function useTowForm(
                   ? String(firstVehicle.total_weight)
                   : ''
               )
+              setManualChassis(firstVehicle.chassis || '')
             } else {
               const savedType = (firstVehicle.vehicle_type || '') as VehicleType | ''
               setVehicleType(savedType)
@@ -1353,6 +1359,7 @@ export function useTowForm(
                 setManualManufacturer('')
                 setManualColor('')
                 setManualWeight('')
+                setManualChassis('')
               } else {
                 setVehicleData(null)
                 setVehicleLookupNotFound(true)
@@ -1363,6 +1370,7 @@ export function useTowForm(
                     ? String(firstVehicle.total_weight)
                     : ''
                 )
+                setManualChassis(firstVehicle.chassis || '')
               }
             }
           }
@@ -2567,6 +2575,7 @@ export function useTowForm(
     manualManufacturer,
     manualColor,
     manualWeight,
+    manualChassis,
     workingManualManufacturer,
     workingManualColor,
     workingManualWeight,
@@ -2720,6 +2729,7 @@ export function useTowForm(
     manualManufacturer, setManualManufacturer,
     manualColor, setManualColor,
     manualWeight, setManualWeight,
+    manualChassis, setManualChassis,
     // Storage
     customerStoredVehicles,
     selectedStoredVehicleId, setSelectedStoredVehicleId,
