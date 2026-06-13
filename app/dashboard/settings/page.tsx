@@ -12,8 +12,6 @@ import {
   Trash2,
   X,
   Check,
-  Eye,
-  EyeOff,
   RefreshCw,
   Phone,
   Mail,
@@ -67,16 +65,12 @@ export default function SettingsPage() {
     default_vat_percent: 18
   })
 
-  // Form state - Integrations
+  // Form state - Integrations (API keys are write-only; never loaded from server)
   const [integrationsForm, setIntegrationsForm] = useState({
     kapaset_api_key: '',
     sms_provider: '',
-    sms_api_key: ''
+    sms_api_key: '',
   })
-
-  // Password visibility
-  const [showKapasetKey, setShowKapasetKey] = useState(false)
-  const [showSmsKey, setShowSmsKey] = useState(false)
 
   // Logo upload
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -117,9 +111,9 @@ export default function SettingsPage() {
           default_vat_percent: settings.default_vat_percent || 18
         })
         setIntegrationsForm({
-          kapaset_api_key: settings.kapaset_api_key || '',
+          kapaset_api_key: '',
           sms_provider: settings.sms_provider || '',
-          sms_api_key: settings.sms_api_key || ''
+          sms_api_key: '',
         })
       }
     } catch (err) {
@@ -176,7 +170,34 @@ export default function SettingsPage() {
     setSuccess('')
 
     try {
-      await updateIntegrations(companyId, integrationsForm)
+      const payload: {
+        sms_provider: string
+        kapaset_api_key?: string
+        sms_api_key?: string
+      } = {
+        sms_provider: integrationsForm.sms_provider,
+      }
+      const newKapasetKey = integrationsForm.kapaset_api_key.trim()
+      const newSmsKey = integrationsForm.sms_api_key.trim()
+      if (newKapasetKey) payload.kapaset_api_key = newKapasetKey
+      if (newSmsKey) payload.sms_api_key = newSmsKey
+
+      await updateIntegrations(companyId, payload)
+      setIntegrationsForm((prev) => ({
+        ...prev,
+        kapaset_api_key: '',
+        sms_api_key: '',
+      }))
+      setCompanySettings((prev) =>
+        prev
+          ? {
+              ...prev,
+              sms_provider: integrationsForm.sms_provider || null,
+              has_kapaset_api_key: prev.has_kapaset_api_key || !!newKapasetKey,
+              has_sms_api_key: prev.has_sms_api_key || !!newSmsKey,
+            }
+          : prev
+      )
       setSuccess('האינטגרציות נשמרו בהצלחה')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -538,22 +559,19 @@ export default function SettingsPage() {
                   </h3>
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">API Key</label>
-                    <div className="relative">
-                      <input
-                        type={showKapasetKey ? 'text' : 'password'}
-                        value={integrationsForm.kapaset_api_key}
-                        onChange={(e) => setIntegrationsForm({ ...integrationsForm, kapaset_api_key: e.target.value })}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 pl-12"
-                        placeholder="הכנס API Key מכספית"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowKapasetKey(!showKapasetKey)}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showKapasetKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
+                    {companySettings?.has_kapaset_api_key && (
+                      <p className="text-sm text-emerald-700 mb-2">מפתח מוגדר ✓</p>
+                    )}
+                    <input
+                      type="password"
+                      value={integrationsForm.kapaset_api_key}
+                      onChange={(e) =>
+                        setIntegrationsForm({ ...integrationsForm, kapaset_api_key: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      placeholder="הזן מפתח חדש להחלפה"
+                      autoComplete="off"
+                    />
                     <p className="text-xs text-gray-500 mt-1">
                       ניתן לקבל את ה-API Key מהגדרות החשבון בכספית
                     </p>
@@ -583,22 +601,19 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">API Key</label>
-                      <div className="relative">
-                        <input
-                          type={showSmsKey ? 'text' : 'password'}
-                          value={integrationsForm.sms_api_key}
-                          onChange={(e) => setIntegrationsForm({ ...integrationsForm, sms_api_key: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 pl-12"
-                          placeholder="הכנס API Key"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSmsKey(!showSmsKey)}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          {showSmsKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
+                      {companySettings?.has_sms_api_key && (
+                        <p className="text-sm text-emerald-700 mb-2">מפתח מוגדר ✓</p>
+                      )}
+                      <input
+                        type="password"
+                        value={integrationsForm.sms_api_key}
+                        onChange={(e) =>
+                          setIntegrationsForm({ ...integrationsForm, sms_api_key: e.target.value })
+                        }
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        placeholder="הזן מפתח חדש להחלפה"
+                        autoComplete="off"
+                      />
                     </div>
                   </div>
                 </div>

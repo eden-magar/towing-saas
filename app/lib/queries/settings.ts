@@ -15,12 +15,31 @@ export interface CompanyDetails {
   updated_at: string
 }
 
-export interface CompanySettings {
+/** Public company_settings fields safe for the browser (no API keys / webhook URLs). */
+const COMPANY_SETTINGS_PUBLIC_SELECT = [
+  'id',
+  'company_id',
+  'sms_provider',
+  'default_vat_percent',
+  'working_hours_start',
+  'working_hours_end',
+  'night_hours_start',
+  'night_hours_end',
+  'evening_hours_start',
+  'evening_hours_end',
+  'shabbat_start',
+  'shabbat_end',
+  'base_address',
+  'base_lat',
+  'base_lng',
+  'created_at',
+  'updated_at',
+].join(', ')
+
+type CompanySettingsRow = {
   id: string
   company_id: string
-  kapaset_api_key: string | null
   sms_provider: string | null
-  sms_api_key: string | null
   default_vat_percent: number
   working_hours_start: string | null
   working_hours_end: string | null
@@ -35,6 +54,36 @@ export interface CompanySettings {
   base_lng: number | null
   created_at: string
   updated_at: string
+}
+
+export interface CompanySettings extends CompanySettingsRow {
+  has_kapaset_api_key: boolean
+  has_sms_api_key: boolean
+}
+
+async function fetchIntegrationKeyFlags(companyId: string): Promise<{
+  has_kapaset_api_key: boolean
+  has_sms_api_key: boolean
+}> {
+  const [kapasetRes, smsRes] = await Promise.all([
+    supabase
+      .from('company_settings')
+      .select('id', { head: true, count: 'exact' })
+      .eq('company_id', companyId)
+      .not('kapaset_api_key', 'is', null)
+      .neq('kapaset_api_key', ''),
+    supabase
+      .from('company_settings')
+      .select('id', { head: true, count: 'exact' })
+      .eq('company_id', companyId)
+      .not('sms_api_key', 'is', null)
+      .neq('sms_api_key', ''),
+  ])
+
+  return {
+    has_kapaset_api_key: (kapasetRes.count ?? 0) > 0,
+    has_sms_api_key: (smsRes.count ?? 0) > 0,
+  }
 }
 
 // ==================== GET COMPANY DETAILS ====================
@@ -94,7 +143,7 @@ export async function updateCompanyDetails(
 export async function getCompanySettings(companyId: string): Promise<CompanySettings | null> {
   const { data, error } = await supabase
     .from('company_settings')
-    .select('*')
+    .select(COMPANY_SETTINGS_PUBLIC_SELECT)
     .eq('company_id', companyId)
     .single()
 
@@ -107,7 +156,8 @@ export async function getCompanySettings(companyId: string): Promise<CompanySett
     return null
   }
 
-  return data
+  const flags = await fetchIntegrationKeyFlags(companyId)
+  return { ...(data as unknown as CompanySettingsRow), ...flags }
 }
 
 // ==================== CREATE DEFAULT SETTINGS ====================
@@ -129,7 +179,7 @@ async function createDefaultSettings(companyId: string): Promise<CompanySettings
   const { data, error } = await supabase
     .from('company_settings')
     .insert(defaultSettings)
-    .select()
+    .select(COMPANY_SETTINGS_PUBLIC_SELECT)
     .single()
 
   if (error) {
@@ -137,7 +187,11 @@ async function createDefaultSettings(companyId: string): Promise<CompanySettings
     return null
   }
 
-  return data
+  return {
+    ...(data as unknown as CompanySettingsRow),
+    has_kapaset_api_key: false,
+    has_sms_api_key: false,
+  }
 }
 
 // ==================== UPDATE COMPANY SETTINGS ====================
@@ -201,9 +255,11 @@ export async function updateIntegrations(
 ): Promise<void> {
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
-  if (input.kapaset_api_key !== undefined) updates.kapaset_api_key = input.kapaset_api_key
+  const kapasetKey = input.kapaset_api_key?.trim()
+  if (kapasetKey) updates.kapaset_api_key = kapasetKey
   if (input.sms_provider !== undefined) updates.sms_provider = input.sms_provider
-  if (input.sms_api_key !== undefined) updates.sms_api_key = input.sms_api_key
+  const smsKey = input.sms_api_key?.trim()
+  if (smsKey) updates.sms_api_key = smsKey
 
   const { error } = await supabase
     .from('company_settings')

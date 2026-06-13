@@ -317,9 +317,9 @@ export interface SystemSettings {
 export interface CompanySettings {
   id: string
   company_id: string
-  kapaset_api_key: string | null
   sms_provider: string | null
-  sms_api_key: string | null
+  has_kapaset_api_key: boolean
+  has_sms_api_key: boolean
   default_vat_percent: number | null
   working_hours_start: string | null
   working_hours_end: string | null
