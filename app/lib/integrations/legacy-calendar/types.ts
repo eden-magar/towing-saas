@@ -45,9 +45,16 @@ export type LegacyVehicle = {
   machineryType: string
   selfWeight: string
   totalWeightTon: string
+  /** Non-machinery weight in kg (legacy form `totalWeight`). */
+  totalWeight: string
   fuelType: string
   driveType: string
   gearType: string
+  year: string
+  chassis: string
+  importType: string
+  /** תקין / תקול from {@link is_working}. */
+  condition: string
 }
 
 // ---------------------------------------------------------------------------

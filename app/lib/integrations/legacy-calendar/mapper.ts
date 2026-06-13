@@ -17,6 +17,7 @@ import type {
   LegacyRoutePoint,
 } from './types'
 import { getTruckTypeLabel } from '../../utils/truck-type-labels'
+import { toTowVehicleCoreInfo, type TowVehicleDbRow } from '../../utils/tow-vehicle-core'
 
 // ---------------------------------------------------------------------------
 // Input shape (extends getTowWithPoints result + optional joins)
@@ -30,6 +31,11 @@ type TowVehicleRow = TowWithDetails['vehicles'][number] & {
   gear_type?: string | null
   drive_technology?: string | null
   total_weight?: number | null
+  self_weight_ton?: number | null
+  total_weight_ton?: number | null
+  machinery_type?: string | null
+  chassis?: string | null
+  import_type?: string | null
   registry_source?: string | null
 }
 
@@ -198,34 +204,81 @@ function sumAmounts(items: { amount: number }[] | undefined): number {
   return (items ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
 }
 
+function towVehicleRowToDbRow(v: TowVehicleRow): TowVehicleDbRow {
+  return {
+    plate_number: v.plate_number,
+    manufacturer: v.manufacturer,
+    model: v.model,
+    year: v.year,
+    color: v.color,
+    vehicle_type: v.vehicle_type ?? null,
+    registry_source: v.registry_source ?? null,
+    vehicle_code: v.vehicle_code ?? null,
+    is_working: v.is_working,
+    tow_reason: v.tow_reason,
+    total_weight: v.total_weight ?? null,
+    self_weight_ton: v.self_weight_ton ?? null,
+    total_weight_ton: v.total_weight_ton ?? null,
+    machinery_type: v.machinery_type ?? null,
+    chassis: v.chassis ?? null,
+    fuel_type: v.fuel_type ?? null,
+    import_type: v.import_type ?? null,
+  }
+}
+
+function formatLegacyNumber(value: number | null | undefined): string {
+  return value != null ? String(value) : ''
+}
+
+function formatLegacyCondition(isWorking: boolean | null | undefined): string {
+  if (isWorking === true) return 'תקין'
+  if (isWorking === false) return 'תקול'
+  return ''
+}
+
+const EMPTY_LEGACY_VEHICLE: LegacyVehicle = {
+  carNumber: '',
+  carType: '',
+  carCode: '',
+  color: '',
+  gear: '',
+  machineryType: '',
+  selfWeight: '',
+  totalWeightTon: '',
+  totalWeight: '',
+  fuelType: '',
+  driveType: '',
+  gearType: '',
+  year: '',
+  chassis: '',
+  importType: '',
+  condition: '',
+}
+
 function mapLegacyVehicle(v: TowVehicleRow | undefined): LegacyVehicle {
   if (!v) {
-    return {
-      carNumber: '',
-      carType: '',
-      carCode: '',
-      color: '',
-      gear: '',
-      machineryType: '',
-      selfWeight: '',
-      totalWeightTon: '',
-      fuelType: '',
-      driveType: '',
-      gearType: '',
-    }
+    return { ...EMPTY_LEGACY_VEHICLE }
   }
+
+  const core = toTowVehicleCoreInfo(towVehicleRowToDbRow(v))
+
   return {
     carNumber: v.plate_number ?? '',
     carType: `${v.manufacturer ?? ''} ${v.model ?? ''}`.trim(),
     carCode: v.vehicle_code ?? '',
     color: v.color ?? '',
     gear: v.gear_type ?? '',
-    machineryType: '',
-    selfWeight: '',
-    totalWeightTon: String(v.total_weight ?? ''),
-    fuelType: v.fuel_type ?? '',
+    machineryType: core.machineryType ?? '',
+    selfWeight: formatLegacyNumber(core.selfWeightTon),
+    totalWeightTon: formatLegacyNumber(core.totalWeightTon),
+    totalWeight: formatLegacyNumber(core.totalWeightKg),
+    fuelType: core.fuelType ?? '',
     driveType: v.drive_type ?? '',
     gearType: v.gear_type ?? '',
+    year: core.year != null ? String(core.year) : '',
+    chassis: core.chassis ?? '',
+    importType: core.importType ?? '',
+    condition: formatLegacyCondition(core.isWorking),
   }
 }
 

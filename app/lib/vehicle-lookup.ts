@@ -269,7 +269,10 @@ async function searchInResource(
     
     return { found: false, data: null }
   } catch (error) {
-    console.error(`Error searching in ${source}:`, error)
+    console.warn(
+      `[vehicle-lookup] ${source} lookup skipped (network):`,
+      error instanceof Error ? error.message : error
+    )
     return { found: false, data: null }
   }
 }
