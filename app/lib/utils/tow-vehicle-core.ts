@@ -16,6 +16,9 @@ export type TowVehicleDbRow = {
   self_weight_ton?: number | null
   total_weight_ton?: number | null
   machinery_type?: string | null
+  chassis?: string | null
+  fuel_type?: string | null
+  import_type?: string | null
 }
 
 export type TowVehicleCoreInfo = {
@@ -33,6 +36,9 @@ export type TowVehicleCoreInfo = {
   isWorking: boolean | null
   defects: string[]
   weightLines: { label: string; value: string }[]
+  chassis: string | null
+  fuelType: string | null
+  importType: string | null
 }
 
 const MANUAL_VEHICLE_TYPE_LABELS: Record<string, string> = {
@@ -112,6 +118,9 @@ export type VehicleLookupFormInput = {
     machineryType?: string | null
     selfWeight?: number | string | null
     totalWeightTon?: number | string | null
+    chassis?: string | null
+    fuelType?: string | null
+    importType?: string | null
   } | null
   /** Form-selected category (van, machinery, etc.) when distinct from registry source. */
   vehicleType?: string | null
@@ -136,6 +145,9 @@ export function vehicleLookupFormToDbRow(input: VehicleLookupFormInput): TowVehi
     self_weight_ton: parseOptionalNumber(d?.selfWeight ?? null),
     total_weight_ton: parseOptionalNumber(d?.totalWeightTon ?? null),
     machinery_type: d?.machineryType ?? null,
+    chassis: d?.chassis?.trim() || null,
+    fuel_type: d?.fuelType?.trim() || null,
+    import_type: d?.importType?.trim() || null,
   }
 }
 
@@ -162,5 +174,8 @@ export function toTowVehicleCoreInfo(row: TowVehicleDbRow): TowVehicleCoreInfo {
     isWorking: row.is_working ?? null,
     defects: parseDefects(row.tow_reason),
     weightLines: buildWeightLines(row),
+    chassis: row.chassis?.trim() || null,
+    fuelType: row.fuel_type?.trim() || null,
+    importType: row.import_type?.trim() || null,
   }
 }

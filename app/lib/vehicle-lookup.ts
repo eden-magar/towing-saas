@@ -10,6 +10,7 @@ const API_RESOURCES = {
   motorcycle: 'bf9df4e2-d90d-4c0a-a400-19e15af8e95f',
   heavy: 'cd3acc5c-03c3-4c89-9c54-d40f93c0d790',
   machinery: '58dc4654-16b1-42ed-8170-98fadec153ea',
+  personal_import: '03adc637-b6fe-402b-9937-7c3d3afc9140',
   private_extra: '142afde2-6228-49f9-8a29-9b6c3a0cbe40',
 }
 
@@ -19,6 +20,7 @@ const SOURCE_LABELS: Record<string, string> = {
   motorcycle: 'דו גלגלי',
   heavy: 'רכב כבד',
   machinery: 'צמ"ה',
+  personal_import: 'יבוא אישי',
 }
 
 // שמות השדות לפי סוג מאגר
@@ -34,6 +36,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     driveType: 'hanaa_nm',
     driveTechnology: 'technologiat_hanaa_nm',
     gearType: 'automatic_ind',
+    chassis: 'misgeret',
   },
   motorcycle: {
     manufacturer: 'tozeret_nm',
@@ -46,6 +49,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     driveType: 'hanaa_nm',
     driveTechnology: '',
     gearType: '',
+    chassis: 'misgeret',
   },
   heavy: {
     manufacturer: 'tozeret_nm',
@@ -58,6 +62,7 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     driveType: 'hanaa_nm',
     driveTechnology: '',
     gearType: '',
+    chassis: 'mispar_shilda',
   },
   machinery: {
     manufacturer: 'shilda_totzar_en_nm',
@@ -70,6 +75,21 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     driveType: '',
     driveTechnology: '',
     gearType: '',
+    chassis: 'mispar_shilda',
+  },
+  personal_import: {
+    manufacturer: 'tozeret_nm',
+    model: 'degem_nm',
+    year: 'shnat_yitzur',
+    color: '',
+    fuelType: 'sug_delek_nm',
+    totalWeight: 'mishkal_kolel',
+    vehicleType: 'sug_rechev_nm',
+    driveType: '',
+    driveTechnology: '',
+    gearType: '',
+    chassis: 'shilda',
+    importType: 'sug_yevu',
   },
 }
 
@@ -151,6 +171,8 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
         driveType: driveType,
         driveTechnology: driveTechnology,
         gearType: gearType,
+        chassis: readChassisFromCacheRow(data),
+        importType: readImportTypeFromCacheRow(data),
         // שדות צמ"ה
         machineryType: machineryType,
         selfWeight: selfWeight,
@@ -164,7 +186,7 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
 }
 
 /**
- * שמירת רכב ב-Supabase (לאחר מציאה ב-API)
+ * שמירת רכב ב-Supabase (לאחר מציאה ב-API) — service-role via /api/vehicles/cache
  */
 async function saveToSupabase(
   licenseNumber: string,
@@ -173,24 +195,39 @@ async function saveToSupabase(
   rawData: any
 ): Promise<void> {
   try {
-    await supabase.from('vehicles').upsert({
-      license_number: licenseNumber,
-      source_type: sourceType,
-      manufacturer: mappedData?.manufacturer,
-      model: mappedData?.model,
-      year: mappedData?.year,
-      color: mappedData?.color,
-      fuel_type: mappedData?.fuelType,
-      total_weight: mappedData?.totalWeight,
-      vehicle_type: mappedData?.vehicleType,
-      drive_type: mappedData?.driveType,
-      drive_technology: mappedData?.driveTechnology,
-      gear_type: mappedData?.gearType,
-      raw_data: rawData,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'license_number' })
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) {
+      console.error('Vehicle cache write skipped: no session')
+      return
+    }
+
+    void fetch('/api/vehicles/cache', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        licenseNumber,
+        sourceType,
+        mappedData,
+        rawData,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          console.error('Error saving vehicle to cache:', body)
+        }
+      })
+      .catch((error) => {
+        console.error('Error saving vehicle to cache:', error)
+      })
   } catch (error) {
-    console.error('Error saving to Supabase:', error)
+    console.error('Error initiating vehicle cache write:', error)
   }
 }
 
@@ -240,6 +277,38 @@ async function searchInResource(
 /**
  * מיפוי נתונים גולמיים לפורמט אחיד
  */
+function readChassisField(rawData: any, column: string | undefined, source: string): string | null {
+  if (column && rawData[column] != null && String(rawData[column]).trim()) {
+    return String(rawData[column]).trim()
+  }
+  if (source === 'heavy' && rawData.misgeret != null && String(rawData.misgeret).trim()) {
+    return String(rawData.misgeret).trim()
+  }
+  return null
+}
+
+function readChassisFromCacheRow(data: { chassis?: string | null; raw_data?: any; source_type?: string }): string | null {
+  if (data.chassis?.trim()) return data.chassis.trim()
+  if (!data.raw_data) return null
+  const source = data.source_type || ''
+  const fields = FIELD_MAPPINGS[source]
+  if (!fields?.chassis) return null
+  return readChassisField(data.raw_data, fields.chassis, source)
+}
+
+function readImportTypeFromCacheRow(data: {
+  import_type?: string | null
+  raw_data?: any
+  source_type?: string
+}): string | null {
+  if (data.import_type?.trim()) return data.import_type.trim()
+  if (data.source_type === 'personal_import' && data.raw_data?.sug_yevu) {
+    const v = String(data.raw_data.sug_yevu).trim()
+    if (v) return v
+  }
+  return null
+}
+
 function mapVehicleData(rawData: any, source: string, licenseNumber: string): VehicleLookupResult['data'] {
   const fields = FIELD_MAPPINGS[source]
   const isMachinery = source === 'machinery'
@@ -266,6 +335,11 @@ function mapVehicleData(rawData: any, source: string, licenseNumber: string): Ve
     driveType: rawData[fields.driveType] || null,
     driveTechnology: rawData[fields.driveTechnology] || null,
     gearType: gearType,
+    chassis: readChassisField(rawData, fields.chassis, source),
+    importType:
+      fields.importType && rawData[fields.importType]
+        ? String(rawData[fields.importType]).trim() || null
+        : null,
     // שדות צמ"ה
     machineryType: isMachinery ? (rawData.sug_tzama_nm || null) : null,
     selfWeight: isMachinery ? (rawData.mishkal_ton ? parseFloat(rawData.mishkal_ton) : null) : null,
@@ -335,7 +409,13 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
   console.log('🔍 לא נמצא ב-Supabase, מחפש ב-API...')
   
   // שלב 2: Fallback ל-API
-  const searchOrder: Array<keyof typeof API_RESOURCES> = ['private', 'motorcycle', 'heavy', 'machinery']
+  const searchOrder: Array<keyof typeof API_RESOURCES> = [
+    'private',
+    'motorcycle',
+    'heavy',
+    'machinery',
+    'personal_import',
+  ]
   
   for (const source of searchOrder) {
     const result = await searchInResource(cleanLicense, API_RESOURCES[source], source)
@@ -388,6 +468,8 @@ export function getVehicleTypeFromSource(source: string | null): VehicleType {
       return 'heavy'
     case 'machinery':
       return 'machinery'
+    case 'personal_import':
+      return 'personal_import'
     default:
       return 'private'
   }
@@ -402,12 +484,19 @@ export function getVehicleTypeLabel(type: VehicleType): string {
     motorcycle: 'דו גלגלי',
     heavy: 'רכב כבד',
     machinery: 'צמ"ה',
+    personal_import: 'יבוא אישי',
   }
   return labels[type] || 'רכב פרטי'
 }
 
 export function isKnownVehicleType(value: unknown): value is VehicleType {
-  return value === 'private' || value === 'motorcycle' || value === 'heavy' || value === 'machinery'
+  return (
+    value === 'private' ||
+    value === 'motorcycle' ||
+    value === 'heavy' ||
+    value === 'machinery' ||
+    value === 'personal_import'
+  )
 }
 
 /**
@@ -419,6 +508,7 @@ export function getVehicleTypeIcon(type: VehicleType): string {
     motorcycle: '🏍️',
     heavy: '🚚',
     machinery: '🚜',
+    personal_import: '🚗',
   }
   return icons[type] || '🚗'
 }

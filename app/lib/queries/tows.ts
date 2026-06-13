@@ -662,6 +662,8 @@ interface CreateTowInput {
     selfWeightTon?: number
     totalWeightTon?: number
     machineryType?: string
+    chassis?: string | null
+    importType?: string | null
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -751,6 +753,8 @@ export async function createTow(input: CreateTowInput) {
     self_weight_ton: v.selfWeightTon ?? null,
     total_weight_ton: v.totalWeightTon ?? null,
     machinery_type: v.machineryType ?? null,
+    chassis: v.chassis ?? null,
+    import_type: v.importType ?? null,
   }))
 
   // בדיקה אם יש delivery leg - אם לא, ניצור אוטומטית
@@ -1096,6 +1100,7 @@ function mapVehicleTypeForTow(
   vehicleType?: string
 ): 'motorcycle' | 'private' | 'heavy' | 'machinery' | undefined {
   if (!vehicleType) return undefined
+  if (vehicleType === 'personal_import') return 'private'
   const valid = ['motorcycle', 'private', 'heavy', 'machinery'] as const
   return (valid as readonly string[]).includes(vehicleType)
     ? (vehicleType as 'motorcycle' | 'private' | 'heavy' | 'machinery')
@@ -1349,6 +1354,8 @@ interface UpdateTowInput {
     selfWeightTon?: number
     totalWeightTon?: number
     machineryType?: string
+    chassis?: string | null
+    importType?: string | null
   }[]
   legs?: {
     id?: string
@@ -1396,6 +1403,8 @@ function buildVehicleOfficeRow(v: UpdateTowVehicleInput, orderIndex: number) {
     self_weight_ton: v.selfWeightTon ?? null,
     total_weight_ton: v.totalWeightTon ?? null,
     machinery_type: v.machineryType ?? null,
+    chassis: v.chassis ?? null,
+    import_type: v.importType ?? null,
   }
 }
 

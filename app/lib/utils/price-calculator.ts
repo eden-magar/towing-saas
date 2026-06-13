@@ -302,13 +302,15 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
  */
 export function extractBasePrices(priceList: Record<string, any> | null): Record<VehicleType, number> {
   if (!priceList) {
-    return { private: 180, motorcycle: 100, heavy: 350, machinery: 500 }
+    return { private: 180, motorcycle: 100, heavy: 350, machinery: 500, personal_import: 180 }
   }
+  const privatePrice = priceList.base_price_private ?? 180
   return {
-    private: priceList.base_price_private ?? 180,
+    private: privatePrice,
     motorcycle: priceList.base_price_motorcycle ?? 100,
     heavy: priceList.base_price_heavy ?? 350,
-    machinery: priceList.base_price_machinery ?? 500
+    machinery: priceList.base_price_machinery ?? 500,
+    personal_import: privatePrice,
   }
 }
 
@@ -336,8 +338,8 @@ export function resolveVehicleBasePrice(
   if (type === 'van' && weightKg != null && weightKg > 0) {
     return resolveWeightBracketBase(weightKg, brackets) ?? 0
   }
-  if (type === 'private' || type === 'motorcycle' || type === 'heavy' || type === 'machinery') {
-    return flatPrices[type] ?? 0
+  if (type === 'private' || type === 'motorcycle' || type === 'heavy' || type === 'machinery' || type === 'personal_import') {
+    return flatPrices[type] ?? flatPrices.private ?? 0
   }
   return flatPrices.private ?? 0
 }

@@ -17,6 +17,10 @@ export interface VehicleData {
   selfWeight?: string
   /** צמ"ה — mishkal_kolel_ton (tons) */
   totalWeightTon?: string
+  /** מספר שלדה / VIN */
+  chassis?: string
+  /** sug_yevu — personal import only */
+  importType?: string
 }
 
 interface VehicleInfoCardProps {

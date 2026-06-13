@@ -15,7 +15,7 @@ export type TowType = 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'e
 export type TowStatus = 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
 
 // סוגי רכב - מעודכן לפי מאגרי משרד התחבורה
-export type VehicleType = 'private' | 'motorcycle' | 'heavy' | 'machinery'
+export type VehicleType = 'private' | 'motorcycle' | 'heavy' | 'machinery' | 'personal_import'
 
 export type LegType = 'empty_drive' | 'pickup' | 'delivery'
 
@@ -333,7 +333,7 @@ export interface CompanySettings {
 
 export interface VehicleLookupResult {
   found: boolean
-  source: 'private' | 'motorcycle' | 'heavy' | 'machinery' | null
+  source: 'private' | 'motorcycle' | 'heavy' | 'machinery' | 'personal_import' | null
   sourceLabel: string
   data: {
     plateNumber: string
@@ -347,6 +347,8 @@ export interface VehicleLookupResult {
     driveType: string | null       // hanaa_nm - הנעה
     driveTechnology: string | null // technologiat_hanaa_nm - טכנולוגיית הנעה
     gearType: string | null        // automatic_ind - סוג גיר
+    chassis: string | null         // misgeret / shilda / mispar_shilda
+    importType: string | null      // sug_yevu — personal import only
     // שדות צמ"ה
     machineryType: string | null   // sug_tzama_nm - סוג צמ"ה
     selfWeight: number | null      // mishkal_ton - משקל עצמי

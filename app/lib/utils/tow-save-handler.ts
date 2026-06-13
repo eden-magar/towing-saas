@@ -363,6 +363,8 @@ export interface PreparedTowData {
     totalWeightTon?: number
     /** צמ"ה — sug_tzama_nm */
     machineryType?: string
+    chassis?: string | null
+    importType?: string | null
   }[]
   legs: {
     legType: 'empty_drive' | 'pickup' | 'delivery'
@@ -455,7 +457,7 @@ const PERSISTED_VEHICLE_TYPES = [
 
 export type PersistedVehicleType = (typeof PERSISTED_VEHICLE_TYPES)[number]
 
-const REGISTRY_VEHICLE_SOURCES = ['private', 'motorcycle', 'heavy', 'machinery'] as const
+const REGISTRY_VEHICLE_SOURCES = ['private', 'motorcycle', 'heavy', 'machinery', 'personal_import'] as const
 
 /**
  * Pass through a user-selected or registry-derived vehicle category for DB storage.
@@ -605,6 +607,8 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
         ? Number(v.manualWeight)
         : undefined,
     gearType: v.vehicleData?.gearType,
+    chassis: v.vehicleData?.chassis || undefined,
+    importType: v.vehicleData?.importType || undefined,
     ...machineryFromRouteVehicleData(resolveRouteVehicleRegistrySource(v), v.vehicleData),
   }))
 }
@@ -1219,6 +1223,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       driveTechnology: input.vehicleData?.data?.driveTechnology,
       vehicleCode: input.vehicleCode || undefined,
       registrySource: input.vehicleData?.source ?? null,
+      chassis: input.vehicleData?.data?.chassis || undefined,
+      importType: input.vehicleData?.data?.importType || undefined,
       ...machineryFromLookupResult(
         input.vehicleData?.source,
         input.vehicleData?.data
@@ -1381,6 +1387,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.workingVehicleData?.data?.gearType,
       driveTechnology: input.workingVehicleData?.data?.driveTechnology,
       registrySource: input.workingVehicleData?.source ?? null,
+      chassis: input.workingVehicleData?.data?.chassis || undefined,
+      importType: input.workingVehicleData?.data?.importType || undefined,
       ...machineryFromLookupResult(
         input.workingVehicleData?.source,
         input.workingVehicleData?.data
@@ -1410,6 +1418,8 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.defectiveVehicleData?.data?.gearType,
       driveTechnology: input.defectiveVehicleData?.data?.driveTechnology,
       registrySource: input.defectiveVehicleData?.source ?? null,
+      chassis: input.defectiveVehicleData?.data?.chassis || undefined,
+      importType: input.defectiveVehicleData?.data?.importType || undefined,
       ...machineryFromLookupResult(
         input.defectiveVehicleData?.source,
         input.defectiveVehicleData?.data

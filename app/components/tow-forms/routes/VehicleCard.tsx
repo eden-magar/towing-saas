@@ -112,6 +112,8 @@ export function VehicleCard({
                 result.data.totalWeightTon != null
                   ? String(result.data.totalWeightTon)
                   : undefined,
+              chassis: result.data.chassis || undefined,
+              importType: result.data.importType || undefined,
               ...(result.data.vehicleType
                 ? { vehicleType: result.data.vehicleType }
                 : {}),

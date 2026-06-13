@@ -787,6 +787,7 @@ export default function TowDetailsPage() {
             motorcycle: pricing.basePriceList.base_price_motorcycle || 0,
             heavy: pricing.basePriceList.base_price_heavy || 0,
             machinery: pricing.basePriceList.base_price_machinery || 0,
+            personal_import: pricing.basePriceList.base_price_private || 0,
           },
           price_per_km: pricing.basePriceList.price_per_km || 12,
           minimum_price: pricing.basePriceList.minimum_price || 250,
@@ -1913,6 +1914,21 @@ export default function TowDetailsPage() {
                             {core.machineryType && (
                               <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
                                 סוג צמ&quot;ה: {core.machineryType}
+                              </span>
+                            )}
+                            {core.chassis && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
+                                מספר שלדה: {core.chassis}
+                              </span>
+                            )}
+                            {core.fuelType && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
+                                סוג דלק: {core.fuelType}
+                              </span>
+                            )}
+                            {core.importType && (
+                              <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
+                                סוג ייבוא: {core.importType}
                               </span>
                             )}
                             {core.weightLines.map((line) => (

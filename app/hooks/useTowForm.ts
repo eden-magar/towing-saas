@@ -134,12 +134,14 @@ type TowVehicleEditRow = {
   self_weight_ton?: number | null
   total_weight_ton?: number | null
   machinery_type?: string | null
+  chassis?: string | null
+  import_type?: string | null
 }
 
 function normalizeRegistrySource(
   raw: string | null | undefined
 ): VehicleLookupResult['source'] {
-  const valid = ['private', 'motorcycle', 'heavy', 'machinery'] as const
+  const valid = ['private', 'motorcycle', 'heavy', 'machinery', 'personal_import'] as const
   if (raw && (valid as readonly string[]).includes(raw)) {
     return raw as VehicleLookupResult['source']
   }
@@ -290,7 +292,9 @@ function buildVehicleLookupResultFromTowVehicle(
     v.drive_technology ||
     v.self_weight_ton != null ||
     v.total_weight_ton != null ||
-    v.machinery_type
+    v.machinery_type ||
+    v.chassis ||
+    v.import_type
   )
   if (!hasStoredDetails) return null
 
@@ -312,6 +316,8 @@ function buildVehicleLookupResultFromTowVehicle(
       driveType: v.drive_type || null,
       driveTechnology: v.drive_technology || null,
       gearType: v.gear_type || null,
+      chassis: v.chassis || null,
+      importType: v.import_type || null,
       machineryType: v.machinery_type || null,
       selfWeight: v.self_weight_ton ?? null,
       totalWeightTon: v.total_weight_ton ?? null,
@@ -1790,6 +1796,8 @@ export function useTowForm(
         driveType: vehicle.vehicle_data.driveType || null,
         driveTechnology: null,
         gearType: vehicle.vehicle_data.gearType || null,
+        chassis: (vehicle.vehicle_data as { chassis?: string }).chassis || null,
+        importType: null,
         machineryType: null,
         selfWeight: null,
         totalWeightTon: null,

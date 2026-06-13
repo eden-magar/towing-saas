@@ -39,6 +39,9 @@ export function VehicleCoreLookupChips({
       {core.color && <Chip label="צבע" value={core.color} />}
       {core.vehicleTypeLabel && <Chip label="סוג" value={core.vehicleTypeLabel} />}
       {core.machineryType && <Chip label="סוג צמ״ה" value={core.machineryType} />}
+      {core.chassis && <Chip label="מספר שלדה" value={core.chassis} />}
+      {core.fuelType && <Chip label="סוג דלק" value={core.fuelType} />}
+      {core.importType && <Chip label="סוג ייבוא" value={core.importType} />}
       {core.weightLines.map((line) => (
         <Chip key={line.label} label={line.label} value={line.value} />
       ))}
