@@ -12,6 +12,10 @@ const API_RESOURCES = {
   machinery: '58dc4654-16b1-42ed-8170-98fadec153ea',
   personal_import: '03adc637-b6fe-402b-9937-7c3d3afc9140',
   private_extra: '142afde2-6228-49f9-8a29-9b6c3a0cbe40',
+  canceled_private: '851ecab1-0622-4dbe-a6c7-f950cf82abf9',
+  canceled_heavy: '4e6b9724-4c1e-43f0-909a-154d4cc4e046',
+  canceled_motorcycle: 'ec8cbc34-72e1-4b69-9c48-22821ba0bd6c',
+  inactive: 'f6efe89a-fb3d-43a4-bb61-9bf12a9b9099',
 }
 
 // תוויות לסוגי רכב
@@ -237,7 +241,8 @@ async function saveToSupabase(
 async function searchInResource(
   licenseNumber: string,
   resourceId: string,
-  source: string
+  source: string,
+  options?: { fuzzyQFallback?: boolean }
 ): Promise<{ found: boolean; data: any }> {
   try {
     const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
@@ -258,10 +263,19 @@ async function searchInResource(
     
     if (data2.success && data2.result?.records?.length > 0) {
       const record = data2.result.records.find((rec: any) => {
-        const recLicense = String(rec.mispar_rechev || '').replace(/[^0-9]/g, '')
-        return recLicense === cleanLicense || recLicense === parseInt(cleanLicense, 10).toString()
+        const recLicense = String(rec.mispar_rechev || rec.MISPAR_RECHEV || '')
+          .replace(/[^0-9]/g, '')
+        if (recLicense === cleanLicense || recLicense === parseInt(cleanLicense, 10).toString()) {
+          return true
+        }
+        if (options?.fuzzyQFallback) {
+          return Object.values(rec).some(
+            (val) => val != null && val.toString().includes(cleanLicense)
+          )
+        }
+        return false
       })
-      
+
       if (record) {
         return { found: true, data: record }
       }
@@ -310,6 +324,38 @@ function readImportTypeFromCacheRow(data: {
     if (v) return v
   }
   return null
+}
+
+/** Flat private-style mapping for cancelled / inactive registries */
+function mapCancelledInactiveVehicleData(
+  rawData: any,
+  licenseNumber: string
+): NonNullable<VehicleLookupResult['data']> {
+  const degem = rawData.degem_nm != null ? String(rawData.degem_nm).trim() : ''
+  const kinuy = rawData.kinuy_mishari != null ? String(rawData.kinuy_mishari).trim() : ''
+  const model = degem || kinuy || null
+
+  return {
+    plateNumber: licenseNumber,
+    manufacturer: rawData.tozeret_nm ? String(rawData.tozeret_nm).trim() || null : null,
+    model,
+    year: rawData.shnat_yitzur != null ? parseInt(String(rawData.shnat_yitzur), 10) : null,
+    color: rawData.tzeva_rechev ? String(rawData.tzeva_rechev).trim() || null : null,
+    fuelType: rawData.sug_delek_nm ? String(rawData.sug_delek_nm).trim() || null : null,
+    totalWeight:
+      rawData.mishkal_kolel != null && rawData.mishkal_kolel !== ''
+        ? parseFloat(String(rawData.mishkal_kolel))
+        : null,
+    vehicleType: rawData.sug_rechev_nm ? String(rawData.sug_rechev_nm).trim() || null : null,
+    driveType: null,
+    driveTechnology: null,
+    gearType: null,
+    chassis: rawData.misgeret ? String(rawData.misgeret).trim() || null : null,
+    importType: null,
+    machineryType: null,
+    selfWeight: null,
+    totalWeightTon: null,
+  }
 }
 
 function mapVehicleData(rawData: any, source: string, licenseNumber: string): VehicleLookupResult['data'] {
@@ -387,6 +433,72 @@ async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
 }
 
 /**
+ * Fallback after active-registry miss: cancelled registries, then inactive.
+ * Not cached to Supabase — status may change if the vehicle is reactivated.
+ */
+async function searchCancelledOrInactive(
+  licenseNumber: string
+): Promise<VehicleLookupResult | null> {
+  const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
+
+  const cancelledResources: Array<{
+    resourceId: string
+    mapAs: keyof typeof FIELD_MAPPINGS
+    sourceLabel: string
+  }> = [
+    {
+      resourceId: API_RESOURCES.canceled_private,
+      mapAs: 'private',
+      sourceLabel: SOURCE_LABELS.private,
+    },
+    {
+      resourceId: API_RESOURCES.canceled_heavy,
+      mapAs: 'heavy',
+      sourceLabel: SOURCE_LABELS.heavy,
+    },
+    {
+      resourceId: API_RESOURCES.canceled_motorcycle,
+      mapAs: 'motorcycle',
+      sourceLabel: SOURCE_LABELS.motorcycle,
+    },
+  ]
+
+  for (const { resourceId, mapAs, sourceLabel } of cancelledResources) {
+    const result = await searchInResource(cleanLicense, resourceId, `canceled_${mapAs}`, {
+      fuzzyQFallback: true,
+    })
+
+    if (result.found) {
+      return {
+        found: true,
+        source: mapAs as VehicleLookupResult['source'],
+        sourceLabel,
+        registryStatus: 'cancelled',
+        data: mapCancelledInactiveVehicleData(result.data, cleanLicense),
+      }
+    }
+  }
+
+  const inactiveResult = await searchInResource(
+    cleanLicense,
+    API_RESOURCES.inactive,
+    'inactive'
+  )
+
+  if (inactiveResult.found) {
+    return {
+      found: true,
+      source: 'private',
+      sourceLabel: 'רכב לא פעיל',
+      registryStatus: 'inactive',
+      data: mapCancelledInactiveVehicleData(inactiveResult.data, cleanLicense),
+    }
+  }
+
+  return null
+}
+
+/**
  * חיפוש רכב - קודם ב-Supabase, אח"כ ב-API
  */
 export async function lookupVehicle(licenseNumber: string): Promise<VehicleLookupResult> {
@@ -448,7 +560,13 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
       }
     }
   }
-  
+
+  const cancelledOrInactive = await searchCancelledOrInactive(cleanLicense)
+  if (cancelledOrInactive) {
+    console.log(`⚠️ נמצא במאגר ${cancelledOrInactive.registryStatus}`)
+    return cancelledOrInactive
+  }
+
   return {
     found: false,
     source: null,

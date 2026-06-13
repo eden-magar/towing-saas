@@ -96,6 +96,32 @@ import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-cont
 
 type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
 
+function VehicleRegistryStatusBanner({
+  status,
+}: {
+  status?: VehicleLookupResult['registryStatus']
+}) {
+  if (status === 'cancelled') {
+    return (
+      <div className="mb-2 rounded-xl border border-red-200 bg-red-50 p-3">
+        <p className="text-sm font-medium text-red-700">
+          ⚠ הרכב מבוטל סופית במאגרי משרד התחבורה ואינו כשיר לנסיעה
+        </p>
+      </div>
+    )
+  }
+  if (status === 'inactive') {
+    return (
+      <div className="mb-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+        <p className="text-sm font-medium text-yellow-800">
+          ⚠ הרכב אינו מופיע כרכב פעיל במאגר — ייתכן שהושבת או שרישויו לא חודש
+        </p>
+      </div>
+    )
+  }
+  return null
+}
+
 // ==================== Create Tow Form ====================
 
 function CreateTowForm({
@@ -1106,6 +1132,7 @@ function CreateTowForm({
       if (result.found && result.data) {
         setDefectiveVehicleData(result)
         setDefectiveVehicleType(result.source || 'private')
+        setDefectiveVehicleNotFound(false)
       } else {
         setDefectiveVehicleData(null)
       }
@@ -1728,6 +1755,8 @@ function CreateTowForm({
                         </div>
                         {vehicleData?.found && vehicleData.data && (
                           <div>
+                            <VehicleRegistryStatusBanner status={vehicleData.registryStatus} />
+                            {!vehicleData.registryStatus && (
                             <div className="flex items-center gap-1.5 mb-2">
                               <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                               <span className="text-xs font-medium text-green-700">נמצא במאגר הרשמי</span>
@@ -1737,6 +1766,14 @@ function CreateTowForm({
                                 </span>
                               )}
                             </div>
+                            )}
+                            {vehicleData.registryStatus && vehicleData.sourceLabel && (
+                              <div className="flex items-center gap-1.5 mb-2">
+                                <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                  {vehicleData.sourceLabel}
+                                </span>
+                              </div>
+                            )}
                             <VehicleCoreLookupChips
                               source={vehicleData.source}
                               data={vehicleData.data}
@@ -2352,6 +2389,8 @@ function CreateTowForm({
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
                             <div className="flex flex-col">
+                              <VehicleRegistryStatusBanner status={workingVehicleData.registryStatus} />
+                              {!workingVehicleData.registryStatus && (
                               <div className="flex items-center gap-1.5 mb-2">
                                 <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                                 <span className="text-xs font-medium text-green-700">נמצא במאגר הרשמי</span>
@@ -2361,6 +2400,14 @@ function CreateTowForm({
                                   </span>
                                 )}
                               </div>
+                              )}
+                              {workingVehicleData.registryStatus && workingVehicleData.sourceLabel && (
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                    {workingVehicleData.sourceLabel}
+                                  </span>
+                                </div>
+                              )}
                               <VehicleCoreLookupChips
                                 source={workingVehicleData.source}
                                 data={workingVehicleData.data}
@@ -2552,6 +2599,8 @@ function CreateTowForm({
                               </div>
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
                                 <div className="flex flex-col">
+                                  <VehicleRegistryStatusBanner status={defectiveVehicleData.registryStatus} />
+                                  {!defectiveVehicleData.registryStatus && (
                                   <div className="flex items-center gap-1.5 mb-2">
                                     <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                                     <span className="text-xs font-medium text-green-700">נמצא במאגר הרשמי</span>
@@ -2561,6 +2610,14 @@ function CreateTowForm({
                                       </span>
                                     )}
                                   </div>
+                                  )}
+                                  {defectiveVehicleData.registryStatus && defectiveVehicleData.sourceLabel && (
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                        {defectiveVehicleData.sourceLabel}
+                                      </span>
+                                    </div>
+                                  )}
                                   <VehicleCoreLookupChips
                                     source={defectiveVehicleData.source}
                                     data={defectiveVehicleData.data}

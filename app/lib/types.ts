@@ -335,6 +335,8 @@ export interface VehicleLookupResult {
   found: boolean
   source: 'private' | 'motorcycle' | 'heavy' | 'machinery' | 'personal_import' | null
   sourceLabel: string
+  /** Omitted or 'active' for normal registry hits; set for cancelled/inactive fallback lookups */
+  registryStatus?: 'active' | 'cancelled' | 'inactive'
   data: {
     plateNumber: string
     manufacturer: string | null    // tozeret_nm
