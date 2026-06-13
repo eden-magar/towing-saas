@@ -14,11 +14,41 @@ export interface TimeSurchargeEditorRow {
   is_active: boolean
 }
 
+function isTechnicalSurchargeName(name: string | null | undefined): boolean {
+  return !!name && /^new_\d+$/.test(name)
+}
+
+/** Display value for the name input — hides auto-generated new_* ids. */
+export function getTimeSurchargeEditorLabel(row: Pick<TimeSurchargeEditorRow, 'label' | 'name'>): string {
+  const label = row.label?.trim()
+  if (label) return label
+  const name = row.name?.trim()
+  if (name && !isTechnicalSurchargeName(name)) return name
+  return ''
+}
+
+/** Resolve label for save/display when empty — time range or fallback. */
+export function resolveTimeSurchargeLabel(row: {
+  label?: string | null
+  name?: string | null
+  time_start?: string | null
+  time_end?: string | null
+}): string {
+  const label = row.label?.trim()
+  if (label) return label
+  const name = row.name?.trim()
+  if (name && !isTechnicalSurchargeName(name)) return name
+  const start = row.time_start?.trim()
+  const end = row.time_end?.trim()
+  if (start && end) return `${start}-${end}`
+  if (start || end) return start || end || 'תוספת זמן'
+  return 'תוספת זמן'
+}
+
 export function createDefaultTimeSurchargeRow(id?: string): TimeSurchargeEditorRow {
-  const newId = id ?? `new_${Date.now()}`
   return {
-    id: newId,
-    name: newId,
+    id: id ?? `new_${Date.now()}`,
+    name: '',
     label: '',
     time_start: '18:00',
     time_end: '22:00',
@@ -66,7 +96,7 @@ function PercentInput({ value, onChange }: { value: number; onChange: (v: number
         type="number"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full pl-6 pr-3 py-2 border border-gray-200 rounded-xl text-sm text-left font-medium focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
+        className="w-full pl-6 pr-3 py-2 border border-gray-200 rounded-xl text-sm text-left font-medium bg-white focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
       />
       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">%</span>
     </div>
@@ -85,7 +115,7 @@ function TextInput({ value, onChange, placeholder, className }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors ${className || ''}`}
+      className={`w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors ${className || ''}`}
     />
   )
 }
@@ -102,7 +132,7 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-const GRID_COLS = 'grid-cols-[1fr_140px_100px_100px_auto]'
+const GRID_COLS = 'grid-cols-[56px_minmax(120px,1fr)_120px_5.5rem_5.5rem_auto]'
 
 export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSurchargesEditorProps) {
   return (
@@ -111,9 +141,11 @@ export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSu
       {rows.length === 0 ? (
         <p className="text-center py-8 text-gray-400 text-sm">אין תוספות זמן</p>
       ) : (
-        <div className={`grid ${GRID_COLS} gap-x-3 px-5`}>
+        <div className="overflow-x-auto">
+          <div className={`grid ${GRID_COLS} gap-x-3 px-5 min-w-[640px]`}>
           {/* Header — contents so cells share column tracks with data rows */}
           <div className="contents text-xs font-medium text-gray-400">
+            <div className="py-2.5 bg-gray-50/50 border-b border-gray-100 text-center">פעיל</div>
             <div className="py-2.5 bg-gray-50/50 border-b border-gray-100">שם</div>
             <div className="py-2.5 bg-gray-50/50 border-b border-gray-100">סוג יום</div>
             <div className="py-2.5 bg-gray-50/50 border-b border-gray-100">שעת התחלה</div>
@@ -122,25 +154,29 @@ export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSu
           </div>
           {rows.map((item) => (
             <div key={item.id} className="contents group">
-              <div className="py-3 min-w-0 flex items-center gap-2 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={item.is_active}
-                  onChange={(e) => onUpdate(item.id, { is_active: e.target.checked })}
-                  className="rounded accent-[#33d4ff] shrink-0"
-                />
+              <div className="py-3 min-w-0 flex items-center justify-center gap-1 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
+                <label className="flex items-center gap-1 cursor-pointer" title="פעיל">
+                  <input
+                    type="checkbox"
+                    checked={item.is_active}
+                    onChange={(e) => onUpdate(item.id, { is_active: e.target.checked })}
+                    className="rounded accent-[#33d4ff] shrink-0"
+                  />
+                  <span className="text-xs text-gray-500 select-none">פעיל</span>
+                </label>
+              </div>
+              <div className="py-3 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
                 <TextInput
-                  value={item.label}
+                  value={getTimeSurchargeEditorLabel(item)}
                   onChange={(v) => onUpdate(item.id, { label: v, name: v })}
-                  placeholder="שם התוספת"
-                  className="flex-1 min-w-0"
+                  placeholder="שם התוספת (לדוגמה: ערב, לילה)"
                 />
               </div>
               <div className="py-3 min-w-0 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
                 <select
                   value={item.day_type}
                   onChange={(e) => onUpdate(item.id, { day_type: e.target.value })}
-                  className="w-full px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
+                  className="w-full px-2 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
                 >
                   <option value="all">כל הימים</option>
                   <option value="weekday">ימי חול</option>
@@ -153,14 +189,14 @@ export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSu
                 <TimeInput
                   value={item.time_start}
                   onChange={(v) => onUpdate(item.id, { time_start: v })}
-                  className="px-2 py-2 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
+                  className="w-full px-2 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
                 />
               </div>
               <div className="py-3 min-w-0 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
                 <TimeInput
                   value={item.time_end}
                   onChange={(v) => onUpdate(item.id, { time_end: v })}
-                  className="px-2 py-2 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
+                  className="w-full px-2 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
                 />
               </div>
               <div className="py-3 min-w-0 flex items-center gap-2 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
@@ -172,6 +208,7 @@ export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSu
               </div>
             </div>
           ))}
+          </div>
         </div>
       )}
     </div>

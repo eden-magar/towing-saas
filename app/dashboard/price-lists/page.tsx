@@ -29,6 +29,7 @@ import { PriceSimulator } from './components/PriceSimulator'
 import {
   TimeSurchargesEditor,
   createDefaultTimeSurchargeRow,
+  resolveTimeSurchargeLabel,
 } from './components/TimeSurchargesEditor'
 
 // ==================== Types ====================
@@ -236,16 +237,19 @@ export default function PriceListsPage() {
 
       // Time surcharges
       if (data.timeSurcharges?.length > 0) {
-        setTimeSurcharges(data.timeSurcharges.map(t => ({
-          id: t.id,
-          name: t.name,
-          label: t.label,
-          time_start: t.time_start || '',
-          time_end: t.time_end || '',
-          day_type: t.day_type || 'all',
-          surcharge_percent: t.surcharge_percent,
-          is_active: t.is_active
-        })))
+        setTimeSurcharges(data.timeSurcharges.map(t => {
+          const label = resolveTimeSurchargeLabel(t)
+          return {
+            id: t.id,
+            name: label,
+            label,
+            time_start: t.time_start || '',
+            time_end: t.time_end || '',
+            day_type: t.day_type || 'all',
+            surcharge_percent: t.surcharge_percent,
+            is_active: t.is_active,
+          }
+        }))
       }
 
       // Location surcharges
@@ -369,16 +373,19 @@ export default function PriceListsPage() {
       })))
 
       // Time surcharges
-      await saveTimeSurcharges(companyId, timeSurcharges.map(t => ({
-        name: t.name,
-        label: t.label,
-        time_description: t.day_type === 'all' ? `${t.time_start}-${t.time_end}` : '',
-        time_start: t.time_start || null,
-        time_end: t.time_end || null,
-        day_type: t.day_type,
-        surcharge_percent: t.surcharge_percent,
-        is_active: t.is_active
-      })))
+      await saveTimeSurcharges(companyId, timeSurcharges.map(t => {
+        const label = resolveTimeSurchargeLabel(t)
+        return {
+          name: label,
+          label,
+          time_description: t.day_type === 'all' ? `${t.time_start}-${t.time_end}` : '',
+          time_start: t.time_start || null,
+          time_end: t.time_end || null,
+          day_type: t.day_type,
+          surcharge_percent: t.surcharge_percent,
+          is_active: t.is_active,
+        }
+      }))
 
       // Location surcharges
       await saveLocationSurcharges(companyId, locationSurcharges.map(l => ({
@@ -578,7 +585,14 @@ export default function PriceListsPage() {
       base.base_price_machinery = existingPriceList.base_price_machinery
       base.price_per_km = existingPriceList.price_per_km
       base.minimum_price = existingPriceList.minimum_price
-      base.customer_time_surcharges = surcharges.timeSurcharges
+      base.customer_time_surcharges = surcharges.timeSurcharges.map(s => {
+        const label = resolveTimeSurchargeLabel(s)
+        return {
+          ...s,
+          name: label,
+          label,
+        }
+      })
       base.customer_location_surcharges = surcharges.locationSurcharges
       base.customer_service_surcharges = surcharges.serviceSurcharges
     } else {
@@ -650,17 +664,20 @@ export default function PriceListsPage() {
         )
 
         await saveCustomerSurcharges(priceListId, companyId, {
-          time: (editingCustomer.customer_time_surcharges || []).map(s => ({
-          name: s.name,
-          label: s.label,
-          time_description: s.time_description ?? null,
-          time_start: s.time_start ?? null,
-          time_end: s.time_end ?? null,
-          surcharge_percent: s.surcharge_percent,
-          day_type: s.day_type ?? 'weekday',
-          sort_order: s.sort_order ?? 0,
-          is_active: s.is_active,
-        })),
+          time: (editingCustomer.customer_time_surcharges || []).map(s => {
+            const label = resolveTimeSurchargeLabel(s)
+            return {
+              name: label,
+              label,
+              time_description: s.time_description ?? null,
+              time_start: s.time_start ?? null,
+              time_end: s.time_end ?? null,
+              surcharge_percent: s.surcharge_percent,
+              day_type: s.day_type ?? 'weekday',
+              sort_order: s.sort_order ?? 0,
+              is_active: s.is_active,
+            }
+          }),
           location: (editingCustomer.customer_location_surcharges || []).map(s => ({
             label: s.label,
             surcharge_percent: s.surcharge_percent,
