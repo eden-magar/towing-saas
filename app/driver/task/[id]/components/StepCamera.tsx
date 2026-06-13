@@ -17,6 +17,7 @@ import {
   DriverTaskVehicle,
   TowImageType
 } from '@/app/lib/queries/driver-tasks'
+import LicensePlate from '@/app/driver/components/LicensePlate'
 
 function StoragePointBadge({
   pointType,
@@ -462,8 +463,10 @@ const StepCamera = forwardRef<StepCameraHandle, StepCameraProps>(function StepCa
               
               {/* Vehicle indicator */}
               <div className="bg-black/50 px-4 py-2 rounded-full text-center">
-                <p className="text-white text-xs flex flex-wrap items-center justify-center gap-1.5">
-                  <span>{currentVehicle?.plate_number}</span>
+                <p className="flex flex-wrap items-center justify-center gap-1.5">
+                  {currentVehicle?.plate_number && (
+                    <LicensePlate plate={currentVehicle.plate_number} size="sm" />
+                  )}
                   {currentVehicle?.vehicle_code && <span className="text-xs text-gray-400"> #{currentVehicle.vehicle_code}</span>}
                   {currentVehicle?.is_working === true && (
                     <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
@@ -597,8 +600,10 @@ const StepCamera = forwardRef<StepCameraHandle, StepCameraProps>(function StepCa
                   <Car size={24} className="text-slate-400" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-white flex flex-wrap items-center gap-1.5">
-                    <span>{currentVehicle?.plate_number}</span>
+                  <p className="flex flex-wrap items-center gap-1.5">
+                    {currentVehicle?.plate_number && (
+                      <LicensePlate plate={currentVehicle.plate_number} size="sm" />
+                    )}
                     {currentVehicle?.vehicle_code && <span className="text-xs text-gray-400"> #{currentVehicle.vehicle_code}</span>}
                     {currentVehicle?.is_working === true && (
                       <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">

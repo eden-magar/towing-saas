@@ -17,6 +17,7 @@ import { DriverTaskPoint, DriverTaskVehicle } from '@/app/lib/queries/driver-tas
 import { resolveDriverContact } from '@/app/lib/utils/driver-contact'
 import { toWhatsApp } from '@/app/lib/utils/phone'
 import { DriverVehicleCoreCompact } from '@/app/driver/components/DriverVehicleCoreCompact'
+import LicensePlate from '@/app/driver/components/LicensePlate'
 
 function StoragePointBadge({
   pointType,
@@ -216,8 +217,10 @@ export default function StepOnTheWay({
               <div key={v.id || idx} className="bg-white rounded-xl p-3 shadow-sm flex items-start gap-2">
                 <Car size={16} className="text-gray-400 shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-base font-bold text-gray-800 font-mono">{v.plate_number}</span>
+                  {v.plate_number && (
+                    <LicensePlate plate={v.plate_number} size="md" />
+                  )}
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     {v.vehicle_code && (
                       <span className="text-xs text-gray-400">#{v.vehicle_code}</span>
                     )}

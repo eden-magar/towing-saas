@@ -18,6 +18,7 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react'
+import LicensePlate from '../../components/LicensePlate'
 
 export default function DriverNavigationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -161,10 +162,10 @@ export default function DriverNavigationPage({ params }: { params: Promise<{ id:
 
         <div className="bg-white rounded-2xl shadow-lg px-4 py-2.5 flex items-center gap-2">
           <span className="font-mono font-bold text-slate-800">#{id.slice(0, 8)}</span>
-          {vehicle && (
+          {vehicle?.plate_number && (
             <>
               <span className="text-slate-300">•</span>
-              <span className="font-mono text-[#33d4ff] font-bold">{vehicle.plate_number}</span>
+              <LicensePlate plate={vehicle.plate_number} size="sm" />
             </>
           )}
         </div>

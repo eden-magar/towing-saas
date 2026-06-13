@@ -51,7 +51,7 @@ import {
   uploadPlateImage,
   uploadVehiclePhoto,
 } from '@/app/lib/queries/event-plate-capture'
-import LicensePlate from './components/LicensePlate'
+import LicensePlate from '../../components/LicensePlate'
 import PlateCamera from './components/PlateCamera'
 import VehiclePhotoCamera from './components/VehiclePhotoCamera'
 

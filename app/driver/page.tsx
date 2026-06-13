@@ -18,6 +18,7 @@ import {
   DriverInfo
 } from '../lib/queries/driver-tasks'
 import { driverVehicleDisplayName } from './components/DriverVehicleCoreCompact'
+import LicensePlate from './components/LicensePlate'
 import { resolveDriverContact } from '../lib/utils/driver-contact'
 import { getDriverActiveEvents, type DriverActiveEvent } from '../lib/queries/events'
 import { 
@@ -712,12 +713,12 @@ export default function DriverHomePage() {
                         <div className="text-xs font-mono text-gray-400">#{task.order_number}</div>
                       )}
                           {getVehicleInfo(task).plate && (
-                            <span className="inline-block bg-yellow-100 text-yellow-800 text-xs font-mono px-2 py-0.5 rounded mt-1">
-                              {getVehicleInfo(task).plate}
+                            <div className="mt-1 flex flex-col gap-1">
+                              <LicensePlate plate={getVehicleInfo(task).plate} size="sm" />
                               {getVehicleInfo(task).vehicleCode && (
-                                <span className="text-xs text-gray-400"> #{getVehicleInfo(task).vehicleCode}</span>
+                                <span className="text-xs text-gray-400">#{getVehicleInfo(task).vehicleCode}</span>
                               )}
-                            </span>
+                            </div>
                           )}
                         </div>
                         <div className="text-sm text-gray-500">

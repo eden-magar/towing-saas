@@ -23,6 +23,7 @@ import {
   RejectionReason 
 } from '@/app/lib/queries/rejection-requests'
 import { supabase } from '@/app/lib/supabase'
+import LicensePlate from '@/app/driver/components/LicensePlate'
 
 type RoutePointLite = { point_type: string; point_order: number }
 
@@ -264,7 +265,7 @@ export default function NewTaskModal({
                       {`${v.manufacturer || ''} ${v.model || ''}`.trim() || 'רכב'}
                     </div>
                     <div className="text-sm text-gray-500 flex flex-wrap items-center gap-1.5">
-                      <span>{v.plate_number}</span>
+                      {v.plate_number && <LicensePlate plate={v.plate_number} size="sm" />}
                       {v.vehicle_code && <span className="text-xs text-gray-400">#{v.vehicle_code}</span>}
                       {v.is_working === true && (
                         <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md">תקין</span>
