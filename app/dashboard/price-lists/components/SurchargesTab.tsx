@@ -1,17 +1,8 @@
 'use client'
-import { Plus, Trash2, Clock, MapPin, Wrench } from 'lucide-react'
-import { TimeInput } from '../../../components/ui/TimeInput'
+import { Plus, Trash2, MapPin, Wrench } from 'lucide-react'
+import { TimeSurchargesEditor, type TimeSurchargeEditorRow } from './TimeSurchargesEditor'
 
-interface TimeSurcharge {
-  id: string
-  name: string
-  label: string
-  time_start: string
-  time_end: string
-  day_type: string
-  surcharge_percent: number
-  is_active: boolean
-}
+type TimeSurcharge = TimeSurchargeEditorRow
 interface LocationSurcharge {
   id: string
   label: string
@@ -133,76 +124,12 @@ export function SurchargesTab({
   return (
     <div className="space-y-4">
 
-      {/* תוספות זמן */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <SectionHeader
-          icon={<Clock size={16} className="text-orange-500" />}
-          title="תוספות זמן"
-          subtitle="מופעלות אוטומטית לפי שעה ויום"
-          onAdd={onTimeSurchargeAdd}
-        />
-        {timeSurcharges.length === 0 ? (
-          <p className="text-center py-8 text-gray-400 text-sm">אין תוספות זמן</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-[1fr_140px_100px_100px_auto] gap-0 text-xs font-medium text-gray-400 px-5 py-2.5 bg-gray-50/50 border-b border-gray-100">
-              <div>שם</div>
-              <div>סוג יום</div>
-              <div>שעת התחלה</div>
-              <div>שעת סיום</div>
-              <div className="w-16 text-center">%</div>
-            </div>
-            <div className="divide-y divide-gray-50">
-              {timeSurcharges.map((item) => (
-                <div key={item.id} className="grid grid-cols-[1fr_140px_100px_100px_auto] gap-3 items-center px-5 py-3 hover:bg-gray-50/30 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={item.is_active}
-                      onChange={(e) => onTimeSurchargeUpdate(item.id, { is_active: e.target.checked })}
-                      className="rounded accent-[#33d4ff]"
-                    />
-                    <TextInput
-                      value={item.label}
-                      onChange={(v) => onTimeSurchargeUpdate(item.id, { label: v, name: v })}
-                      placeholder="שם התוספת"
-                      className="flex-1"
-                    />
-                  </div>
-                  <select
-                    value={item.day_type}
-                    onChange={(e) => onTimeSurchargeUpdate(item.id, { day_type: e.target.value })}
-                    className="px-2 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
-                  >
-                    <option value="all">כל הימים</option>
-                    <option value="weekday">ימי חול</option>
-                    <option value="friday">שישי</option>
-                    <option value="saturday">שבת</option>
-                    <option value="holiday">חג</option>
-                  </select>
-                  <TimeInput
-                    value={item.time_start}
-                    onChange={(v) => onTimeSurchargeUpdate(item.id, { time_start: v })}
-                    className="px-2 py-2 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
-                  />
-                  <TimeInput
-                    value={item.time_end}
-                    onChange={(v) => onTimeSurchargeUpdate(item.id, { time_end: v })}
-                    className="px-2 py-2 rounded-xl text-sm focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
-                  />
-                  <div className="flex items-center gap-2 w-16">
-                    <PercentInput
-                      value={item.surcharge_percent}
-                      onChange={(v) => onTimeSurchargeUpdate(item.id, { surcharge_percent: v })}
-                    />
-                    <RemoveButton onClick={() => onTimeSurchargeRemove(item.id)} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+      <TimeSurchargesEditor
+        rows={timeSurcharges}
+        onUpdate={onTimeSurchargeUpdate}
+        onAdd={onTimeSurchargeAdd}
+        onRemove={onTimeSurchargeRemove}
+      />
 
       {/* תוספות מיקום */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
