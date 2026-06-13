@@ -16,6 +16,7 @@ import {
 import { DriverTaskPoint, DriverTaskVehicle } from '@/app/lib/queries/driver-tasks'
 import { resolveDriverContact } from '@/app/lib/utils/driver-contact'
 import { toWhatsApp } from '@/app/lib/utils/phone'
+import { DriverVehicleCoreCompact } from '@/app/driver/components/DriverVehicleCoreCompact'
 
 function StoragePointBadge({
   pointType,
@@ -216,9 +217,10 @@ export default function StepOnTheWay({
                 <Car size={16} className="text-gray-400 shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-sm font-medium text-gray-700 font-mono">{v.plate_number}</span>
-                    {v.vehicle_code && <span className="text-xs text-gray-400"> #{v.vehicle_code}</span>}
-                    {v.color && <span className="text-xs text-gray-400">• {v.color}</span>}
+                    <span className="text-base font-bold text-gray-800 font-mono">{v.plate_number}</span>
+                    {v.vehicle_code && (
+                      <span className="text-xs text-gray-400">#{v.vehicle_code}</span>
+                    )}
                     {v.is_working === true && (
                       <span className="text-xs bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-md font-medium">
                         תקין
@@ -230,8 +232,9 @@ export default function StepOnTheWay({
                       </span>
                     )}
                   </div>
+                  <DriverVehicleCoreCompact vehicle={v} />
                   {v.tow_reason && !v.is_working && (
-                    <div className="text-xs text-orange-600 mt-1">
+                    <div className="text-xs text-orange-600 mt-1.5">
                       {'\uD83D\uDD27'} תקלות: {v.tow_reason}
                     </div>
                   )}

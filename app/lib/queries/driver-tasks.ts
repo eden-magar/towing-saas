@@ -16,12 +16,19 @@ export interface DriverTaskVehicle {
   model: string | null
   year: number | null
   color: string | null
+  vehicle_type?: string | null
+  registry_source?: string | null
   is_working: boolean | null
   tow_reason: string | null
   fuel_type: string | null
   drive_type: string | null
   gear_type: string | null
   total_weight: number | null
+  self_weight_ton?: number | null
+  total_weight_ton?: number | null
+  machinery_type?: string | null
+  chassis?: string | null
+  import_type?: string | null
   drive_technology: string | null
 }
 

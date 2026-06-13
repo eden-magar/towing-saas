@@ -17,6 +17,7 @@ import {
   DriverTask,
   DriverInfo
 } from '../lib/queries/driver-tasks'
+import { driverVehicleDisplayName } from './components/DriverVehicleCoreCompact'
 import { resolveDriverContact } from '../lib/utils/driver-contact'
 import { getDriverActiveEvents, type DriverActiveEvent } from '../lib/queries/events'
 import { 
@@ -225,7 +226,7 @@ export default function DriverHomePage() {
   if (task.vehicles.length === 0) return { name: 'אין פרטי רכב', plate: '', vehicleCode: '' }
   const v = task.vehicles[0]
   return {
-    name: `${v.manufacturer || ''} ${v.model || ''}`.trim() || 'רכב',
+    name: driverVehicleDisplayName(v),
     plate: v.plate_number || '',
     vehicleCode: v.vehicle_code || ''
   }
