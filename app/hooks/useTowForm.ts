@@ -43,7 +43,7 @@ import {
 } from '../lib/utils/storage-vehicle'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
-import { RoutePoint } from '../components/tow-forms/routes'
+import { RoutePoint, type VehicleOnTruck } from '../components/tow-forms/routes'
 import {
   buildRoutePointsFromExchangeState,
   type ExchangeFormState,
@@ -116,6 +116,7 @@ const TOW_VEHICLE_REGISTRY_LABELS: Record<string, string> = {
 }
 
 type TowVehicleEditRow = {
+  id?: string
   plate_number?: string | null
   manufacturer?: string | null
   model?: string | null
@@ -326,6 +327,105 @@ function buildVehicleLookupResultFromTowVehicle(
       selfWeight: v.self_weight_ton ?? null,
       totalWeightTon: v.total_weight_ton ?? null,
     },
+  }
+}
+
+function resolveFullTowVehicleRow(
+  towVehicles: TowVehicleEditRow[] | undefined,
+  vehicleId: string | undefined,
+  plateNumber: string | undefined
+): TowVehicleEditRow | undefined {
+  const rows = towVehicles ?? []
+  if (vehicleId) {
+    const byId = rows.find((v) => v.id === vehicleId)
+    if (byId) return byId
+  }
+  const plate = plateNumber?.trim()
+  if (!plate) return undefined
+  const normalized = normalizePlate(plate)
+  return rows.find((v) => normalizePlate(v.plate_number || '') === normalized)
+}
+
+function parseTowReasonDefects(towReason: string | null | undefined): string[] {
+  if (!towReason?.trim()) return []
+  return towReason
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function vehicleDataFromTowVehicleRow(row: TowVehicleEditRow) {
+  return {
+    manufacturer: row.manufacturer || undefined,
+    model: row.model || undefined,
+    year: row.year != null ? String(row.year) : undefined,
+    color: row.color || undefined,
+    gearType: row.gear_type || undefined,
+    driveType: row.drive_type || undefined,
+    totalWeight: row.total_weight != null ? String(row.total_weight) : undefined,
+    fuelType: row.fuel_type || undefined,
+    chassis: row.chassis || undefined,
+    importType: row.import_type || undefined,
+    machineryType: row.machinery_type || undefined,
+    selfWeight: row.self_weight_ton != null ? String(row.self_weight_ton) : undefined,
+    totalWeightTon: row.total_weight_ton != null ? String(row.total_weight_ton) : undefined,
+  }
+}
+
+/** Edit-mode custom route: merge tow.vehicles full row so save round-trips DB columns. */
+function hydrateRouteVehicleFromTowRows(
+  nestedVehicle: TowVehicleEditRow,
+  fullRow: TowVehicleEditRow | undefined,
+  vehicleId: string
+): VehicleOnTruck {
+  const row: TowVehicleEditRow = fullRow ? { ...nestedVehicle, ...fullRow } : nestedVehicle
+  const plateNumber = row.plate_number || ''
+  const isWorking = row.is_working !== false
+  const defects = parseTowReasonDefects(row.tow_reason)
+  const vehicleData = vehicleDataFromTowVehicleRow(row)
+
+  const base: VehicleOnTruck = {
+    id: vehicleId,
+    plateNumber,
+    isWorking,
+    defects,
+    vehicleCode: row.vehicle_code || '',
+    registrySource: row.registry_source ?? null,
+  }
+
+  if (isManualCommercialVehicle(row)) {
+    return {
+      ...base,
+      vehicleType: 'van',
+      vehicleNotFound: true,
+      manualManufacturer: row.manufacturer || '',
+      manualColor: row.color || '',
+      manualWeight: row.total_weight != null ? String(row.total_weight) : '',
+      vehicleData,
+    }
+  }
+
+  const savedType = (row.vehicle_type || '') as VehicleType | ''
+  const lookupResult = buildVehicleLookupResultFromTowVehicle(row)
+
+  if (lookupResult) {
+    return {
+      ...base,
+      isFound: true,
+      vehicleNotFound: false,
+      vehicleType: savedType || (lookupResult.source as string) || undefined,
+      vehicleData,
+    }
+  }
+
+  return {
+    ...base,
+    vehicleType: savedType || undefined,
+    vehicleNotFound: true,
+    manualManufacturer: row.manufacturer || '',
+    manualColor: row.color || '',
+    manualWeight: row.total_weight != null ? String(row.total_weight) : '',
+    vehicleData,
   }
 }
 
@@ -1462,6 +1562,7 @@ export function useTowForm(
         // Custom tow - route points (step 2; duplicate gets fresh ids only)
 
         if (tow.tow_type === 'multi_vehicle' && tow.points) {
+          const towVehicleRows = (tow.vehicles ?? []) as TowVehicleEditRow[]
           const points: RoutePoint[] = tow.points.map((p: any) => ({
             id: isDuplicateLoad ? crypto.randomUUID() : p.id,
             type: p.point_type === 'pickup' ? 'stop' : 'stop',
@@ -1473,18 +1574,29 @@ export function useTowForm(
             notes: p.notes || '',
             vehiclesToPickup: (p.vehicles || [])
               .filter((pv: any) => pv.action === 'pickup' && pv.vehicle)
-              .map((pv: any) => ({
-                id: isDuplicateLoad ? crypto.randomUUID() : pv.vehicle.id,
-                plateNumber: pv.vehicle.plate_number || '',
-                isWorking: pv.vehicle.is_working !== false,
-                defects: [],
-                vehicleCode: '',
-                vehicleData: {
-                  manufacturer: pv.vehicle.manufacturer,
-                  model: pv.vehicle.model,
-                  color: pv.vehicle.color,
+              .map((pv: any) => {
+                const vehicleId = isDuplicateLoad ? crypto.randomUUID() : pv.vehicle.id
+                if (editTowId) {
+                  const fullRow = resolveFullTowVehicleRow(
+                    towVehicleRows,
+                    pv.vehicle.id,
+                    pv.vehicle.plate_number
+                  )
+                  return hydrateRouteVehicleFromTowRows(pv.vehicle, fullRow, vehicleId)
                 }
-              })),
+                return {
+                  id: vehicleId,
+                  plateNumber: pv.vehicle.plate_number || '',
+                  isWorking: pv.vehicle.is_working !== false,
+                  defects: [],
+                  vehicleCode: '',
+                  vehicleData: {
+                    manufacturer: pv.vehicle.manufacturer,
+                    model: pv.vehicle.model,
+                    color: pv.vehicle.color,
+                  },
+                }
+              }),
             vehiclesToDropoff: isDuplicateLoad
               ? []
               : (p.vehicles || [])
