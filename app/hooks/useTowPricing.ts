@@ -10,7 +10,7 @@ import {
 import { SelectedService } from '../components/tow-forms/shared'
 import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
-import { calculateTowPrice, extractBasePrices, TowPriceResult } from '../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, TowPriceResult } from '../lib/utils/price-calculator'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
   if (!services?.length) return []
@@ -186,9 +186,10 @@ export function useTowPricing(params: UseTowPricingParams) {
   const customRouteServicesKey = JSON.stringify(customRouteData.services)
 
   const recommendedResult = useMemo((): TowPriceResult | null => {
-    const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
-      ? selectedCustomerPricing.price_list
-      : basePriceList
+    const activePriceList =
+      priceMode === 'recommended_customer'
+        ? mergePriceLists(basePriceList, selectedCustomerPricing?.price_list ?? null)
+        : basePriceList
 
     if (towType === 'custom') {
       if (customRouteData.vehicles.length === 0 || customRouteData.totalDistanceKm === 0) return null
@@ -308,9 +309,10 @@ export function useTowPricing(params: UseTowPricingParams) {
   ])
 
   const finalResult = useMemo((): TowPriceResult | null => {
-    const activePriceList = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
-      ? selectedCustomerPricing.price_list
-      : basePriceList
+    const activePriceList =
+      priceMode === 'recommended_customer'
+        ? mergePriceLists(basePriceList, selectedCustomerPricing?.price_list ?? null)
+        : basePriceList
 
     if (priceMode === 'custom' && customPrice) {
       const price = parseFloat(customPrice)

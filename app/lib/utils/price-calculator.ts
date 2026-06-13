@@ -297,6 +297,64 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
 
 // ==================== Helpers for callers ====================
 
+export type MergeablePriceList = Record<string, any> | object | null | undefined
+
+/** Treat '' as unset; preserve 0 as an explicit value. */
+export function normalizeNullableNumber(value: unknown): number | null {
+  if (value === '' || value === null || value === undefined) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+function normalizeNullableString(value: unknown): string | null {
+  if (value === '' || value === null || value === undefined) return null
+  return String(value)
+}
+
+const MERGE_NUMERIC_FIELDS = [
+  'base_price_private',
+  'base_price_motorcycle',
+  'base_price_heavy',
+  'base_price_machinery',
+  'price_per_km',
+  'minimum_price',
+  'base_lat',
+  'base_lng',
+] as const
+
+/**
+ * Per-field merge: customer value when set (including 0), else company.
+ * Does not merge surcharges — base list scalars only.
+ */
+export function mergePriceLists(
+  company: MergeablePriceList,
+  customer: MergeablePriceList
+): Record<string, any> | null {
+  if (customer == null) return (company as Record<string, any>) ?? null
+  if (company == null) return (customer as Record<string, any>) ?? null
+
+  const merged: Record<string, any> = { ...(company as Record<string, any>) }
+
+  const customerRec = customer as Record<string, any>
+  for (const key of MERGE_NUMERIC_FIELDS) {
+    const customerVal = normalizeNullableNumber(customerRec[key])
+    if (customerVal != null) {
+      merged[key] = customerVal
+    }
+  }
+
+  const customerAddress = normalizeNullableString(customerRec.base_address)
+  if (customerAddress != null) {
+    merged.base_address = customerAddress
+  }
+
+  return merged
+}
+
 /**
  * Build base_prices from a price list (DB format).
  */

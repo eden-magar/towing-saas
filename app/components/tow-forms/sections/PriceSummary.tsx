@@ -3,7 +3,7 @@
 import { FileText } from 'lucide-react'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge, CustomerWithPricing } from '../../../lib/queries/price-lists'
 import { SelectedService } from '../shared'
-import { calculateTowPrice, extractBasePrices } from '../../../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists } from '../../../lib/utils/price-calculator'
 import { VehicleType } from '../../../lib/types'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
@@ -129,9 +129,10 @@ export function PriceSummary({
     )
   }
 
-  const activePriceList: any = (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list)
-    ? selectedCustomerPricing.price_list
-    : basePriceList
+  const activePriceList: any =
+    priceMode === 'recommended_customer'
+      ? mergePriceLists(basePriceList, selectedCustomerPricing?.price_list ?? null)
+      : basePriceList
 
   const hasDataForCalculation = isCustomRoute
     ? (customRouteData

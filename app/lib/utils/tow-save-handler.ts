@@ -8,7 +8,7 @@ import {
 } from '../queries/price-lists'
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
-import { calculateTowPrice, extractBasePrices, resolveVehicleBasePrice } from './price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, resolveVehicleBasePrice } from './price-calculator'
 import { VehicleType, VehicleLookupResult } from '../types'
 import { normalizePlate } from './plate-number'
 import {
@@ -920,9 +920,10 @@ function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['s
  * Thin wrapper: calls calculateTowPrice and formats for DB storage.
  */
 export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdown {
-  const activePriceList = (input.priceMode === 'recommended_customer' && input.selectedCustomerPricing?.price_list)
-    ? input.selectedCustomerPricing.price_list
-    : input.basePriceList
+  const activePriceList =
+    input.priceMode === 'recommended_customer'
+      ? mergePriceLists(input.basePriceList, input.selectedCustomerPricing?.price_list ?? null)
+      : input.basePriceList
 
   const pickupToDropoffKm = input.distance?.distanceKm || 0
   const baseToPickupKm = (input.startFromBase && input.baseToPickupDistance?.distanceKm) || 0
@@ -1055,8 +1056,8 @@ export function buildCustomTowPriceBreakdown(
   routePoints: RoutePoint[]
 ): PriceBreakdown & { vehicle_count: number; route_points: RoutePoint[] } {
   const activePriceList =
-    input.priceMode === 'recommended_customer' && input.selectedCustomerPricing?.price_list
-      ? input.selectedCustomerPricing.price_list
+    input.priceMode === 'recommended_customer'
+      ? mergePriceLists(input.basePriceList, input.selectedCustomerPricing?.price_list ?? null)
       : input.basePriceList
 
   const vehicles = input.customRouteData?.vehicles || []
