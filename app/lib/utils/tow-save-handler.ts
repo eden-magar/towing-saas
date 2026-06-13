@@ -164,6 +164,9 @@ export interface SaveTowInput {
   /** Exchange edit: baseline signature captured at hydration — unchanged inputs keep saved price */
   exchangeEditPriceBaselineSignature?: string | null
   exchangeEditOriginalFinalPrice?: number | null
+  /** Single-tow edit: baseline signature captured at hydration — unchanged inputs keep saved price */
+  singleEditPriceBaselineSignature?: string | null
+  singleEditOriginalFinalPrice?: number | null
   exchangeRouteLayout?: 'four_point' | 'hub' | null
   stopsBeforeExchange?: { address: AddressData }[]
   stopsAfterExchange?: { address: AddressData }[]
@@ -291,6 +294,88 @@ export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string
     selectedLocationSurcharges: input.selectedLocationSurcharges,
     workingSelectedServices: input.workingSelectedServices,
     defectiveSelectedServices: input.defectiveSelectedServices,
+    activeTimeSurchargeIds: (input.activeTimeSurcharges ?? []).map((s) => s.id),
+    timeSurchargesData: input.timeSurchargesData,
+    selectedCustomerPricing: input.selectedCustomerPricing,
+    isHoliday: input.isHoliday,
+    hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
+    manualAdjustmentPercent: input.manualAdjustmentPercent,
+    towDate: input.towDate,
+    towTime: input.towTime,
+  })
+}
+
+export type SinglePriceAffectingFields = {
+  routeStops?: SaveTowInput['routeStops']
+  startFromBase?: boolean
+  vehicleType?: string
+  manualWeight?: string
+  priceMode: string
+  customerId?: string | null
+  discountPercent?: number
+  selectedLocationSurcharges?: string[]
+  selectedServices?: SelectedService[]
+  activeTimeSurchargeIds?: string[]
+  timeSurchargesData?: TimeSurcharge[]
+  selectedCustomerPricing?: CustomerWithPricing | null
+  isHoliday?: boolean
+  hasManualTimeSurchargeOverride?: boolean
+  manualAdjustmentPercent?: number
+  towDate?: string
+  towTime?: string
+}
+
+function singleRouteStopsSignature(routeStops?: SaveTowInput['routeStops']): string {
+  return JSON.stringify(
+    (routeStops ?? []).map((stop) => [
+      stop.address.address,
+      stop.address.lat,
+      stop.address.lng,
+    ])
+  )
+}
+
+/** Stable signature of single-tow inputs that affect recommended/custom price calculation. */
+export function buildSinglePriceAffectingSignature(fields: SinglePriceAffectingFields): string {
+  return JSON.stringify({
+    route: singleRouteStopsSignature(fields.routeStops),
+    startFromBase: fields.startFromBase ?? false,
+    vehicleType: fields.vehicleType ?? '',
+    manualWeight: fields.manualWeight ?? '',
+    priceMode: fields.priceMode,
+    customerId: fields.customerId ?? '',
+    discountPercent: fields.discountPercent ?? 0,
+    location: [...(fields.selectedLocationSurcharges ?? [])].sort().join(','),
+    services: exchangeServicesSignature(fields.selectedServices),
+    timeIds: exchangeTimeSurchargeIds({
+      priceMode: fields.priceMode,
+      activeTimeSurchargeIds: fields.activeTimeSurchargeIds,
+      timeSurchargesData: fields.timeSurchargesData,
+      selectedCustomerPricing: fields.selectedCustomerPricing,
+      isHoliday: fields.isHoliday,
+      hasManualTimeSurchargeOverride: fields.hasManualTimeSurchargeOverride,
+      towDate: fields.towDate,
+      towTime: fields.towTime,
+    }),
+    towDate: fields.towDate ?? '',
+    towTime: fields.towTime ?? '',
+    isHoliday: fields.isHoliday ?? false,
+    hasManualTimeSurchargeOverride: fields.hasManualTimeSurchargeOverride ?? false,
+    manualAdj: fields.manualAdjustmentPercent ?? 0,
+  })
+}
+
+export function singlePriceSignatureFromSaveInput(input: SaveTowInput): string {
+  return buildSinglePriceAffectingSignature({
+    routeStops: input.routeStops,
+    startFromBase: input.startFromBase,
+    vehicleType: input.vehicleType,
+    manualWeight: input.manualWeight,
+    priceMode: input.priceMode,
+    customerId: input.customerId,
+    discountPercent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    selectedLocationSurcharges: input.selectedLocationSurcharges,
+    selectedServices: input.selectedServices,
     activeTimeSurchargeIds: (input.activeTimeSurcharges ?? []).map((s) => s.id),
     timeSurchargesData: input.timeSurchargesData,
     selectedCustomerPricing: input.selectedCustomerPricing,
@@ -1231,7 +1316,27 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
 
   // גרירה רגילה
   if (input.towType === 'single') {
-    const priceBreakdown = buildSingleTowPriceBreakdownForSave(input)
+    const singlePriceInputsUnchanged =
+      input.singleEditPriceBaselineSignature != null &&
+      singlePriceSignatureFromSaveInput(input) === input.singleEditPriceBaselineSignature &&
+      input.existingPriceBreakdown != null
+
+    let priceBreakdown: PriceBreakdown | null
+    let resolvedSingleFinalPrice: number | undefined
+
+    if (singlePriceInputsUnchanged) {
+      priceBreakdown = structuredClone(input.existingPriceBreakdown!)
+      resolvedSingleFinalPrice =
+        input.singleEditOriginalFinalPrice ??
+        input.existingPriceBreakdown!.total ??
+        input.finalPrice
+    } else if (input.priceMode === 'custom') {
+      priceBreakdown = buildSingleTowPriceBreakdownForSave(input)
+      resolvedSingleFinalPrice = input.finalPrice
+    } else {
+      priceBreakdown = buildSingleTowPriceBreakdownForSave(input)
+      resolvedSingleFinalPrice = input.finalPrice
+    }
     
     const vehicles: PreparedTowData['vehicles'] = assignExistingVehicleIds(
       [{
@@ -1292,7 +1397,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       scheduledAt,
       scheduledEndAt,
       notes: input.notes || undefined,
-      finalPrice: input.finalPrice || undefined,
+      finalPrice: resolvedSingleFinalPrice ?? (input.finalPrice || undefined),
       priceMode: input.priceMode,
       priceBreakdown,
       vehicles,

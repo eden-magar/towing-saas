@@ -149,6 +149,7 @@ interface UseTowSaveParams {
   isHoliday?: boolean
   hasManualTimeSurchargeOverride?: boolean
   getExchangeEditPriceBaselineSignature?: () => string | null
+  getSingleEditPriceBaselineSignature?: () => string | null
   getExchangeRouteLayout?: () => 'four_point' | 'hub' | null
   // Post-save
   setSavedTowId: (id: string) => void
@@ -267,6 +268,7 @@ export function useTowSave(params: UseTowSaveParams) {
     isHoliday,
     hasManualTimeSurchargeOverride,
     getExchangeEditPriceBaselineSignature,
+    getSingleEditPriceBaselineSignature,
     getExchangeRouteLayout,
     setSavedTowId,
     setShowAssignNowModal,
@@ -478,6 +480,14 @@ export function useTowSave(params: UseTowSaveParams) {
           : undefined,
       exchangeEditOriginalFinalPrice:
         editTowId && towType === 'exchange'
+          ? (originalTow?.final_price ?? null)
+          : undefined,
+      singleEditPriceBaselineSignature:
+        editTowId && towType === 'single'
+          ? (getSingleEditPriceBaselineSignature?.() ?? null)
+          : undefined,
+      singleEditOriginalFinalPrice:
+        editTowId && towType === 'single'
           ? (originalTow?.final_price ?? null)
           : undefined,
     })

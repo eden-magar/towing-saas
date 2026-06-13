@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
-import { getTowWithPoints, type EditTowSnapshot } from '../lib/queries/tows'
+import { getTowWithPoints, type EditTowSnapshot, type PriceBreakdown } from '../lib/queries/tows'
 import { getCustomersLite, CustomerListItem } from '../lib/queries/customers'
 import { getDrivers } from '../lib/queries/drivers'
 import { getCompanySettings } from '../lib/queries/settings'
@@ -32,7 +32,7 @@ import {
 } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
 import { extractBasePrices, resolveVehicleBasePrice } from '../lib/utils/price-calculator'
-import { buildExchangePriceAffectingSignature } from '../lib/utils/tow-save-handler'
+import { buildExchangePriceAffectingSignature, buildSinglePriceAffectingSignature } from '../lib/utils/tow-save-handler'
 import { normalizePlate } from '../lib/utils/plate-number'
 import {
   STORAGE_OTHER_CUSTOMER_MESSAGE,
@@ -106,6 +106,25 @@ function routeStopsDistanceSignatureFromPoints(
       p.lng != null && p.lng !== '' ? Number(p.lng) : undefined,
     ])
   )
+}
+
+/** Saved breakdown stores { id, label, percent, amount } — join id → catalog day_type. */
+function inferIsHolidayFromSavedBreakdown(
+  breakdown: PriceBreakdown | null | undefined,
+  catalogs: TimeSurcharge[][]
+): boolean {
+  const applied = (breakdown?.time_surcharges ?? []).filter((row) => (row.amount ?? 0) > 0)
+  if (applied.length === 0) return false
+
+  const byId = new Map<string, TimeSurcharge>()
+  for (const catalog of catalogs) {
+    for (const entry of catalog) {
+      if (entry.id) byId.set(entry.id, entry)
+    }
+  }
+  if (byId.size === 0) return false
+
+  return applied.some((row) => byId.get(row.id)?.day_type === 'holiday')
 }
 
 const TOW_VEHICLE_REGISTRY_LABELS: Record<string, string> = {
@@ -592,6 +611,10 @@ export function useTowForm(
   const editExchangeRouteBaselineRef = useRef<string | null>(null)
   const editExchangePriceBaselineRef = useRef<string | null>(null)
   const editExchangePriceBaselineCapturedRef = useRef(false)
+  const editSinglePriceBaselineRef = useRef<string | null>(null)
+  const editSinglePriceBaselineCapturedRef = useRef(false)
+  const editIsHolidayHydratedRef = useRef(false)
+  const [editIsHolidayHydrationSettled, setEditIsHolidayHydrationSettled] = useState(false)
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
@@ -718,6 +741,11 @@ export function useTowForm(
     editExchangeRouteBaselineRef.current = null
     editExchangePriceBaselineRef.current = null
     editExchangePriceBaselineCapturedRef.current = false
+    editSinglePriceBaselineRef.current = null
+    editSinglePriceBaselineCapturedRef.current = false
+    editIsHolidayHydratedRef.current = false
+    setEditIsHolidayHydrationSettled(false)
+    setIsHoliday(false)
     setEditHydrationSettled(false)
   }, [editTowId])
 
@@ -801,6 +829,48 @@ export function useTowForm(
     }
   }, [editTowId, towType, editHydrationSettled, routeStopsDistanceSignature])
 
+  // Edit-only: restore isHoliday from saved breakdown (catalog id → day_type === 'holiday')
+  useEffect(() => {
+    if (!editTowId) return
+    if (editIsHolidayHydratedRef.current) return
+    const breakdown = editTowSnapshot?.price_breakdown
+    if (!breakdown) {
+      editIsHolidayHydratedRef.current = true
+      setEditIsHolidayHydrationSettled(true)
+      return
+    }
+
+    if (timeSurchargesData.length === 0) return
+
+    const needsCustomerCatalog = priceMode === 'recommended_customer' && !!selectedCustomerId
+    if (needsCustomerCatalog && customersWithPricing.length === 0) return
+
+    const customerPricing =
+      selectedCustomerId
+        ? customersWithPricing.find((c) => c.customer_id === selectedCustomerId) ??
+          selectedCustomerPricing
+        : null
+    const customerCatalog =
+      priceMode === 'recommended_customer' &&
+      (customerPricing?.customer_time_surcharges?.length ?? 0) > 0
+        ? customerPricing!.customer_time_surcharges!
+        : []
+
+    if (inferIsHolidayFromSavedBreakdown(breakdown, [timeSurchargesData, customerCatalog])) {
+      setIsHoliday(true)
+    }
+    editIsHolidayHydratedRef.current = true
+    setEditIsHolidayHydrationSettled(true)
+  }, [
+    editTowId,
+    editTowSnapshot,
+    timeSurchargesData,
+    selectedCustomerPricing,
+    selectedCustomerId,
+    customersWithPricing,
+    priceMode,
+  ])
+
   // Capture exchange edit price-affecting baseline once after hydration settles
   useEffect(() => {
     if (!editTowId || towType !== 'exchange' || !editHydrationSettled) return
@@ -854,6 +924,71 @@ export function useTowForm(
     selectedLocationSurcharges,
     workingSelectedServices,
     defectiveSelectedServices,
+    activeTimeSurchargesList,
+    timeSurchargesData,
+    isHoliday,
+    hasManualTimeSurchargeOverride,
+    manualAdjustmentPercent,
+    manualAdjustmentType,
+  ])
+
+  // Capture single-tow edit price-affecting baseline once after hydration + isHoliday restore
+  useEffect(() => {
+    if (!editTowId || towType !== 'single' || !editHydrationSettled) return
+    if (editSinglePriceBaselineCapturedRef.current) return
+    if (!editIsHolidayHydrationSettled) return
+    if (!towDate || !towTime) return
+    if (!editRouteBaselineRef.current) return
+    if (routeStopsDistanceSignature !== editRouteBaselineRef.current) return
+
+    const manualAdj = parseFloat(manualAdjustmentPercent ?? '') || 0
+    editSinglePriceBaselineRef.current = buildSinglePriceAffectingSignature({
+      routeStops: routeStops.map((s) => ({
+        id: s.id,
+        role: s.role,
+        stopSubtype: s.stopSubtype,
+        address: s.address,
+        contactName: s.contactName,
+        contactPhone: s.contactPhone,
+        notes: s.notes,
+        orderNotes: s.orderNotes,
+      })),
+      startFromBase,
+      vehicleType: vehicleType || undefined,
+      manualWeight,
+      priceMode,
+      customerId: selectedCustomerId,
+      discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      selectedLocationSurcharges,
+      selectedServices,
+      activeTimeSurchargeIds: activeTimeSurchargesList.map((s) => s.id),
+      timeSurchargesData,
+      selectedCustomerPricing,
+      isHoliday,
+      hasManualTimeSurchargeOverride,
+      manualAdjustmentPercent:
+        manualAdjustmentType === 'discount' ? -manualAdj : manualAdj,
+      towDate,
+      towTime,
+    })
+    editSinglePriceBaselineCapturedRef.current = true
+  }, [
+    editTowId,
+    towType,
+    editHydrationSettled,
+    editIsHolidayHydrationSettled,
+    towDate,
+    towTime,
+    routeStops,
+    routeStopsDistanceSignature,
+    startFromBase,
+    vehicleType,
+    manualWeight,
+    priceMode,
+    selectedCustomerId,
+    selectedCustomerPricing,
+    selectedLocationSurcharges,
+    selectedServices,
     activeTimeSurchargesList,
     timeSurchargesData,
     isHoliday,
@@ -1122,6 +1257,10 @@ export function useTowForm(
         editSeededExchangeBaseRef.current = null
         editExchangePriceBaselineRef.current = null
         editExchangePriceBaselineCapturedRef.current = false
+        editSinglePriceBaselineRef.current = null
+        editSinglePriceBaselineCapturedRef.current = false
+        editIsHolidayHydratedRef.current = false
+        setEditIsHolidayHydrationSettled(false)
       }
       try {
         const tow = await getTowWithPoints(sourceTowId)
@@ -2770,6 +2909,7 @@ export function useTowForm(
     isHoliday,
     hasManualTimeSurchargeOverride,
     getExchangeEditPriceBaselineSignature: () => editExchangePriceBaselineRef.current,
+    getSingleEditPriceBaselineSignature: () => editSinglePriceBaselineRef.current,
     getExchangeRouteLayout: () => editExchangeRouteLayoutRef.current,
     setSavedTowId,
     setShowAssignNowModal,
@@ -2895,6 +3035,7 @@ export function useTowForm(
     stopsBeforeExchange, setStopsBeforeExchange,
     stopsAfterExchange, setStopsAfterExchange,
     getExchangeEditPriceBaselineSignature: () => editExchangePriceBaselineRef.current,
+    getSingleEditPriceBaselineSignature: () => editSinglePriceBaselineRef.current,
     getExchangeRouteLayout: () => editExchangeRouteLayoutRef.current,
     exchangeTotalDistance, setExchangeTotalDistance,
     exchangeDistanceLoading, setExchangeDistanceLoading,
