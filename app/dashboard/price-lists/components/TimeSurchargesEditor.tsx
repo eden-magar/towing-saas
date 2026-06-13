@@ -91,7 +91,7 @@ function SectionHeader({ onAdd }: { onAdd: () => void }) {
 
 function PercentInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div className="relative w-24">
+    <div className="relative w-24 shrink-0 min-w-[6rem]">
       <input
         type="number"
         value={value}
@@ -132,7 +132,7 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-const GRID_COLS = 'grid-cols-[56px_minmax(120px,1fr)_120px_5.5rem_5.5rem_auto]'
+const GRID_COLS = 'grid-cols-[56px_minmax(120px,1fr)_120px_5.5rem_5.5rem_8.5rem]'
 
 export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSurchargesEditorProps) {
   return (
@@ -142,7 +142,7 @@ export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSu
         <p className="text-center py-8 text-gray-400 text-sm">אין תוספות זמן</p>
       ) : (
         <div className="overflow-x-auto">
-          <div className={`grid ${GRID_COLS} gap-x-3 px-5 min-w-[640px]`}>
+          <div className={`grid ${GRID_COLS} gap-x-3 px-5 min-w-[680px]`}>
           {/* Header — contents so cells share column tracks with data rows */}
           <div className="contents text-xs font-medium text-gray-400">
             <div className="py-2.5 bg-gray-50/50 border-b border-gray-100 text-center">פעיל</div>
@@ -199,7 +199,7 @@ export function TimeSurchargesEditor({ rows, onUpdate, onAdd, onRemove }: TimeSu
                   className="w-full px-2 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff]"
                 />
               </div>
-              <div className="py-3 min-w-0 flex items-center gap-2 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
+              <div className="py-3 flex items-center gap-2 border-b border-gray-50 group-hover:bg-gray-50/30 transition-colors">
                 <PercentInput
                   value={item.surcharge_percent}
                   onChange={(v) => onUpdate(item.id, { surcharge_percent: v })}

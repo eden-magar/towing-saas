@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/AuthContext'
 import { Save, RefreshCw, X, Plus, Trash2 } from 'lucide-react'
 import {
@@ -138,6 +139,9 @@ function mapCustomerWithPricingToList(c: CustomerWithPricing): CustomerPriceList
 
 export default function PriceListsPage() {
   const { companyId, loading: authLoading } = useAuth()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const deepLinkOpenedRef = useRef(false)
   const [activeTab, setActiveTab] = useState<'base' | 'fixed' | 'surcharges' | 'customers'>('base')
   const [hasChanges, setHasChanges] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -605,26 +609,51 @@ export default function PriceListsPage() {
     setShowCustomerModal(true)
   }
 
+  const openCustomerByCompanyId = async (customerCompanyId: string) => {
+    if (!companyId) return
+
+    try {
+      const full = await getCustomerPricingByCompanyId(companyId, customerCompanyId)
+      if (!full) {
+        console.error('Customer not found for pricing:', customerCompanyId)
+        return
+      }
+      const target = mapCustomerWithPricingToList(full)
+      setCustomerPriceLists(prev => {
+        if (prev.some(c => c.customer_company_id === target.customer_company_id)) return prev
+        return [...prev, target]
+      })
+      await openCustomerModal(target)
+    } catch (error) {
+      console.error('Error opening customer pricing:', error)
+    }
+  }
+
   const handleSelectSearchCustomer = async (customer: CustomerPriceList) => {
     setCustomerSearchQuery('')
     setCustomerSearchResults([])
+    await openCustomerByCompanyId(customer.customer_company_id)
+  }
 
-    let target = customer
-    if (companyId) {
-      try {
-        const full = await getCustomerPricingByCompanyId(companyId, customer.customer_company_id)
-        if (full) target = mapCustomerWithPricingToList(full)
-      } catch (error) {
-        console.error('Error loading customer pricing summary:', error)
-      }
+  useEffect(() => {
+    if (loading || authLoading || !companyId || deepLinkOpenedRef.current) return
+
+    const tab = searchParams.get('tab')
+    const customerCompanyId = searchParams.get('customer_company_id')
+
+    if (tab === 'customers') {
+      setActiveTab('customers')
     }
 
-    setCustomerPriceLists(prev => {
-      if (prev.some(c => c.customer_company_id === target.customer_company_id)) return prev
-      return [...prev, target]
-    })
-    await openCustomerModal(target)
-  }
+    if (!customerCompanyId) return
+
+    deepLinkOpenedRef.current = true
+
+    void (async () => {
+      await openCustomerByCompanyId(customerCompanyId)
+      router.replace('/dashboard/price-lists', { scroll: false })
+    })()
+  }, [loading, authLoading, companyId, searchParams, router])
 
   const saveCustomerPrices = async () => {
     if (!editingCustomer || !companyId) return
@@ -834,7 +863,7 @@ export default function PriceListsPage() {
       {/* Customer Edit Modal */}
       {showCustomerModal && editingCustomer && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl w-full max-w-4xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-[#33d4ff] text-white">
               <div>
                 <h2 className="font-bold">מחירון מותאם</h2>
