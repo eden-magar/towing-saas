@@ -219,7 +219,7 @@ function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string 
 }
 
 function timeSurchargesForPriceCalc(
-  input: Pick<SaveTowInput, 'priceMode' | 'selectedCustomerPricing' | 'activeTimeSurcharges'>
+  input: Pick<SaveTowInput, 'priceMode' | 'selectedCustomerPricing' | 'timeSurchargesData'>
 ): TimeSurcharge[] {
   if (
     input.priceMode === 'recommended_customer' &&
@@ -227,7 +227,7 @@ function timeSurchargesForPriceCalc(
   ) {
     return input.selectedCustomerPricing!.customer_time_surcharges!
   }
-  return input.activeTimeSurcharges || []
+  return input.timeSurchargesData || []
 }
 
 function exchangeAddressPart(a?: AddressData): string {
@@ -990,8 +990,9 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     timeSurcharges: timeSurchargesForCalc,
     towDate: input.towDate || '',
     towTime: input.towTime || '',
-    isHoliday: false,
+    isHoliday: input.isHoliday ?? false,
     activeTimeSurchargeIds: (input.activeTimeSurcharges || []).map(s => s.id),
+    hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
     locationSurcharges,
     serviceSurcharges,
     priceMode: 'recommended',
@@ -1122,8 +1123,9 @@ export function buildCustomTowPriceBreakdown(
     timeSurcharges: timeSurchargesForCalc,
     towDate: input.towDate || '',
     towTime: input.towTime || '',
-    isHoliday: false,
+    isHoliday: input.isHoliday ?? false,
     activeTimeSurchargeIds: (input.activeTimeSurcharges || []).map((s) => s.id),
+    hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
     locationSurcharges,
     serviceSurcharges,
     priceMode: 'recommended',
