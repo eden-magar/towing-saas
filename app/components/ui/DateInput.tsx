@@ -66,6 +66,8 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
     const wrapperRef = useRef<HTMLDivElement | null>(null)
     const calendarRef = useRef<HTMLDivElement | null>(null)
     const calendarOpenRef = useRef(false)
+    const skipFocusDraftResetRef = useRef(false)
+    const skipNextBlurCommitRef = useRef(false)
     const [focused, setFocused] = useState(false)
     const [draft, setDraft] = useState('')
     const [internalError, setInternalError] = useState(false)
@@ -153,6 +155,12 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
       if (calendarOpenRef.current) return
+      if (skipNextBlurCommitRef.current) {
+        skipNextBlurCommitRef.current = false
+        setFocused(false)
+        onBlur?.(e)
+        return
+      }
       if (!commit()) {
         e.preventDefault()
         requestAnimationFrame(() => innerRef.current?.focus())
@@ -219,6 +227,8 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       setDraft(yyyyMmDdToDisplay(next))
       onChange(next)
       setCalendarOpenState(false)
+      skipFocusDraftResetRef.current = true
+      skipNextBlurCommitRef.current = true
       innerRef.current?.focus()
     }
 
@@ -286,6 +296,11 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
           onChange={(e) => applyFromRaw(e.target.value)}
           onFocus={() => {
             setFocused(true)
+            if (skipFocusDraftResetRef.current) {
+              skipFocusDraftResetRef.current = false
+              setCaretToEnd()
+              return
+            }
             const digits = extractDateDigitsFromYyyyMmDd(value)
             setDraft(digits ? formatDateDigitsLive(digits) : '')
             setCaretToEnd()
