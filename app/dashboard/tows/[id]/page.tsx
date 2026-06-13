@@ -1300,6 +1300,14 @@ export default function TowDetailsPage() {
                     <span className="hidden sm:inline">ערוך</span>
                   </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/tows/create?duplicate=${tow.id}`)}
+                    className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm flex items-center gap-2"
+                  >
+                    <RefreshCw size={18} />
+                    <span className="hidden sm:inline">שכפל גרירה</span>
+                  </button>
                   <button 
                     onClick={handleCancelClick}
                     className="p-2 sm:px-3 sm:py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm flex items-center gap-2"

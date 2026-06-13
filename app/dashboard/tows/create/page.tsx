@@ -99,11 +99,13 @@ type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
 
 function CreateTowForm({
   editTowId,
+  duplicateFromId,
   dateParam,
   timeParam,
   driverParam,
 }: {
   editTowId?: string
+  duplicateFromId?: string
   dateParam: string | null
   timeParam: string | null
   driverParam: string | null
@@ -117,6 +119,7 @@ function CreateTowForm({
     beforeSaveTow: async () => {
       await persistCustomerContactsRef.current()
     },
+    duplicateFromTowId: duplicateFromId,
   })
 
   const {
@@ -314,6 +317,7 @@ function CreateTowForm({
     orderedBy,
     setOrderedBy,
     orderNumber,
+    isDuplicateLoad,
     loadedTowStatus,
     setLoadedTowStatus,
     editExistingVehicles,
@@ -1499,10 +1503,18 @@ function CreateTowForm({
               </Link>
               <div>
                 <h1 className="font-bold text-gray-800 text-base sm:text-lg">
-                  {editTowId ? 'עריכת גרירה' : 'גרירה חדשה'}
+                  {editTowId
+                    ? 'עריכת גרירה'
+                    : isDuplicateLoad
+                      ? 'שכפול גרירה'
+                      : 'גרירה חדשה'}
                 </h1>
                 <p className="text-xs text-gray-500 hidden sm:block">
-                  {editTowId ? 'עדכון פרטי הגרירה' : 'מילוי פרטי הגרירה'}
+                  {editTowId
+                    ? 'עדכון פרטי הגרירה'
+                    : isDuplicateLoad
+                      ? 'גרירה חדשה על בסיס גרירה קיימת — בדוק ועדכן לפני שמירה'
+                      : 'מילוי פרטי הגרירה'}
                 </p>
               </div>
             </div>
@@ -4080,6 +4092,7 @@ function LocationSurchargesSection({
 export default function CreateTowPage() {
   const searchParams = useSearchParams()
   const editTowId = searchParams.get('edit') || undefined
+  const duplicateFromId = searchParams.get('duplicate') || undefined
   const dateParam = searchParams.get('date')
   const timeParam = searchParams.get('time')
   const driverParam = searchParams.get('driver')
@@ -4094,6 +4107,7 @@ export default function CreateTowPage() {
     >
       <CreateTowForm
         editTowId={editTowId}
+        duplicateFromId={duplicateFromId}
         dateParam={dateParam}
         timeParam={timeParam}
         driverParam={driverParam}

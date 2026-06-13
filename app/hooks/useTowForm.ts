@@ -321,10 +321,12 @@ type CustomRouteData = {
 
 export function useTowForm(
   editTowId?: string,
-  options?: { beforeSaveTow?: () => Promise<void> }
+  options?: { beforeSaveTow?: () => Promise<void>; duplicateFromTowId?: string }
 ) {
   const beforeSaveTowRef = useRef(options?.beforeSaveTow)
   beforeSaveTowRef.current = options?.beforeSaveTow
+  const duplicateFromTowId = options?.duplicateFromTowId
+  const isDuplicateLoad = !!duplicateFromTowId && !editTowId
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, companyId, loading: authLoading } = useAuth()
@@ -976,41 +978,46 @@ export function useTowForm(
     }
   }, [basePriceList])
 
-  // Load existing tow for editing
+  // Load existing tow for editing or duplicating (duplicate keeps editTowId falsy)
   useEffect(() => {
-    if (!editTowId || !companyId) return
+    const sourceTowId = editTowId ?? duplicateFromTowId
+    if (!sourceTowId || !companyId) return
     const loadTowForEdit = async () => {
-      setEditHydrationSettled(false)
-      editRouteBaselineRef.current = null
-      editSeededDistanceRef.current = null
-      editSeededExchangeBaseRef.current = null
-      editExchangePriceBaselineRef.current = null
-      editExchangePriceBaselineCapturedRef.current = false
+      if (editTowId) {
+        setEditHydrationSettled(false)
+        editRouteBaselineRef.current = null
+        editSeededDistanceRef.current = null
+        editSeededExchangeBaseRef.current = null
+        editExchangePriceBaselineRef.current = null
+        editExchangePriceBaselineCapturedRef.current = false
+      }
       try {
-        const tow = await getTowWithPoints(editTowId)
+        const tow = await getTowWithPoints(sourceTowId)
         if (!tow) return
-        setLoadedTowStatus(tow.status)
-        setEditExistingVehicles(
-          (tow.vehicles ?? []).map((v, i) => ({
-            id: v.id,
-            plateNumber: v.plate_number,
-            orderIndex: v.order_index ?? i,
-          }))
-        )
-        setEditExistingPoints(
-          (tow.points ?? []).map((p) => ({
-            id: p.id,
-            pointOrder: p.point_order,
-            pointType: p.point_type,
-          }))
-        )
-        setEditTowSnapshot({
-          final_price: tow.final_price,
-          payment_method: tow.payment_method,
-          notes: tow.notes,
-          scheduled_at: tow.scheduled_at,
-          price_breakdown: tow.price_breakdown,
-        })
+        if (editTowId) {
+          setLoadedTowStatus(tow.status)
+          setEditExistingVehicles(
+            (tow.vehicles ?? []).map((v, i) => ({
+              id: v.id,
+              plateNumber: v.plate_number,
+              orderIndex: v.order_index ?? i,
+            }))
+          )
+          setEditExistingPoints(
+            (tow.points ?? []).map((p) => ({
+              id: p.id,
+              pointOrder: p.point_order,
+              pointType: p.point_type,
+            }))
+          )
+          setEditTowSnapshot({
+            final_price: tow.final_price,
+            payment_method: tow.payment_method,
+            notes: tow.notes,
+            scheduled_at: tow.scheduled_at,
+            price_breakdown: tow.price_breakdown,
+          })
+        }
         // Customer
         setSelectedCustomerId(tow.customer_id)
         setCustomerName(tow.customer?.name || '')
@@ -1018,24 +1025,28 @@ export function useTowForm(
         setCustomerEmail(tow.customer?.email || '')
         setCustomerAddress(tow.customer?.address || '')
         // Date/Time
-        if (tow.scheduled_at) {
-          const d = new Date(tow.scheduled_at)
-          setTowDate(d.toISOString().split('T')[0])
-          setTowTime(d.toTimeString().slice(0, 5))
+        if (editTowId) {
+          if (tow.scheduled_at) {
+            const d = new Date(tow.scheduled_at)
+            setTowDate(d.toISOString().split('T')[0])
+            setTowTime(d.toTimeString().slice(0, 5))
+          }
+          if (tow.scheduled_end_at) {
+            const end = new Date(tow.scheduled_end_at)
+            setTowEndDate(end.toISOString().split('T')[0])
+            setTowEndTime(end.toTimeString().slice(0, 5))
+          } else {
+            setTowEndDate('')
+            setTowEndTime('')
+          }
         }
-        if (tow.scheduled_end_at) {
-          const end = new Date(tow.scheduled_end_at)
-          setTowEndDate(end.toISOString().split('T')[0])
-          setTowEndTime(end.toTimeString().slice(0, 5))
-        } else {
-          setTowEndDate('')
-          setTowEndTime('')
-        }
-        if (tow.driver_id) {
-          setPreSelectedDriverId(tow.driver_id)
-        }
-        if (tow.truck_id) {
-          setPreSelectedTruckId(tow.truck_id)
+        if (editTowId) {
+          if (tow.driver_id) {
+            setPreSelectedDriverId(tow.driver_id)
+          }
+          if (tow.truck_id) {
+            setPreSelectedTruckId(tow.truck_id)
+          }
         }
         // Type
         const towTypeMap: Record<string, TowType> = {
@@ -1048,9 +1059,11 @@ export function useTowForm(
         setTowType(towTypeMap[tow.tow_type] || 'single')
         // Notes
         setNotes(tow.notes || '')
-        // Price — preserve manual/custom value; live recompute activates on route change
-        setCustomPrice(String(tow.final_price ?? 0))
-        loadedEditPriceModeRef.current = tow.price_mode || 'custom'
+        // Price mode (duplicate: recompute amount at new datetime; edit: also preserve custom total)
+        if (editTowId) {
+          setCustomPrice(String(tow.final_price ?? 0))
+          loadedEditPriceModeRef.current = tow.price_mode || 'custom'
+        }
         const loadedMode = String(tow.price_mode || 'custom')
         if (loadedMode === 'recommended_customer') {
           setPriceMode('recommended_customer')
@@ -1064,7 +1077,9 @@ export function useTowForm(
           setPriceMode('custom')
         }
         setCustomerOrderNumber(tow.customer_order_number || '')
-        setOrderNumber(tow.order_number || null)
+        if (editTowId) {
+          setOrderNumber(tow.order_number || null)
+        }
         setDepartment(tow.department || '')
         setOrderedBy(tow.ordered_by || '')
         // Payment
@@ -1106,7 +1121,7 @@ export function useTowForm(
           setSelectedDefects((defective?.tow_reason ?? '').split(', ').filter(Boolean))
           setDefectiveFaultDescription(defective?.tow_reason ?? '')
 
-          if (editTowId) {
+          if (editTowId || isDuplicateLoad) {
             hydrateExchangeVehicleFromTowRow(working as TowVehicleEditRow | undefined, {
               setVehicleType: setWorkingVehicleType,
               setVehicleData: setWorkingVehicleData,
@@ -1365,7 +1380,7 @@ export function useTowForm(
               return 'stop'
             }
             const hydratedStops: RouteStop[] = sortedSinglePoints.map((p: any) => ({
-              id: p.id || crypto.randomUUID(),
+              id: isDuplicateLoad ? crypto.randomUUID() : (p.id || crypto.randomUUID()),
               role: roleFromPointType(p.point_type),
               stopSubtype:
                 p.point_type === 'stop'
@@ -1398,8 +1413,10 @@ export function useTowForm(
               })
             }
             setRouteStops(hydratedStops)
-            editRouteBaselineRef.current =
-              routeStopsDistanceSignatureFromPoints(sortedSinglePoints)
+            if (editTowId) {
+              editRouteBaselineRef.current =
+                routeStopsDistanceSignatureFromPoints(sortedSinglePoints)
+            }
             const dropoffPoint = sortedSinglePoints.find(
               (p: { point_type: string }) => p.point_type === 'dropoff'
             )
@@ -1410,6 +1427,7 @@ export function useTowForm(
 
           // Bootstrap distance for recommended edit until Maps recalc completes
           if (
+            editTowId &&
             (tow.tow_type === 'simple' || tow.tow_type === 'with_base') &&
             (loadedMode === 'recommended' || loadedMode === 'recommended_customer') &&
             !tow.start_from_base
@@ -1421,11 +1439,11 @@ export function useTowForm(
             }
           }
         }
-        // Custom tow - route points
+        // Custom tow - route points (step 2; duplicate gets fresh ids only)
 
         if (tow.tow_type === 'multi_vehicle' && tow.points) {
           const points: RoutePoint[] = tow.points.map((p: any) => ({
-            id: p.id,
+            id: isDuplicateLoad ? crypto.randomUUID() : p.id,
             type: p.point_type === 'pickup' ? 'stop' : 'stop',
             isStopOnly: false,
             address: p.address || '',
@@ -1436,7 +1454,7 @@ export function useTowForm(
             vehiclesToPickup: (p.vehicles || [])
               .filter((pv: any) => pv.action === 'pickup' && pv.vehicle)
               .map((pv: any) => ({
-                id: pv.vehicle.id,
+                id: isDuplicateLoad ? crypto.randomUUID() : pv.vehicle.id,
                 plateNumber: pv.vehicle.plate_number || '',
                 isWorking: pv.vehicle.is_working !== false,
                 defects: [],
@@ -1447,33 +1465,55 @@ export function useTowForm(
                   color: pv.vehicle.color,
                 }
               })),
-            vehiclesToDropoff: (p.vehicles || [])
-              .filter((pv: any) => pv.action === 'dropoff')
-              .map((pv: any) => pv.vehicle?.id || ''),
+            vehiclesToDropoff: isDuplicateLoad
+              ? []
+              : (p.vehicles || [])
+                  .filter((pv: any) => pv.action === 'dropoff')
+                  .map((pv: any) => pv.vehicle?.id || ''),
             services: [],
           }))
           setRoutePoints(points)
         }
 
-        const reserved = await getVehiclesReservedForTow(editTowId)
-        if (reserved.length > 0) {
-          const rv = reserved[0]
-          const effectiveType = towTypeMap[tow.tow_type] || 'single'
-          if (effectiveType === 'single') {
-            setSelectedStoredVehicleId(rv.id)
-          } else if (effectiveType === 'exchange') {
-            setSelectedWorkingVehicleId(rv.id)
-            setWorkingVehicleSource('storage')
+        if (editTowId) {
+          const reserved = await getVehiclesReservedForTow(editTowId)
+          if (reserved.length > 0) {
+            const rv = reserved[0]
+            const effectiveType = towTypeMap[tow.tow_type] || 'single'
+            if (effectiveType === 'single') {
+              setSelectedStoredVehicleId(rv.id)
+            } else if (effectiveType === 'exchange') {
+              setSelectedWorkingVehicleId(rv.id)
+              setWorkingVehicleSource('storage')
+            }
           }
+
+          setEditHydrationSettled(true)
         }
 
-        setEditHydrationSettled(true)
+        if (isDuplicateLoad) {
+          const now = new Date()
+          const today = now.toISOString().split('T')[0]
+          const currentTime = now.toTimeString().slice(0, 5)
+          setTowDate(today)
+          setTowTime(currentTime)
+          setTowEndDate('')
+          setTowEndTime('')
+          setIsToday(true)
+          setOrderNumber(null)
+          setCustomerOrderNumber('')
+          setCustomPrice('')
+          setPreSelectedDriverId(null)
+          setPreSelectedTruckId(null)
+          setSelectedStoredVehicleId(null)
+          setSelectedWorkingVehicleId(null)
+        }
       } catch (err) {
         console.error('Error loading tow for edit:', err)
       }
     }
     loadTowForEdit()
-  }, [editTowId, companyId])
+  }, [editTowId, duplicateFromTowId, companyId, isDuplicateLoad])
 
   const loadData = async () => {
     if (!companyId) return
@@ -2628,6 +2668,8 @@ export function useTowForm(
     // Customer
     customerOrderNumber, setCustomerOrderNumber,
     orderNumber,
+    isDuplicateLoad,
+    duplicateFromTowId,
     loadedTowStatus,
     setLoadedTowStatus,
     editExistingVehicles,
