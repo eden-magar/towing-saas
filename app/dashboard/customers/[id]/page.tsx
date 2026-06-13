@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/app/lib/AuthContext'
 import {
   ArrowRight,
@@ -26,7 +27,8 @@ import {
   Check,
   Settings,
   Contact2,
-  Briefcase
+  Briefcase,
+  ClipboardList,
 } from 'lucide-react'
 import { supabase } from '@/app/lib/supabase'
 import {
@@ -484,6 +486,15 @@ export default function CustomerDetailPage() {
                 </div>
               )}
             </div>
+            {customer.company_relation?.id && (
+              <Link
+                href={`/dashboard/price-lists?tab=customers&customer_company_id=${customer.company_relation.id}`}
+                className="mt-5 flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-800 hover:bg-gray-100 transition-colors text-sm font-medium"
+              >
+                <ClipboardList size={16} className="text-[#33d4ff]" />
+                מחירון הלקוח
+              </Link>
+            )}
           </div>
 
           {/* Notes */}
