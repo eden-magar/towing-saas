@@ -187,6 +187,7 @@ export type ExchangePriceAffectingFields = {
   defectiveSelectedServices?: SelectedService[]
   activeTimeSurchargeIds?: string[]
   timeSurchargesData?: TimeSurcharge[]
+  selectedCustomerPricing?: CustomerWithPricing | null
   isHoliday?: boolean
   hasManualTimeSurchargeOverride?: boolean
   manualAdjustmentPercent?: number
@@ -198,9 +199,14 @@ function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string 
   if (fields.hasManualTimeSurchargeOverride) {
     return [...(fields.activeTimeSurchargeIds ?? [])].sort().join(',')
   }
-  if (fields.towDate && fields.towTime && fields.timeSurchargesData?.length) {
+  const surchargeSource =
+    fields.priceMode === 'recommended_customer' &&
+    (fields.selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
+      ? fields.selectedCustomerPricing!.customer_time_surcharges!
+      : fields.timeSurchargesData
+  if (fields.towDate && fields.towTime && surchargeSource?.length) {
     return getActiveTimeSurcharges(
-      fields.timeSurchargesData,
+      surchargeSource,
       fields.towTime,
       fields.towDate,
       fields.isHoliday ?? false
@@ -210,6 +216,18 @@ function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string 
       .join(',')
   }
   return ''
+}
+
+function timeSurchargesForPriceCalc(
+  input: Pick<SaveTowInput, 'priceMode' | 'selectedCustomerPricing' | 'activeTimeSurcharges'>
+): TimeSurcharge[] {
+  if (
+    input.priceMode === 'recommended_customer' &&
+    (input.selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
+  ) {
+    return input.selectedCustomerPricing!.customer_time_surcharges!
+  }
+  return input.activeTimeSurcharges || []
 }
 
 function exchangeAddressPart(a?: AddressData): string {
@@ -275,6 +293,7 @@ export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string
     defectiveSelectedServices: input.defectiveSelectedServices,
     activeTimeSurchargeIds: (input.activeTimeSurcharges ?? []).map((s) => s.id),
     timeSurchargesData: input.timeSurchargesData,
+    selectedCustomerPricing: input.selectedCustomerPricing,
     isHoliday: input.isHoliday,
     hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
     manualAdjustmentPercent: input.manualAdjustmentPercent,
@@ -957,6 +976,8 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     if (w) basePriceOverride = resolveVehicleBasePrice('van', w, brackets, flat)
   }
 
+  const timeSurchargesForCalc = timeSurchargesForPriceCalc(input)
+
   const result = calculateTowPrice({
     priceList: {
       base_prices: extractBasePrices(activePriceList),
@@ -966,7 +987,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     vehicleType: (input.vehicleType as VehicleType) || 'private',
     distanceKm,
     ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
-    timeSurcharges: input.activeTimeSurcharges || [],
+    timeSurcharges: timeSurchargesForCalc,
     towDate: input.towDate || '',
     towTime: input.towTime || '',
     isHoliday: false,
@@ -1087,6 +1108,8 @@ export function buildCustomTowPriceBreakdown(
     })
     .filter((x) => x.amount > 0)
 
+  const timeSurchargesForCalc = timeSurchargesForPriceCalc(input)
+
   const result = calculateTowPrice({
     priceList: {
       base_prices: extractBasePrices(activePriceList),
@@ -1096,7 +1119,7 @@ export function buildCustomTowPriceBreakdown(
     vehicleType: 'private',
     distanceKm: totalDistanceKm,
     basePriceOverride: totalBasePrice,
-    timeSurcharges: input.activeTimeSurcharges || [],
+    timeSurcharges: timeSurchargesForCalc,
     towDate: input.towDate || '',
     towTime: input.towTime || '',
     isHoliday: false,

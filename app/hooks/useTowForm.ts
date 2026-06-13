@@ -595,6 +595,9 @@ export function useTowForm(
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
+  const urlDateTimeInitializedRef = useRef(false)
+  const lastUrlDateParamRef = useRef<string | null>(null)
+  const lastUrlTimeParamRef = useRef<string | null>(null)
   const deferStorageBaseAddressRef = useRef(false)
   const deferStorageExchangeAddressRef = useRef(false)
   const deferStorageWorkingAddressRef = useRef(false)
@@ -786,7 +789,9 @@ export function useTowForm(
     if (routeStopsDistanceSignature !== editRouteBaselineRef.current) {
       editSeededDistanceRef.current = null
       setPriceMode((prev) => {
-        if (prev === 'recommended' || prev === 'recommended_customer') return prev
+        if (prev === 'recommended' || prev === 'recommended_customer') {
+          return prev
+        }
         if (loadedEditPriceModeRef.current === 'recommended_customer') {
           return 'recommended_customer'
         }
@@ -978,34 +983,44 @@ export function useTowForm(
     stopsBeforeExchange,
     stopsAfterExchange,
   ])
-  // Read URL params or set defaults to now
+  // Read URL params or set defaults once on create (never clobber user-picked date/time)
   useEffect(() => {
+    if (editTowId) return
+
     const dateParam = searchParams.get('date')
     const timeParam = searchParams.get('time')
     const driverParam = searchParams.get('driver')
-    
+
     const now = new Date()
     const today = now.toISOString().split('T')[0]
     const currentTime = now.toTimeString().slice(0, 5) // HH:MM format
-    
+
     if (dateParam) {
-      setTowDate(dateParam)
-      setIsToday(dateParam === today)
-    } else {
-      // Default to today
+      if (!urlDateTimeInitializedRef.current || dateParam !== lastUrlDateParamRef.current) {
+        setTowDate(dateParam)
+        setIsToday(dateParam === today)
+        lastUrlDateParamRef.current = dateParam
+      }
+    } else if (!urlDateTimeInitializedRef.current) {
       setTowDate(today)
       setIsToday(true)
+      lastUrlDateParamRef.current = null
     }
-    
+
     if (timeParam) {
-      setTowTime(timeParam)
-    } else {
-      // Default to current time
+      if (!urlDateTimeInitializedRef.current || timeParam !== lastUrlTimeParamRef.current) {
+        setTowTime(timeParam)
+        lastUrlTimeParamRef.current = timeParam
+      }
+    } else if (!urlDateTimeInitializedRef.current) {
       setTowTime(currentTime)
+      lastUrlTimeParamRef.current = null
     }
-    
+
     if (driverParam) setPreSelectedDriverId(driverParam)
-  }, [searchParams])
+
+    urlDateTimeInitializedRef.current = true
+  }, [searchParams, editTowId])
 
   // Load data
   useEffect(() => {
@@ -1145,7 +1160,8 @@ export function useTowForm(
         if (editTowId) {
           if (tow.scheduled_at) {
             const d = new Date(tow.scheduled_at)
-            setTowDate(d.toISOString().split('T')[0])
+            const hydratedDate = d.toISOString().split('T')[0]
+            setTowDate(hydratedDate)
             setTowTime(d.toTimeString().slice(0, 5))
           }
           if (tow.scheduled_end_at) {

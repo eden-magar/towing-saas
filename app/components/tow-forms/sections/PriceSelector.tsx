@@ -72,7 +72,9 @@ export function PriceSelector({
       {/* מחיר מומלץ - only show for single tow */}
       {showRecommended && (
         <button
-          onClick={() => { setPriceMode('recommended'); setSelectedPriceItem(null); setCustomPrice('') }}
+          onClick={() => {
+            setPriceMode('recommended'); setSelectedPriceItem(null); setCustomPrice('')
+          }}
           className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
             priceMode === 'recommended' ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200 hover:border-gray-300'
           }`}
@@ -101,7 +103,9 @@ export function PriceSelector({
       {/* מחיר מומלץ לפי מחירון לקוח */}
        {showRecommended && selectedCustomerPricing?.price_list && (
         <button
-          onClick={() => { setPriceMode('recommended_customer'); setSelectedPriceItem(null); setCustomPrice('') }}
+          onClick={() => {
+            setPriceMode('recommended_customer'); setSelectedPriceItem(null); setCustomPrice('')
+          }}
           className={`w-full p-4 rounded-xl border-2 transition-all text-right ${
             priceMode === 'recommended_customer' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'
           }`}
@@ -133,7 +137,9 @@ export function PriceSelector({
       {hasCustomerPricing && (
         <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'customer' ? 'border-purple-500' : 'border-gray-200'}`}>
           <button
-            onClick={() => { setPriceMode('customer'); setSelectedPriceItem(null); setCustomPrice('') }}
+            onClick={() => {
+              setPriceMode('customer'); setSelectedPriceItem(null); setCustomPrice('')
+            }}
             className={`w-full p-4 text-right ${priceMode === 'customer' ? 'bg-purple-50' : 'hover:bg-gray-50'}`}
           >
             <div className="flex items-center gap-3">
@@ -177,7 +183,9 @@ export function PriceSelector({
       {hasFixedPrices && (
         <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'fixed' ? 'border-emerald-500' : 'border-gray-200'}`}>
           <button
-            onClick={() => { setPriceMode('fixed'); setSelectedPriceItem(null); setCustomPrice('') }}
+            onClick={() => {
+              setPriceMode('fixed'); setSelectedPriceItem(null); setCustomPrice('')
+            }}
             className={`w-full p-4 text-right ${priceMode === 'fixed' ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
           >
             <div className="flex items-center gap-3">
@@ -216,7 +224,9 @@ export function PriceSelector({
       {/* מחיר ידני */}
       <div className={`rounded-xl border-2 transition-all overflow-hidden ${priceMode === 'custom' ? 'border-amber-500' : 'border-gray-200'}`}>
         <button
-          onClick={() => { setPriceMode('custom'); setSelectedPriceItem(null) }}
+          onClick={() => {
+            setPriceMode('custom'); setSelectedPriceItem(null)
+          }}
           className={`w-full p-4 text-right ${priceMode === 'custom' ? 'bg-amber-50' : 'hover:bg-gray-50'}`}
         >
           <div className="flex items-center gap-3">

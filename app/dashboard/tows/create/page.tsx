@@ -401,6 +401,13 @@ function CreateTowForm({
     customerTab === 'existing' &&
     !!selectedCustomerId &&
     customers.find((c) => c.id === selectedCustomerId)?.customer_type === 'business'
+
+  const displayTimeSurcharges =
+    priceMode === 'recommended_customer' &&
+    (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
+      ? selectedCustomerPricing!.customer_time_surcharges!
+      : timeSurchargesData
+
   const [entryKind, setEntryKind] = useState<TowEntryKind>(null)
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
@@ -941,7 +948,9 @@ function CreateTowForm({
 
   // URL params (date/time only — driver goes through truck step when ?driver= is present)
   useEffect(() => {
-    if (dateParam) setTowDate(dateParam)
+    if (dateParam) {
+      setTowDate(dateParam)
+    }
     if (timeParam) setTowTime(timeParam)
   }, [dateParam, timeParam])
 
@@ -996,7 +1005,8 @@ function CreateTowForm({
 
   const handleNowClick = () => {
     const now = new Date()
-    setTowDate(now.toISOString().split('T')[0])
+    const today = now.toISOString().split('T')[0]
+    setTowDate(today)
     setTowTime(now.toTimeString().slice(0, 5))
     setIsToday(true)
   }
@@ -1987,7 +1997,7 @@ function CreateTowForm({
                       </div>
                       <div className="p-4">
                         <TimeSurchargesSection
-                          timeSurchargesData={timeSurchargesData}
+                          timeSurchargesData={displayTimeSurcharges}
                           towDate={towDate}
                           towTime={towTime}
                           isHoliday={isHoliday}
@@ -2900,7 +2910,7 @@ function CreateTowForm({
 
                     <FormSubcard title="תוספות זמן">
                       <TimeSurchargesSection
-                        timeSurchargesData={timeSurchargesData}
+                        timeSurchargesData={displayTimeSurcharges}
                         towDate={towDate}
                         towTime={towTime}
                         isHoliday={isHoliday}
@@ -2956,7 +2966,7 @@ function CreateTowForm({
                       </div>
                       <div className="p-4">
                         <TimeSurchargesSection
-                          timeSurchargesData={timeSurchargesData}
+                          timeSurchargesData={displayTimeSurcharges}
                           towDate={towDate}
                           towTime={towTime}
                           isHoliday={isHoliday}
@@ -3111,11 +3121,26 @@ function CreateTowForm({
                       <>
                         {priceResult.breakdown
                           .filter(item => item.amount !== 0)
-                          .map((item, idx) => (
-                            <p key={idx} className={item.bold ? 'font-bold text-base text-gray-900' : 'text-gray-500'}>
-                              {item.label}: ₪{item.amount.toFixed(2)}
-                            </p>
-                          ))}
+                          .map((item, idx) => {
+                            const label =
+                              item.type === 'time' && priceResult.maxTimeSurchargePercent > 0
+                                ? priceResult.maxTimeSurchargeLabel
+                                  ? `תוספת ${priceResult.maxTimeSurchargeLabel} (${priceResult.maxTimeSurchargePercent}%)`
+                                  : `תוספת זמן (${priceResult.maxTimeSurchargePercent}%)`
+                                : item.label
+                            return (
+                              <p
+                                key={idx}
+                                className={
+                                  item.bold
+                                    ? 'font-bold text-base text-gray-900'
+                                    : 'text-gray-500'
+                                }
+                              >
+                                {label}: ₪{item.amount.toFixed(2)}
+                              </p>
+                            )
+                          })}
                       </>
                     ) : (
                       <>
@@ -4022,18 +4047,22 @@ function TimeSurchargesSection({
       <div className="flex flex-wrap gap-2">
         {nonHolidaySurcharges.map((s) => {
           const active = isActive(s)
+          const chipLabel =
+            s.label?.trim() ||
+            s.name?.trim() ||
+            (s.time_start && s.time_end ? `${s.time_start}-${s.time_end}` : 'תוספת זמן')
           return (
             <button
               key={s.id}
               type="button"
               onClick={() => toggleSurcharge(s)}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 active
-                  ? 'bg-amber-500 text-white'
-                  : 'border border-gray-300 text-gray-500'
+                  ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200 font-medium'
+                  : 'border border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600'
               }`}
             >
-              {s.label} ({s.surcharge_percent}%)
+              {chipLabel} ({s.surcharge_percent}%)
             </button>
           )
         })}
@@ -4041,8 +4070,10 @@ function TimeSurchargesSection({
           <button
             type="button"
             onClick={() => setIsHoliday(!isHoliday)}
-            className={`px-3 py-1.5 rounded-lg text-sm ${
-              isHoliday ? 'bg-amber-500 text-white' : 'border border-gray-300 text-gray-500'
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              isHoliday
+                ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200 font-medium'
+                : 'border border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600'
             }`}
           >
             חג ({holidaySurcharge.surcharge_percent}%)

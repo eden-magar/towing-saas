@@ -127,20 +127,33 @@ export function useTowPricing(params: UseTowPricingParams) {
   const adjPercent = parseFloat(manualAdjustmentPercent) || 0
   const effectiveManualAdj = manualAdjustmentType === 'discount' ? -adjPercent : adjPercent
 
+  const effectiveTimeSurcharges = useMemo((): TimeSurcharge[] => {
+    return priceMode === 'recommended_customer' &&
+      (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
+        ? selectedCustomerPricing!.customer_time_surcharges!
+        : timeSurchargesData
+  }, [priceMode, selectedCustomerPricing?.customer_time_surcharges, timeSurchargesData])
+
   // Customer pricing
   useEffect(() => {
+    const customerPricing = selectedCustomerId
+      ? customersWithPricing.find(c => c.customer_id === selectedCustomerId) ?? null
+      : null
+
     if (selectedCustomerId) {
-      const customerPricing = customersWithPricing.find(c => c.customer_id === selectedCustomerId)
-      setSelectedCustomerPricing(customerPricing || null)
+      setSelectedCustomerPricing(customerPricing)
     } else {
       setSelectedCustomerPricing(null)
     }
     if (!isEditMode) {
-      setPriceMode('recommended')
+      const isBusinessCustomer = customerPricing?.customer?.customer_type === 'business'
+      const nextMode =
+        selectedCustomerId && isBusinessCustomer ? 'recommended_customer' : 'recommended'
+      setPriceMode(nextMode)
       setSelectedPriceItem(null)
       setCustomPrice('')
     }
-  }, [selectedCustomerId, customersWithPricing])
+  }, [selectedCustomerId, customersWithPricing, isEditMode])
 
   // החלפת תוספות כשמשתנה priceMode
   useEffect(() => {
@@ -169,15 +182,20 @@ export function useTowPricing(params: UseTowPricingParams) {
 
   // Time surcharges calculation
   useEffect(() => {
-    if (!towDate || !towTime || timeSurchargesData.length === 0) {
+    if (!towDate || !towTime) {
       setActiveTimeSurchargesList([])
       if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
       return
     }
-    const activeSurcharges = getActiveTimeSurcharges(timeSurchargesData, towTime, towDate, isHoliday)
+    if (effectiveTimeSurcharges.length === 0) {
+      setActiveTimeSurchargesList([])
+      if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
+      return
+    }
+    const activeSurcharges = getActiveTimeSurcharges(effectiveTimeSurcharges, towTime, towDate, isHoliday)
     setActiveTimeSurchargesList(activeSurcharges)
     if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
-  }, [towDate, towTime, timeSurchargesData, isHoliday])
+  }, [towDate, towTime, effectiveTimeSurcharges, isHoliday, priceMode, selectedCustomerPricing])
 
   const activeTimeSurchargeIds = activeTimeSurchargesList.map((s) => s.id).join(',')
   const selectedLocationKey = selectedLocationSurcharges.join(',')
@@ -223,7 +241,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         vehicleType: 'private',
         distanceKm: customRouteData.totalDistanceKm,
         basePriceOverride: totalBasePrice,
-        timeSurcharges: timeSurchargesData,
+        timeSurcharges: effectiveTimeSurcharges,
         towDate: towDate || '',
         towTime: towTime || '',
         isHoliday: isHoliday ?? false,
@@ -266,7 +284,7 @@ export function useTowPricing(params: UseTowPricingParams) {
       vehicleType: vehicleType as VehicleType,
       ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       distanceKm,
-      timeSurcharges: timeSurchargesData,
+      timeSurcharges: effectiveTimeSurcharges,
       towDate: towDate || '',
       towTime: towTime || '',
       isHoliday: isHoliday ?? false,
@@ -302,7 +320,7 @@ export function useTowPricing(params: UseTowPricingParams) {
     priceMode,
     towDate,
     towTime,
-    timeSurchargesData,
+    effectiveTimeSurcharges,
     isHoliday,
     effectiveManualAdj,
     vatPercent,
