@@ -56,7 +56,10 @@ export default function DriversMap({
         mapInstanceRef.current = new window.google.maps.Map(mapRef.current!, {
           center: { lat: 32.0181, lng: 34.7746 },
           zoom: 12,
-          mapTypeControl: false,
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            mapTypeIds: ['roadmap', 'satellite'],
+          },
           streetViewControl: false,
           gestureHandling: 'greedy',
         })

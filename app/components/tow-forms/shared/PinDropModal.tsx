@@ -80,7 +80,10 @@ export function PinDropModal({
         gestureHandling: 'greedy',
         streetViewControl: false,
         fullscreenControl: false,
-        mapTypeControl: false
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+          mapTypeIds: ['roadmap', 'satellite'],
+        },
       })
 
       markerRef.current = new window.google.maps.Marker({
