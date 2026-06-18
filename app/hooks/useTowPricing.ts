@@ -226,9 +226,12 @@ export function useTowPricing(params: UseTowPricingParams) {
         .map((selected) => {
           const s = serviceSurchargesData.find((x) => x.id === selected.id)
           if (!s) return { amount: 0 }
-          if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-          if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
-          return { amount: s.price }
+          if (s.price_type === 'manual') return { amount: selected.manualPrice || 0, label: s.label }
+          if (s.price_type === 'per_unit') {
+            const qty = selected.quantity || 1
+            return { amount: s.price * qty, label: `${s.label} (×${qty})` }
+          }
+          return { amount: s.price, label: s.label }
         })
         .filter((x) => x.amount > 0)
 
@@ -270,9 +273,12 @@ export function useTowPricing(params: UseTowPricingParams) {
     const serviceSurcharges = selectedServices.map(selected => {
       const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
       if (!surcharge) return { amount: 0 }
-      if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-      if (surcharge.price_type === 'per_unit') return { amount: surcharge.price * (selected.quantity || 1) }
-      return { amount: surcharge.price }
+      if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0, label: surcharge.label }
+      if (surcharge.price_type === 'per_unit') {
+        const qty = selected.quantity || 1
+        return { amount: surcharge.price * qty, label: `${surcharge.label} (×${qty})` }
+      }
+      return { amount: surcharge.price, label: surcharge.label }
     }).filter(s => s.amount > 0)
 
     const result = calculateTowPrice({

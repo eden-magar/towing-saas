@@ -36,7 +36,7 @@ export interface TowPriceInput {
   hasManualTimeSurchargeOverride?: boolean
 
   locationSurcharges: { percent: number }[]
-  serviceSurcharges: { amount: number }[]
+  serviceSurcharges: { amount: number; label?: string }[]
 
   // price mode
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
@@ -243,7 +243,7 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
   })
   input.serviceSurcharges.forEach(s => {
     if (s.amount > 0) {
-      breakdown.push({ label: 'שירות', amount: s.amount, type: 'service' })
+      breakdown.push({ label: s.label || 'שירות', amount: s.amount, type: 'service' })
     }
   })
   if (input.discountPercent > 0) {
