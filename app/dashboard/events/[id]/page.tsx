@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
@@ -20,6 +20,7 @@ import {
   X,
   Plus,
   Loader2,
+  Search,
   AlertTriangle,
   CheckCircle,
 } from 'lucide-react'
@@ -38,6 +39,7 @@ import {
   completeEvent,
   saveEventChangeLog,
   spawnEventInstances,
+  updateEvent,
   type EventVehicle,
   type EventVehicleDetails,
   type EventVehiclePhoto,
@@ -45,11 +47,15 @@ import {
   type EventChangeLogEntry,
 } from '../../../lib/queries/events'
 import { getDrivers } from '../../../lib/queries/drivers'
+import { getCustomersLite, type CustomerListItem } from '../../../lib/queries/customers'
 import { getEventImageSignedUrl } from '../../../lib/queries/event-plate-capture'
 import { getCompanySettings } from '../../../lib/queries/settings'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { EventPriceEditor } from '../../../components/event-forms/EventPriceEditor'
-import { DateInput, TimeInput } from '../../../components/ui'
+import { AddressInput, type AddressData } from '../../../components/tow-forms/routes/AddressInput'
+import { PinDropModal } from '../../../components/tow-forms/shared/PinDropModal'
+import { DateInput, TimeInput, Input } from '../../../components/ui'
+import { PhoneInput } from '../../../components/ui/PhoneInput'
 import type { DriverWithDetails } from '../../../lib/types'
 import type { EventPriceResult } from '../../../lib/utils/event-pricing'
 
@@ -545,11 +551,55 @@ export default function EventDetailsPage() {
 
   const [eventGroupSiblingCount, setEventGroupSiblingCount] = useState(0)
 
+  const [isEditingDetails, setIsEditingDetails] = useState(false)
+  const [detailsDraft, setDetailsDraft] = useState('')
+  const [detailsSaving, setDetailsSaving] = useState(false)
+  const [detailsError, setDetailsError] = useState('')
+
+  const [isEditingContact, setIsEditingContact] = useState(false)
+  const [contactNameDraft, setContactNameDraft] = useState('')
+  const [contactPhoneDraft, setContactPhoneDraft] = useState('')
+  const [contactSaving, setContactSaving] = useState(false)
+  const [contactError, setContactError] = useState('')
+
+  const [isEditingLocation, setIsEditingLocation] = useState(false)
+  const [locationDraft, setLocationDraft] = useState<AddressData>({ address: '' })
+  const [locationPinOpen, setLocationPinOpen] = useState(false)
+  const [locationSaving, setLocationSaving] = useState(false)
+  const [locationError, setLocationError] = useState('')
+
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false)
+  const [scheduleDateDraft, setScheduleDateDraft] = useState('')
+  const [scheduleStartDraft, setScheduleStartDraft] = useState('')
+  const [scheduleEndDraft, setScheduleEndDraft] = useState('')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleError, setScheduleError] = useState('')
+
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false)
+  const [customerDraftId, setCustomerDraftId] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerSearchFocused, setCustomerSearchFocused] = useState(false)
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
+  const [customersLoading, setCustomersLoading] = useState(false)
+  const [customerSaving, setCustomerSaving] = useState(false)
+  const [customerError, setCustomerError] = useState('')
+
   const handleTabChange = (tab: EventTab) => {
     setActiveTab(tab)
     if (tab !== 'details') {
       setIsEditingPrice(false)
       setPriceError('')
+      setIsEditingDetails(false)
+      setDetailsError('')
+      setIsEditingContact(false)
+      setContactError('')
+      setIsEditingLocation(false)
+      setLocationError('')
+      setLocationPinOpen(false)
+      setIsEditingSchedule(false)
+      setScheduleError('')
+      setIsEditingCustomer(false)
+      setCustomerError('')
     }
   }
 
@@ -646,6 +696,17 @@ export default function EventDetailsPage() {
     setChangeLogsLoaded(false)
     setChangeLogs([])
     setIsEditingPrice(false)
+    setIsEditingDetails(false)
+    setDetailsError('')
+    setIsEditingContact(false)
+    setContactError('')
+    setIsEditingLocation(false)
+    setLocationError('')
+    setLocationPinOpen(false)
+    setIsEditingSchedule(false)
+    setScheduleError('')
+    setIsEditingCustomer(false)
+    setCustomerError('')
     setShowCancelModal(false)
     setCancelStep('reason')
     setSelectedCancellationReason('')
@@ -898,6 +959,143 @@ export default function EventDetailsPage() {
     }
   }
 
+  const handleSaveDetails = async () => {
+    if (!event) return
+
+    setDetailsSaving(true)
+    setDetailsError('')
+    try {
+      await updateEvent(eventId, {
+        details: detailsDraft.trim() || null,
+      })
+      await loadEvent(true)
+      setIsEditingDetails(false)
+    } catch (err) {
+      console.error('Error saving event details:', err)
+      setDetailsError('שגיאה בשמירת הפרטים')
+    } finally {
+      setDetailsSaving(false)
+    }
+  }
+
+  const handleSaveContact = async () => {
+    if (!event) return
+
+    setContactSaving(true)
+    setContactError('')
+    try {
+      await updateEvent(eventId, {
+        contactName: contactNameDraft.trim() || null,
+        contactPhone: contactPhoneDraft.trim() || null,
+      })
+      await loadEvent(true)
+      setIsEditingContact(false)
+    } catch (err) {
+      console.error('Error saving event contact:', err)
+      setContactError('שגיאה בשמירת איש הקשר')
+    } finally {
+      setContactSaving(false)
+    }
+  }
+
+  const openEditCustomer = useCallback(() => {
+    if (!companyId || !event) return
+
+    setCustomerError('')
+    setCustomerDraftId(event.customer_id)
+    setCustomerSearch(event.customer?.name ?? '')
+    setCustomerSearchFocused(false)
+    setIsEditingCustomer(true)
+    setCustomersLoading(true)
+    void getCustomersLite(companyId)
+      .then((data) => setCustomers(data))
+      .catch((err) => {
+        console.error('Error loading customers for event edit:', err)
+        setCustomerError('שגיאה בטעינת רשימת הלקוחות')
+      })
+      .finally(() => setCustomersLoading(false))
+  }, [companyId, event])
+
+  const handleSaveCustomer = async () => {
+    if (!event) return
+
+    if (!customerDraftId) {
+      setCustomerError('יש לבחור לקוח')
+      return
+    }
+
+    setCustomerSaving(true)
+    setCustomerError('')
+    try {
+      await updateEvent(eventId, { customerId: customerDraftId })
+      await loadEvent(true)
+      setIsEditingCustomer(false)
+    } catch (err) {
+      console.error('Error saving event customer:', err)
+      setCustomerError('שגיאה בשמירת הלקוח')
+    } finally {
+      setCustomerSaving(false)
+    }
+  }
+
+  const handleSaveLocation = async () => {
+    if (!event) return
+
+    if (!locationDraft.address.trim()) {
+      setLocationError('יש להזין מיקום')
+      return
+    }
+
+    setLocationSaving(true)
+    setLocationError('')
+    try {
+      await updateEvent(eventId, {
+        locationAddress: locationDraft.address.trim(),
+        locationLat: locationDraft.lat ?? null,
+        locationLng: locationDraft.lng ?? null,
+      })
+      await loadEvent(true)
+      setIsEditingLocation(false)
+      setLocationPinOpen(false)
+    } catch (err) {
+      console.error('Error saving event location:', err)
+      setLocationError('שגיאה בשמירת המיקום')
+    } finally {
+      setLocationSaving(false)
+    }
+  }
+
+  const handleSaveSchedule = async () => {
+    if (!event) return
+
+    if (!scheduleDateDraft.trim() || !scheduleStartDraft.trim() || !scheduleEndDraft.trim()) {
+      setScheduleError('יש למלא תאריך, שעת התחלה ושעת סיום')
+      return
+    }
+
+    if (scheduleEndDraft <= scheduleStartDraft) {
+      setScheduleError('שעת הסיום חייבת להיות אחרי שעת ההתחלה')
+      return
+    }
+
+    setScheduleSaving(true)
+    setScheduleError('')
+    try {
+      await updateEvent(eventId, {
+        eventDate: scheduleDateDraft.trim(),
+        startTime: scheduleStartDraft.trim(),
+        endTime: scheduleEndDraft.trim(),
+      })
+      await loadEvent(true)
+      setIsEditingSchedule(false)
+    } catch (err) {
+      console.error('Error saving event schedule:', err)
+      setScheduleError('שגיאה בשמירת מועד האירוע')
+    } finally {
+      setScheduleSaving(false)
+    }
+  }
+
   const handleSavePrice = async (result: {
     enteredPrice: number
     priceResult: EventPriceResult
@@ -931,6 +1129,19 @@ export default function EventDetailsPage() {
       setPriceSaving(false)
     }
   }
+
+  const filteredCustomersForEdit = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase()
+    if (!q) return customers
+    return customers.filter((customer) => {
+      const idNum = customer.id_number
+      return (
+        (customer.name?.toLowerCase() ?? '').includes(q) ||
+        (customer.phone?.includes(q) ?? false) ||
+        (idNum?.includes(q) ?? false)
+      )
+    })
+  }, [customers, customerSearch])
 
   if (loading) {
     return (
@@ -973,6 +1184,10 @@ export default function EventDetailsPage() {
   const canModify =
     event.status !== 'cancelled' && event.status !== 'completed'
   const validSpawnRows = spawnRows.filter(isSpawnRowValid)
+
+  const showCustomerPickerList =
+    isEditingCustomer && (customerSearchFocused || customerSearch.length > 0)
+
   const canApproveQuoteEvent =
     event.status === 'quote' && canApproveQuote(user?.role)
   const isCancelled = event.status === 'cancelled'
@@ -1130,49 +1345,340 @@ export default function EventDetailsPage() {
         {activeTab === 'details' && (
           <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
             <div className="flex-1 space-y-3 sm:space-y-4">
-              <InfoPanel icon={User} title="פרטי לקוח">
-                <FieldLabel>שם</FieldLabel>
-                <FieldValue>{event.customer?.name || 'לא צוין'}</FieldValue>
-                {event.customer?.phone && (
-                  <a
-                    href={`tel:${event.customer.phone}`}
-                    className="text-[#33d4ff] text-sm flex items-center gap-1 mt-2 hover:underline"
-                  >
-                    <Phone size={13} />
-                    {event.customer.phone}
-                  </a>
+              <InfoPanel
+                icon={User}
+                title="פרטי לקוח"
+                headerAction={
+                  canModify && !isEditingCustomer ? (
+                    <button
+                      type="button"
+                      onClick={openEditCustomer}
+                      className="flex items-center gap-1 text-xs text-[#21b8e6] hover:text-[#1a9bc7] font-medium shrink-0"
+                    >
+                      <Edit2 size={13} />
+                      ערוך
+                    </button>
+                  ) : undefined
+                }
+              >
+                {isEditingCustomer ? (
+                  <div className="space-y-3">
+                    {customerError && (
+                      <p className="text-sm text-red-600">{customerError}</p>
+                    )}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                      <Input
+                        type="text"
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        onFocus={() => setCustomerSearchFocused(true)}
+                        onBlur={() => setTimeout(() => setCustomerSearchFocused(false), 150)}
+                        placeholder="חפש לפי שם, טלפון, ת.ז..."
+                        disabled={customerSaving || customersLoading}
+                        className="pl-9 pr-3 text-right w-full"
+                      />
+                    </div>
+                    {customersLoading && (
+                      <div className="flex items-center justify-end gap-2 text-xs text-gray-500">
+                        <span>טוען לקוחות...</span>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#33d4ff]" />
+                      </div>
+                    )}
+                    {showCustomerPickerList && !customersLoading && (
+                      <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
+                        {filteredCustomersForEdit.slice(0, 10).map((customer) => {
+                          const isSelected = customerDraftId === customer.id
+                          return (
+                            <button
+                              key={customer.id}
+                              type="button"
+                              onClick={() => {
+                                setCustomerDraftId(customer.id)
+                                setCustomerSearch(customer.name || '')
+                                setCustomerSearchFocused(false)
+                                setCustomerError('')
+                              }}
+                              disabled={customerSaving}
+                              className={`w-full flex items-center justify-between px-3 py-2 text-right transition-colors ${
+                                isSelected
+                                  ? 'bg-[#33d4ff]/10 text-[#21b8e6]'
+                                  : 'hover:bg-gray-50 text-gray-800'
+                              }`}
+                            >
+                              <span className="text-xs text-gray-400">{customer.phone}</span>
+                              <span className="text-sm font-medium">{customer.name}</span>
+                            </button>
+                          )
+                        })}
+                        {filteredCustomersForEdit.length === 0 && (
+                          <p className="px-3 py-4 text-sm text-gray-400 text-center">
+                            לא נמצאו לקוחות
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {customerDraftId && (
+                      <p className="text-xs text-gray-500">
+                        נבחר:{' '}
+                        <span className="font-medium text-gray-800">
+                          {customers.find((c) => c.id === customerDraftId)?.name ||
+                            event.customer?.name ||
+                            customerDraftId}
+                        </span>
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerError('')
+                          setIsEditingCustomer(false)
+                        }}
+                        disabled={customerSaving}
+                        className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveCustomer()}
+                        disabled={customerSaving}
+                        className="flex-1 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {customerSaving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            שומר...
+                          </>
+                        ) : (
+                          'שמור'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <FieldLabel>שם</FieldLabel>
+                    <FieldValue>{event.customer?.name || 'לא צוין'}</FieldValue>
+                    {event.customer?.phone && (
+                      <a
+                        href={`tel:${event.customer.phone}`}
+                        className="text-[#33d4ff] text-sm flex items-center gap-1 mt-2 hover:underline"
+                      >
+                        <Phone size={13} />
+                        {event.customer.phone}
+                      </a>
+                    )}
+                  </>
                 )}
               </InfoPanel>
 
-              <InfoPanel icon={Phone} title="איש קשר">
-                <FieldLabel>שם</FieldLabel>
-                <FieldValue>{event.contact_name?.trim() || 'לא צוין'}</FieldValue>
-                {event.contact_phone && (
-                  <a
-                    href={`tel:${event.contact_phone}`}
-                    className="text-[#33d4ff] text-sm flex items-center gap-1 mt-2 hover:underline"
-                  >
-                    <Phone size={13} />
-                    {event.contact_phone}
-                  </a>
+              <InfoPanel
+                icon={Phone}
+                title="איש קשר"
+                headerAction={
+                  canModify && !isEditingContact ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContactError('')
+                        setContactNameDraft(event.contact_name ?? '')
+                        setContactPhoneDraft(event.contact_phone ?? '')
+                        setIsEditingContact(true)
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#21b8e6] hover:text-[#1a9bc7] font-medium shrink-0"
+                    >
+                      <Edit2 size={13} />
+                      ערוך
+                    </button>
+                  ) : undefined
+                }
+              >
+                {isEditingContact ? (
+                  <div className="space-y-3">
+                    {contactError && (
+                      <p className="text-sm text-red-600">{contactError}</p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <FieldLabel>שם</FieldLabel>
+                        <Input
+                          type="text"
+                          value={contactNameDraft}
+                          onChange={(e) => setContactNameDraft(e.target.value)}
+                          placeholder="שם איש קשר"
+                          disabled={contactSaving}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>טלפון</FieldLabel>
+                        <PhoneInput
+                          value={contactPhoneDraft}
+                          onChange={setContactPhoneDraft}
+                          placeholder="טלפון"
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setContactError('')
+                          setIsEditingContact(false)
+                        }}
+                        disabled={contactSaving}
+                        className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveContact()}
+                        disabled={contactSaving}
+                        className="flex-1 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {contactSaving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            שומר...
+                          </>
+                        ) : (
+                          'שמור'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <FieldLabel>שם</FieldLabel>
+                    <FieldValue>{event.contact_name?.trim() || 'לא צוין'}</FieldValue>
+                    {event.contact_phone && (
+                      <a
+                        href={`tel:${event.contact_phone}`}
+                        className="text-[#33d4ff] text-sm flex items-center gap-1 mt-2 hover:underline"
+                      >
+                        <Phone size={13} />
+                        {event.contact_phone}
+                      </a>
+                    )}
+                  </>
                 )}
               </InfoPanel>
 
-              <InfoPanel icon={Clock} title="מועד האירוע">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <FieldLabel>תאריך</FieldLabel>
-                    <FieldValue>{formatEventDate(event.event_date)}</FieldValue>
+              <InfoPanel
+                icon={Clock}
+                title="מועד האירוע"
+                headerAction={
+                  canModify && !isEditingSchedule ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduleError('')
+                        setScheduleDateDraft(
+                          event.event_date
+                            ? event.event_date.includes('T')
+                              ? event.event_date.split('T')[0]
+                              : event.event_date
+                            : ''
+                        )
+                        setScheduleStartDraft(
+                          event.start_time ? formatEventTime(event.start_time) : ''
+                        )
+                        setScheduleEndDraft(
+                          event.end_time ? formatEventTime(event.end_time) : ''
+                        )
+                        setIsEditingSchedule(true)
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#21b8e6] hover:text-[#1a9bc7] font-medium shrink-0"
+                    >
+                      <Edit2 size={13} />
+                      ערוך
+                    </button>
+                  ) : undefined
+                }
+              >
+                {isEditingSchedule ? (
+                  <div className="space-y-3">
+                    {scheduleError && (
+                      <p className="text-sm text-red-600">{scheduleError}</p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <FieldLabel>תאריך</FieldLabel>
+                        <DateInput
+                          value={scheduleDateDraft}
+                          onChange={setScheduleDateDraft}
+                          disabled={scheduleSaving}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>שעת התחלה</FieldLabel>
+                        <TimeInput
+                          value={scheduleStartDraft}
+                          onChange={setScheduleStartDraft}
+                          disabled={scheduleSaving}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>שעת סיום</FieldLabel>
+                        <TimeInput
+                          value={scheduleEndDraft}
+                          onChange={setScheduleEndDraft}
+                          disabled={scheduleSaving}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScheduleError('')
+                          setIsEditingSchedule(false)
+                        }}
+                        disabled={scheduleSaving}
+                        className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveSchedule()}
+                        disabled={scheduleSaving}
+                        className="flex-1 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {scheduleSaving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            שומר...
+                          </>
+                        ) : (
+                          'שמור'
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <FieldLabel>שעות</FieldLabel>
-                    <FieldValue>
-                      {event.start_time && event.end_time
-                        ? `${formatEventTime(event.start_time)} – ${formatEventTime(event.end_time)}`
-                        : 'לא צוין'}
-                    </FieldValue>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <FieldLabel>תאריך</FieldLabel>
+                      <FieldValue>{formatEventDate(event.event_date)}</FieldValue>
+                    </div>
+                    <div>
+                      <FieldLabel>שעות</FieldLabel>
+                      <FieldValue>
+                        {event.start_time && event.end_time
+                          ? `${formatEventTime(event.start_time)} – ${formatEventTime(event.end_time)}`
+                          : 'לא צוין'}
+                      </FieldValue>
+                    </div>
                   </div>
-                </div>
+                )}
               </InfoPanel>
 
               {canModify && (
@@ -1282,16 +1788,147 @@ export default function EventDetailsPage() {
                 </InfoPanel>
               )}
 
-              <InfoPanel icon={MapPin} title="מיקום">
-                <p className="text-sm text-gray-800 leading-relaxed">
-                  {event.location_address?.trim() || 'לא צוין'}
-                </p>
+              <InfoPanel
+                icon={MapPin}
+                title="מיקום"
+                headerAction={
+                  canModify && !isEditingLocation ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocationError('')
+                        setLocationDraft({
+                          address: event.location_address ?? '',
+                          lat: event.location_lat ?? undefined,
+                          lng: event.location_lng ?? undefined,
+                        })
+                        setIsEditingLocation(true)
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#21b8e6] hover:text-[#1a9bc7] font-medium shrink-0"
+                    >
+                      <Edit2 size={13} />
+                      ערוך
+                    </button>
+                  ) : undefined
+                }
+              >
+                {isEditingLocation ? (
+                  <div className="space-y-3">
+                    {locationError && (
+                      <p className="text-sm text-red-600">{locationError}</p>
+                    )}
+                    <AddressInput
+                      value={locationDraft}
+                      onChange={(data: AddressData) => setLocationDraft(data)}
+                      hideLabel
+                      placeholder="הזן כתובת או הדבק קישור..."
+                      onPinDropClick={() => setLocationPinOpen(true)}
+                      readOnly={locationSaving}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocationError('')
+                          setIsEditingLocation(false)
+                          setLocationPinOpen(false)
+                        }}
+                        disabled={locationSaving}
+                        className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveLocation()}
+                        disabled={locationSaving}
+                        className="flex-1 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {locationSaving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            שומר...
+                          </>
+                        ) : (
+                          'שמור'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-800 leading-relaxed">
+                    {event.location_address?.trim() || 'לא צוין'}
+                  </p>
+                )}
               </InfoPanel>
 
-              <InfoPanel icon={FileText} title="פרטים">
-                <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                  {event.details?.trim() || 'לא צוין'}
-                </p>
+              <InfoPanel
+                icon={FileText}
+                title="פרטים"
+                headerAction={
+                  canModify && !isEditingDetails ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailsError('')
+                        setDetailsDraft(event.details ?? '')
+                        setIsEditingDetails(true)
+                      }}
+                      className="flex items-center gap-1 text-xs text-[#21b8e6] hover:text-[#1a9bc7] font-medium shrink-0"
+                    >
+                      <Edit2 size={13} />
+                      ערוך
+                    </button>
+                  ) : undefined
+                }
+              >
+                {isEditingDetails ? (
+                  <div className="space-y-3">
+                    {detailsError && (
+                      <p className="text-sm text-red-600">{detailsError}</p>
+                    )}
+                    <textarea
+                      value={detailsDraft}
+                      onChange={(e) => setDetailsDraft(e.target.value)}
+                      rows={4}
+                      placeholder="פרטים נוספים על האירוע..."
+                      disabled={detailsSaving}
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsError('')
+                          setIsEditingDetails(false)
+                        }}
+                        disabled={detailsSaving}
+                        className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        ביטול
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSaveDetails()}
+                        disabled={detailsSaving}
+                        className="flex-1 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {detailsSaving ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            שומר...
+                          </>
+                        ) : (
+                          'שמור'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {event.details?.trim() || 'לא צוין'}
+                  </p>
+                )}
               </InfoPanel>
             </div>
 
@@ -1656,6 +2293,17 @@ export default function EventDetailsPage() {
           }}
         />
       )}
+
+      <PinDropModal
+        isOpen={locationPinOpen}
+        onClose={() => setLocationPinOpen(false)}
+        onConfirm={(data) => {
+          setLocationDraft(data)
+          setLocationPinOpen(false)
+        }}
+        initialAddress={locationDraft}
+        title="בחר מיקום אירוע"
+      />
     </div>
   )
 }

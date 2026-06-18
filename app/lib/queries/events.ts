@@ -436,6 +436,83 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
   return { id: eventId }
 }
 
+export interface UpdateEventInput {
+  customerId?: string
+  locationAddress?: string
+  locationLat?: number | null
+  locationLng?: number | null
+  contactName?: string | null
+  contactPhone?: string | null
+  details?: string | null
+  eventDate?: string
+  startTime?: string
+  endTime?: string
+}
+
+export async function updateEvent(
+  eventId: string,
+  input: UpdateEventInput
+): Promise<EventWithDetails> {
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (input.customerId !== undefined) {
+    payload.customer_id = input.customerId
+  }
+  if (input.locationAddress !== undefined) {
+    payload.location_address = input.locationAddress
+  }
+  if (input.locationLat !== undefined) {
+    payload.location_lat = input.locationLat
+  }
+  if (input.locationLng !== undefined) {
+    payload.location_lng = input.locationLng
+  }
+  if (input.contactName !== undefined) {
+    payload.contact_name = input.contactName
+  }
+  if (input.contactPhone !== undefined) {
+    payload.contact_phone = input.contactPhone
+  }
+  if (input.details !== undefined) {
+    payload.details = input.details
+  }
+  if (input.eventDate !== undefined) {
+    payload.event_date = input.eventDate
+  }
+  if (input.startTime !== undefined) {
+    payload.start_time = input.startTime
+  }
+  if (input.endTime !== undefined) {
+    payload.end_time = input.endTime
+  }
+
+  const { data, error } = await supabase
+    .from('events')
+    .update(payload)
+    .eq('id', eventId)
+    .select(EVENT_WITH_RELATIONS_SELECT)
+    .single()
+
+  if (error) {
+    console.error('Error updating event:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  if (!data) {
+    throw new Error('Event not found')
+  }
+
+  const updated = data as EventWithDetails
+
+  if (updated.status === 'approved') {
+    await syncEventToLegacyCalendar(eventId)
+  }
+
+  return updated
+}
+
 export interface EventGroupMember {
   id: string
   instance_label: string | null
