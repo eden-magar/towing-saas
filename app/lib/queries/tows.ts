@@ -1129,6 +1129,7 @@ export interface CreateStorageFollowUpInput {
   dropoffContactName: string
   dropoffContactPhone: string
   requiredTruckTypes: string[]
+  customerOrderNumber?: string | null
 }
 
 /** Second tow: yard pickup → admin follow-up destination; unassigned, no schedule. */
@@ -1156,6 +1157,7 @@ export async function createStorageFollowUpTow(
     priceMode: 'recommended',
     priceBreakdown: null,
     notes: 'גרירת המשך מאחסנה',
+    customerOrderNumber: input.customerOrderNumber ?? undefined,
     vehicles: [
       {
         plateNumber: normalizePlate(input.vehiclePlate),

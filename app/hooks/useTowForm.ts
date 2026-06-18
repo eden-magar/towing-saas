@@ -640,6 +640,7 @@ export function useTowForm(
   const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
   const [hasStorageFollowUp, setHasStorageFollowUp] = useState(false)
+  const [inheritCustomerOrderNumber, setInheritCustomerOrderNumber] = useState(false)
   const [followUpAddress, setFollowUpAddress] = useState<AddressData>({ address: '' })
   const [followUpContactName, setFollowUpContactName] = useState('')
   const [followUpContactPhone, setFollowUpContactPhone] = useState('')
@@ -2409,6 +2410,7 @@ export function useTowForm(
       setDistance(null)
       setDropoffToStorage(false)
       setHasStorageFollowUp(false)
+      setInheritCustomerOrderNumber(false)
       setFollowUpAddress({ address: '' })
       setFollowUpContactName('')
       setFollowUpContactPhone('')
@@ -2463,6 +2465,7 @@ export function useTowForm(
       setWorkingSelectedServices([])
       setDefectiveSelectedServices([])
       setHasStorageFollowUp(false)
+      setInheritCustomerOrderNumber(false)
       setFollowUpAddress({ address: '' })
       setFollowUpContactName('')
       setFollowUpContactPhone('')
@@ -2815,6 +2818,7 @@ export function useTowForm(
     truckTypeSectionRef,
     dropoffToStorage,
     hasStorageFollowUp,
+    inheritCustomerOrderNumber,
     followUpAddress,
     followUpContactName,
     followUpContactPhone,
@@ -3003,6 +3007,7 @@ export function useTowForm(
     selectedStoredVehicleId, setSelectedStoredVehicleId,
     dropoffToStorage, setDropoffToStorage,
     hasStorageFollowUp, setHasStorageFollowUp,
+    inheritCustomerOrderNumber, setInheritCustomerOrderNumber,
     followUpAddress, setFollowUpAddress,
     followUpContactName, setFollowUpContactName,
     followUpContactPhone, setFollowUpContactPhone,

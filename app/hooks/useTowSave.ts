@@ -43,6 +43,7 @@ interface UseTowSaveParams {
   truckTypeSectionRef: React.RefObject<HTMLDivElement>
   dropoffToStorage: boolean
   hasStorageFollowUp?: boolean
+  inheritCustomerOrderNumber?: boolean
   followUpAddress?: AddressData
   followUpContactName?: string
   followUpContactPhone?: string
@@ -173,6 +174,7 @@ export function useTowSave(params: UseTowSaveParams) {
     truckTypeSectionRef,
     dropoffToStorage,
     hasStorageFollowUp,
+    inheritCustomerOrderNumber,
     followUpAddress,
     followUpContactName,
     followUpContactPhone,
@@ -624,6 +626,7 @@ export function useTowSave(params: UseTowSaveParams) {
             dropoffContactName: followUpContactName?.trim() || '',
             dropoffContactPhone: followUpContactPhone?.trim() || '',
             requiredTruckTypes,
+            customerOrderNumber: inheritCustomerOrderNumber ? (customerOrderNumber || null) : null,
           })
           console.log('[useTowSave] follow-up storage tow created')
         } catch (followUpError) {

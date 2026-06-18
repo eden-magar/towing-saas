@@ -148,6 +148,8 @@ function CreateExchangeTowForm({
     customerStoredVehicles,
     hasStorageFollowUp,
     setHasStorageFollowUp,
+    inheritCustomerOrderNumber,
+    setInheritCustomerOrderNumber,
     followUpAddress,
     setFollowUpAddress,
     followUpContactName,
@@ -1606,6 +1608,7 @@ function CreateExchangeTowForm({
                                           setFollowUpAddress({ address: '' })
                                           setFollowUpContactName('')
                                           setFollowUpContactPhone('')
+                                          setInheritCustomerOrderNumber(false)
                                         }
                                       }}
                                       className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
@@ -1665,6 +1668,25 @@ function CreateExchangeTowForm({
                                             />
                                           </div>
                                         </div>
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={inheritCustomerOrderNumber}
+                                          onClick={() => setInheritCustomerOrderNumber((prev) => !prev)}
+                                          className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
+                                        >
+                                          <span
+                                            aria-hidden
+                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
+                                              inheritCustomerOrderNumber ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
+                                            }`}
+                                          >
+                                            <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
+                                          </span>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-semibold text-gray-800">שמור מס׳ הזמנת לקוח לגרירת ההמשך</div>
+                                          </div>
+                                        </button>
                                       </div>
                                     )}
                                   </div>
