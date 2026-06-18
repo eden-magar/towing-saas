@@ -29,6 +29,7 @@ import {
   approveEventQuote,
   assignEventDriver,
   getEvent,
+  getEventsByGroupId,
   getEventChangeLog,
   getEventVehiclePhotos,
   getEventVehicles,
@@ -542,6 +543,8 @@ export default function EventDetailsPage() {
   const [spawnError, setSpawnError] = useState('')
   const [spawnSuccess, setSpawnSuccess] = useState('')
 
+  const [eventGroupSiblingCount, setEventGroupSiblingCount] = useState(0)
+
   const handleTabChange = (tab: EventTab) => {
     setActiveTab(tab)
     if (tab !== 'details') {
@@ -615,6 +618,28 @@ export default function EventDetailsPage() {
   }, [companyId, eventId, loadEvent])
 
   useEffect(() => {
+    const groupId = event?.event_group_id
+    if (!groupId) {
+      setEventGroupSiblingCount(0)
+      return
+    }
+
+    let cancelled = false
+    void getEventsByGroupId(groupId)
+      .then((siblings) => {
+        if (!cancelled) setEventGroupSiblingCount(siblings.length)
+      })
+      .catch((err) => {
+        console.error('Error loading event group siblings:', err)
+        if (!cancelled) setEventGroupSiblingCount(0)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [event?.event_group_id])
+
+  useEffect(() => {
     setVehicles([])
     setPhotos([])
     setSignedUrlByPhotoId({})
@@ -631,6 +656,7 @@ export default function EventDetailsPage() {
     setSpawnRows([])
     setSpawnError('')
     setSpawnSuccess('')
+    setEventGroupSiblingCount(0)
     if (eventId) {
       void loadChangeLogs()
     }
@@ -935,9 +961,14 @@ export default function EventDetailsPage() {
     color: 'bg-gray-100 text-gray-600 border-gray-200',
   }
 
-  const titleLabel = event.order_number
+  const baseTitleLabel = event.order_number
     ? `אירוע #${event.order_number}`
     : 'אירוע מיוחד'
+
+  const titleLabel =
+    eventGroupSiblingCount > 1 && event.instance_label
+      ? `${baseTitleLabel} (${event.instance_label})`
+      : baseTitleLabel
 
   const canModify =
     event.status !== 'cancelled' && event.status !== 'completed'
