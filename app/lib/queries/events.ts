@@ -60,6 +60,8 @@ export interface EventWithDetails {
   final_price: number | null
   price_breakdown: EventPriceResult | null
   order_number: string | null
+  event_group_id?: string | null
+  instance_label?: string | null
   event_date: string | null
   start_time: string | null
   end_time: string | null
@@ -395,6 +397,8 @@ export interface CreateEventInput {
   finalPrice?: number | null
   priceBreakdown?: EventPriceResult | null
   status?: string
+  eventGroupId?: string | null
+  instanceLabel?: string | null
 }
 
 export async function createEvent(input: CreateEventInput): Promise<{ id: string }> {
@@ -420,6 +424,8 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
     final_price: input.finalPrice ?? null,
     price_breakdown: input.priceBreakdown ?? null,
     status: input.status ?? 'draft',
+    event_group_id: input.eventGroupId ?? null,
+    instance_label: input.instanceLabel ?? null,
   })
 
   if (error) {
@@ -428,6 +434,107 @@ export async function createEvent(input: CreateEventInput): Promise<{ id: string
   }
 
   return { id: eventId }
+}
+
+export interface EventGroupMember {
+  id: string
+  instance_label: string | null
+  event_date: string | null
+  order_number: string | null
+}
+
+export async function getEventsByGroupId(groupId: string): Promise<EventGroupMember[]> {
+  const { data, error } = await supabase
+    .from('events')
+    .select('id, instance_label, event_date, order_number')
+    .eq('event_group_id', groupId)
+    .order('instance_label', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching events by group:', JSON.stringify(error, null, 2))
+    throw error
+  }
+
+  return (data ?? []) as EventGroupMember[]
+}
+
+export interface SpawnEventInstanceRow {
+  eventDate: string
+  startTime: string
+  endTime: string
+}
+
+function maxInstanceLabelCode(labels: (string | null | undefined)[]): number {
+  let max = 64
+  for (const label of labels) {
+    if (!label || label.length !== 1) continue
+    const code = label.charCodeAt(0)
+    if (code >= 65 && code <= 90 && code > max) max = code
+  }
+  return max
+}
+
+export async function spawnEventInstances(
+  sourceEvent: EventWithDetails,
+  rows: SpawnEventInstanceRow[],
+  currentUserId: string
+): Promise<{ id: string; instanceLabel: string }[]> {
+  if (rows.length === 0) return []
+
+  let groupId = sourceEvent.event_group_id ?? null
+
+  if (!groupId) {
+    groupId = crypto.randomUUID()
+    const { error: backfillError } = await supabase
+      .from('events')
+      .update({ event_group_id: groupId, instance_label: 'A' })
+      .eq('id', sourceEvent.id)
+
+    if (backfillError) {
+      console.error('Error backfilling event group on source:', JSON.stringify(backfillError, null, 2))
+      throw backfillError
+    }
+  }
+
+  const siblings = await getEventsByGroupId(groupId)
+  let nextLabelCode = Math.max(maxInstanceLabelCode(siblings.map((s) => s.instance_label)), 65) + 1
+
+  const created: { id: string; instanceLabel: string }[] = []
+
+  for (const row of rows) {
+    const instanceLabel = String.fromCharCode(nextLabelCode)
+    nextLabelCode += 1
+
+    const result = await createEvent({
+      companyId: sourceEvent.company_id,
+      createdBy: currentUserId,
+      customerId: sourceEvent.customer_id,
+      driverId: sourceEvent.driver_id ?? null,
+      locationAddress: sourceEvent.location_address ?? '',
+      locationLat: sourceEvent.location_lat,
+      locationLng: sourceEvent.location_lng,
+      contactName: sourceEvent.contact_name,
+      contactPhone: sourceEvent.contact_phone,
+      details: sourceEvent.details,
+      eventDate: row.eventDate,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      manualPrice: sourceEvent.manual_price,
+      finalPrice: sourceEvent.final_price,
+      priceBreakdown: sourceEvent.price_breakdown,
+      status: sourceEvent.status,
+      eventGroupId: groupId,
+      instanceLabel,
+    })
+
+    if (sourceEvent.status === 'approved') {
+      void syncEventToLegacyCalendar(result.id)
+    }
+
+    created.push({ id: result.id, instanceLabel })
+  }
+
+  return created
 }
 
 export interface UpdateEventPriceFields {

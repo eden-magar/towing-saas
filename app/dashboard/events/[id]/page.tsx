@@ -18,6 +18,8 @@ import {
   History,
   Image,
   X,
+  Plus,
+  Loader2,
   AlertTriangle,
   CheckCircle,
 } from 'lucide-react'
@@ -34,6 +36,7 @@ import {
   cancelEvent,
   completeEvent,
   saveEventChangeLog,
+  spawnEventInstances,
   type EventVehicle,
   type EventVehicleDetails,
   type EventVehiclePhoto,
@@ -45,6 +48,7 @@ import { getEventImageSignedUrl } from '../../../lib/queries/event-plate-capture
 import { getCompanySettings } from '../../../lib/queries/settings'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { EventPriceEditor } from '../../../components/event-forms/EventPriceEditor'
+import { DateInput, TimeInput } from '../../../components/ui'
 import type { DriverWithDetails } from '../../../lib/types'
 import type { EventPriceResult } from '../../../lib/utils/event-pricing'
 
@@ -142,6 +146,37 @@ function googleMapsDestinationUrl(lat: number, lng: number): string {
 }
 
 type EventTab = 'details' | 'history' | 'documentation'
+
+type SpawnDateRow = {
+  id: string
+  eventDate: string
+  startTime: string
+  endTime: string
+}
+
+function createEmptySpawnDateRow(): SpawnDateRow {
+  return {
+    id: crypto.randomUUID(),
+    eventDate: '',
+    startTime: '',
+    endTime: '',
+  }
+}
+
+function isSpawnRowValid(row: SpawnDateRow): boolean {
+  if (!row.eventDate.trim() || !row.startTime.trim() || !row.endTime.trim()) {
+    return false
+  }
+  return row.endTime > row.startTime
+}
+
+function isSpawnRowPartial(row: SpawnDateRow): boolean {
+  return Boolean(row.eventDate.trim() || row.startTime.trim() || row.endTime.trim())
+}
+
+function isSpawnRowInvalid(row: SpawnDateRow): boolean {
+  return isSpawnRowPartial(row) && !isSpawnRowValid(row)
+}
 
 function EventPricingDisplay({
   breakdown,
@@ -502,6 +537,11 @@ export default function EventDetailsPage() {
   const [assigningDriver, setAssigningDriver] = useState(false)
   const [assignDriverError, setAssignDriverError] = useState('')
 
+  const [spawnRows, setSpawnRows] = useState<SpawnDateRow[]>([])
+  const [spawning, setSpawning] = useState(false)
+  const [spawnError, setSpawnError] = useState('')
+  const [spawnSuccess, setSpawnSuccess] = useState('')
+
   const handleTabChange = (tab: EventTab) => {
     setActiveTab(tab)
     if (tab !== 'details') {
@@ -588,6 +628,9 @@ export default function EventDetailsPage() {
     setCancelError('')
     setShowCompleteModal(false)
     setCompleteError('')
+    setSpawnRows([])
+    setSpawnError('')
+    setSpawnSuccess('')
     if (eventId) {
       void loadChangeLogs()
     }
@@ -771,6 +814,64 @@ export default function EventDetailsPage() {
     }
   }
 
+  const handleAddSpawnRow = () => {
+    setSpawnSuccess('')
+    setSpawnError('')
+    setSpawnRows((prev) => [...prev, createEmptySpawnDateRow()])
+  }
+
+  const handleRemoveSpawnRow = (rowId: string) => {
+    setSpawnRows((prev) => prev.filter((row) => row.id !== rowId))
+  }
+
+  const handleUpdateSpawnRow = (
+    rowId: string,
+    field: keyof Omit<SpawnDateRow, 'id'>,
+    value: string
+  ) => {
+    setSpawnSuccess('')
+    setSpawnError('')
+    setSpawnRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, [field]: value } : row))
+    )
+  }
+
+  const handleSpawnDates = async () => {
+    if (!user || !event) return
+
+    const validRows = spawnRows.filter(isSpawnRowValid).map((row) => ({
+      eventDate: row.eventDate.trim(),
+      startTime: row.startTime.trim(),
+      endTime: row.endTime.trim(),
+    }))
+
+    if (validRows.length === 0) {
+      setSpawnError('יש למלא לפחות תאריך אחד תקין (תאריך, שעת התחלה ושעת סיום; סיום אחרי התחלה)')
+      return
+    }
+
+    setSpawning(true)
+    setSpawnError('')
+    setSpawnSuccess('')
+
+    try {
+      const created = await spawnEventInstances(event, validRows, user.id)
+      const labels = created.map((item) => item.instanceLabel).join(', ')
+      setSpawnSuccess(
+        created.length === 1
+          ? `נוסף אירוע אחד (${labels})`
+          : `נוספו ${created.length} אירועים (${labels})`
+      )
+      setSpawnRows([])
+      await loadEvent(true)
+    } catch (err) {
+      console.error('Error spawning event instances:', err)
+      setSpawnError('שגיאה ביצירת האירועים')
+    } finally {
+      setSpawning(false)
+    }
+  }
+
   const handleSavePrice = async (result: {
     enteredPrice: number
     priceResult: EventPriceResult
@@ -840,6 +941,7 @@ export default function EventDetailsPage() {
 
   const canModify =
     event.status !== 'cancelled' && event.status !== 'completed'
+  const validSpawnRows = spawnRows.filter(isSpawnRowValid)
   const canApproveQuoteEvent =
     event.status === 'quote' && canApproveQuote(user?.role)
   const isCancelled = event.status === 'cancelled'
@@ -1041,6 +1143,113 @@ export default function EventDetailsPage() {
                   </div>
                 </div>
               </InfoPanel>
+
+              {canModify && (
+                <InfoPanel icon={Calendar} title="הוסף תאריכים נוספים">
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={handleAddSpawnRow}
+                      disabled={spawning}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      <Plus size={16} />
+                      הוסף תאריך
+                    </button>
+
+                    {spawnRows.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-end gap-2" dir="rtl">
+                          <div className="flex-1 min-w-[7rem]">
+                            <FieldLabel>תאריך</FieldLabel>
+                          </div>
+                          <div className="flex-1 min-w-[6rem]">
+                            <FieldLabel>שעת התחלה</FieldLabel>
+                          </div>
+                          <div className="flex-1 min-w-[6rem]">
+                            <FieldLabel>שעת סיום</FieldLabel>
+                          </div>
+                          <div className="w-9 shrink-0" aria-hidden="true" />
+                        </div>
+                        {spawnRows.map((row) => {
+                          const rowInvalid = isSpawnRowInvalid(row)
+                          return (
+                            <div
+                              key={row.id}
+                              className="flex flex-wrap items-center gap-2"
+                              dir="rtl"
+                            >
+                              <DateInput
+                                value={row.eventDate}
+                                onChange={(value) =>
+                                  handleUpdateSpawnRow(row.id, 'eventDate', value)
+                                }
+                                hasError={rowInvalid}
+                                disabled={spawning}
+                                className="flex-1 min-w-[7rem]"
+                              />
+                              <TimeInput
+                                value={row.startTime}
+                                onChange={(value) =>
+                                  handleUpdateSpawnRow(row.id, 'startTime', value)
+                                }
+                                hasError={rowInvalid}
+                                disabled={spawning}
+                                className="flex-1 min-w-[6rem]"
+                              />
+                              <TimeInput
+                                value={row.endTime}
+                                onChange={(value) =>
+                                  handleUpdateSpawnRow(row.id, 'endTime', value)
+                                }
+                                hasError={rowInvalid}
+                                disabled={spawning}
+                                className="flex-1 min-w-[6rem]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSpawnRow(row.id)}
+                                disabled={spawning}
+                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 shrink-0"
+                                aria-label="הסר תאריך"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {spawnError && (
+                      <p className="text-sm text-red-600">{spawnError}</p>
+                    )}
+                    {spawnSuccess && (
+                      <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                        {spawnSuccess}
+                      </p>
+                    )}
+
+                    {validSpawnRows.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void handleSpawnDates()}
+                        disabled={spawning}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6] disabled:opacity-50"
+                      >
+                        {spawning ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            יוצר...
+                          </>
+                        ) : (
+                          'צור אירועים'
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </InfoPanel>
+              )}
 
               <InfoPanel icon={MapPin} title="מיקום">
                 <p className="text-sm text-gray-800 leading-relaxed">
