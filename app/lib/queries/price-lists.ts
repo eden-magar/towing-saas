@@ -139,6 +139,10 @@ export async function upsertBasePriceList(
     base_price_heavy?: number        // רכב כבד
     base_price_machinery?: number    // צמ"ה
     price_per_km?: number
+    price_per_km_private?: number | null
+    price_per_km_motorcycle?: number | null
+    price_per_km_heavy?: number | null
+    price_per_km_machinery?: number | null
     minimum_price?: number
     // נקודת בסיס
     base_address?: string | null
@@ -923,6 +927,10 @@ export async function upsertCustomerPriceList(
     base_price_heavy?: number | null
     base_price_machinery?: number | null
     price_per_km?: number | null
+    price_per_km_private?: number | null
+    price_per_km_motorcycle?: number | null
+    price_per_km_heavy?: number | null
+    price_per_km_machinery?: number | null
     minimum_price?: number | null
   }
 ): Promise<string> {
@@ -932,6 +940,10 @@ export async function upsertCustomerPriceList(
     base_price_heavy: data.base_price_heavy ?? null,
     base_price_machinery: data.base_price_machinery ?? null,
     price_per_km: data.price_per_km ?? null,
+    price_per_km_private: data.price_per_km_private ?? null,
+    price_per_km_motorcycle: data.price_per_km_motorcycle ?? null,
+    price_per_km_heavy: data.price_per_km_heavy ?? null,
+    price_per_km_machinery: data.price_per_km_machinery ?? null,
     minimum_price: data.minimum_price ?? null,
   }
 

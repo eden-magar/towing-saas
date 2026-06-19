@@ -49,6 +49,25 @@ interface VehiclePrice {
   price: number
 }
 
+interface VehicleKmRate {
+  id: string
+  label: string
+  field: string
+  price: number | null
+}
+
+const DEFAULT_VEHICLE_KM_RATES: VehicleKmRate[] = [
+  { id: 'private', label: 'רכב פרטי', field: 'price_per_km_private', price: null },
+  { id: 'motorcycle', label: 'דו גלגלי', field: 'price_per_km_motorcycle', price: null },
+  { id: 'heavy', label: 'רכב כבד', field: 'price_per_km_heavy', price: null },
+  { id: 'machinery', label: 'צמ"ה', field: 'price_per_km_machinery', price: null },
+]
+
+function nullablePerTypeKm(value: number | null | undefined): number | null {
+  if (value == null || value <= 0) return null
+  return value
+}
+
 type WeightBracketRow = {
   id: string
   min_kg: number
@@ -114,6 +133,10 @@ interface CustomerPriceList {
   base_price_heavy?: number | null
   base_price_machinery?: number | null
   price_per_km?: number | null
+  price_per_km_private?: number | null
+  price_per_km_motorcycle?: number | null
+  price_per_km_heavy?: number | null
+  price_per_km_machinery?: number | null
   minimum_price?: number | null
   customer_time_surcharges?: TimeSurcharge[]
   customer_location_surcharges?: LocationSurcharge[]
@@ -161,6 +184,7 @@ export default function PriceListsPage() {
   ])
   const [pricePerKm, setPricePerKm] = useState(12)
   const [minimumPrice, setMinimumPrice] = useState(250)
+  const [vehicleKmRates, setVehicleKmRates] = useState<VehicleKmRate[]>(DEFAULT_VEHICLE_KM_RATES)
   const [weightBrackets, setWeightBrackets] = useState<WeightBracketRow[]>([])
 
   // Fixed prices state
@@ -211,6 +235,12 @@ export default function PriceListsPage() {
         ])
         setPricePerKm(bp.price_per_km || 12)
         setMinimumPrice(bp.minimum_price || 250)
+        setVehicleKmRates([
+          { id: 'private', label: 'רכב פרטי', field: 'price_per_km_private', price: bp.price_per_km_private ?? null },
+          { id: 'motorcycle', label: 'דו גלגלי', field: 'price_per_km_motorcycle', price: bp.price_per_km_motorcycle ?? null },
+          { id: 'heavy', label: 'רכב כבד', field: 'price_per_km_heavy', price: bp.price_per_km_heavy ?? null },
+          { id: 'machinery', label: 'צמ"ה', field: 'price_per_km_machinery', price: bp.price_per_km_machinery ?? null },
+        ])
         if (bp.base_address) {
           setBaseLocation({
             address: bp.base_address,
@@ -356,6 +386,9 @@ export default function PriceListsPage() {
       vehiclePrices.forEach(v => {
         basePriceData[v.field] = v.price
       })
+      vehicleKmRates.forEach(v => {
+        basePriceData[v.field] = nullablePerTypeKm(v.price)
+      })
       await upsertBasePriceList(companyId, basePriceData)
 
       await saveWeightBrackets(
@@ -424,6 +457,11 @@ export default function PriceListsPage() {
   // Vehicle prices
   const handleVehiclePriceChange = (id: string, price: number) => {
     setVehiclePrices(prev => prev.map(v => v.id === id ? { ...v, price } : v))
+    markChanged()
+  }
+
+  const handleVehicleKmRateChange = (id: string, price: number | null) => {
+    setVehicleKmRates(prev => prev.map(v => v.id === id ? { ...v, price } : v))
     markChanged()
   }
 
@@ -588,6 +626,10 @@ export default function PriceListsPage() {
       base.base_price_heavy = existingPriceList.base_price_heavy
       base.base_price_machinery = existingPriceList.base_price_machinery
       base.price_per_km = existingPriceList.price_per_km
+      base.price_per_km_private = existingPriceList.price_per_km_private
+      base.price_per_km_motorcycle = existingPriceList.price_per_km_motorcycle
+      base.price_per_km_heavy = existingPriceList.price_per_km_heavy
+      base.price_per_km_machinery = existingPriceList.price_per_km_machinery
       base.minimum_price = existingPriceList.minimum_price
       base.customer_time_surcharges = surcharges.timeSurcharges.map(s => {
         const label = resolveTimeSurchargeLabel(s)
@@ -671,7 +713,11 @@ export default function PriceListsPage() {
         editingCustomer.base_price_motorcycle ||
         editingCustomer.base_price_heavy ||
         editingCustomer.base_price_machinery ||
-        editingCustomer.price_per_km
+        editingCustomer.price_per_km ||
+        editingCustomer.price_per_km_private ||
+        editingCustomer.price_per_km_motorcycle ||
+        editingCustomer.price_per_km_heavy ||
+        editingCustomer.price_per_km_machinery
 
       const hasSurcharges =
         (editingCustomer.customer_time_surcharges?.length ?? 0) > 0 ||
@@ -688,6 +734,10 @@ export default function PriceListsPage() {
             base_price_heavy: editingCustomer.base_price_heavy ?? null,
             base_price_machinery: editingCustomer.base_price_machinery ?? null,
             price_per_km: editingCustomer.price_per_km ?? null,
+            price_per_km_private: editingCustomer.price_per_km_private ?? null,
+            price_per_km_motorcycle: editingCustomer.price_per_km_motorcycle ?? null,
+            price_per_km_heavy: editingCustomer.price_per_km_heavy ?? null,
+            price_per_km_machinery: editingCustomer.price_per_km_machinery ?? null,
             minimum_price: editingCustomer.minimum_price ?? null,
           }
         )
@@ -801,6 +851,8 @@ export default function PriceListsPage() {
           onBaseLocationChange={(data) => { setBaseLocation(data); markChanged() }}
           vehiclePrices={vehiclePrices}
           onVehiclePriceChange={handleVehiclePriceChange}
+          vehicleKmRates={vehicleKmRates}
+          onVehicleKmRateChange={handleVehicleKmRateChange}
           pricePerKm={pricePerKm}
           onPricePerKmChange={(v) => { setPricePerKm(v); markChanged() }}
           minimumPrice={minimumPrice}
@@ -945,6 +997,31 @@ export default function PriceListsPage() {
                       />
                     </div>
                   </div>
+                </div>
+                <p className="text-xs font-medium text-gray-500 mt-4 mb-2">
+                  מחיר לק״מ לפי סוג רכב (ריק = לפי מחירון כללי)
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'price_per_km_private', label: 'רכב פרטי' },
+                    { key: 'price_per_km_motorcycle', label: 'דו גלגלי' },
+                    { key: 'price_per_km_heavy', label: 'רכב כבד' },
+                    { key: 'price_per_km_machinery', label: 'צמ"ה' },
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                      <div className="relative">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                        <input
+                          type="number"
+                          value={(editingCustomer as any)[key] || ''}
+                          onChange={(e) => setEditingCustomer({ ...editingCustomer, [key]: Number(e.target.value) || null })}
+                          placeholder="כמו מחירון כללי"
+                          className="w-full pr-8 pl-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

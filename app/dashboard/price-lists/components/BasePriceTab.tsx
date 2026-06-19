@@ -17,13 +17,22 @@ interface VehiclePrice {
   price: number
 }
 
+interface VehicleKmRate {
+  id: string
+  label: string
+  field: string
+  price: number | null
+}
+
 interface BasePriceTabProps {
   baseLocation: BaseLocationData
   vehiclePrices: VehiclePrice[]
+  vehicleKmRates: VehicleKmRate[]
   pricePerKm: number
   minimumPrice: number
   onBaseLocationChange: (location: BaseLocationData) => void
   onVehiclePriceChange: (id: string, value: number) => void
+  onVehicleKmRateChange: (id: string, value: number | null) => void
   onPricePerKmChange: (value: number) => void
   onMinimumPriceChange: (value: number) => void
   weightBrackets: { id: string; min_kg: number; max_kg: number | null; base_price: number }[]
@@ -64,10 +73,12 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
 export function BasePriceTab({
   baseLocation,
   vehiclePrices,
+  vehicleKmRates,
   pricePerKm,
   minimumPrice,
   onBaseLocationChange,
   onVehiclePriceChange,
+  onVehicleKmRateChange,
   onPricePerKmChange,
   onMinimumPriceChange,
   weightBrackets,
@@ -129,6 +140,26 @@ export function BasePriceTab({
               value={minimumPrice}
               onChange={onMinimumPriceChange}
             />
+          </div>
+          <p className="text-xs font-medium text-gray-500 mt-4 mb-2">
+            מחיר לק״מ לפי סוג רכב (ריק = לפי מחיר כללי)
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {vehicleKmRates.map((item) => (
+              <div key={item.id}>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">{item.label}</label>
+                <div className="relative">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                  <input
+                    type="number"
+                    value={item.price ?? ''}
+                    onChange={(e) => onVehicleKmRateChange(item.id, Number(e.target.value) || null)}
+                    placeholder="כמו מחיר כללי"
+                    className="w-full pr-8 pl-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

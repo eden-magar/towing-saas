@@ -20,6 +20,10 @@ interface CustomerPriceList {
   base_price_heavy?: number | null
   base_price_machinery?: number | null
   price_per_km?: number | null
+  price_per_km_private?: number | null
+  price_per_km_motorcycle?: number | null
+  price_per_km_heavy?: number | null
+  price_per_km_machinery?: number | null
   minimum_price?: number | null
 }
 
@@ -53,7 +57,9 @@ export function CustomerPricingTab({
 }: CustomerPricingTabProps) {
   const hasCustomPricing = (customer: CustomerPriceList) =>
     customer.base_price_private || customer.base_price_heavy ||
-    customer.base_price_machinery || customer.price_per_km
+    customer.base_price_machinery || customer.price_per_km ||
+    customer.price_per_km_private || customer.price_per_km_motorcycle ||
+    customer.price_per_km_heavy || customer.price_per_km_machinery
 
   const toCustomerPriceList = (hit: CustomerSearchResult): CustomerPriceList => ({
     id: hit.customer_id,
