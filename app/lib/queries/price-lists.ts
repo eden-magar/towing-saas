@@ -98,6 +98,10 @@ export interface BasePriceList {
   base_price_heavy: number | null        // רכב כבד
   base_price_machinery: number | null    // צמ"ה
   price_per_km: number | null
+  price_per_km_private: number | null
+  price_per_km_motorcycle: number | null
+  price_per_km_heavy: number | null
+  price_per_km_machinery: number | null
   minimum_price: number | null
   night_surcharge_percent: number | null
   weekend_surcharge_percent: number | null

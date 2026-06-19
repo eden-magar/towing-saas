@@ -10,7 +10,7 @@ import {
 import { SelectedService } from '../components/tow-forms/shared'
 import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, TowPriceResult } from '../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, TowPriceResult } from '../lib/utils/price-calculator'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
   if (!services?.length) return []
@@ -210,6 +210,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         : basePriceList
 
     if (towType === 'custom') {
+      // Custom multi-vehicle routes use global price_per_km only (per-type km does not apply).
       if (customRouteData.vehicles.length === 0 || customRouteData.totalDistanceKm === 0) return null
       const basePrices = extractBasePrices(activePriceList)
       let totalBasePrice = 0
@@ -236,11 +237,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         .filter((x) => x.amount > 0)
 
       const result = calculateTowPrice({
-        priceList: {
-          base_prices: extractBasePrices(activePriceList),
-          price_per_km: activePriceList?.price_per_km ?? 12,
-          minimum_price: activePriceList?.minimum_price ?? 250
-        },
+        priceList: priceListForTowCalc(activePriceList, { globalKmOnly: true }),
         vehicleType: 'private',
         distanceKm: customRouteData.totalDistanceKm,
         basePriceOverride: totalBasePrice,
@@ -282,11 +279,7 @@ export function useTowPricing(params: UseTowPricingParams) {
     }).filter(s => s.amount > 0)
 
     const result = calculateTowPrice({
-      priceList: {
-        base_prices: extractBasePrices(activePriceList),
-        price_per_km: activePriceList?.price_per_km ?? 12,
-        minimum_price: activePriceList?.minimum_price ?? 250
-      },
+      priceList: priceListForTowCalc(activePriceList),
       vehicleType: vehicleType as VehicleType,
       ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       distanceKm,

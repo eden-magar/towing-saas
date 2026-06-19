@@ -8,7 +8,7 @@ import {
 } from '../queries/price-lists'
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, resolveVehicleBasePrice } from './price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveVehicleBasePrice } from './price-calculator'
 import { VehicleType, VehicleLookupResult } from '../types'
 import { normalizePlate } from './plate-number'
 import {
@@ -1063,13 +1063,14 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
 
   const timeSurchargesForCalc = timeSurchargesForPriceCalc(input)
 
+  const kmRateVehicleType: VehicleType =
+    input.towType === 'exchange' && input.defectiveVehicleType
+      ? (input.defectiveVehicleType as VehicleType)
+      : ((input.vehicleType as VehicleType) || 'private')
+
   const result = calculateTowPrice({
-    priceList: {
-      base_prices: extractBasePrices(activePriceList),
-      price_per_km: activePriceList?.price_per_km ?? 12,
-      minimum_price: activePriceList?.minimum_price ?? 250
-    },
-    vehicleType: (input.vehicleType as VehicleType) || 'private',
+    priceList: priceListForTowCalc(activePriceList),
+    vehicleType: kmRateVehicleType,
     distanceKm,
     ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
     timeSurcharges: timeSurchargesForCalc,
@@ -1196,12 +1197,9 @@ export function buildCustomTowPriceBreakdown(
 
   const timeSurchargesForCalc = timeSurchargesForPriceCalc(input)
 
+  // Custom multi-vehicle routes use global price_per_km only (per-type km does not apply).
   const result = calculateTowPrice({
-    priceList: {
-      base_prices: extractBasePrices(activePriceList),
-      price_per_km: activePriceList?.price_per_km ?? 12,
-      minimum_price: activePriceList?.minimum_price ?? 250,
-    },
+    priceList: priceListForTowCalc(activePriceList, { globalKmOnly: true }),
     vehicleType: 'private',
     distanceKm: totalDistanceKm,
     basePriceOverride: totalBasePrice,

@@ -1979,7 +1979,7 @@ export function useTowForm(
   const { recommendedPrice, finalPrice, priceResult } = useTowPricing({
     towType,
     vehicleType: towType === 'exchange'
-      ? (workingVehicleType || defectiveVehicleType ? (workingVehicleType || 'private') : '')
+      ? (workingVehicleType || defectiveVehicleType ? (defectiveVehicleType || 'private') : '')
       : vehicleType,
     basePriceOverride,
     distance: towType === 'exchange' ? exchangeTotalDistance : distance,

@@ -15,13 +15,19 @@ import { TimeSurcharge, getActiveTimeSurcharges } from '../queries/price-lists'
 
 // ==================== Input ====================
 
+export interface TowPriceListInput {
+  base_prices: Record<VehicleType, number>
+  price_per_km: number
+  minimum_price: number
+  price_per_km_private?: number | null
+  price_per_km_motorcycle?: number | null
+  price_per_km_heavy?: number | null
+  price_per_km_machinery?: number | null
+}
+
 export interface TowPriceInput {
   // base pricing
-  priceList: {
-    base_prices: Record<VehicleType, number>
-    price_per_km: number
-    minimum_price: number
-  }
+  priceList: TowPriceListInput
   vehicleType: VehicleType
   distanceKm: number
   /** Override base price (e.g. for custom route with multiple vehicles) */
@@ -168,7 +174,7 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
 
   // Recommended mode
   const basePrice = input.basePriceOverride ?? (input.priceList.base_prices[input.vehicleType] ?? 0)
-  const pricePerKm = input.priceList.price_per_km
+  const pricePerKm = resolvePricePerKm(input.vehicleType, input.priceList)
   const minimumPrice = input.priceList.minimum_price
 
   const distancePrice = input.distanceKm * pricePerKm
@@ -321,10 +327,55 @@ const MERGE_NUMERIC_FIELDS = [
   'base_price_heavy',
   'base_price_machinery',
   'price_per_km',
+  'price_per_km_private',
+  'price_per_km_motorcycle',
+  'price_per_km_heavy',
+  'price_per_km_machinery',
   'minimum_price',
   'base_lat',
   'base_lng',
 ] as const
+
+const PER_TYPE_KM_TYPES = ['private', 'motorcycle', 'heavy', 'machinery'] as const
+type PerTypeKmVehicleType = (typeof PER_TYPE_KM_TYPES)[number]
+
+/** Per-type km when set (private/motorcycle/heavy/machinery only); else global price_per_km; else 12. */
+export function resolvePricePerKm(
+  vehicleType: string,
+  priceList: Pick<
+    TowPriceListInput,
+    | 'price_per_km'
+    | 'price_per_km_private'
+    | 'price_per_km_motorcycle'
+    | 'price_per_km_heavy'
+    | 'price_per_km_machinery'
+  >
+): number {
+  if (PER_TYPE_KM_TYPES.includes(vehicleType as PerTypeKmVehicleType)) {
+    const perTypeKey = `price_per_km_${vehicleType}` as keyof typeof priceList
+    const perType = normalizeNullableNumber(priceList[perTypeKey])
+    if (perType != null && perType > 0) return perType
+  }
+  const global = normalizeNullableNumber(priceList.price_per_km)
+  if (global != null) return global
+  return 12
+}
+
+export function priceListForTowCalc(
+  priceList: Record<string, any> | null | undefined,
+  options?: { globalKmOnly?: boolean }
+): TowPriceListInput {
+  const globalKmOnly = options?.globalKmOnly === true
+  return {
+    base_prices: extractBasePrices(priceList ?? null),
+    price_per_km: priceList?.price_per_km ?? 12,
+    minimum_price: priceList?.minimum_price ?? 250,
+    price_per_km_private: globalKmOnly ? null : (priceList?.price_per_km_private ?? null),
+    price_per_km_motorcycle: globalKmOnly ? null : (priceList?.price_per_km_motorcycle ?? null),
+    price_per_km_heavy: globalKmOnly ? null : (priceList?.price_per_km_heavy ?? null),
+    price_per_km_machinery: globalKmOnly ? null : (priceList?.price_per_km_machinery ?? null),
+  }
+}
 
 /**
  * Per-field merge: customer value when set (including 0), else company.
