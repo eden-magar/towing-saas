@@ -7,7 +7,10 @@ import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
-import { logRealtimeSubscribeStatus } from '../../lib/realtime-auth'
+import {
+  ensureRealtimeAuthBeforeSubscribe,
+  subscribeRealtimeChannel,
+} from '../../lib/realtime-auth'
 import { PhoneInput } from '../../components/ui/PhoneInput'
 import { TimeInput, DateInput } from '../../components/ui'
 import DriversMap from '../../components/DriversMap'
@@ -215,6 +218,15 @@ export default function DriversPage() {
     }
   }, [companyId, mapActiveDriversToState])
 
+  const driversRealtimeHandlersRef = useRef({
+    refreshLiveDriverData,
+    refreshMapData,
+  })
+  driversRealtimeHandlersRef.current = {
+    refreshLiveDriverData,
+    refreshMapData,
+  }
+
   // טעינת נתונים
   useEffect(() => {
     if (companyId) {
@@ -225,31 +237,54 @@ export default function DriversPage() {
   useEffect(() => {
     if (!companyId || !realtimeAuthReady) return
 
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let cancelled = false
     const channelName = `drivers-realtime-${companyId}`
-    const channel = supabase
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'drivers',
-        filter: `company_id=eq.${companyId}`,
-      }, () => { void refreshLiveDriverData() })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'driver_shifts',
-        filter: `company_id=eq.${companyId}`,
-      }, () => { void refreshLiveDriverData() })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'driver_locations',
-        filter: `company_id=eq.${companyId}`,
-      }, () => { void refreshMapData() })
-      .subscribe(logRealtimeSubscribeStatus(channelName))
 
-    return () => { supabase.removeChannel(channel) }
-  }, [companyId, realtimeAuthReady, refreshLiveDriverData, refreshMapData])
+    void (async () => {
+      const authed = await ensureRealtimeAuthBeforeSubscribe(channelName)
+      if (cancelled || !authed) return
+
+      channel = supabase
+        .channel(channelName)
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'drivers',
+          filter: `company_id=eq.${companyId}`,
+        }, () => {
+          void driversRealtimeHandlersRef.current.refreshLiveDriverData()
+        })
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'driver_shifts',
+          filter: `company_id=eq.${companyId}`,
+        }, () => {
+          void driversRealtimeHandlersRef.current.refreshLiveDriverData()
+        })
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'driver_locations',
+          filter: `company_id=eq.${companyId}`,
+        }, () => {
+          void driversRealtimeHandlersRef.current.refreshMapData()
+        })
+
+      subscribeRealtimeChannel(channel, channelName)
+
+      if (cancelled) {
+        supabase.removeChannel(channel)
+        channel = null
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [companyId, realtimeAuthReady])
 
   const loadData = async () => {
     if (!companyId) return

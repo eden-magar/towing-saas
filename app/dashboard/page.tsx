@@ -14,7 +14,7 @@
   import { getDayEvents, getQuoteEvents, getPendingUnassignedEvents, type EventListItem } from '../lib/queries/events'
   import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
   import { supabase } from '../lib/supabase'
-  import { logRealtimeSubscribeStatus } from '../lib/realtime-auth'
+  import { ensureRealtimeAuthBeforeSubscribe, subscribeRealtimeChannel } from '../lib/realtime-auth'
   import { getVehicleTypeLabel, isKnownVehicleType } from '../lib/vehicle-lookup'
   import DriversMap, { MAP_STATUS_LEGEND } from '../components/DriversMap'
   import EditShiftModal from '../components/EditShiftModal'
@@ -391,6 +391,21 @@
       }
     }, [companyId, listDate])
 
+    const dashboardRealtimeHandlersRef = useRef({
+      debouncedRefreshEssential,
+      refreshRejections,
+      refreshDriversAndMap,
+      refreshShiftsAndOvertime,
+      loadListTows,
+    })
+    dashboardRealtimeHandlersRef.current = {
+      debouncedRefreshEssential,
+      refreshRejections,
+      refreshDriversAndMap,
+      refreshShiftsAndOvertime,
+      loadListTows,
+    }
+
     const isListToday = listDate.toDateString() === new Date().toDateString()
 
     const prevListDay = () => {
@@ -475,29 +490,87 @@
     useEffect(() => {
       if (!companyId || !realtimeAuthReady) return
 
+      let channel: ReturnType<typeof supabase.channel> | null = null
+      let cancelled = false
       const channelName = `dashboard-realtime-${companyId}`
-      const channel = supabase
-        .channel(channelName)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => {
-          debouncedRefreshEssential()
-          void loadListTows()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `company_id=eq.${companyId}` }, () => {
-          debouncedRefreshEssential()
-          void loadListTows()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => { void refreshRejections() })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => {
-          void refreshShiftsAndOvertime()
-          void refreshDriversAndMap()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => { debouncedRefreshEssential() })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
-        .subscribe(logRealtimeSubscribeStatus(channelName))
 
-      return () => { supabase.removeChannel(channel) }
-    }, [companyId, realtimeAuthReady, debouncedRefreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime, loadListTows])
+      void (async () => {
+        const authed = await ensureRealtimeAuthBeforeSubscribe(channelName)
+        if (cancelled || !authed) return
+
+        channel = supabase
+          .channel(channelName)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => {
+            dashboardRealtimeHandlersRef.current.debouncedRefreshEssential()
+            void dashboardRealtimeHandlersRef.current.loadListTows()
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `company_id=eq.${companyId}` }, () => {
+            dashboardRealtimeHandlersRef.current.debouncedRefreshEssential()
+            void dashboardRealtimeHandlersRef.current.loadListTows()
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => {
+            void dashboardRealtimeHandlersRef.current.refreshRejections()
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => {
+            void dashboardRealtimeHandlersRef.current.refreshShiftsAndOvertime()
+            void dashboardRealtimeHandlersRef.current.refreshDriversAndMap()
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => {
+            dashboardRealtimeHandlersRef.current.debouncedRefreshEssential()
+          })
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => {
+            void dashboardRealtimeHandlersRef.current.refreshDriversAndMap()
+          })
+
+        subscribeRealtimeChannel(channel, channelName)
+
+        if (cancelled) {
+          supabase.removeChannel(channel)
+          channel = null
+        }
+      })()
+
+      return () => {
+        cancelled = true
+        if (channel) supabase.removeChannel(channel)
+      }
+    }, [companyId, realtimeAuthReady])
+
+    // Dedicated drivers channel — unfiltered server-side; client filters by companyId.
+    useEffect(() => {
+      if (!companyId || !realtimeAuthReady) return
+
+      let driversChannel: ReturnType<typeof supabase.channel> | null = null
+      let cancelled = false
+      const driversChannelName = `dashboard-drivers-realtime-${companyId}`
+
+      void (async () => {
+        const authed = await ensureRealtimeAuthBeforeSubscribe(driversChannelName)
+        if (cancelled || !authed) return
+
+        driversChannel = supabase
+          .channel(driversChannelName)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, (payload) => {
+            const newCompanyId = (payload.new as { company_id?: string } | undefined)?.company_id
+            const oldCompanyId = (payload.old as { company_id?: string } | undefined)?.company_id
+            if (newCompanyId !== companyId && oldCompanyId !== companyId) return
+
+            void dashboardRealtimeHandlersRef.current.refreshDriversAndMap()
+          })
+
+        subscribeRealtimeChannel(driversChannel, driversChannelName)
+
+        if (cancelled) {
+          supabase.removeChannel(driversChannel)
+          driversChannel = null
+        }
+      })()
+
+      return () => {
+        cancelled = true
+        if (driversChannel) supabase.removeChannel(driversChannel)
+      }
+    }, [companyId, realtimeAuthReady])
 
     const assignedListTows = useMemo(
       () => listTows.filter((t) => t.driver_id),

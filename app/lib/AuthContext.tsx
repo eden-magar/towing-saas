@@ -1,13 +1,14 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import { syncSupabaseRealtimeAuth } from './realtime-auth'
+import { clearSyncedRealtimeAuthToken, isRealtimeAccessTokenSynced, syncSupabaseRealtimeAuth } from './realtime-auth'
 import { User } from './types'
 
 interface AuthContextType {
   user: User | null
+  session: Session | null
   loading: boolean
   companyId: string | null
   realtimeAuthReady: boolean
@@ -16,105 +17,126 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  session: null,
   loading: true,
   companyId: null,
   realtimeAuthReady: false,
   signOut: async () => {}
 })
 
-const REALTIME_AUTH_EVENTS: AuthChangeEvent[] = [
-  'INITIAL_SESSION',
-  'SIGNED_IN',
-  'TOKEN_REFRESHED',
-]
+async function fetchUserProfile(authUserId: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUserId)
+    .single()
+
+  if (error) {
+    console.error('Error fetching user profile:', error)
+    return null
+  }
+
+  return data as User
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [authInitialized, setAuthInitialized] = useState(false)
+  const [profileLoaded, setProfileLoaded] = useState(false)
   const [realtimeAuthReady, setRealtimeAuthReady] = useState(false)
 
+  // 1) Supabase auth listener — synchronous only (no supabase.from / getSession here).
   useEffect(() => {
-    let isMounted = true
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setAuthInitialized(true)
 
-    const handleAuthChange = async (event: AuthChangeEvent, session: Session | null) => {
-      console.log('Auth state changed:', event)
-
-      try {
-        if (event === 'SIGNED_OUT') {
-          await syncSupabaseRealtimeAuth(null)
-          if (isMounted) {
-            setRealtimeAuthReady(false)
-            setUser(null)
-            setLoading(false)
-          }
-          return
-        }
-
-        if (REALTIME_AUTH_EVENTS.includes(event)) {
-          const authOk = await syncSupabaseRealtimeAuth(session)
-          if (isMounted) {
-            setRealtimeAuthReady(authOk && !!session?.access_token)
-          }
-        }
-
-        if (event === 'TOKEN_REFRESHED') {
-          return
-        }
-
-        if (session?.user && isMounted) {
-          const userData = await fetchUserData(session.user.id)
-          if (isMounted) {
-            setUser(userData)
-          }
-        } else if (event === 'INITIAL_SESSION' && isMounted) {
-          setUser(null)
-        }
-      } catch (error) {
-        console.error('Error in auth state handler:', error)
-      } finally {
-        if (event === 'INITIAL_SESSION' && isMounted) {
-          setLoading(false)
-        }
+      if (event === 'SIGNED_OUT') {
+        setSession(null)
+        setUser(null)
+        setProfileLoaded(true)
+        return
       }
-    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      void handleAuthChange(event, session)
+      setSession(nextSession)
+      if (!nextSession?.user?.id) {
+        setUser(null)
+        setProfileLoaded(true)
+      }
     })
 
     return () => {
-      isMounted = false
       subscription.unsubscribe()
     }
   }, [])
 
-  const fetchUserData = async (authUserId: string): Promise<User | null> => {
-    console.log('fetchUserData started for:', authUserId)
+  // 2) App profile row — separate from auth callback (avoids SIGNED_IN feedback loop).
+  useEffect(() => {
+    if (!authInitialized) return
 
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authUserId)
-        .single()
-
-      console.log('fetchUserData result:', { data, error })
-
-      if (error) {
-        console.error('Error fetching user data:', error)
-        return null
-      }
-
-      return data as User
-    } catch (err) {
-      console.error('Fetch user error:', err)
-      return null
+    const authUserId = session?.user?.id ?? null
+    if (!authUserId) {
+      setUser(null)
+      setProfileLoaded(true)
+      return
     }
-  }
+
+    let cancelled = false
+    setProfileLoaded(false)
+
+    void (async () => {
+      const profile = await fetchUserProfile(authUserId)
+      if (cancelled) return
+      setUser(profile)
+      setProfileLoaded(true)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authInitialized, session?.user?.id])
+
+  // 3) Realtime JWT — isolated; must not mutate session, user, or loading.
+  useEffect(() => {
+    const accessToken = session?.access_token ?? null
+
+    if (!accessToken) {
+      clearSyncedRealtimeAuthToken()
+      setRealtimeAuthReady(false)
+      return
+    }
+
+    if (isRealtimeAccessTokenSynced(accessToken)) {
+      setRealtimeAuthReady(true)
+      return
+    }
+
+    let active = true
+    const tokenAtStart = accessToken
+
+    void (async () => {
+      const ok = await syncSupabaseRealtimeAuth(session)
+      if (!active) return
+
+      const { data: { session: current } } = await supabase.auth.getSession()
+      if (current?.access_token !== tokenAtStart) return
+
+      setRealtimeAuthReady(ok)
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [session?.access_token])
+
+  const loading = !authInitialized || !profileLoaded
 
   const signOut = async () => {
+    clearSyncedRealtimeAuthToken()
     await supabase.auth.signOut()
+    setSession(null)
     setUser(null)
+    setProfileLoaded(true)
     setRealtimeAuthReady(false)
     window.location.href = '/login'
   }
@@ -122,10 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user,
+      session,
       loading,
-      companyId: user?.company_id || null,
+      companyId: user?.company_id ?? null,
       realtimeAuthReady,
-      signOut
+      signOut,
     }}>
       {children}
     </AuthContext.Provider>

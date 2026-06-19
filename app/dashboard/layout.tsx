@@ -3,17 +3,18 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from '../components/Sidebar'
-import { useAuth } from "../lib/AuthContext";
+import { useAuth } from '../lib/AuthContext'
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, session, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return
+    if (!session?.user || !user) {
       router.push('/login')
     }
-  }, [loading, user, router])
+  }, [loading, session, user, router])
 
   if (loading) {
     return (
@@ -24,6 +25,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </div>
       </div>
     )
+  }
+
+  if (!session?.user || !user) {
+    return null
   }
 
   return (
