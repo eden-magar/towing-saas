@@ -1829,10 +1829,14 @@ export function useTowForm(
       getServiceSurcharges(companyId)
         .then((value) => setServiceSurchargesData(value))
         .catch((err) => console.error('Error loading serviceSurcharges:', err))
+      getDrivers(companyId)
+        .then((v) => setDrivers(v))
+        .catch((err) => console.error('Error loading drivers:', err))
+      getTrucks(companyId)
+        .then((v) => setTrucks(v))
+        .catch((err) => console.error('Error loading trucks:', err))
 
       const results = await Promise.allSettled([
-        getDrivers(companyId),
-        getTrucks(companyId),
         getBasePriceList(companyId),
         getWeightBrackets(companyId),
         getFixedPriceItems(companyId),
@@ -1841,8 +1845,6 @@ export function useTowForm(
       ])
 
       const [
-        driversResult,
-        trucksResult,
         basePriceListResult,
         weightBracketsResult,
         fixedPriceItemsResult,
@@ -1851,18 +1853,6 @@ export function useTowForm(
       ] = results
 
       await customersPromise
-
-      if (driversResult.status === 'fulfilled') {
-        setDrivers(driversResult.value)
-      } else {
-        console.error('Error loading drivers:', driversResult.reason)
-      }
-
-      if (trucksResult.status === 'fulfilled') {
-        setTrucks(trucksResult.value)
-      } else {
-        console.error('Error loading trucks:', trucksResult.reason)
-      }
 
       if (basePriceListResult.status === 'fulfilled') {
         setBasePriceList(basePriceListResult.value)

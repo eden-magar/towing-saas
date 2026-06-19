@@ -179,22 +179,28 @@ export function DriverCalendarPicker({
             <div className="flex sticky top-0 z-10 bg-white shrink-0">
               <div className="w-16 shrink-0 border-b border-l border-gray-200 bg-gray-50" />
               <div className="flex flex-1 min-w-0">
-                {visibleDrivers.map(d => {
-                  const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
-                  return (
-                    <div
-                      key={d.id}
-                      className={`${driverColumnClass} border-b px-1 py-1.5 text-center overflow-hidden`}
-                    >
-                      <span
-                        className="inline-block max-w-full truncate rounded-lg px-2 py-1 font-bold"
-                        style={{ backgroundColor: `${color}26`, color: '#000' }}
+                {visibleDrivers.length === 0 ? (
+                  <div className="flex flex-1 items-center justify-center border-b border-gray-200 py-2 text-gray-500">
+                    טוען נהגים...
+                  </div>
+                ) : (
+                  visibleDrivers.map(d => {
+                    const color = DRIVER_COLORS[drivers.indexOf(d) % DRIVER_COLORS.length]
+                    return (
+                      <div
+                        key={d.id}
+                        className={`${driverColumnClass} border-b px-1 py-1.5 text-center overflow-hidden`}
                       >
-                        {d.user?.full_name?.split(' ')[0] || 'נהג'}
-                      </span>
-                    </div>
-                  )
-                })}
+                        <span
+                          className="inline-block max-w-full truncate rounded-lg px-2 py-1 font-bold"
+                          style={{ backgroundColor: `${color}26`, color: '#000' }}
+                        >
+                          {d.user?.full_name?.split(' ')[0] || 'נהג'}
+                        </span>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </div>
 
@@ -213,7 +219,15 @@ export function DriverCalendarPicker({
               </div>
 
               <div className="flex flex-1 min-w-0">
-                {visibleDrivers.map(driver => {
+                {visibleDrivers.length === 0 ? (
+                  <div
+                    className="flex flex-1 items-center justify-center text-gray-500"
+                    style={{ minHeight: `${HOURS_PER_DAY * PIXELS_PER_HOUR}px` }}
+                  >
+                    טוען נהגים...
+                  </div>
+                ) : (
+                  visibleDrivers.map(driver => {
                   const driverIdx = drivers.indexOf(driver)
                   const color = DRIVER_COLORS[driverIdx % DRIVER_COLORS.length]
                   return (
@@ -296,7 +310,8 @@ export function DriverCalendarPicker({
                       })}
                     </div>
                   )
-                })}
+                })
+                )}
               </div>
 
               {isPickerToday && (
