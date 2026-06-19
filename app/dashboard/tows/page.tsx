@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, MapPin, User, Truck, Sparkles } from 'lucide-react'
+import { Plus, Search, MapPin, User, Truck, Sparkles, X } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '../../lib/AuthContext'
 import { getTows, TowWithDetails } from '../../lib/queries/tows'
@@ -99,6 +99,29 @@ function ScheduledDateBadge({
   )
 }
 
+const TOWS_FILTER_STORAGE = {
+  search: 'towsFilter_search',
+  status: 'towsFilter_status',
+  showAll: 'towsFilter_showAll',
+} as const
+
+const TOWS_FILTER_STATUS_IDS = new Set([
+  'all',
+  'quote',
+  'pending',
+  'assigned',
+  'in_progress',
+  'completed',
+  'cancelled',
+])
+
+function clearTowsFilterSession() {
+  if (typeof window === 'undefined') return
+  sessionStorage.removeItem(TOWS_FILTER_STORAGE.search)
+  sessionStorage.removeItem(TOWS_FILTER_STORAGE.status)
+  sessionStorage.removeItem(TOWS_FILTER_STORAGE.showAll)
+}
+
 export default function TowsPage() {
   const { companyId } = useAuth()
   const router = useRouter()
@@ -108,9 +131,36 @@ export default function TowsPage() {
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState('')
   
-  const [searchTerm, setSearchTerm] = useState('')
-  const [activeStatus, setActiveStatus] = useState('all')
-  const [showAll, setShowAll] = useState(false)
+  const [searchTerm, setSearchTerm] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return sessionStorage.getItem(TOWS_FILTER_STORAGE.search) ?? ''
+  })
+  const [activeStatus, setActiveStatus] = useState(() => {
+    if (typeof window === 'undefined') return 'all'
+    const saved = sessionStorage.getItem(TOWS_FILTER_STORAGE.status)
+    return saved && TOWS_FILTER_STATUS_IDS.has(saved) ? saved : 'all'
+  })
+  const [showAll, setShowAll] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return sessionStorage.getItem(TOWS_FILTER_STORAGE.showAll) === 'true'
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    sessionStorage.setItem(TOWS_FILTER_STORAGE.search, searchTerm)
+    sessionStorage.setItem(TOWS_FILTER_STORAGE.status, activeStatus)
+    sessionStorage.setItem(TOWS_FILTER_STORAGE.showAll, showAll ? 'true' : 'false')
+  }, [searchTerm, activeStatus, showAll])
+
+  const hasActiveFilters =
+    searchTerm !== '' || activeStatus !== 'all' || showAll
+
+  const handleClearFilters = () => {
+    setSearchTerm('')
+    setActiveStatus('all')
+    setShowAll(false)
+    clearTowsFilterSession()
+  }
 
   useEffect(() => {
     if (companyId) {
@@ -348,20 +398,32 @@ export default function TowsPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
-          {statuses.map((status) => (
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
+            {statuses.map((status) => (
+              <button
+                key={status.id}
+                onClick={() => setActiveStatus(status.id)}
+                className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                  activeStatus === status.id
+                    ? 'bg-[#33d4ff] text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {status.label}
+              </button>
+            ))}
+          </div>
+          {hasActiveFilters && (
             <button
-              key={status.id}
-              onClick={() => setActiveStatus(status.id)}
-              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                activeStatus === status.id
-                  ? 'bg-[#33d4ff] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              type="button"
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1 shrink-0 rounded-lg bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors"
             >
-              {status.label}
+              <X size={14} aria-hidden />
+              נקה סינון
             </button>
-          ))}
+          )}
         </div>
 
         <div className="mt-3 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between text-xs">
