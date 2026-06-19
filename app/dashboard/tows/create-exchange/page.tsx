@@ -285,6 +285,12 @@ function CreateExchangeTowForm({
 
   const [customerTab, setCustomerTab] = useState<'existing' | 'casual'>('existing')
   const [customerSearch, setCustomerSearch] = useState('')
+
+  const usesCompanyTimeFallback =
+    priceMode === 'recommended_customer' &&
+    !!selectedCustomerPricing &&
+    (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) === 0
+
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
   const [quoteSavedId, setQuoteSavedId] = useState<string | null>(null)
@@ -1852,6 +1858,14 @@ function CreateExchangeTowForm({
                               {item.label}: ₪{item.amount.toFixed(2)}
                             </p>
                           ))}
+                        {usesCompanyTimeFallback &&
+                          priceResult.breakdown.some(
+                            (item) => item.type === 'time' && item.amount !== 0
+                          ) && (
+                            <p className="text-xs text-amber-600">
+                              תוספת השעה לפי תעריף החברה — ללקוח זה אין תוספת שעה מותאמת
+                            </p>
+                          )}
                       </>
                     ) : (
                       <>

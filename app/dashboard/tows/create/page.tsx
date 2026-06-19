@@ -410,6 +410,11 @@ function CreateTowForm({
       ? selectedCustomerPricing!.customer_time_surcharges!
       : timeSurchargesData
 
+  const usesCompanyTimeFallback =
+    priceMode === 'recommended_customer' &&
+    !!selectedCustomerPricing &&
+    (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) === 0
+
   const [entryKind, setEntryKind] = useState<TowEntryKind>(null)
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
@@ -3183,6 +3188,11 @@ function CreateTowForm({
                               </p>
                             )
                           })}
+                        {usesCompanyTimeFallback && priceResult.maxTimeSurchargePercent > 0 && (
+                          <p className="text-xs text-amber-600">
+                            תוספת השעה לפי תעריף החברה — ללקוח זה אין תוספת שעה מותאמת
+                          </p>
+                        )}
                       </>
                     ) : (
                       <>
