@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { syncSupabaseRealtimeAuth } from '../lib/realtime-auth'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -41,6 +42,8 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
+
+    await syncSupabaseRealtimeAuth(data.session)
 
     // הפנה לפי תפקיד
     if (userData.role === 'driver') {

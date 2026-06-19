@@ -573,6 +573,204 @@ export async function getAddressFromCoords(lat: number, lng: number): Promise<st
   return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
 }
 
+const COORD_SHAPED_ADDRESS = /^\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+\s*$/
+
+export function isCoordShapedAddress(address: string | null | undefined): boolean {
+  if (!address) return false
+  return COORD_SHAPED_ADDRESS.test(address)
+}
+
+function needsLocationAddressBackfill(address: string | null | undefined): boolean {
+  return address == null || isCoordShapedAddress(address)
+}
+
+function roundedCoordKey(lat: number, lng: number): string {
+  return `${lat.toFixed(4)},${lng.toFixed(4)}`
+}
+
+async function geocodeToRealAddress(lat: number, lng: number): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) return null
+
+    const res = await fetch('/api/reverse-geocode', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ lat, lng }),
+    })
+
+    if (!res.ok) return null
+
+    const data = (await res.json()) as { ok?: boolean; address?: string }
+    if (!data.ok || !data.address) return null
+    if (isCoordShapedAddress(data.address)) return null
+    return data.address
+  } catch {
+    return null
+  }
+}
+
+type LocationPingRow = {
+  id: string
+  lat: number
+  lng: number
+  address: string | null
+}
+
+type ShiftStartRow = {
+  id: string
+  start_lat: number | null
+  start_lng: number | null
+}
+
+/** Resolve lat/lng → address once per distinct spot; persist to driver_locations.address. */
+export async function backfillLocationAddresses(
+  companyId: string,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('driver_locations')
+    .select('id, lat, lng, address')
+    .eq('company_id', companyId)
+    .gte('timestamp', startDate)
+    .lte('timestamp', endDate)
+    .not('lat', 'is', null)
+    .not('lng', 'is', null)
+
+  if (error) throw error
+
+  const rows = (data ?? []).filter(
+    (row): row is LocationPingRow =>
+      row.lat != null &&
+      row.lng != null &&
+      needsLocationAddressBackfill(row.address)
+  )
+
+  const byCoord = new Map<string, { lat: number; lng: number; ids: string[] }>()
+  for (const row of rows) {
+    const key = roundedCoordKey(row.lat, row.lng)
+    const bucket = byCoord.get(key)
+    if (bucket) {
+      bucket.ids.push(row.id)
+    } else {
+      byCoord.set(key, { lat: row.lat, lng: row.lng, ids: [row.id] })
+    }
+  }
+
+  let rowsUpdated = 0
+
+  for (const { lat, lng, ids } of byCoord.values()) {
+    try {
+      const address = await geocodeToRealAddress(lat, lng)
+      if (!address) continue
+
+      const { error: updateError } = await supabase
+        .from('driver_locations')
+        .update({ address })
+        .in('id', ids)
+
+      if (updateError) {
+        console.error('[backfillLocationAddresses] update failed:', updateError)
+        continue
+      }
+
+      rowsUpdated += ids.length
+    } catch (err) {
+      console.error('[backfillLocationAddresses] geocode failed:', err)
+    }
+  }
+
+  return rowsUpdated
+}
+
+/** Persist driver_shifts.start_address from shift coords or first location ping. end_address not handled yet. */
+export async function backfillShiftStartAddresses(
+  companyId: string,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('driver_shifts')
+    .select('id, start_lat, start_lng')
+    .eq('company_id', companyId)
+    .gte('started_at', startDate)
+    .lte('started_at', endDate)
+    .is('start_address', null)
+
+  if (error) throw error
+
+  const shifts = (data ?? []) as ShiftStartRow[]
+  if (shifts.length === 0) return 0
+
+  const shiftsNeedingPing = shifts.filter(s => s.start_lat == null || s.start_lng == null)
+  const firstPingByShiftId = new Map<string, { lat: number; lng: number; address: string | null }>()
+
+  if (shiftsNeedingPing.length > 0) {
+    const shiftIds = shiftsNeedingPing.map(s => s.id)
+    const { data: pings, error: pingsError } = await supabase
+      .from('driver_locations')
+      .select('shift_id, lat, lng, address, timestamp')
+      .in('shift_id', shiftIds)
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .order('timestamp', { ascending: true })
+
+    if (pingsError) throw pingsError
+
+    for (const ping of pings ?? []) {
+      if (!ping.shift_id || firstPingByShiftId.has(ping.shift_id)) continue
+      firstPingByShiftId.set(ping.shift_id, {
+        lat: ping.lat,
+        lng: ping.lng,
+        address: ping.address ?? null,
+      })
+    }
+  }
+
+  let shiftsUpdated = 0
+
+  for (const shift of shifts) {
+    try {
+      let address: string | null = null
+
+      if (shift.start_lat != null && shift.start_lng != null) {
+        address = await geocodeToRealAddress(shift.start_lat, shift.start_lng)
+      } else {
+        const firstPing = firstPingByShiftId.get(shift.id)
+        if (!firstPing) continue
+
+        if (firstPing.address && !isCoordShapedAddress(firstPing.address)) {
+          address = firstPing.address
+        } else {
+          address = await geocodeToRealAddress(firstPing.lat, firstPing.lng)
+        }
+      }
+
+      if (!address) continue
+
+      const { error: updateError } = await supabase
+        .from('driver_shifts')
+        .update({ start_address: address })
+        .eq('id', shift.id)
+
+      if (updateError) {
+        console.error('[backfillShiftStartAddresses] update failed:', updateError)
+        continue
+      }
+
+      shiftsUpdated += 1
+    } catch (err) {
+      console.error('[backfillShiftStartAddresses] shift failed:', shift.id, err)
+    }
+  }
+
+  return shiftsUpdated
+}
+
 export async function getDriverHourlyLocations(
   companyId: string,
   startDate: string,

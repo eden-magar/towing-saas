@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   getDriverHoursReport,
   getDriverHourlyLocations,
   getShiftEditSummaries,
+  backfillLocationAddresses,
+  backfillShiftStartAddresses,
+  isCoordShapedAddress,
   type DriverHourlyLocationRow,
   type ShiftEditSummary,
 } from '../lib/queries/driver-shifts'
@@ -36,6 +39,11 @@ export default function DriverHoursTab({ companyId }: Props) {
   const [editTarget, setEditTarget] = useState<EditShiftModalTarget | null>(null)
   const [historyShiftId, setHistoryShiftId] = useState<string | null>(null)
   const [historyDriverName, setHistoryDriverName] = useState('')
+  const backfillDoneForRangeRef = useRef<string | null>(null)
+
+  const reportStartIso = startDate + 'T00:00:00'
+  const reportEndIso = endDate + 'T23:59:59'
+  const backfillRangeKey = `${companyId}|${startDate}|${endDate}`
 
   useEffect(() => {
     if (!companyId) return
@@ -57,20 +65,21 @@ export default function DriverHoursTab({ companyId }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [companyId])
 
-  const loadData = async () => {
+  const loadData = async (options?: { skipBackfill?: boolean }) => {
     setLoading(true)
+    let fetchSucceeded = false
     try {
       const [shiftsData, locationsData, driversData] = await Promise.all([
         getDriverHoursReport(
           companyId,
-          startDate + 'T00:00:00',
-          endDate + 'T23:59:59',
+          reportStartIso,
+          reportEndIso,
           selectedDriver !== 'all' ? selectedDriver : undefined
         ),
         getDriverHourlyLocations(
           companyId,
-          startDate + 'T00:00:00',
-          endDate + 'T23:59:59',
+          reportStartIso,
+          reportEndIso,
           selectedDriver !== 'all' ? selectedDriver : undefined
         ),
         getDrivers(companyId)
@@ -81,10 +90,32 @@ export default function DriverHoursTab({ companyId }: Props) {
       setEditSummaries(summaries)
       setLocations(locationsData)
       setDrivers(driversData)
+      fetchSucceeded = true
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+
+    if (fetchSucceeded && !options?.skipBackfill && companyId) {
+      void runBackgroundBackfill()
+    }
+  }
+
+  const runBackgroundBackfill = async () => {
+    if (backfillDoneForRangeRef.current === backfillRangeKey) return
+    backfillDoneForRangeRef.current = backfillRangeKey
+
+    try {
+      const [locCount, shiftCount] = await Promise.all([
+        backfillLocationAddresses(companyId, reportStartIso, reportEndIso),
+        backfillShiftStartAddresses(companyId, reportStartIso, reportEndIso),
+      ])
+      if (locCount + shiftCount > 0) {
+        await loadData({ skipBackfill: true })
+      }
+    } catch (err) {
+      console.error('[DriverHoursTab] address backfill failed:', err)
     }
   }
 
@@ -362,14 +393,12 @@ export default function DriverHoursTab({ companyId }: Props) {
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        {loc.address
+                        {loc.address && !isCoordShapedAddress(loc.address)
                           ? <span className="flex items-center gap-1.5 text-gray-600">
                               <MapPin size={13} className="text-gray-400 flex-shrink-0" />
                               {loc.address}
                             </span>
-                          : loc.lat != null && loc.lng != null
-                            ? <span className="text-gray-400 text-xs">{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
-                            : <span className="text-gray-300">—</span>}
+                          : <span className="text-gray-400 text-xs">טוען כתובת...</span>}
                       </td>
                     </tr>
                   )

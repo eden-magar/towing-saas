@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadGoogleMaps } from '../lib/google-maps'
 
 const DRIVER_COLORS = [
@@ -37,49 +37,8 @@ function getDriverStatusColor(status: string): string {
   return STATUS_COLORS[status] ?? STATUS_COLORS.unavailable
 }
 
-export default function DriversMap({
-  drivers,
-  embedded = false,
-}: {
-  drivers: DriverOnMap[]
-  embedded?: boolean
-}) {
-  const mapRef = useRef<HTMLDivElement>(null)
-  const mapInstanceRef = useRef<any>(null)
-  const markersRef = useRef<any[]>([])
-
-  useEffect(() => {
-    if (!mapRef.current) return
-
-    loadGoogleMaps().then(() => {
-      if (!mapInstanceRef.current) {
-        mapInstanceRef.current = new window.google.maps.Map(mapRef.current!, {
-          center: { lat: 32.0181, lng: 34.7746 },
-          zoom: 12,
-          mapTypeControl: true,
-          mapTypeControlOptions: {
-            mapTypeIds: ['roadmap', 'satellite'],
-          },
-          streetViewControl: false,
-          gestureHandling: 'greedy',
-        })
-      }
-
-      // מחיקת markers קיימים
-      markersRef.current.forEach(m => m.setMap(null))
-      markersRef.current = []
-
-      if (drivers.length === 0) return
-
-      const bounds = new window.google.maps.LatLngBounds()
-
-      drivers.forEach((driver, index) => {
-      const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
-      const initial = driver.name.charAt(0)
-
-      const statusColor = getDriverStatusColor(driver.status)
-
-      const svgIcon = `
+function buildMarkerSvg(driver: DriverOnMap, color: string, statusColor: string): string {
+  return `
 <svg xmlns="http://www.w3.org/2000/svg" width="52" height="60" viewBox="0 0 52 60">
   <filter id="shadow${driver.id}">
     <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.35"/>
@@ -92,43 +51,134 @@ export default function DriversMap({
   <circle cx="40" cy="8" r="6" fill="${statusColor}"/>
 </svg>
 `
+}
 
+function buildInfoWindowContent(driver: DriverOnMap): string {
+  return `
+    <div style="text-align:right; padding:4px">
+      <strong>${driver.name}</strong><br/>
+      <span style="color:#666">עדכון אחרון: ${new Date(driver.last_seen_at).toLocaleTimeString('he-IL')}</span>
+    </div>
+  `
+}
+
+type MarkerEntry = {
+  marker: google.maps.Marker
+  infoWindow: google.maps.InfoWindow
+  color: string
+  status: string
+}
+
+export default function DriversMap({
+  drivers,
+  embedded = false,
+}: {
+  drivers: DriverOnMap[]
+  embedded?: boolean
+}) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<google.maps.Map | null>(null)
+  const markersByIdRef = useRef<Map<string, MarkerEntry>>(new Map())
+  const driversRef = useRef(drivers)
+  const hasFitBoundsRef = useRef(false)
+  const [mapReady, setMapReady] = useState(false)
+
+  driversRef.current = drivers
+
+  useEffect(() => {
+    if (!mapRef.current) return
+
+    loadGoogleMaps().then(() => {
+      if (!mapInstanceRef.current && mapRef.current) {
+        mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+          center: { lat: 32.0181, lng: 34.7746 },
+          zoom: 12,
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            mapTypeIds: ['roadmap', 'satellite'],
+          },
+          streetViewControl: false,
+          gestureHandling: 'greedy',
+        })
+      }
+      setMapReady(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    const map = mapInstanceRef.current
+    if (!mapReady || !map) return
+      const markersById = markersByIdRef.current
+      const currentIds = new Set(drivers.map((driver) => driver.id))
+
+      for (const [id, entry] of markersById) {
+        if (!currentIds.has(id)) {
+          entry.marker.setMap(null)
+          markersById.delete(id)
+        }
+      }
+
+      if (drivers.length === 0) {
+        hasFitBoundsRef.current = false
+        return
+      }
+
+      const bounds = new window.google.maps.LatLngBounds()
       const OFFSET = 0.0002
-      const sameSpot = drivers.slice(0, index).filter(
-        d => d.last_lat === driver.last_lat && d.last_lng === driver.last_lng
-      ).length
-      const lat = driver.last_lat + sameSpot * OFFSET
-      const lng = driver.last_lng + sameSpot * OFFSET
 
-      const marker = new window.google.maps.Marker({
-        position: { lat, lng },
-        map: mapInstanceRef.current,
-        title: driver.name,
-        icon: {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgIcon),
+      drivers.forEach((driver, index) => {
+        const color = DRIVER_COLORS[index % DRIVER_COLORS.length]
+        const statusColor = getDriverStatusColor(driver.status)
+        const sameSpot = drivers.slice(0, index).filter(
+          (d) => d.last_lat === driver.last_lat && d.last_lng === driver.last_lng
+        ).length
+        const lat = driver.last_lat + sameSpot * OFFSET
+        const lng = driver.last_lng + sameSpot * OFFSET
+        const position = { lat, lng }
+        const icon = {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(buildMarkerSvg(driver, color, statusColor)),
           scaledSize: new window.google.maps.Size(40, 48),
           anchor: new window.google.maps.Point(20, 46),
-        },
-      })
+        }
 
-        const infoWindow = new window.google.maps.InfoWindow({
-          content: `
-            <div style="text-align:right; padding:4px">
-              <strong>${driver.name}</strong><br/>
-              <span style="color:#666">עדכון אחרון: ${new Date(driver.last_seen_at).toLocaleTimeString('he-IL')}</span>
-            </div>
-          `
-        })
+        const existing = markersById.get(driver.id)
+        if (existing) {
+          existing.marker.setPosition(position)
+          if (existing.color !== color || existing.status !== driver.status) {
+            existing.marker.setIcon(icon)
+            existing.color = color
+            existing.status = driver.status
+          }
+          existing.infoWindow.setContent(buildInfoWindowContent(driver))
+        } else {
+          const marker = new window.google.maps.Marker({
+            position,
+            map,
+            title: driver.name,
+            icon,
+          })
 
-        marker.addListener('click', () => {
-          infoWindow.open(mapInstanceRef.current, marker)
-        })
+          const infoWindow = new window.google.maps.InfoWindow({
+            content: buildInfoWindowContent(driver),
+          })
 
-        markersRef.current.push(marker)
+          marker.addListener('click', () => {
+            const latest = driversRef.current.find((d) => d.id === driver.id) ?? driver
+            infoWindow.setContent(buildInfoWindowContent(latest))
+            infoWindow.open(map, marker)
+          })
+
+          markersById.set(driver.id, { marker, infoWindow, color, status: driver.status })
+        }
+
         bounds.extend({ lat: driver.last_lat, lng: driver.last_lng })
       })
-    })
-  }, [drivers])
+
+      if (!hasFitBoundsRef.current) {
+        map.fitBounds(bounds)
+        hasFitBoundsRef.current = true
+      }
+  }, [drivers, mapReady])
 
   if (embedded) {
     return <div ref={mapRef} className="h-full w-full min-h-0" />

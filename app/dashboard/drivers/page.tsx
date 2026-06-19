@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Search, Phone, Truck, Edit2, Trash2, X, User, CheckCircle, Clock, XCircle, MoreHorizontal, AlertTriangle, MapPin, BarChart2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers, createDriver, updateDriver, deleteDriver, checkDuplicates } from '../../lib/queries/drivers'
 import { DriverWithDetails, DriverStatus, TowTruck } from '../../lib/types'
 import { supabase } from '../../lib/supabase'
+import { logRealtimeSubscribeStatus } from '../../lib/realtime-auth'
 import { PhoneInput } from '../../components/ui/PhoneInput'
 import { TimeInput, DateInput } from '../../components/ui'
 import DriversMap from '../../components/DriversMap'
@@ -110,7 +111,7 @@ function AssignedTrucksCell({ trucks }: { trucks: TowTruck[] }) {
 }
 
 export default function DriversPage() {
-  const { companyId } = useAuth()
+  const { companyId, realtimeAuthReady } = useAuth()
   const searchParams = useSearchParams()
   const editFromQueryHandled = useRef<string | null>(null)
   
@@ -173,6 +174,47 @@ export default function DriversPage() {
     break: { label: 'בהפסקה', color: 'bg-orange-100 text-orange-700', dot: 'bg-orange-400', icon: Clock },
   }
 
+  const mapActiveDriversToState = useCallback((activeDrivers: any[]) => {
+    return activeDrivers
+      .map((d: any) => ({
+        id: d.driver.id,
+        name: d.driver.user?.full_name || 'נהג',
+        status: d.driver.status,
+        last_lat: d.driver.last_lat,
+        last_lng: d.driver.last_lng,
+        last_seen_at: d.driver.last_seen_at,
+      }))
+      .filter((d: any) => d.last_lat && d.last_lng)
+  }, [])
+
+  const refreshMapData = useCallback(async () => {
+    if (!companyId) return
+
+    try {
+      const { getActiveDriversWithLocation } = await import('../../lib/queries/driver-shifts')
+      const activeDrivers = await getActiveDriversWithLocation(companyId)
+      setDriversWithLocation(mapActiveDriversToState(activeDrivers))
+    } catch (err) {
+      console.error('Error refreshing map data:', err)
+    }
+  }, [companyId, mapActiveDriversToState])
+
+  const refreshLiveDriverData = useCallback(async () => {
+    if (!companyId) return
+
+    try {
+      const { getActiveDriversWithLocation } = await import('../../lib/queries/driver-shifts')
+      const [driversData, activeDrivers] = await Promise.all([
+        getDrivers(companyId),
+        getActiveDriversWithLocation(companyId),
+      ])
+      setDrivers(driversData)
+      setDriversWithLocation(mapActiveDriversToState(activeDrivers))
+    } catch (err) {
+      console.error('Error refreshing live driver data:', err)
+    }
+  }, [companyId, mapActiveDriversToState])
+
   // טעינת נתונים
   useEffect(() => {
     if (companyId) {
@@ -181,18 +223,33 @@ export default function DriversPage() {
   }, [companyId])
 
   useEffect(() => {
-  if (!companyId) return
-  const channel = supabase
-    .channel(`drivers-location-${companyId}`)
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'drivers',
-      filter: `company_id=eq.${companyId}`
-    }, () => loadData())
-    .subscribe()
-  return () => { supabase.removeChannel(channel) }
-}, [companyId])
+    if (!companyId || !realtimeAuthReady) return
+
+    const channelName = `drivers-realtime-${companyId}`
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'drivers',
+        filter: `company_id=eq.${companyId}`,
+      }, () => { void refreshLiveDriverData() })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'driver_shifts',
+        filter: `company_id=eq.${companyId}`,
+      }, () => { void refreshLiveDriverData() })
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'driver_locations',
+        filter: `company_id=eq.${companyId}`,
+      }, () => { void refreshMapData() })
+      .subscribe(logRealtimeSubscribeStatus(channelName))
+
+    return () => { supabase.removeChannel(channel) }
+  }, [companyId, realtimeAuthReady, refreshLiveDriverData, refreshMapData])
 
   const loadData = async () => {
     if (!companyId) return
@@ -213,14 +270,7 @@ export default function DriversPage() {
       setTrucks(trucksData || [])
       const { getActiveDriversWithLocation } = await import('../../lib/queries/driver-shifts')
       const activeDrivers = await getActiveDriversWithLocation(companyId)
-      setDriversWithLocation(activeDrivers.map((d: any) => ({
-        id: d.driver.id,
-        name: d.driver.user?.full_name || 'נהג',
-        status: d.driver.status,
-        last_lat: d.driver.last_lat,
-        last_lng: d.driver.last_lng,
-        last_seen_at: d.driver.last_seen_at,
-      })).filter((d: any) => d.last_lat && d.last_lng))
+      setDriversWithLocation(mapActiveDriversToState(activeDrivers))
     } catch (err) {
       console.error('Error loading data:', err)
       setError('שגיאה בטעינת הנתונים')

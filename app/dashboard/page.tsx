@@ -14,6 +14,7 @@
   import { getDayEvents, getQuoteEvents, getPendingUnassignedEvents, type EventListItem } from '../lib/queries/events'
   import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
   import { supabase } from '../lib/supabase'
+  import { logRealtimeSubscribeStatus } from '../lib/realtime-auth'
   import { getVehicleTypeLabel, isKnownVehicleType } from '../lib/vehicle-lookup'
   import DriversMap, { MAP_STATUS_LEGEND } from '../components/DriversMap'
   import EditShiftModal from '../components/EditShiftModal'
@@ -140,7 +141,7 @@
   }
 
   export default function DashboardPage() {
-    const { user, companyId, loading: authLoading } = useAuth()
+    const { user, companyId, loading: authLoading, realtimeAuthReady } = useAuth()
     const router = useRouter()
 
     const [stats, setStats] = useState<DashboardStats>({
@@ -472,10 +473,11 @@
 
     // Realtime — scoped refreshes (no full dashboard reload)
     useEffect(() => {
-      if (!companyId) return
+      if (!companyId || !realtimeAuthReady) return
 
+      const channelName = `dashboard-realtime-${companyId}`
       const channel = supabase
-        .channel(`dashboard-realtime-${companyId}`)
+        .channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tows', filter: `company_id=eq.${companyId}` }, () => {
           debouncedRefreshEssential()
           void loadListTows()
@@ -492,10 +494,10 @@
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => { debouncedRefreshEssential() })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => { void refreshDriversAndMap() })
-        .subscribe()
+        .subscribe(logRealtimeSubscribeStatus(channelName))
 
       return () => { supabase.removeChannel(channel) }
-    }, [companyId, debouncedRefreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime, loadListTows])
+    }, [companyId, realtimeAuthReady, debouncedRefreshEssential, refreshRejections, refreshDriversAndMap, refreshShiftsAndOvertime, loadListTows])
 
     const assignedListTows = useMemo(
       () => listTows.filter((t) => t.driver_id),
