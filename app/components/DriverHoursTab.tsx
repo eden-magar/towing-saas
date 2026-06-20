@@ -76,8 +76,11 @@ export default function DriverHoursTab({ companyId }: Props) {
   const [historyDriverName, setHistoryDriverName] = useState('')
   const [isBackfillingAddresses, setIsBackfillingAddresses] = useState(false)
   const [backfillStatusText, setBackfillStatusText] = useState<string | null>(null)
+  const [isBackfillingShiftAddresses, setIsBackfillingShiftAddresses] = useState(false)
+  const [shiftBackfillStatusText, setShiftBackfillStatusText] = useState<string | null>(null)
   const backfillCompleteForRangeRef = useRef<string | null>(null)
   const backfillInFlightRef = useRef(false)
+  const shiftBackfillInFlightRef = useRef(false)
 
   const reportStartIso = startDate + 'T00:00:00'
   const reportEndIso = endDate + 'T23:59:59'
@@ -270,16 +273,7 @@ export default function DriverHoursTab({ companyId }: Props) {
         await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
       }
 
-      const shiftCount = await backfillShiftStartAddresses(
-        companyId,
-        reportStartIso,
-        reportEndIso
-      )
-      if (shiftCount > 0) {
-        await loadData()
-      }
-
-      console.log('[DriverHoursTab] manual address backfill finished', { remaining, shiftCount })
+      console.log('[DriverHoursTab] manual address backfill finished', { remaining })
     } catch (err) {
       backfillCompleteForRangeRef.current = null
       console.error('[DriverHoursTab] manual address backfill failed:', err)
@@ -287,6 +281,40 @@ export default function DriverHoursTab({ companyId }: Props) {
       backfillInFlightRef.current = false
       setIsBackfillingAddresses(false)
       setBackfillStatusText(null)
+    }
+  }
+
+  const handleRetryShiftAddressBackfill = async () => {
+    if (!companyId || shiftBackfillInFlightRef.current) return
+
+    shiftBackfillInFlightRef.current = true
+    setIsBackfillingShiftAddresses(true)
+    setShiftBackfillStatusText('מאתר כתובות משמרות...')
+
+    try {
+      const result = await backfillShiftStartAddresses(
+        companyId,
+        reportStartIso,
+        reportEndIso
+      )
+
+      console.log('[DriverHoursTab] shift address backfill finished', result)
+
+      if (result.rowsUpdated > 0) {
+        await loadData()
+      }
+
+      if (result.rowsNeedingBackfill > 0) {
+        setShiftBackfillStatusText(
+          `עודכנו ${result.rowsUpdated}, ${result.remainingRowsNeedingBackfill} נותרו`
+        )
+      }
+    } catch (err) {
+      console.error('[DriverHoursTab] shift address backfill failed:', err)
+    } finally {
+      shiftBackfillInFlightRef.current = false
+      setIsBackfillingShiftAddresses(false)
+      window.setTimeout(() => setShiftBackfillStatusText(null), 3000)
     }
   }
 
@@ -426,6 +454,23 @@ export default function DriverHoursTab({ companyId }: Props) {
 
           {/* Shifts Table */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-100">
+              <p className="text-xs text-gray-500">
+                {shiftBackfillStatusText ??
+                  (isBackfillingShiftAddresses
+                    ? 'מאתר כתובות משמרות...'
+                    : 'כתובות משמרות מוצגות לפי מיקום התחלה/סיום')}
+              </p>
+              <button
+                type="button"
+                onClick={handleRetryShiftAddressBackfill}
+                disabled={isBackfillingShiftAddresses || loading}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={isBackfillingShiftAddresses ? 'animate-spin' : ''} />
+                נסה לאתר כתובות משמרות מחדש
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
