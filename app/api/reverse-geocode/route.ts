@@ -17,10 +17,15 @@ function isValidLatLng(lat: number, lng: number): boolean {
   )
 }
 
-async function reverseGeocodeAddress(lat: number, lng: number): Promise<string | null> {
+type ReverseGeocodeOutcome = {
+  address: string | null
+  error?: string
+}
+
+async function reverseGeocodeAddress(lat: number, lng: number): Promise<ReverseGeocodeOutcome> {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   if (!apiKey) {
-    return null
+    return { address: null, error: 'missing_api_key' }
   }
 
   try {
@@ -29,16 +34,25 @@ async function reverseGeocodeAddress(lat: number, lng: number): Promise<string |
     )
     const data = (await res.json()) as {
       results?: Array<{ formatted_address?: string }>
+      status?: string
+      error_message?: string
     }
 
     if (data.results?.[0]?.formatted_address) {
-      return data.results[0].formatted_address
+      return { address: data.results[0].formatted_address }
+    }
+
+    return {
+      address: null,
+      error: data.error_message || data.status || 'zero_results',
     }
   } catch (err) {
     console.error('[reverse-geocode] geocode failed', err)
+    return {
+      address: null,
+      error: err instanceof Error ? err.message : 'geocode_request_failed',
+    }
   }
-
-  return null
 }
 
 export async function POST(request: NextRequest) {
@@ -62,9 +76,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: 'invalid coordinates' }, { status: 400 })
     }
 
-    const address = await reverseGeocodeAddress(lat, lng)
+    const { address, error } = await reverseGeocodeAddress(lat, lng)
     if (!address) {
-      return NextResponse.json({ ok: false })
+      return NextResponse.json({ ok: false, error: error || 'geocode_failed' })
     }
 
     return NextResponse.json({ ok: true, address })
