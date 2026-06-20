@@ -15,12 +15,47 @@ import { getDrivers } from '../lib/queries/drivers'
 import EditShiftModal, { type EditShiftModalTarget } from './EditShiftModal'
 import ShiftEditHistoryModal from './ShiftEditHistoryModal'
 import { formatJerusalemDateShort } from '../lib/shift-datetime'
-import { Clock, MapPin, Users, Activity, ChevronDown, Edit2 } from 'lucide-react'
+import { Clock, MapPin, Users, Activity, ChevronDown, Edit2, RefreshCw } from 'lucide-react'
 import { DateInput } from './ui'
 
 interface Props {
   companyId: string
 }
+
+function formatCoordLabel(lat: number | null, lng: number | null): string | null {
+  if (lat == null || lng == null) return null
+  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+}
+
+function renderHourlyLocationAddress(loc: DriverHourlyLocationRow) {
+  const hasRealAddress = Boolean(loc.address && !isCoordShapedAddress(loc.address))
+  if (hasRealAddress && loc.address) {
+    return (
+      <span className="flex items-center gap-1.5 text-gray-600">
+        <MapPin size={13} className="text-gray-400 flex-shrink-0" />
+        {loc.address}
+      </span>
+    )
+  }
+
+  const coordLabel =
+    formatCoordLabel(loc.lat, loc.lng) ||
+    (loc.address && isCoordShapedAddress(loc.address) ? loc.address.trim() : null)
+
+  if (coordLabel) {
+    return (
+      <span className="flex items-center gap-1.5 text-gray-500 text-xs font-mono">
+        <MapPin size={13} className="text-gray-400 flex-shrink-0" />
+        {coordLabel}
+      </span>
+    )
+  }
+
+  return <span className="text-gray-400 text-xs">כתובת לא זמינה</span>
+}
+
+const AUTO_BACKFILL_MAX_BUCKETS = 50
+const MANUAL_BACKFILL_BATCH_SIZE = 50
 
 export default function DriverHoursTab({ companyId }: Props) {
   const [shifts, setShifts] = useState<any[]>([])
@@ -39,11 +74,18 @@ export default function DriverHoursTab({ companyId }: Props) {
   const [editTarget, setEditTarget] = useState<EditShiftModalTarget | null>(null)
   const [historyShiftId, setHistoryShiftId] = useState<string | null>(null)
   const [historyDriverName, setHistoryDriverName] = useState('')
-  const backfillDoneForRangeRef = useRef<string | null>(null)
+  const [isBackfillingAddresses, setIsBackfillingAddresses] = useState(false)
+  const [backfillStatusText, setBackfillStatusText] = useState<string | null>(null)
+  const backfillCompleteForRangeRef = useRef<string | null>(null)
+  const backfillInFlightRef = useRef(false)
 
   const reportStartIso = startDate + 'T00:00:00'
   const reportEndIso = endDate + 'T23:59:59'
   const backfillRangeKey = `${companyId}|${startDate}|${endDate}`
+
+  useEffect(() => {
+    backfillCompleteForRangeRef.current = null
+  }, [backfillRangeKey])
 
   useEffect(() => {
     if (!companyId) return
@@ -65,9 +107,19 @@ export default function DriverHoursTab({ companyId }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [companyId])
 
-  const loadData = async (options?: { skipBackfill?: boolean }) => {
+  useEffect(() => {
+    if (!companyId || loading || activeSubTab !== 'locations') return
+    if (backfillCompleteForRangeRef.current === backfillRangeKey) return
+
+    const timer = window.setTimeout(() => {
+      void runAutoBackgroundBackfill()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [companyId, backfillRangeKey, loading, activeSubTab])
+
+  const loadData = async () => {
     setLoading(true)
-    let fetchSucceeded = false
     try {
       const [shiftsData, locationsData, driversData] = await Promise.all([
         getDriverHoursReport(
@@ -90,32 +142,151 @@ export default function DriverHoursTab({ companyId }: Props) {
       setEditSummaries(summaries)
       setLocations(locationsData)
       setDrivers(driversData)
-      fetchSucceeded = true
     } catch (err) {
       console.error(err)
     } finally {
       setLoading(false)
     }
+  }
 
-    if (fetchSucceeded && !options?.skipBackfill && companyId) {
-      void runBackgroundBackfill()
+  const reloadLocationsTable = async () => {
+    if (!companyId) return
+
+    try {
+      const locationsData = await getDriverHourlyLocations(
+        companyId,
+        reportStartIso,
+        reportEndIso,
+        selectedDriver !== 'all' ? selectedDriver : undefined
+      )
+      setLocations(locationsData)
+    } catch (err) {
+      console.error('[DriverHoursTab] locations reload failed:', err)
     }
   }
 
-  const runBackgroundBackfill = async () => {
-    if (backfillDoneForRangeRef.current === backfillRangeKey) return
-    backfillDoneForRangeRef.current = backfillRangeKey
+  const runBackfillBatch = async (options: {
+    maxCoordBuckets?: number
+    skipRemainingCount?: boolean
+    statusLabel: string
+  }) => {
+    if (!companyId || backfillInFlightRef.current) return null
+
+    backfillInFlightRef.current = true
+    setIsBackfillingAddresses(true)
+    setBackfillStatusText(options.statusLabel)
 
     try {
-      const [locCount, shiftCount] = await Promise.all([
-        backfillLocationAddresses(companyId, reportStartIso, reportEndIso),
-        backfillShiftStartAddresses(companyId, reportStartIso, reportEndIso),
-      ])
-      if (locCount + shiftCount > 0) {
-        await loadData({ skipBackfill: true })
+      const locResult = await backfillLocationAddresses(
+        companyId,
+        reportStartIso,
+        reportEndIso,
+        {
+          maxCoordBuckets: options.maxCoordBuckets,
+          skipRemainingCount: options.skipRemainingCount,
+        }
+      )
+
+      if (locResult.rowsUpdated > 0) {
+        await reloadLocationsTable()
       }
+
+      if (locResult.remainingRowsNeedingBackfill === 0) {
+        backfillCompleteForRangeRef.current = backfillRangeKey
+      } else {
+        backfillCompleteForRangeRef.current = null
+      }
+
+      return locResult
     } catch (err) {
+      backfillCompleteForRangeRef.current = null
       console.error('[DriverHoursTab] address backfill failed:', err)
+      return null
+    } finally {
+      backfillInFlightRef.current = false
+      setIsBackfillingAddresses(false)
+    }
+  }
+
+  const runAutoBackgroundBackfill = async () => {
+    if (backfillCompleteForRangeRef.current === backfillRangeKey) return
+
+    const result = await runBackfillBatch({
+      maxCoordBuckets: AUTO_BACKFILL_MAX_BUCKETS,
+      skipRemainingCount: true,
+      statusLabel: 'מאתר כתובות ברקע...',
+    })
+
+    if (result) {
+      console.log('[DriverHoursTab] background address backfill finished', result)
+    }
+
+    setBackfillStatusText(null)
+  }
+
+  const handleRetryAddressBackfill = async () => {
+    if (!companyId || backfillInFlightRef.current) return
+
+    backfillCompleteForRangeRef.current = null
+    backfillInFlightRef.current = true
+    setIsBackfillingAddresses(true)
+
+    try {
+      let remaining = Infinity
+
+      while (remaining > 0) {
+        setBackfillStatusText('מאתר כתובות ברקע...')
+
+        const locResult = await backfillLocationAddresses(
+          companyId,
+          reportStartIso,
+          reportEndIso,
+          {
+            maxCoordBuckets: MANUAL_BACKFILL_BATCH_SIZE,
+            skipRemainingCount: false,
+          }
+        )
+
+        console.log('[DriverHoursTab] manual address backfill batch', locResult)
+
+        if (locResult.rowsUpdated > 0) {
+          await reloadLocationsTable()
+        }
+
+        remaining = locResult.remainingRowsNeedingBackfill
+
+        if (locResult.coordBucketsProcessed === 0) break
+
+        setBackfillStatusText(
+          `מאתר כתובות ברקע... (${locResult.rowsUpdated} עודכנו, ${remaining} נותרו)`
+        )
+
+        if (remaining === 0) {
+          backfillCompleteForRangeRef.current = backfillRangeKey
+          break
+        }
+
+        backfillCompleteForRangeRef.current = null
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+      }
+
+      const shiftCount = await backfillShiftStartAddresses(
+        companyId,
+        reportStartIso,
+        reportEndIso
+      )
+      if (shiftCount > 0) {
+        await loadData()
+      }
+
+      console.log('[DriverHoursTab] manual address backfill finished', { remaining, shiftCount })
+    } catch (err) {
+      backfillCompleteForRangeRef.current = null
+      console.error('[DriverHoursTab] manual address backfill failed:', err)
+    } finally {
+      backfillInFlightRef.current = false
+      setIsBackfillingAddresses(false)
+      setBackfillStatusText(null)
     }
   }
 
@@ -355,6 +526,23 @@ export default function DriverHoursTab({ companyId }: Props) {
 
       {activeSubTab === 'locations' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-100">
+            <p className="text-xs text-gray-500">
+              {backfillStatusText ??
+                (isBackfillingAddresses
+                  ? 'מאתר כתובות ברקע...'
+                  : 'כתובות נטענות מהמיקום השעתי האחרון בכל שעה')}
+            </p>
+            <button
+              type="button"
+              onClick={handleRetryAddressBackfill}
+              disabled={isBackfillingAddresses || loading}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={isBackfillingAddresses ? 'animate-spin' : ''} />
+              נסה לאתר כתובות מחדש
+            </button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -393,12 +581,7 @@ export default function DriverHoursTab({ companyId }: Props) {
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        {loc.address && !isCoordShapedAddress(loc.address)
-                          ? <span className="flex items-center gap-1.5 text-gray-600">
-                              <MapPin size={13} className="text-gray-400 flex-shrink-0" />
-                              {loc.address}
-                            </span>
-                          : <span className="text-gray-400 text-xs">טוען כתובת...</span>}
+                        {renderHourlyLocationAddress(loc)}
                       </td>
                     </tr>
                   )

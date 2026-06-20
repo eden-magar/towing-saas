@@ -588,10 +588,17 @@ function roundedCoordKey(lat: number, lng: number): string {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`
 }
 
-async function geocodeToRealAddress(lat: number, lng: number): Promise<string | null> {
+type GeocodeResult = {
+  address: string | null
+  error?: string
+}
+
+async function geocodeToRealAddress(lat: number, lng: number): Promise<GeocodeResult> {
   try {
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) return null
+    if (!session?.access_token) {
+      return { address: null, error: 'no_session' }
+    }
 
     const res = await fetch('/api/reverse-geocode', {
       method: 'POST',
@@ -602,22 +609,193 @@ async function geocodeToRealAddress(lat: number, lng: number): Promise<string | 
       body: JSON.stringify({ lat, lng }),
     })
 
-    if (!res.ok) return null
+    const data = (await res.json()) as { ok?: boolean; address?: string; error?: string }
 
-    const data = (await res.json()) as { ok?: boolean; address?: string }
-    if (!data.ok || !data.address) return null
-    if (isCoordShapedAddress(data.address)) return null
-    return data.address
-  } catch {
-    return null
+    if (!res.ok) {
+      return { address: null, error: data.error || `http_${res.status}` }
+    }
+    if (!data.ok || !data.address) {
+      return { address: null, error: data.error || 'no_address' }
+    }
+    if (isCoordShapedAddress(data.address)) {
+      return { address: null, error: 'coord_shaped_result' }
+    }
+    return { address: data.address }
+  } catch (err) {
+    return {
+      address: null,
+      error: err instanceof Error ? err.message : 'network_error',
+    }
   }
 }
+
+function bumpGeocodeError(counts: Record<string, number>, reason: string) {
+  counts[reason] = (counts[reason] ?? 0) + 1
+}
+
+const DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE = 1000
 
 type LocationPingRow = {
   id: string
   lat: number
   lng: number
   address: string | null
+}
+
+type DriverLocationBackfillScan = {
+  rowsNeedingBackfill: LocationPingRow[]
+  byCoord: Map<string, { lat: number; lng: number; ids: string[] }>
+  totalRowsScanned: number
+  pagesLoaded: number
+  scanComplete: boolean
+}
+
+async function scanDriverLocationsForBackfill(
+  companyId: string,
+  startDate: string,
+  endDate: string,
+  maxCoordBuckets?: number
+): Promise<DriverLocationBackfillScan> {
+  const rowsNeedingBackfill: LocationPingRow[] = []
+  const byCoord = new Map<string, { lat: number; lng: number; ids: string[] }>()
+  let totalRowsScanned = 0
+  let pagesLoaded = 0
+  let from = 0
+  let scanComplete = false
+
+  while (true) {
+    const to = from + DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE - 1
+    const { data, error } = await supabase
+      .from('driver_locations')
+      .select('id, lat, lng, address')
+      .eq('company_id', companyId)
+      .gte('timestamp', startDate)
+      .lte('timestamp', endDate)
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .order('timestamp', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to)
+
+    if (error) throw error
+
+    const page = data ?? []
+    pagesLoaded += 1
+    totalRowsScanned += page.length
+
+    for (const row of page) {
+      if (
+        row.lat == null ||
+        row.lng == null ||
+        !needsLocationAddressBackfill(row.address)
+      ) {
+        continue
+      }
+
+      const ping = row as LocationPingRow
+      const key = roundedCoordKey(ping.lat, ping.lng)
+      const bucket = byCoord.get(key)
+
+      if (bucket) {
+        bucket.ids.push(ping.id)
+        rowsNeedingBackfill.push(ping)
+        continue
+      }
+
+      if (maxCoordBuckets != null && byCoord.size >= maxCoordBuckets) {
+        continue
+      }
+
+      byCoord.set(key, { lat: ping.lat, lng: ping.lng, ids: [ping.id] })
+      rowsNeedingBackfill.push(ping)
+    }
+
+    if (page.length < DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE) {
+      scanComplete = true
+      break
+    }
+
+    if (maxCoordBuckets != null && byCoord.size >= maxCoordBuckets) {
+      break
+    }
+
+    from += DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE
+  }
+
+  return {
+    rowsNeedingBackfill,
+    byCoord,
+    totalRowsScanned,
+    pagesLoaded,
+    scanComplete,
+  }
+}
+
+async function countLocationRowsNeedingBackfill(
+  companyId: string,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  let remaining = 0
+  let totalRowsScanned = 0
+  let pagesLoaded = 0
+  let from = 0
+
+  while (true) {
+    const to = from + DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE - 1
+    const { data, error } = await supabase
+      .from('driver_locations')
+      .select('id, address')
+      .eq('company_id', companyId)
+      .gte('timestamp', startDate)
+      .lte('timestamp', endDate)
+      .not('lat', 'is', null)
+      .not('lng', 'is', null)
+      .order('timestamp', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to)
+
+    if (error) throw error
+
+    const page = data ?? []
+    pagesLoaded += 1
+    totalRowsScanned += page.length
+
+    for (const row of page) {
+      if (needsLocationAddressBackfill(row.address)) {
+        remaining += 1
+      }
+    }
+
+    if (page.length < DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE) break
+    from += DRIVER_LOCATIONS_BACKFILL_PAGE_SIZE
+  }
+
+  console.log('[countLocationRowsNeedingBackfill]', {
+    totalRowsScanned,
+    pagesLoaded,
+    remainingRowsNeedingBackfill: remaining,
+  })
+
+  return remaining
+}
+
+export type BackfillLocationAddressesOptions = {
+  /** Max distinct coord buckets to geocode in this run. */
+  maxCoordBuckets?: number
+  /** Skip full paginated recount after updates (faster batches). */
+  skipRemainingCount?: boolean
+}
+
+export type BackfillLocationAddressesResult = {
+  rowsNeedingBackfill: number
+  coordBuckets: number
+  coordBucketsProcessed: number
+  rowsUpdated: number
+  failedGeocodes: number
+  failedUpdates: number
+  remainingRowsNeedingBackfill: number
+  geocodeErrors: Record<string, number>
 }
 
 type ShiftStartRow = {
@@ -630,43 +808,61 @@ type ShiftStartRow = {
 export async function backfillLocationAddresses(
   companyId: string,
   startDate: string,
-  endDate: string
-): Promise<number> {
-  const { data, error } = await supabase
-    .from('driver_locations')
-    .select('id, lat, lng, address')
-    .eq('company_id', companyId)
-    .gte('timestamp', startDate)
-    .lte('timestamp', endDate)
-    .not('lat', 'is', null)
-    .not('lng', 'is', null)
-
-  if (error) throw error
-
-  const rows = (data ?? []).filter(
-    (row): row is LocationPingRow =>
-      row.lat != null &&
-      row.lng != null &&
-      needsLocationAddressBackfill(row.address)
+  endDate: string,
+  options?: BackfillLocationAddressesOptions
+): Promise<BackfillLocationAddressesResult> {
+  const maxCoordBuckets = options?.maxCoordBuckets
+  const {
+    rowsNeedingBackfill: rows,
+    byCoord,
+    totalRowsScanned,
+    pagesLoaded,
+    scanComplete,
+  } = await scanDriverLocationsForBackfill(
+    companyId,
+    startDate,
+    endDate,
+    maxCoordBuckets
   )
 
-  const byCoord = new Map<string, { lat: number; lng: number; ids: string[] }>()
-  for (const row of rows) {
-    const key = roundedCoordKey(row.lat, row.lng)
-    const bucket = byCoord.get(key)
-    if (bucket) {
-      bucket.ids.push(row.id)
-    } else {
-      byCoord.set(key, { lat: row.lat, lng: row.lng, ids: [row.id] })
+  const rowsNeedingBackfill = rows.length
+  const geocodeErrors: Record<string, number> = {}
+  const coordBuckets = byCoord.size
+
+  if (rowsNeedingBackfill === 0) {
+    const result: BackfillLocationAddressesResult = {
+      rowsNeedingBackfill: 0,
+      coordBuckets: 0,
+      coordBucketsProcessed: 0,
+      rowsUpdated: 0,
+      failedGeocodes: 0,
+      failedUpdates: 0,
+      remainingRowsNeedingBackfill: 0,
+      geocodeErrors,
     }
+    console.log('[backfillLocationAddresses]', {
+      ...result,
+      totalRowsScanned,
+      pagesLoaded,
+      scanComplete,
+    })
+    return result
   }
 
   let rowsUpdated = 0
+  let failedGeocodes = 0
+  let failedUpdates = 0
+  let coordBucketsProcessed = 0
 
   for (const { lat, lng, ids } of byCoord.values()) {
     try {
-      const address = await geocodeToRealAddress(lat, lng)
-      if (!address) continue
+      const { address, error: geocodeError } = await geocodeToRealAddress(lat, lng)
+      if (!address) {
+        failedGeocodes += ids.length
+        bumpGeocodeError(geocodeErrors, geocodeError || 'unknown_geocode_failure')
+        coordBucketsProcessed += 1
+        continue
+      }
 
       const { error: updateError } = await supabase
         .from('driver_locations')
@@ -674,17 +870,58 @@ export async function backfillLocationAddresses(
         .in('id', ids)
 
       if (updateError) {
+        failedUpdates += ids.length
+        bumpGeocodeError(geocodeErrors, `update_failed:${updateError.message}`)
         console.error('[backfillLocationAddresses] update failed:', updateError)
+        coordBucketsProcessed += 1
         continue
       }
 
       rowsUpdated += ids.length
+      coordBucketsProcessed += 1
     } catch (err) {
+      failedGeocodes += ids.length
+      const message = err instanceof Error ? err.message : 'unexpected_geocode_error'
+      bumpGeocodeError(geocodeErrors, message)
       console.error('[backfillLocationAddresses] geocode failed:', err)
+      coordBucketsProcessed += 1
     }
   }
 
-  return rowsUpdated
+  let remainingRowsNeedingBackfill = 0
+  if (options?.skipRemainingCount) {
+    remainingRowsNeedingBackfill = Math.max(0, rowsNeedingBackfill - rowsUpdated)
+    if (!scanComplete) {
+      remainingRowsNeedingBackfill = Math.max(remainingRowsNeedingBackfill, 1)
+    }
+  } else {
+    remainingRowsNeedingBackfill = await countLocationRowsNeedingBackfill(
+      companyId,
+      startDate,
+      endDate
+    )
+  }
+
+  const result: BackfillLocationAddressesResult = {
+    rowsNeedingBackfill,
+    coordBuckets,
+    coordBucketsProcessed,
+    rowsUpdated,
+    failedGeocodes,
+    failedUpdates,
+    remainingRowsNeedingBackfill,
+    geocodeErrors,
+  }
+
+  console.log('[backfillLocationAddresses]', {
+    ...result,
+    totalRowsScanned,
+    pagesLoaded,
+    scanComplete,
+    maxCoordBuckets: maxCoordBuckets ?? null,
+  })
+
+  return result
 }
 
 /** Persist driver_shifts.start_address from shift coords or first location ping. end_address not handled yet. */
@@ -738,7 +975,7 @@ export async function backfillShiftStartAddresses(
       let address: string | null = null
 
       if (shift.start_lat != null && shift.start_lng != null) {
-        address = await geocodeToRealAddress(shift.start_lat, shift.start_lng)
+        address = (await geocodeToRealAddress(shift.start_lat, shift.start_lng)).address
       } else {
         const firstPing = firstPingByShiftId.get(shift.id)
         if (!firstPing) continue
@@ -746,7 +983,7 @@ export async function backfillShiftStartAddresses(
         if (firstPing.address && !isCoordShapedAddress(firstPing.address)) {
           address = firstPing.address
         } else {
-          address = await geocodeToRealAddress(firstPing.lat, firstPing.lng)
+          address = (await geocodeToRealAddress(firstPing.lat, firstPing.lng)).address
         }
       }
 
