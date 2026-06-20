@@ -518,9 +518,6 @@
           .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_tasks', filter: `company_id=eq.${companyId}` }, () => {
             dashboardRealtimeHandlersRef.current.debouncedRefreshEssential()
           })
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_locations', filter: `company_id=eq.${companyId}` }, () => {
-            void dashboardRealtimeHandlersRef.current.refreshDriversAndMap()
-          })
 
         subscribeRealtimeChannel(channel, channelName)
 
