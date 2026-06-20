@@ -552,7 +552,31 @@
             const oldCompanyId = (payload.old as { company_id?: string } | undefined)?.company_id
             if (newCompanyId !== companyId && oldCompanyId !== companyId) return
 
-            void dashboardRealtimeHandlersRef.current.refreshDriversAndMap()
+            if (payload.eventType === 'UPDATE') {
+              type DriverLocRow = {
+                id?: string
+                last_lat?: number | null
+                last_lng?: number | null
+                last_seen_at?: string | null
+              }
+              const oldRow = payload.old as DriverLocRow | undefined
+              const newRow = payload.new as DriverLocRow | undefined
+              console.log('[drivers realtime test] UPDATE received', {
+                driverId: newRow?.id ?? oldRow?.id,
+                old_last_lat: oldRow?.last_lat,
+                new_last_lat: newRow?.last_lat,
+                old_last_lng: oldRow?.last_lng,
+                new_last_lng: newRow?.last_lng,
+                old_last_seen_at: oldRow?.last_seen_at,
+                new_last_seen_at: newRow?.last_seen_at,
+              })
+            }
+
+            void dashboardRealtimeHandlersRef.current.refreshDriversAndMap().then(() => {
+              if (payload.eventType === 'UPDATE') {
+                console.log('[drivers realtime test] refresh done')
+              }
+            })
           })
 
         subscribeRealtimeChannel(driversChannel, driversChannelName)
