@@ -20,6 +20,10 @@ const MAP_CENTER_PATTERN = /@(-?\d+(?:\.\d+)?),[+\s]*(-?\d+(?:\.\d+)?)/
 const DMS_PATTERN =
   /(\d+)°(\d+)'([\d.]+)"([NS])[+\s]+(\d+)°(\d+)'([\d.]+)"([EW])/i
 
+/** Waze live-map HTML embeds venue coords as JSON (no ll= in final URL). */
+const WAZE_JSON_COORD_PATTERN =
+  /"lat"\s*:\s*(-?\d+(?:\.\d+)?)[\s\S]{0,200}?"lng"\s*:\s*(-?\d+(?:\.\d+)?)/
+
 function dmsToDecimal(deg: number, min: number, sec: number, hemisphere: string): number {
   let decimal = deg + min / 60 + sec / 3600
   const h = hemisphere.toUpperCase()
@@ -73,6 +77,7 @@ function isSupportedMapLink(urlString: string): boolean {
     if (host === 'goo.gl' && path.startsWith('/maps')) return true
     if (host.startsWith('maps.google.')) return true
     if (host.startsWith('google.') && path.includes('/maps')) return true
+    if (host === 'ul.waze.com') return true
     if (host === 'waze.com' || host === 'www.waze.com') return true
 
     return false
@@ -120,6 +125,17 @@ function extractCoords(finalUrl: string, originalUrl: string): { lat: number; ln
   for (const candidate of [finalUrl, originalUrl]) {
     const coords = extractCoordsFromText(candidate)
     if (coords) return coords
+  }
+  return null
+}
+
+function extractCoordsFromWazeJson(html: string): { lat: number; lng: number } | null {
+  const match = html.match(WAZE_JSON_COORD_PATTERN)
+  if (!match) return null
+  const lat = Number(match[1])
+  const lng = Number(match[2])
+  if (isValidLatLng(lat, lng)) {
+    return { lat, lng }
   }
   return null
 }
@@ -174,7 +190,11 @@ export async function POST(request: NextRequest) {
     const res = await fetch(url, { redirect: 'follow' })
     const finalUrl = res.url || url
 
-    const coords = extractCoords(finalUrl, url)
+    let coords = extractCoords(finalUrl, url)
+    if (!coords) {
+      const bodyText = await res.text()
+      coords = extractCoordsFromWazeJson(bodyText)
+    }
     if (!coords) {
       return NextResponse.json({ ok: false, error: 'could_not_resolve' }, { status: 422 })
     }
