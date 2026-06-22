@@ -1750,6 +1750,8 @@ function CreateTowForm({
           {entryKind === 'events' && (
             <EventTowSection
               selectedCustomerId={selectedCustomerId}
+              customerName={customerName}
+              customerPhone={customerPhone}
               towDate={towDate}
               towTime={towTime}
               towEndTime={towEndTime}

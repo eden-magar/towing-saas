@@ -10,6 +10,7 @@ import { AddressInput, type AddressData } from '../tow-forms/routes/AddressInput
 import { PinDropModal } from '../tow-forms/shared/PinDropModal'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers } from '../../lib/queries/drivers'
+import { createCustomer } from '../../lib/queries/customers'
 import { createEvent } from '../../lib/queries/events'
 import { syncEventToLegacyCalendar } from '../../lib/integrations/legacy-calendar/client-sync'
 import { getCompanySettings } from '../../lib/queries/settings'
@@ -29,6 +30,8 @@ function formatMoney(value: number): string {
 
 interface EventTowSectionProps {
   selectedCustomerId: string | null
+  customerName: string
+  customerPhone: string
   towDate: string
   towTime: string
   towEndTime: string
@@ -36,6 +39,8 @@ interface EventTowSectionProps {
 
 export function EventTowSection({
   selectedCustomerId,
+  customerName,
+  customerPhone,
   towDate,
   towTime,
   towEndTime,
@@ -182,8 +187,24 @@ export function EventTowSection({
   const handleSave = async (status: 'approved' | 'quote') => {
     if (!companyId || !user) return
 
-    if (!selectedCustomerId) {
-      setError('יש לבחור לקוח לפני שמירת האירוע')
+    let finalCustomerId = selectedCustomerId
+    if (!selectedCustomerId && customerName.trim()) {
+      try {
+        const result = await createCustomer({
+          companyId,
+          customerType: 'private',
+          name: customerName.trim(),
+          phone: customerPhone.trim() || undefined,
+          paymentTerms: 'immediate',
+        })
+        finalCustomerId = result.id
+      } catch (err) {
+        console.error('Error creating customer:', err)
+      }
+    }
+
+    if (!finalCustomerId) {
+      setError('יש לבחור לקוח או להזין שם')
       return
     }
 
@@ -208,11 +229,11 @@ export function EventTowSection({
     try {
       if (
         saveContactToCustomer &&
-        selectedCustomerId &&
+        finalCustomerId &&
         companyId &&
         contactName.trim()
       ) {
-        await insertPendingCustomerContacts(companyId, selectedCustomerId, [
+        await insertPendingCustomerContacts(companyId, finalCustomerId, [
           {
             name: contactName.trim(),
             phone: contactPhone.trim() || null,
@@ -223,7 +244,7 @@ export function EventTowSection({
       const result = await createEvent({
         companyId,
         createdBy: user.id,
-        customerId: selectedCustomerId,
+        customerId: finalCustomerId,
         driverId: selectedDriverId || null,
         locationAddress: location.address.trim(),
         locationLat: location.lat ?? null,
