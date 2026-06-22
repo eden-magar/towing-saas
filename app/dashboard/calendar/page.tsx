@@ -500,6 +500,7 @@ export default function CalendarPage() {
   const [refreshing, setRefreshing] = useState(false)
   
   const [selectedTow, setSelectedTow] = useState<TowWithDetails | null>(null)
+  const [towActionMenu, setTowActionMenu] = useState<TowWithDetails | null>(null)
   const [draggedTow, setDraggedTow] = useState<TowWithDetails | null>(null)
   
   // מודל בחירת נהג
@@ -1364,11 +1365,7 @@ const handleSkipPriceUpdate = () => {
                       onDragStart={(e) => handleDragStart(e, tow)}
                       onClick={(e) => { 
                         e.stopPropagation()
-                        if (!tow.driver_id) {
-                          handleAssignDriver(tow)
-                        } else {
-                          setSelectedTow(tow)
-                        }
+                        setTowActionMenu(tow)
                       }}
                       className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
                         draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
@@ -1581,11 +1578,7 @@ const handleSkipPriceUpdate = () => {
                           onDragStart={(e) => handleDragStart(e, tow)}
                           onClick={(e) => {
                             e.stopPropagation()
-                            if (!tow.driver_id) {
-                              handleAssignDriver(tow)
-                            } else {
-                              setSelectedTow(tow)
-                            }
+                            setTowActionMenu(tow)
                           }}
                           className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
                             draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
@@ -1742,6 +1735,59 @@ const handleSkipPriceUpdate = () => {
           <p className="text-gray-700"><strong>יום:</strong> לחץ על תאריך</p>
         </div>
       </div>
+
+      {/* Tow action menu */}
+      {towActionMenu && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setTowActionMenu(null)}
+        >
+          <div
+            className="bg-white w-full max-w-sm mx-4 rounded-2xl overflow-hidden shadow-xl"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-[#33d4ff] text-white flex items-center justify-between">
+              <div className="min-w-0">
+                <h2 className="font-bold text-lg truncate">
+                  {towActionMenu.customer?.name || 'ללא לקוח'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTowActionMenu(null)}
+                className="p-2 hover:bg-white/20 rounded-lg shrink-0"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const tow = towActionMenu
+                  setTowActionMenu(null)
+                  handleAssignDriver(tow)
+                }}
+                className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6]"
+              >
+                שיבוץ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const tow = towActionMenu
+                  setTowActionMenu(null)
+                  router.push(`/dashboard/tows/${tow.id}`)
+                }}
+                className="w-full py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50"
+              >
+                פתיחת הגרירה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tow Detail Modal */}
       {selectedTow && (() => {
