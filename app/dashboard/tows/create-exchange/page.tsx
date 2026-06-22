@@ -53,8 +53,11 @@ import {
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import { CustomerContactFields } from '../../../components/customer-contacts/CustomerContactFields'
 import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
+import { useCustomerOrderers } from '../../../hooks/useCustomerOrderers'
 import { insertPendingCustomerContacts } from '../../../lib/queries/customer-contacts'
+import { insertPendingCustomerOrderers } from '../../../lib/queries/customer-orderers'
 import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import { shouldOfferSaveCustomerOrderer } from '../../../lib/utils/customer-orderer-save-ui'
 import type { AddressData } from '../../../lib/google-maps'
 import type { TimeSurcharge, LocationSurcharge } from '../../../lib/queries/price-lists'
 import type { VehicleLookupResult, VehicleType } from '../../../lib/types'
@@ -72,9 +75,11 @@ function CreateExchangeTowForm({
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const persistCustomerContactsRef = useRef<() => Promise<void>>(async () => {})
+  const persistCustomerOrderersRef = useRef<() => Promise<void>>(async () => {})
   const form = useTowForm(editTowId, {
     beforeSaveTow: async () => {
       await persistCustomerContactsRef.current()
+      await persistCustomerOrderersRef.current()
     },
   })
 
@@ -316,6 +321,7 @@ function CreateExchangeTowForm({
     useState(false)
   const [saveDefectiveDestinationContactToCustomer, setSaveDefectiveDestinationContactToCustomer] =
     useState(false)
+  const [saveOrdererToCustomer, setSaveOrdererToCustomer] = useState(false)
 
   const { savedContacts, contactsLoading } = useCustomerContacts(
     companyId,
@@ -355,6 +361,7 @@ function CreateExchangeTowForm({
     setSaveWorkingDestinationContactToCustomer(false)
     setSaveExchangePickupContactToCustomer(false)
     setSaveDefectiveDestinationContactToCustomer(false)
+    setSaveOrdererToCustomer(false)
   }, [selectedCustomerId])
 
   useEffect(() => {
@@ -430,6 +437,48 @@ function CreateExchangeTowForm({
     customerTab === 'existing' &&
     !!selectedCustomerId &&
     customers.find((c) => c.id === selectedCustomerId)?.customer_type === 'business'
+
+  const { savedOrderers, orderersLoading } = useCustomerOrderers(
+    companyId,
+    isBusinessCustomer ? selectedCustomerId : null
+  )
+
+  const showSaveOrdererOption = shouldOfferSaveCustomerOrderer(
+    isBusinessCustomer,
+    selectedCustomerId,
+    department,
+    orderedBy,
+    savedOrderers
+  )
+
+  useEffect(() => {
+    if (!showSaveOrdererOption) {
+      setSaveOrdererToCustomer(false)
+    }
+  }, [showSaveOrdererOption])
+
+  const persistExchangeCustomerOrderers = useCallback(async () => {
+    if (!companyId || !selectedCustomerId || !isBusinessCustomer) return
+    if (!saveOrdererToCustomer || !orderedBy.trim()) return
+
+    await insertPendingCustomerOrderers(companyId, selectedCustomerId, [
+      {
+        department: department || null,
+        name: orderedBy.trim(),
+      },
+    ])
+  }, [
+    companyId,
+    selectedCustomerId,
+    isBusinessCustomer,
+    saveOrdererToCustomer,
+    department,
+    orderedBy,
+  ])
+
+  useEffect(() => {
+    persistCustomerOrderersRef.current = persistExchangeCustomerOrderers
+  }, [persistExchangeCustomerOrderers])
 
   useEffect(() => {
     if (!editTowId) setTowType('exchange')
@@ -995,6 +1044,12 @@ function CreateExchangeTowForm({
             onDepartmentChange={setDepartment}
             orderedBy={orderedBy}
             onOrderedByChange={setOrderedBy}
+            savedOrderers={savedOrderers}
+            orderersLoading={orderersLoading}
+            showSaveOrdererPill={showSaveOrdererOption}
+            saveOrdererToCustomer={saveOrdererToCustomer}
+            onSaveOrdererToggle={() => setSaveOrdererToCustomer((v) => !v)}
+            onOrdererSelected={() => setSaveOrdererToCustomer(false)}
             editTowId={editTowId}
             orderNumber={orderNumber}
           />

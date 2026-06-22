@@ -149,6 +149,21 @@ export interface CustomerContactInput {
   notes?: string | null
 }
 
+export interface CustomerOrderer {
+  id: string
+  company_id: string
+  customer_id: string
+  department: string | null
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerOrdererInput {
+  department?: string | null
+  name: string
+}
+
 export interface PriceList {
   id: string
   company_id: string

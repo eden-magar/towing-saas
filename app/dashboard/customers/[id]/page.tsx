@@ -29,6 +29,7 @@ import {
   Contact2,
   Briefcase,
   ClipboardList,
+  UserPen,
 } from 'lucide-react'
 import { supabase } from '@/app/lib/supabase'
 import {
@@ -44,7 +45,13 @@ import {
   updateCustomerContact,
   deleteCustomerContact,
 } from '@/app/lib/queries/customer-contacts'
-import type { CustomerContact, CustomerUserWithDetails } from '@/app/lib/types'
+import {
+  getCustomerOrderers,
+  insertCustomerOrderer,
+  updateCustomerOrderer,
+  deleteCustomerOrderer,
+} from '@/app/lib/queries/customer-orderers'
+import type { CustomerContact, CustomerOrderer, CustomerUserWithDetails } from '@/app/lib/types'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
 
 interface CustomerDetail {
@@ -82,8 +89,9 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [customerUsers, setCustomerUsers] = useState<CustomerUserWithDetails[]>([])
   const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
+  const [customerOrderers, setCustomerOrderers] = useState<CustomerOrderer[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'contacts' | 'users' | 'settings'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'contacts' | 'orderers' | 'users' | 'settings'>('info')
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
 
   // Modal states
@@ -92,6 +100,9 @@ export default function CustomerDetailPage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
   const [showDeleteContactConfirm, setShowDeleteContactConfirm] = useState<string | null>(null)
+  const [showOrdererModal, setShowOrdererModal] = useState(false)
+  const [editingOrdererId, setEditingOrdererId] = useState<string | null>(null)
+  const [showDeleteOrdererConfirm, setShowDeleteOrdererConfirm] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tempPassword, setTempPassword] = useState<string | null>(null)
@@ -106,6 +117,9 @@ export default function CustomerDetailPage() {
 
   const emptyContactForm = { name: '', phone: '', role_or_title: '', notes: '' }
   const [contactForm, setContactForm] = useState(emptyContactForm)
+
+  const emptyOrdererForm = { department: '', name: '' }
+  const [ordererForm, setOrdererForm] = useState(emptyOrdererForm)
 
   useEffect(() => {
     if (companyId && customerId) {
@@ -148,8 +162,12 @@ export default function CustomerDetailPage() {
       setCustomerUsers(users)
 
       if (companyId) {
-        const contacts = await getCustomerContacts(companyId, customerId)
+        const [contacts, orderers] = await Promise.all([
+          getCustomerContacts(companyId, customerId),
+          getCustomerOrderers(companyId, customerId),
+        ])
         setCustomerContacts(contacts)
+        setCustomerOrderers(orderers)
       }
     } catch (err) {
       console.error('Error loading customer:', err)
@@ -275,6 +293,65 @@ export default function CustomerDetailPage() {
     }
   }
 
+  const openAddOrdererModal = () => {
+    setEditingOrdererId(null)
+    setOrdererForm(emptyOrdererForm)
+    setError('')
+    setShowOrdererModal(true)
+  }
+
+  const openEditOrdererModal = (orderer: CustomerOrderer) => {
+    setEditingOrdererId(orderer.id)
+    setOrdererForm({
+      department: orderer.department || '',
+      name: orderer.name,
+    })
+    setError('')
+    setShowOrdererModal(true)
+  }
+
+  const handleSaveOrderer = async () => {
+    if (!companyId || !ordererForm.name.trim()) return
+
+    setSaving(true)
+    setError('')
+
+    try {
+      const payload = {
+        department: ordererForm.department || null,
+        name: ordererForm.name,
+      }
+
+      if (editingOrdererId) {
+        await updateCustomerOrderer(companyId, editingOrdererId, payload)
+      } else {
+        await insertCustomerOrderer(companyId, customerId, payload)
+      }
+
+      setShowOrdererModal(false)
+      setEditingOrdererId(null)
+      setOrdererForm(emptyOrdererForm)
+      await loadData()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'שגיאה בשמירת המזמין'
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteOrderer = async (ordererId: string) => {
+    if (!companyId) return
+
+    try {
+      await deleteCustomerOrderer(companyId, ordererId)
+      setShowDeleteOrdererConfirm(null)
+      await loadData()
+    } catch (err) {
+      console.error('Error deleting orderer:', err)
+    }
+  }
+
   const copyPassword = () => {
     if (tempPassword) {
       navigator.clipboard.writeText(tempPassword)
@@ -370,6 +447,26 @@ export default function CustomerDetailPage() {
             </span>
           )}
         </button>
+        {customer.customer_type === 'business' && (
+          <button
+            onClick={() => setActiveTab('orderers')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'orderers'
+                ? 'bg-[#33d4ff] text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <UserPen size={16} />
+            מזמינים
+            {customerOrderers.length > 0 && (
+              <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+                activeTab === 'orderers' ? 'bg-white/20' : 'bg-gray-200'
+              }`}>
+                {customerOrderers.length}
+              </span>
+            )}
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('users')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -576,6 +673,79 @@ export default function CustomerDetailPage() {
                         </button>
                         <button
                           onClick={() => setShowDeleteContactConfirm(contact.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="מחיקה"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Orderers Tab */}
+      {activeTab === 'orderers' && customer.customer_type === 'business' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-500">
+              מזמינים שמורים ללקוח — יוצעו בטופס גרירה בעת בחירת הלקוח העסקי
+            </p>
+            <button
+              onClick={openAddOrdererModal}
+              className="flex items-center gap-2 bg-[#33d4ff] text-white px-4 py-2.5 rounded-xl hover:bg-[#21b8e6] transition-colors font-medium text-sm"
+            >
+              <Plus size={18} />
+              הוסף מזמין
+            </button>
+          </div>
+
+          {customerOrderers.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <UserPen size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 mb-1">אין מזמינים שמורים</p>
+              <p className="text-sm text-gray-400">הוסף מזמינים שחוזרים על עצמם בגרירות מול לקוח עסקי זה</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="divide-y divide-gray-100">
+                {customerOrderers.map((orderer) => (
+                  <div key={orderer.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                          <UserPen size={20} className="text-purple-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-gray-800">{orderer.name}</span>
+                            {orderer.department && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                <Briefcase size={12} />
+                                {orderer.department}
+                              </span>
+                            )}
+                          </div>
+                          {!orderer.department && (
+                            <p className="text-sm text-gray-400 mt-0.5">ללא מחלקה</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => openEditOrdererModal(orderer)}
+                          className="p-2 text-gray-400 hover:text-[#33d4ff] hover:bg-blue-50 rounded-lg transition-colors"
+                          title="עריכה"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteOrdererConfirm(orderer.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="מחיקה"
                         >
@@ -927,6 +1097,109 @@ export default function CustomerDetailPage() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Orderer Modal */}
+      {showOrdererModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+          <div className="bg-white w-full lg:max-w-md lg:rounded-2xl lg:mx-4 overflow-hidden rounded-t-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white">
+              <h2 className="font-bold text-lg">
+                {editingOrdererId ? 'עריכת מזמין' : 'הוספת מזמין'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowOrdererModal(false)
+                  setEditingOrdererId(null)
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">מחלקה</label>
+                <input
+                  type="text"
+                  value={ordererForm.department}
+                  onChange={(e) => setOrdererForm({ ...ordererForm, department: e.target.value })}
+                  placeholder="לדוגמה: לוגיסטיקה, חשבונות"
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">שם מזמין *</label>
+                <input
+                  type="text"
+                  value={ordererForm.name}
+                  onChange={(e) => setOrdererForm({ ...ordererForm, name: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowOrdererModal(false)
+                    setEditingOrdererId(null)
+                  }}
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={handleSaveOrderer}
+                  disabled={!ordererForm.name.trim() || saving}
+                  className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 transition-colors font-medium"
+                >
+                  {saving ? (
+                    <Loader2 size={18} className="animate-spin mx-auto" />
+                  ) : (
+                    'שמור'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Orderer Confirm Modal */}
+      {showDeleteOrdererConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">מחיקת מזמין</h2>
+              <p className="text-gray-600">המזמין יוסר מרשימת המזמינים של הלקוח. להמשיך?</p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setShowDeleteOrdererConfirm(null)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={() => handleDeleteOrderer(showDeleteOrdererConfirm)}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+              >
+                מחק
+              </button>
             </div>
           </div>
         </div>

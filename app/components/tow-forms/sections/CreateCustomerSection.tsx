@@ -10,6 +10,9 @@ import {
 } from '../../../lib/queries/storage'
 import { Input, Button, FormCard, TimeInput, DateInput } from '../../ui'
 import { PhoneInput } from '../../ui/PhoneInput'
+import { OrdererNameAutocomplete } from '../../customer-orderers/OrdererNameAutocomplete'
+import { SaveCustomerOrdererPill } from '../../customer-orderers/SaveCustomerOrdererPill'
+import type { CustomerOrderer } from '../../../lib/types'
 
 export type CreateCustomerTab = 'existing' | 'casual'
 
@@ -44,6 +47,12 @@ export interface CreateCustomerSectionProps {
   onDepartmentChange?: (v: string) => void
   orderedBy?: string
   onOrderedByChange?: (v: string) => void
+  savedOrderers?: CustomerOrderer[]
+  orderersLoading?: boolean
+  showSaveOrdererPill?: boolean
+  saveOrdererToCustomer?: boolean
+  onSaveOrdererToggle?: () => void
+  onOrdererSelected?: () => void
   editTowId?: string | null
   orderNumber?: string | null
 }
@@ -86,6 +95,12 @@ export function CreateCustomerSection({
   onDepartmentChange,
   orderedBy = '',
   onOrderedByChange,
+  savedOrderers = [],
+  orderersLoading = false,
+  showSaveOrdererPill = false,
+  saveOrdererToCustomer = false,
+  onSaveOrdererToggle,
+  onOrdererSelected,
   editTowId,
   orderNumber,
 }: CreateCustomerSectionProps) {
@@ -318,21 +333,36 @@ export function CreateCustomerSection({
       </div>
 
       {isBusinessCustomer && onDepartmentChange && onOrderedByChange && (
-        <div className="px-4 pb-3 grid grid-cols-2 gap-2 border-t border-gray-100" dir="rtl">
-          <Input
-            type="text"
-            value={department}
-            onChange={(e) => onDepartmentChange(e.target.value)}
-            placeholder="מחלקה (אופציונלי)"
-            className="text-right"
-          />
-          <Input
-            type="text"
-            value={orderedBy}
-            onChange={(e) => onOrderedByChange(e.target.value)}
-            placeholder="מזמין (אופציונלי)"
-            className="text-right"
-          />
+        <div className="px-4 pb-3 border-t border-gray-100 space-y-2" dir="rtl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              type="text"
+              value={department}
+              onChange={(e) => onDepartmentChange(e.target.value)}
+              placeholder="מחלקה (אופציונלי)"
+              className="text-right"
+            />
+            <OrdererNameAutocomplete
+              value={orderedBy}
+              onChange={onOrderedByChange}
+              onSelectOrderer={(orderer) => {
+                onDepartmentChange(orderer.department ?? '')
+                onOrderedByChange(orderer.name)
+                onOrdererSelected?.()
+              }}
+              orderers={savedOrderers}
+              loading={orderersLoading}
+              placeholder="מזמין (אופציונלי)"
+              className="text-right"
+            />
+          </div>
+          {showSaveOrdererPill && onSaveOrdererToggle && (
+            <SaveCustomerOrdererPill
+              visible
+              active={saveOrdererToCustomer}
+              onToggle={onSaveOrdererToggle}
+            />
+          )}
         </div>
       )}
 

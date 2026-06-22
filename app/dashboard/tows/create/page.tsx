@@ -88,11 +88,14 @@ import { ContactNameAutocomplete } from '../../../components/customer-contacts/C
 import { SaveCustomerContactPill } from '../../../components/customer-contacts/SaveCustomerContactPill'
 import { CustomerContactFields } from '../../../components/customer-contacts/CustomerContactFields'
 import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
+import { useCustomerOrderers } from '../../../hooks/useCustomerOrderers'
 import {
   findMatchingCustomerContact,
   insertPendingCustomerContacts,
 } from '../../../lib/queries/customer-contacts'
+import { insertPendingCustomerOrderers } from '../../../lib/queries/customer-orderers'
 import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import { shouldOfferSaveCustomerOrderer } from '../../../lib/utils/customer-orderer-save-ui'
 
 type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
 
@@ -142,9 +145,11 @@ function CreateTowForm({
   const { user } = useAuth()
   const storedVehicleParam = searchParams.get('storedVehicle')
   const persistCustomerContactsRef = useRef<() => Promise<void>>(async () => {})
+  const persistCustomerOrderersRef = useRef<() => Promise<void>>(async () => {})
   const form = useTowForm(editTowId, {
     beforeSaveTow: async () => {
       await persistCustomerContactsRef.current()
+      await persistCustomerOrderersRef.current()
     },
     duplicateFromTowId: duplicateFromId,
   })
@@ -446,6 +451,21 @@ function CreateTowForm({
     selectedCustomerId
   )
 
+  const { savedOrderers, orderersLoading } = useCustomerOrderers(
+    companyId,
+    isBusinessCustomer ? selectedCustomerId : null
+  )
+
+  const [saveOrdererToCustomer, setSaveOrdererToCustomer] = useState(false)
+
+  const showSaveOrdererOption = shouldOfferSaveCustomerOrderer(
+    isBusinessCustomer,
+    selectedCustomerId,
+    department,
+    orderedBy,
+    savedOrderers
+  )
+
   const pickupStop = useMemo(() => findPickupRouteStop(routeStops), [routeStops])
   const dropoffStop = useMemo(() => findDropoffRouteStop(routeStops), [routeStops])
   const pickupContactName = pickupStop?.contactName ?? ''
@@ -506,7 +526,14 @@ function CreateTowForm({
     setSaveExchangePickupContactToCustomer(false)
     setSaveDefectiveDestinationContactToCustomer(false)
     setSaveCustomPointContacts({})
+    setSaveOrdererToCustomer(false)
   }, [selectedCustomerId])
+
+  useEffect(() => {
+    if (!showSaveOrdererOption) {
+      setSaveOrdererToCustomer(false)
+    }
+  }, [showSaveOrdererOption])
 
   useEffect(() => {
     if (!showSavePickupContactOption) {
@@ -648,6 +675,29 @@ function CreateTowForm({
   useEffect(() => {
     persistCustomerContactsRef.current = persistTowCustomerContacts
   }, [persistTowCustomerContacts])
+
+  const persistTowCustomerOrderers = useCallback(async () => {
+    if (!companyId || !selectedCustomerId || !isBusinessCustomer) return
+    if (!saveOrdererToCustomer || !orderedBy.trim()) return
+
+    await insertPendingCustomerOrderers(companyId, selectedCustomerId, [
+      {
+        department: department || null,
+        name: orderedBy.trim(),
+      },
+    ])
+  }, [
+    companyId,
+    selectedCustomerId,
+    isBusinessCustomer,
+    saveOrdererToCustomer,
+    department,
+    orderedBy,
+  ])
+
+  useEffect(() => {
+    persistCustomerOrderersRef.current = persistTowCustomerOrderers
+  }, [persistTowCustomerOrderers])
 
   const getDriverTrucks = (driverId: string) =>
     trucks.filter((t) => (t.assigned_drivers ?? []).some((d) => d.id === driverId))
@@ -1625,6 +1675,12 @@ function CreateTowForm({
             onDepartmentChange={setDepartment}
             orderedBy={orderedBy}
             onOrderedByChange={setOrderedBy}
+            savedOrderers={savedOrderers}
+            orderersLoading={orderersLoading}
+            showSaveOrdererPill={showSaveOrdererOption}
+            saveOrdererToCustomer={saveOrdererToCustomer}
+            onSaveOrdererToggle={() => setSaveOrdererToCustomer((v) => !v)}
+            onOrdererSelected={() => setSaveOrdererToCustomer(false)}
             editTowId={editTowId}
             orderNumber={orderNumber}
           />
