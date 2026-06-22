@@ -175,7 +175,13 @@ export default function DriversMap({
       })
 
       if (!hasFitBoundsRef.current) {
-        map.fitBounds(bounds)
+        if (drivers.length === 1) {
+          const driver = drivers[0]
+          map.setCenter({ lat: driver.last_lat, lng: driver.last_lng })
+          map.setZoom(14)
+        } else {
+          map.fitBounds(bounds)
+        }
         hasFitBoundsRef.current = true
       }
   }, [drivers, mapReady])
