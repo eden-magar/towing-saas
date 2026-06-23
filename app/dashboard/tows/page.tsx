@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Search, MapPin, User, Truck, Sparkles, X } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '../../lib/AuthContext'
-import { getTows, TowWithDetails } from '../../lib/queries/tows'
+import { getTows, getTowListStats, TowWithDetails } from '../../lib/queries/tows'
 import { getEvents, type EventListItem } from '../../lib/queries/events'
 
 type LocalYmd = { year: number; month: number; day: number }
@@ -128,6 +128,13 @@ export default function TowsPage() {
   
   const [tows, setTows] = useState<TowWithDetails[]>([])
   const [events, setEvents] = useState<EventListItem[]>([])
+  const [towListStats, setTowListStats] = useState({
+    total: 0,
+    pending: 0,
+    assigned: 0,
+    in_progress: 0,
+    completed: 0,
+  })
   const [pageLoading, setPageLoading] = useState(true)
   const [error, setError] = useState('')
   
@@ -174,12 +181,14 @@ export default function TowsPage() {
     setPageLoading(true)
     try {
       const listOptions = showAll ? { since: null, limit: null } : {}
-      const [towsData, eventsData] = await Promise.all([
+      const [towsData, eventsData, stats] = await Promise.all([
         getTows(companyId, listOptions),
         getEvents(companyId, listOptions),
+        getTowListStats(companyId),
       ])
       setTows(towsData)
       setEvents(eventsData)
+      setTowListStats(stats)
     } catch (err) {
       console.error('Error loading tows:', err)
       setError('שגיאה בטעינת הנתונים')
@@ -362,23 +371,23 @@ export default function TowsPage() {
       {/* סטטיסטיקות */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-gray-800">{tows.length}</p>
+          <p className="text-2xl font-bold text-gray-800">{towListStats.total}</p>
           <p className="text-xs text-gray-500">סה״כ</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-amber-600">{tows.filter(t => t.status === 'pending').length}</p>
+          <p className="text-2xl font-bold text-amber-600">{towListStats.pending}</p>
           <p className="text-xs text-gray-500">ממתינות</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-blue-600">{tows.filter(t => t.status === 'assigned').length}</p>
+          <p className="text-2xl font-bold text-blue-600">{towListStats.assigned}</p>
           <p className="text-xs text-gray-500">משויכות</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-          <p className="text-2xl font-bold text-purple-600">{tows.filter(t => t.status === 'in_progress').length}</p>
+          <p className="text-2xl font-bold text-purple-600">{towListStats.in_progress}</p>
           <p className="text-xs text-gray-500">בביצוע</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4 text-center col-span-2 sm:col-span-1">
-          <p className="text-2xl font-bold text-emerald-600">{tows.filter(t => t.status === 'completed').length}</p>
+          <p className="text-2xl font-bold text-emerald-600">{towListStats.completed}</p>
           <p className="text-xs text-gray-500">הושלמו</p>
         </div>
       </div>

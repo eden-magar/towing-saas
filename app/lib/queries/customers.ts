@@ -1,5 +1,8 @@
 import { supabase } from '../supabase'
 
+const COUNT_PAGE_SIZE = 1000
+const CUSTOMER_ID_CHUNK_SIZE = 300
+
 // ==================== טיפוסים ====================
 
 export interface CustomerWithDetails {
@@ -63,6 +66,97 @@ export async function getCustomersLite(companyId: string): Promise<CustomerListI
   return customerCompanies.map((cc) => cc.customer as any as CustomerListItem)
 }
 
+async function loadTowCountsByCustomer(
+  companyId: string,
+  customerIds: string[]
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {}
+  if (customerIds.length === 0) return counts
+
+  for (let i = 0; i < customerIds.length; i += CUSTOMER_ID_CHUNK_SIZE) {
+    const chunk = customerIds.slice(i, i + CUSTOMER_ID_CHUNK_SIZE)
+    const chunkIndex = Math.floor(i / CUSTOMER_ID_CHUNK_SIZE) + 1
+    let from = 0
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('tows')
+        .select('customer_id')
+        .eq('company_id', companyId)
+        .in('customer_id', chunk)
+        .range(from, from + COUNT_PAGE_SIZE - 1)
+
+      if (error) {
+        console.error(
+          `Error fetching tow counts (chunk ${chunkIndex}, range ${from}-${from + COUNT_PAGE_SIZE - 1}):`,
+          error
+        )
+        break
+      }
+
+      const rows = data ?? []
+      if (rows.length === 0) break
+
+      for (const row of rows) {
+        if (row.customer_id) {
+          counts[row.customer_id] = (counts[row.customer_id] ?? 0) + 1
+        }
+      }
+
+      if (rows.length < COUNT_PAGE_SIZE) break
+      from += COUNT_PAGE_SIZE
+    }
+  }
+
+  return counts
+}
+
+async function loadOpenBalancesByCustomer(
+  companyId: string,
+  customerIds: string[]
+): Promise<Record<string, number>> {
+  const balances: Record<string, number> = {}
+  if (customerIds.length === 0) return balances
+
+  for (let i = 0; i < customerIds.length; i += CUSTOMER_ID_CHUNK_SIZE) {
+    const chunk = customerIds.slice(i, i + CUSTOMER_ID_CHUNK_SIZE)
+    const chunkIndex = Math.floor(i / CUSTOMER_ID_CHUNK_SIZE) + 1
+    let from = 0
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('customer_id, total_amount')
+        .eq('company_id', companyId)
+        .in('customer_id', chunk)
+        .in('status', ['draft', 'sent'])
+        .range(from, from + COUNT_PAGE_SIZE - 1)
+
+      if (error) {
+        console.error(
+          `Error fetching open balances (chunk ${chunkIndex}, range ${from}-${from + COUNT_PAGE_SIZE - 1}):`,
+          error
+        )
+        break
+      }
+
+      const rows = data ?? []
+      if (rows.length === 0) break
+
+      for (const row of rows) {
+        if (row.customer_id) {
+          balances[row.customer_id] = (balances[row.customer_id] ?? 0) + row.total_amount
+        }
+      }
+
+      if (rows.length < COUNT_PAGE_SIZE) break
+      from += COUNT_PAGE_SIZE
+    }
+  }
+
+  return balances
+}
+
 export async function getCustomers(companyId: string): Promise<CustomerWithDetails[]> {
   // שליפת לקוחות עם הקשר לחברה
   const { data: customerCompanies, error } = await supabase
@@ -95,37 +189,12 @@ export async function getCustomers(companyId: string): Promise<CustomerWithDetai
 
   if (!customerCompanies) return []
 
-  // שליפת ספירת גרירות לכל לקוח
-  const customerIds = customerCompanies.map(cc => (cc.customer as any).id)
-  
-  const { data: towCounts } = await supabase
-    .from('tows')
-    .select('customer_id')
-    .eq('company_id', companyId)
-    .in('customer_id', customerIds)
+  const customerIds = customerCompanies.map((cc) => (cc.customer as any).id as string)
 
-  // מיפוי ספירות
-  const countByCustomer: Record<string, number> = {}
-  towCounts?.forEach(tow => {
-    if (tow.customer_id) {
-      countByCustomer[tow.customer_id] = (countByCustomer[tow.customer_id] || 0) + 1
-    }
-  })
-
-  // שליפת יתרות פתוחות (חשבוניות לא משולמות)
-  const { data: openInvoices } = await supabase
-    .from('invoices')
-    .select('customer_id, total_amount')
-    .eq('company_id', companyId)
-    .in('customer_id', customerIds)
-    .in('status', ['draft', 'sent'])
-
-  const balanceByCustomer: Record<string, number> = {}
-  openInvoices?.forEach(inv => {
-    if (inv.customer_id) {
-      balanceByCustomer[inv.customer_id] = (balanceByCustomer[inv.customer_id] || 0) + inv.total_amount
-    }
-  })
+  const [countByCustomer, balanceByCustomer] = await Promise.all([
+    loadTowCountsByCustomer(companyId, customerIds),
+    loadOpenBalancesByCustomer(companyId, customerIds),
+  ])
 
   return customerCompanies.map(cc => {
     const customer = cc.customer as any
@@ -141,6 +210,47 @@ export async function getCustomers(companyId: string): Promise<CustomerWithDetai
       open_balance: balanceByCustomer[customer.id] || 0
     }
   })
+}
+
+export interface CustomerListStats {
+  total: number
+  business: number
+  private: number
+}
+
+async function countActiveCustomers(
+  companyId: string,
+  customerType?: 'business' | 'private'
+): Promise<number> {
+  let query = supabase
+    .from('customers')
+    .select('id, customer_company!inner(company_id, is_active)', { count: 'exact', head: true })
+    .eq('customer_company.company_id', companyId)
+    .eq('customer_company.is_active', true)
+
+  if (customerType) {
+    query = query.eq('customer_type', customerType)
+  }
+
+  const { count, error } = await query
+
+  if (error) {
+    console.error('Error counting customers:', error)
+    throw error
+  }
+
+  return count ?? 0
+}
+
+/** Exact DB totals for customers list summary cards (not limited by list fetch). */
+export async function getCustomerListStats(companyId: string): Promise<CustomerListStats> {
+  const [total, business, privateCount] = await Promise.all([
+    countActiveCustomers(companyId),
+    countActiveCustomers(companyId, 'business'),
+    countActiveCustomers(companyId, 'private'),
+  ])
+
+  return { total, business, private: privateCount }
 }
 
 // ==================== הוספת לקוח ====================

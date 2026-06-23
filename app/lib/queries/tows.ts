@@ -285,6 +285,47 @@ export async function getTows(
   })) as unknown as TowWithDetails[]
 }
 
+export interface TowListStats {
+  total: number
+  pending: number
+  assigned: number
+  in_progress: number
+  completed: number
+}
+
+async function countTowsByStatus(companyId: string, status?: string): Promise<number> {
+  let query = supabase
+    .from('tows')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  const { count, error } = await query
+
+  if (error) {
+    console.error('Error counting tows:', error)
+    throw error
+  }
+
+  return count ?? 0
+}
+
+/** Exact DB totals for tows list summary cards (all history, not limited by list fetch). */
+export async function getTowListStats(companyId: string): Promise<TowListStats> {
+  const [total, pending, assigned, in_progress, completed] = await Promise.all([
+    countTowsByStatus(companyId),
+    countTowsByStatus(companyId, 'pending'),
+    countTowsByStatus(companyId, 'assigned'),
+    countTowsByStatus(companyId, 'in_progress'),
+    countTowsByStatus(companyId, 'completed'),
+  ])
+
+  return { total, pending, assigned, in_progress, completed }
+}
+
 export async function searchTows(companyId: string, query: string): Promise<TowWithDetails[]> {
   const q = query.trim()
   if (!q) return []

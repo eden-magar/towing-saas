@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../lib/AuthContext'
 import { 
   getCustomers, 
+  getCustomerListStats,
   createCustomer, 
   updateCustomer, 
   deleteCustomer, 
@@ -30,6 +31,7 @@ export default function CustomersPage() {
 
   // Data states
   const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
+  const [listStats, setListStats] = useState({ total: 0, business: 0, private: 0 })
   const [pageLoading, setPageLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -67,8 +69,12 @@ export default function CustomersPage() {
 
     setPageLoading(true)
     try {
-      const data = await getCustomers(companyId)
+      const [data, stats] = await Promise.all([
+        getCustomers(companyId),
+        getCustomerListStats(companyId),
+      ])
       setCustomers(data)
+      setListStats(stats)
     } catch (err) {
       console.error('Error loading customers:', err)
       setError('שגיאה בטעינת הנתונים')
@@ -78,9 +84,10 @@ export default function CustomersPage() {
   }
 
   const stats = {
-    total: customers.length,
-    business: customers.filter(c => c.customer_type === 'business').length,
-    private: customers.filter(c => c.customer_type === 'private').length,
+    total: listStats.total,
+    business: listStats.business,
+    private: listStats.private,
+    // Still derived from loaded rows (≤1000); exact totals need invoice aggregation.
     withBalance: customers.filter(c => c.open_balance > 0).length,
     totalBalance: customers.reduce((sum, c) => sum + c.open_balance, 0)
   }
