@@ -157,6 +157,40 @@ async function loadOpenBalancesByCustomer(
   return balances
 }
 
+interface CompanyRelationFields {
+  id: string
+  payment_terms: 'immediate' | 'monthly'
+  credit_limit: number | null
+  is_active: boolean
+}
+
+interface CustomerFields {
+  id: string
+  customer_type: 'private' | 'business'
+  name: string
+  id_number: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+function toCustomerWithDetails(
+  customer: CustomerFields,
+  companyRelation: CompanyRelationFields,
+  countByCustomer: Record<string, number>,
+  balanceByCustomer: Record<string, number>
+): CustomerWithDetails {
+  return {
+    ...customer,
+    company_relation: companyRelation,
+    total_tows: countByCustomer[customer.id] || 0,
+    open_balance: balanceByCustomer[customer.id] || 0,
+  }
+}
+
 export async function getCustomers(companyId: string): Promise<CustomerWithDetails[]> {
   // שליפת לקוחות עם הקשר לחברה
   const { data: customerCompanies, error } = await supabase
@@ -196,19 +230,89 @@ export async function getCustomers(companyId: string): Promise<CustomerWithDetai
     loadOpenBalancesByCustomer(companyId, customerIds),
   ])
 
-  return customerCompanies.map(cc => {
-    const customer = cc.customer as any
-    return {
-      ...customer,
-      company_relation: {
+  return customerCompanies.map((cc) => {
+    const customer = cc.customer as any as CustomerFields
+    return toCustomerWithDetails(
+      customer,
+      {
         id: cc.id,
         payment_terms: cc.payment_terms,
         credit_limit: cc.credit_limit,
-        is_active: cc.is_active
+        is_active: cc.is_active,
       },
-      total_tows: countByCustomer[customer.id] || 0,
-      open_balance: balanceByCustomer[customer.id] || 0
+      countByCustomer,
+      balanceByCustomer
+    )
+  })
+}
+
+export async function searchCustomers(
+  companyId: string,
+  term: string
+): Promise<CustomerWithDetails[]> {
+  const trimmed = term.trim()
+  if (!trimmed) return []
+
+  const pattern = `%${trimmed}%`
+  const all: (CustomerFields & { customer_company: CompanyRelationFields | CompanyRelationFields[] })[] = []
+  let from = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('customers')
+      .select(`
+        id,
+        customer_type,
+        name,
+        id_number,
+        phone,
+        email,
+        address,
+        notes,
+        created_at,
+        updated_at,
+        customer_company!inner (
+          id,
+          payment_terms,
+          credit_limit,
+          is_active,
+          company_id
+        )
+      `)
+      .eq('customer_company.company_id', companyId)
+      .eq('customer_company.is_active', true)
+      .or(`name.ilike.${pattern},id_number.ilike.${pattern},phone.ilike.${pattern},email.ilike.${pattern}`)
+      .order('name', { ascending: true })
+      .range(from, from + COUNT_PAGE_SIZE - 1)
+
+    if (error) {
+      console.error('Error searching customers:', error)
+      throw error
     }
+
+    const rows = (data ?? []) as (CustomerFields & {
+      customer_company: CompanyRelationFields | CompanyRelationFields[]
+    })[]
+    if (rows.length === 0) break
+
+    all.push(...rows)
+
+    if (rows.length < COUNT_PAGE_SIZE) break
+    from += COUNT_PAGE_SIZE
+  }
+
+  if (all.length === 0) return []
+
+  const customerIds = all.map((row) => row.id)
+  const [countByCustomer, balanceByCustomer] = await Promise.all([
+    loadTowCountsByCustomer(companyId, customerIds),
+    loadOpenBalancesByCustomer(companyId, customerIds),
+  ])
+
+  return all.map((row) => {
+    const junction = row.customer_company
+    const companyRelation = Array.isArray(junction) ? junction[0] : junction
+    return toCustomerWithDetails(row, companyRelation, countByCustomer, balanceByCustomer)
   })
 }
 

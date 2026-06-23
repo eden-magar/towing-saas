@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { 
   Search, 
   Plus, 
@@ -17,6 +17,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { 
   getCustomers, 
   getCustomerListStats,
+  searchCustomers,
   createCustomer, 
   updateCustomer, 
   deleteCustomer, 
@@ -31,6 +32,8 @@ export default function CustomersPage() {
 
   // Data states
   const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
+  const [searchResults, setSearchResults] = useState<CustomerWithDetails[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const [listStats, setListStats] = useState({ total: 0, business: 0, private: 0 })
   const [pageLoading, setPageLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -69,12 +72,19 @@ export default function CustomersPage() {
 
     setPageLoading(true)
     try {
+      const trimmedSearch = searchQuery.trim()
       const [data, stats] = await Promise.all([
         getCustomers(companyId),
         getCustomerListStats(companyId),
       ])
       setCustomers(data)
       setListStats(stats)
+      if (trimmedSearch) {
+        const results = await searchCustomers(companyId, trimmedSearch)
+        setSearchResults(results)
+      } else {
+        setSearchResults(null)
+      }
     } catch (err) {
       console.error('Error loading customers:', err)
       setError('שגיאה בטעינת הנתונים')
@@ -82,6 +92,33 @@ export default function CustomersPage() {
       setPageLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!companyId) return
+
+    const trimmed = searchQuery.trim()
+    if (!trimmed) {
+      setSearchResults(null)
+      setSearchLoading(false)
+      return
+    }
+
+    setSearchLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchCustomers(companyId, trimmed)
+        setSearchResults(results)
+      } catch (err) {
+        console.error('Error searching customers:', err)
+        setError('שגיאה בחיפוש לקוחות')
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery, companyId])
 
   const stats = {
     total: listStats.total,
@@ -92,18 +129,13 @@ export default function CustomersPage() {
     totalBalance: customers.reduce((sum, c) => sum + c.open_balance, 0)
   }
 
-  const filteredCustomers = customers.filter(c => {
-    if (typeFilter !== 'all' && c.customer_type !== typeFilter) return false
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      if (!c.name.toLowerCase().includes(query) && 
-          !(c.phone && c.phone.includes(query)) && 
-          !(c.id_number && c.id_number.includes(query))) {
-        return false
-      }
-    }
-    return true
-  })
+  const filteredCustomers = useMemo(() => {
+    const baseList = searchQuery.trim() ? (searchResults ?? []) : customers
+    return baseList.filter((c) => {
+      if (typeFilter !== 'all' && c.customer_type !== typeFilter) return false
+      return true
+    })
+  }, [customers, searchResults, searchQuery, typeFilter])
 
   const resetForm = () => {
     setFormData({
@@ -469,7 +501,7 @@ export default function CustomersPage() {
           {filteredCustomers.length === 0 && (
             <div className="text-center py-12 text-gray-500">
               <User size={48} className="mx-auto mb-4 opacity-50" />
-              <p>לא נמצאו לקוחות</p>
+              <p>{searchLoading ? 'מחפש לקוחות...' : 'לא נמצאו לקוחות'}</p>
             </div>
           )}
         </div>
