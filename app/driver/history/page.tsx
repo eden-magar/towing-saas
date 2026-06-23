@@ -89,7 +89,8 @@ export default function DriverHistoryPage() {
         status,
         created_at,
         completed_at,
-        started_at
+        started_at,
+        cancellation_reason
       `)
       .eq('driver_id', driverId)
       .in('status', ['completed', 'cancelled', 'cancelled_charged'])
@@ -169,6 +170,9 @@ export default function DriverHistoryPage() {
       }
 
       const createdDate = new Date(tow.created_at)
+      const isCancelled = tow.status === 'cancelled' || tow.status === 'cancelled_charged'
+      const cancellationReason = tow.cancellation_reason?.trim()
+      const cancelLabel = tow.status === 'cancelled_charged' ? 'בוטל בחיוב' : 'בוטלה'
 
       return {
         id: tow.id,
@@ -182,7 +186,9 @@ export default function DriverHistoryPage() {
         to: addresses.to || 'לא צוין',
         status: tow.status as HistoryItem['status'],
         duration,
-        cancelReason: tow.status === 'cancelled_charged' ? 'בוטל בחיוב' : 'בוטלה'
+        cancelReason: isCancelled
+          ? (cancellationReason ? `${cancelLabel} — ${cancellationReason}` : cancelLabel)
+          : undefined
       }
     })
   }

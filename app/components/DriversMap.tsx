@@ -95,7 +95,7 @@ export default function DriversMap({
           zoom: 12,
           mapTypeControl: true,
           mapTypeControlOptions: {
-            mapTypeIds: ['roadmap', 'satellite'],
+            mapTypeIds: ['roadmap', 'satellite', 'hybrid'],
           },
           streetViewControl: false,
           gestureHandling: 'greedy',

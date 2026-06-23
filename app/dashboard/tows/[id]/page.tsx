@@ -1339,6 +1339,11 @@ export default function TowDetailsPage() {
                   {(tow as { cancellation_reason?: string | null }).cancellation_reason}
                 </p>
               )}
+              {(tow as { cancellation_details?: string | null }).cancellation_details && (
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {(tow as { cancellation_details?: string | null }).cancellation_details}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1353,6 +1358,11 @@ export default function TowDetailsPage() {
               {(tow as { cancellation_reason?: string | null }).cancellation_reason && (
                 <p className="text-amber-800 text-sm mt-0.5">
                   {(tow as { cancellation_reason?: string | null }).cancellation_reason}
+                </p>
+              )}
+              {(tow as { cancellation_details?: string | null }).cancellation_details && (
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {(tow as { cancellation_details?: string | null }).cancellation_details}
                 </p>
               )}
               {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (

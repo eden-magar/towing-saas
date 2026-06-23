@@ -59,7 +59,7 @@ export default function PinDropModal({
       fullscreenControl: false,
       mapTypeControl: true,
       mapTypeControlOptions: {
-        mapTypeIds: ['roadmap', 'satellite'],
+        mapTypeIds: ['roadmap', 'satellite', 'hybrid'],
       },
       zoomControl: true,
       styles: [
