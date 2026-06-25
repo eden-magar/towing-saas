@@ -149,6 +149,7 @@ type TowVehicleEditRow = {
   drive_type?: string | null
   fuel_type?: string | null
   total_weight?: number | null
+  curb_weight_kg?: number | null
   gear_type?: string | null
   drive_technology?: string | null
   self_weight_ton?: number | null
@@ -316,6 +317,7 @@ function buildVehicleLookupResultFromTowVehicle(
     v.drive_technology ||
     v.self_weight_ton != null ||
     v.total_weight_ton != null ||
+    v.curb_weight_kg != null ||
     v.machinery_type ||
     v.chassis ||
     v.import_type
@@ -342,6 +344,7 @@ function buildVehicleLookupResultFromTowVehicle(
       gearType: v.gear_type || null,
       chassis: v.chassis || null,
       importType: v.import_type || null,
+      curbWeightKg: v.curb_weight_kg ?? null,
       machineryType: v.machinery_type || null,
       selfWeight: v.self_weight_ton ?? null,
       totalWeightTon: v.total_weight_ton ?? null,
@@ -382,6 +385,7 @@ function vehicleDataFromTowVehicleRow(row: TowVehicleEditRow) {
     gearType: row.gear_type || undefined,
     driveType: row.drive_type || undefined,
     totalWeight: row.total_weight != null ? String(row.total_weight) : undefined,
+    curbWeightKg: row.curb_weight_kg != null ? String(row.curb_weight_kg) : undefined,
     fuelType: row.fuel_type || undefined,
     chassis: row.chassis || undefined,
     importType: row.import_type || undefined,
@@ -2061,6 +2065,10 @@ export function useTowForm(
         gearType: vehicle.vehicle_data.gearType || null,
         chassis: (vehicle.vehicle_data as { chassis?: string }).chassis || null,
         importType: null,
+        curbWeightKg:
+          (vehicle.vehicle_data as { curbWeightKg?: string | number }).curbWeightKg != null
+            ? Number((vehicle.vehicle_data as { curbWeightKg?: string | number }).curbWeightKg)
+            : null,
         machineryType: null,
         selfWeight: null,
         totalWeightTon: null,

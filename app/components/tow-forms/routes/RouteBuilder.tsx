@@ -491,6 +491,10 @@ export function RouteBuilder({
                   totalWeight: result.data.totalWeight
                     ? String(result.data.totalWeight)
                     : undefined,
+                  curbWeightKg:
+                    result.data.curbWeightKg != null
+                      ? String(result.data.curbWeightKg)
+                      : undefined,
                   fuelType: result.data.fuelType || undefined,
                   machineryType: result.data.machineryType || undefined,
                   selfWeight:

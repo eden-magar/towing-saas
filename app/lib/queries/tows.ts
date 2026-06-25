@@ -697,6 +697,7 @@ interface CreateTowInput {
     driveType?: string
     fuelType?: string
     totalWeight?: number
+    curbWeightKg?: number
     gearType?: string
     driveTechnology?: string
     registrySource?: string | null
@@ -787,6 +788,7 @@ export async function createTow(input: CreateTowInput) {
     drive_type: v.driveType || null,
     fuel_type: v.fuelType || null,
     total_weight: v.totalWeight || null,
+    curb_weight_kg: v.curbWeightKg ?? null,
     gear_type: v.gearType || null,
     drive_technology: v.driveTechnology || null,
     vehicle_code: v.vehicleCode || null,
@@ -1478,6 +1480,7 @@ interface UpdateTowInput {
     driveType?: string
     fuelType?: string
     totalWeight?: number
+    curbWeightKg?: number
     gearType?: string
     driveTechnology?: string
     registrySource?: string | null
@@ -1528,6 +1531,7 @@ function buildVehicleOfficeRow(v: UpdateTowVehicleInput, orderIndex: number) {
     drive_type: v.driveType || null,
     fuel_type: v.fuelType || null,
     total_weight: v.totalWeight || null,
+    curb_weight_kg: v.curbWeightKg ?? null,
     gear_type: v.gearType || null,
     drive_technology: v.driveTechnology || null,
     self_weight_ton: v.selfWeightTon ?? null,
@@ -1787,6 +1791,18 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.driverId !== undefined) towUpdates.driver_id = input.driverId
   if (input.truckId !== undefined) towUpdates.truck_id = input.truckId
   if (input.status !== undefined) towUpdates.status = input.status
+
+  // Assigning a driver to a still-pending tow must promote it to 'assigned',
+  // otherwise it stays "ממתין לשיבוץ" and never reaches the driver app
+  // (which only loads assigned/in_progress). Only pending → assigned; any other
+  // status (in_progress/completed/cancelled/...) and unassignment are untouched.
+  if (
+    input.driverId &&
+    input.status === undefined &&
+    existingTow?.status === 'pending'
+  ) {
+    towUpdates.status = 'assigned'
+  }
 
   if (Object.keys(towUpdates).length > 0) {
     const { error: towError } = await supabase

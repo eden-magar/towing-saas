@@ -1273,6 +1273,7 @@ function CreateExchangeTowForm({
                                   { label: 'הנעה', value: workingVehicleData.data.driveType },
                                   { label: 'גיר', value: workingVehicleData.data.gearType },
                                   { label: 'משקל', value: workingVehicleData.data.totalWeight != null ? `${workingVehicleData.data.totalWeight} ק״ג` : null },
+                                  { label: 'משקל עצמי', value: workingVehicleData.source === 'heavy' && workingVehicleData.data.curbWeightKg != null && workingVehicleData.data.curbWeightKg > 0 ? `${workingVehicleData.data.curbWeightKg} ק״ג` : null },
                                 ].filter((f): f is { label: string; value: string } => Boolean(f.value)).map((f) => (
                                   <span key={f.label}
                                     className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">
@@ -1478,6 +1479,7 @@ function CreateExchangeTowForm({
                                       { label: 'הנעה', value: defectiveVehicleData.data.driveType },
                                       { label: 'גיר', value: defectiveVehicleData.data.gearType },
                                       { label: 'משקל', value: defectiveVehicleData.data.totalWeight != null ? `${defectiveVehicleData.data.totalWeight} ק״ג` : null },
+                                      { label: 'משקל עצמי', value: defectiveVehicleData.source === 'heavy' && defectiveVehicleData.data.curbWeightKg != null && defectiveVehicleData.data.curbWeightKg > 0 ? `${defectiveVehicleData.data.curbWeightKg} ק״ג` : null },
                                     ].filter((f): f is { label: string; value: string } => Boolean(f.value)).map((f) => (
                                       <span key={f.label}
                                         className="px-2 py-0.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700">

@@ -147,6 +147,10 @@ export function VehicleLookup({
             {vehicleData.data.driveType && <span>הנעה: {vehicleData.data.driveType}</span>}
             {vehicleData.data.driveTechnology && <span>טכנולוגיה: {vehicleData.data.driveTechnology}</span>}
             {vehicleData.data.totalWeight && <span>משקל: {vehicleData.data.totalWeight.toLocaleString()} ק״ג</span>}
+            {/* משקל עצמי — רכב כבד (mishkal_azmi בק"ג; 0 לא מוצג) */}
+            {vehicleData.source === 'heavy' && vehicleData.data.curbWeightKg != null && vehicleData.data.curbWeightKg > 0 && (
+              <span>משקל עצמי: {vehicleData.data.curbWeightKg.toLocaleString()} ק״ג</span>
+            )}
             {/* שדות לדו גלגלי */}
             {vehicleData.source === 'motorcycle' && vehicleData.data.vehicleType && (
               <span>סוג: {vehicleData.data.vehicleType}</span>

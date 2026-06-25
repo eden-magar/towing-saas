@@ -98,6 +98,16 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
 }
 
 /**
+ * משקל עצמי (mishkal_azmi) ברכב כבד מגיע בק"ג. ערך 0 / ריק => לא זמין (null).
+ */
+function parseCurbWeightKg(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = parseFloat(String(value))
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n
+}
+
+/**
  * חיפוש רכב ב-Supabase (מהיר)
  */
 async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupResult | null> {
@@ -115,6 +125,7 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
     const isPrivate = data.source_type === 'private'
     const isMachinery = data.source_type === 'machinery'
     const isMotorcycle = data.source_type === 'motorcycle'
+    const isHeavy = data.source_type === 'heavy'
 
     // משתנים למידע נוסף
     let driveType = data.drive_type
@@ -159,6 +170,12 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
       motorcycleType = data.raw_data.sug_rechev_nm || data.vehicle_type
     }
 
+    // לרכב כבד - משקל עצמי מ-raw_data (mishkal_azmi, ק"ג; 0 => null)
+    let curbWeightKg: number | null = null
+    if (isHeavy && data.raw_data) {
+      curbWeightKg = parseCurbWeightKg(data.raw_data.mishkal_azmi)
+    }
+
     return {
       found: true,
       source: data.source_type as VehicleType,
@@ -177,6 +194,7 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
         gearType: gearType,
         chassis: readChassisFromCacheRow(data),
         importType: readImportTypeFromCacheRow(data),
+        curbWeightKg: curbWeightKg,
         // שדות צמ"ה
         machineryType: machineryType,
         selfWeight: selfWeight,
@@ -352,6 +370,7 @@ function mapCancelledInactiveVehicleData(
     gearType: null,
     chassis: rawData.misgeret ? String(rawData.misgeret).trim() || null : null,
     importType: null,
+    curbWeightKg: parseCurbWeightKg(rawData.mishkal_azmi),
     machineryType: null,
     selfWeight: null,
     totalWeightTon: null,
@@ -389,6 +408,7 @@ function mapVehicleData(rawData: any, source: string, licenseNumber: string): Ve
       fields.importType && rawData[fields.importType]
         ? String(rawData[fields.importType]).trim() || null
         : null,
+    curbWeightKg: source === 'heavy' ? parseCurbWeightKg(rawData.mishkal_azmi) : null,
     // שדות צמ"ה
     machineryType: isMachinery ? (rawData.sug_tzama_nm || null) : null,
     selfWeight: isMachinery ? (rawData.mishkal_ton ? parseFloat(rawData.mishkal_ton) : null) : null,

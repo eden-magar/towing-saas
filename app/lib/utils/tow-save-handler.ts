@@ -458,6 +458,8 @@ export interface PreparedTowData {
     driveType?: string
     fuelType?: string
     totalWeight?: number
+    /** רכב כבד — mishkal_azmi (kg); 0/חסר נשמר כ-undefined */
+    curbWeightKg?: number
     gearType?: string
     driveTechnology?: string
     vehicleCode?: string
@@ -641,6 +643,19 @@ function machineryFromRouteVehicleData(
 }
 
 /**
+ * Persist curb weight (משקל עצמי) only for HEAVY vehicles, in kg.
+ * 0 / missing / non-positive is treated as "not available" and not stored.
+ */
+function curbWeightPersist(
+  registrySource: string | null | undefined,
+  curbWeightKg: number | null | undefined
+): { curbWeightKg?: number } {
+  if (registrySource !== 'heavy') return {}
+  if (curbWeightKg == null || !Number.isFinite(curbWeightKg) || curbWeightKg <= 0) return {}
+  return { curbWeightKg }
+}
+
+/**
  * המרת נקודות מסלול (RoutePoints) לרגליים (Legs)
  * כל שתי נקודות עוקבות הופכות לרגל אחת
  */
@@ -715,6 +730,10 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
     chassis: v.vehicleData?.chassis || undefined,
     importType: v.vehicleData?.importType || undefined,
     ...machineryFromRouteVehicleData(resolveRouteVehicleRegistrySource(v), v.vehicleData),
+    ...curbWeightPersist(
+      resolveRouteVehicleRegistrySource(v),
+      v.vehicleData?.curbWeightKg != null ? Number(v.vehicleData.curbWeightKg) : null
+    ),
   }))
 }
 
@@ -1362,6 +1381,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         input.vehicleData?.source,
         input.vehicleData?.data
       ),
+      ...curbWeightPersist(input.vehicleData?.source, input.vehicleData?.data?.curbWeightKg),
     }],
       mapExistingVehiclesForMatch(input.existingTowVehicles)
     )
@@ -1526,6 +1546,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
         input.workingVehicleData?.source,
         input.workingVehicleData?.data
       ),
+      ...curbWeightPersist(
+        input.workingVehicleData?.source,
+        input.workingVehicleData?.data?.curbWeightKg
+      ),
     })
   }
 
@@ -1556,6 +1580,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       ...machineryFromLookupResult(
         input.defectiveVehicleData?.source,
         input.defectiveVehicleData?.data
+      ),
+      ...curbWeightPersist(
+        input.defectiveVehicleData?.source,
+        input.defectiveVehicleData?.data?.curbWeightKg
       ),
     })
   }

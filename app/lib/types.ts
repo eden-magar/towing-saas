@@ -370,6 +370,7 @@ export interface VehicleLookupResult {
     gearType: string | null        // automatic_ind - סוג גיר
     chassis: string | null         // misgeret / shilda / mispar_shilda
     importType: string | null      // sug_yevu — personal import only
+    curbWeightKg: number | null    // mishkal_azmi - משקל עצמי בק"ג (רכב כבד בלבד; 0 => null)
     // שדות צמ"ה
     machineryType: string | null   // sug_tzama_nm - סוג צמ"ה
     selfWeight: number | null      // mishkal_ton - משקל עצמי

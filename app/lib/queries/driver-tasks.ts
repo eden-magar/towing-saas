@@ -24,6 +24,7 @@ export interface DriverTaskVehicle {
   drive_type: string | null
   gear_type: string | null
   total_weight: number | null
+  curb_weight_kg?: number | null
   self_weight_ton?: number | null
   total_weight_ton?: number | null
   machinery_type?: string | null

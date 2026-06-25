@@ -102,6 +102,10 @@ export function VehicleCard({
               gearType: result.data.gearType || undefined,
               driveType: result.data.driveType || undefined,
               totalWeight: result.data.totalWeight ? String(result.data.totalWeight) : undefined,
+              curbWeightKg:
+                result.data.curbWeightKg != null
+                  ? String(result.data.curbWeightKg)
+                  : undefined,
               fuelType: result.data.fuelType || undefined,
               machineryType: result.data.machineryType || undefined,
               selfWeight:

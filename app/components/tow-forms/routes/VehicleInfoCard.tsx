@@ -10,6 +10,8 @@ export interface VehicleData {
   gearType?: string
   driveType?: string
   totalWeight?: string
+  /** רכב כבד — mishkal_azmi (kg) */
+  curbWeightKg?: string
   fuelType?: string
   /** צמ"ה — sug_tzama_nm */
   machineryType?: string
@@ -39,7 +41,8 @@ export function VehicleInfoCard({ data, isWorking = true, className = '' }: Vehi
     data.color && `צבע: ${data.color}`,
     data.gearType && `גיר: ${data.gearType}`,
     data.driveType && `הנעה: ${data.driveType}`,
-    data.totalWeight && `משקל: ${data.totalWeight} ק"ג`
+    data.totalWeight && `משקל: ${data.totalWeight} ק"ג`,
+    Number(data.curbWeightKg) > 0 && `משקל עצמי: ${data.curbWeightKg} ק"ג`
   ].filter(Boolean).join(' • ')
   
   if (!title && !details) return null

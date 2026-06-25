@@ -13,6 +13,7 @@ export type TowVehicleDbRow = {
   is_working?: boolean | null
   tow_reason?: string | null
   total_weight?: number | null
+  curb_weight_kg?: number | null
   self_weight_ton?: number | null
   total_weight_ton?: number | null
   machinery_type?: string | null
@@ -32,6 +33,7 @@ export type TowVehicleCoreInfo = {
   selfWeightTon: number | null
   totalWeightTon: number | null
   totalWeightKg: number | null
+  curbWeightKg: number | null
   vehicleCode: string | null
   isWorking: boolean | null
   defects: string[]
@@ -84,10 +86,15 @@ function buildWeightLines(row: TowVehicleDbRow): TowVehicleCoreInfo['weightLines
     }
     return lines
   }
+  const lines: TowVehicleCoreInfo['weightLines'] = []
   if (row.total_weight != null) {
-    return [{ label: 'משקל', value: `${row.total_weight} ק"ג` }]
+    lines.push({ label: 'משקל', value: `${row.total_weight} ק"ג` })
   }
-  return []
+  // משקל עצמי (רכב כבד) — 0 / חסר נחשב כלא זמין ולא מוצג
+  if (row.curb_weight_kg != null && row.curb_weight_kg > 0) {
+    lines.push({ label: 'משקל עצמי', value: `${row.curb_weight_kg} ק"ג` })
+  }
+  return lines
 }
 
 function parseDefects(towReason: string | null | undefined): string[] {
@@ -115,6 +122,7 @@ export type VehicleLookupFormInput = {
     driveType?: string | null
     gearType?: string | null
     totalWeight?: number | string | null
+    curbWeightKg?: number | string | null
     machineryType?: string | null
     selfWeight?: number | string | null
     totalWeightTon?: number | string | null
@@ -133,6 +141,7 @@ export function vehicleLookupFormToDbRow(input: VehicleLookupFormInput): TowVehi
   const vehicleType = input.vehicleType ?? registrySource ?? null
   const parsedManualWeight = parseOptionalNumber(input.manualWeight)
   const parsedDataWeight = parseOptionalNumber(d?.totalWeight ?? null)
+  const parsedCurbWeight = parseOptionalNumber(d?.curbWeightKg ?? null)
 
   return {
     manufacturer: d?.manufacturer ?? null,
@@ -142,6 +151,7 @@ export function vehicleLookupFormToDbRow(input: VehicleLookupFormInput): TowVehi
     vehicle_type: vehicleType,
     registry_source: registrySource,
     total_weight: parsedDataWeight ?? parsedManualWeight,
+    curb_weight_kg: parsedCurbWeight != null && parsedCurbWeight > 0 ? parsedCurbWeight : null,
     self_weight_ton: parseOptionalNumber(d?.selfWeight ?? null),
     total_weight_ton: parseOptionalNumber(d?.totalWeightTon ?? null),
     machinery_type: d?.machineryType ?? null,
@@ -170,6 +180,7 @@ export function toTowVehicleCoreInfo(row: TowVehicleDbRow): TowVehicleCoreInfo {
     selfWeightTon: machinery ? (row.self_weight_ton ?? null) : null,
     totalWeightTon: machinery ? (row.total_weight_ton ?? null) : null,
     totalWeightKg: machinery ? null : (row.total_weight ?? null),
+    curbWeightKg: machinery ? null : (row.curb_weight_kg != null && row.curb_weight_kg > 0 ? row.curb_weight_kg : null),
     vehicleCode: row.vehicle_code ?? null,
     isWorking: row.is_working ?? null,
     defects: parseDefects(row.tow_reason),
