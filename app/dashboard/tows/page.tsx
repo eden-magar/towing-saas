@@ -103,7 +103,12 @@ const TOWS_FILTER_STORAGE = {
   search: 'towsFilter_search',
   status: 'towsFilter_status',
   showAll: 'towsFilter_showAll',
+  kind: 'towsFilter_kind',
 } as const
+
+type ListKind = 'all' | 'tows' | 'events'
+
+const LIST_KIND_IDS = new Set<ListKind>(['all', 'tows', 'events'])
 
 const TOWS_FILTER_STATUS_IDS = new Set([
   'all',
@@ -120,6 +125,7 @@ function clearTowsFilterSession() {
   sessionStorage.removeItem(TOWS_FILTER_STORAGE.search)
   sessionStorage.removeItem(TOWS_FILTER_STORAGE.status)
   sessionStorage.removeItem(TOWS_FILTER_STORAGE.showAll)
+  sessionStorage.removeItem(TOWS_FILTER_STORAGE.kind)
 }
 
 export default function TowsPage() {
@@ -151,21 +157,28 @@ export default function TowsPage() {
     if (typeof window === 'undefined') return false
     return sessionStorage.getItem(TOWS_FILTER_STORAGE.showAll) === 'true'
   })
+  const [listKind, setListKind] = useState<ListKind>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const saved = sessionStorage.getItem(TOWS_FILTER_STORAGE.kind)
+    return saved && LIST_KIND_IDS.has(saved as ListKind) ? (saved as ListKind) : 'all'
+  })
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     sessionStorage.setItem(TOWS_FILTER_STORAGE.search, searchTerm)
     sessionStorage.setItem(TOWS_FILTER_STORAGE.status, activeStatus)
     sessionStorage.setItem(TOWS_FILTER_STORAGE.showAll, showAll ? 'true' : 'false')
-  }, [searchTerm, activeStatus, showAll])
+    sessionStorage.setItem(TOWS_FILTER_STORAGE.kind, listKind)
+  }, [searchTerm, activeStatus, showAll, listKind])
 
   const hasActiveFilters =
-    searchTerm !== '' || activeStatus !== 'all' || showAll
+    searchTerm !== '' || activeStatus !== 'all' || showAll || listKind !== 'all'
 
   const handleClearFilters = () => {
     setSearchTerm('')
     setActiveStatus('all')
     setShowAll(false)
+    setListKind('all')
     clearTowsFilterSession()
   }
 
@@ -280,18 +293,25 @@ export default function TowsPage() {
     | { kind: 'tow'; tow: TowWithDetails; sortKey: string }
     | { kind: 'event'; event: EventListItem; sortKey: string }
 
-  const mergedRows: TowsListRow[] = [
-    ...filteredTows.map((tow) => ({
-      kind: 'tow' as const,
-      tow,
-      sortKey: tow.created_at,
-    })),
-    ...filteredEvents.map((event) => ({
-      kind: 'event' as const,
-      event,
-      sortKey: event.created_at,
-    })),
-  ].sort(
+  const towRows: TowsListRow[] =
+    listKind === 'events'
+      ? []
+      : filteredTows.map((tow) => ({
+          kind: 'tow' as const,
+          tow,
+          sortKey: tow.created_at,
+        }))
+
+  const eventRows: TowsListRow[] =
+    listKind === 'tows'
+      ? []
+      : filteredEvents.map((event) => ({
+          kind: 'event' as const,
+          event,
+          sortKey: event.created_at,
+        }))
+
+  const mergedRows: TowsListRow[] = [...towRows, ...eventRows].sort(
     (a, b) => new Date(b.sortKey).getTime() - new Date(a.sortKey).getTime()
   )
 
@@ -407,22 +427,46 @@ export default function TowsPage() {
           </div>
         </div>
 
+        <div className="flex gap-2 mt-3" role="group" aria-label="סוג רשומות">
+          {([
+            { id: 'all', label: 'הכל' },
+            { id: 'tows', label: 'גרירות' },
+            { id: 'events', label: 'אירועים' },
+          ] as { id: ListKind; label: string }[]).map((kind) => (
+            <button
+              key={kind.id}
+              type="button"
+              aria-pressed={listKind === kind.id}
+              onClick={() => setListKind(kind.id)}
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                listKind === kind.id
+                  ? 'bg-[#33d4ff] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {kind.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-wrap items-center gap-2 mt-3">
-          <div className="flex gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
-            {statuses.map((status) => (
-              <button
-                key={status.id}
-                onClick={() => setActiveStatus(status.id)}
-                className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                  activeStatus === status.id
-                    ? 'bg-[#33d4ff] text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {status.label}
-              </button>
-            ))}
-          </div>
+          {listKind !== 'events' && (
+            <div className="flex gap-2 overflow-x-auto pb-1 flex-1 min-w-0">
+              {statuses.map((status) => (
+                <button
+                  key={status.id}
+                  onClick={() => setActiveStatus(status.id)}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeStatus === status.id
+                      ? 'bg-[#33d4ff] text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {status.label}
+                </button>
+              ))}
+            </div>
+          )}
           {hasActiveFilters && (
             <button
               type="button"
