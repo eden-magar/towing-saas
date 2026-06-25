@@ -169,6 +169,137 @@ export interface GetTowsOptions {
   since?: string | null
   /** Max rows. If null, no limit. Default: 100. */
   limit?: number | null
+  /** Row offset for pagination (load-more). Default: 0. Requires a non-null limit. */
+  offset?: number
+}
+
+/** Max tow_id values per `.in(...)` to stay under URL/query limits on large pages. */
+const TOW_ID_CHUNK_SIZE = 300
+
+/**
+ * Slim column set used by the tow LIST views (getTows / searchTowsByField).
+ * The list renders plate/manufacturer/model + from→to route; it does not need
+ * the full row. Use getTow / getTowWithPoints for the detail page (select '*').
+ */
+const TOW_LIST_SELECT = `
+  id,
+  company_id,
+  customer_id,
+  driver_id,
+  second_driver_id,
+  truck_id,
+  status,
+  created_at,
+  scheduled_at,
+  order_number,
+  customer_order_number,
+  final_price,
+  customer:customers (
+    id,
+    name,
+    phone
+  ),
+  driver:drivers!tows_driver_id_fkey (
+    id,
+    user:users!drivers_user_id_fkey (
+      full_name,
+      phone
+    )
+  ),
+  second_driver:drivers!tows_second_driver_id_fkey (
+    id,
+    user:users!drivers_user_id_fkey (
+      full_name,
+      phone
+    )
+  ),
+  truck:tow_trucks (
+    id,
+    plate_number
+  )
+`
+
+/**
+ * Fetch tow child rows (vehicles/legs) for the list view, chunked by tow_id.
+ * Slim column sets only — the tow LIST renders plate/manufacturer/model and
+ * the from→to route; it does not need the full row. Use getTow / getTowWithPoints
+ * for the detail page, which still select '*'.
+ */
+async function fetchTowChildrenChunked(
+  table: 'tow_vehicles' | 'tow_legs',
+  columns: string,
+  orderColumn: string,
+  towIds: string[]
+): Promise<Record<string, unknown>[]> {
+  const results: Record<string, unknown>[] = []
+  for (let i = 0; i < towIds.length; i += TOW_ID_CHUNK_SIZE) {
+    const chunk = towIds.slice(i, i + TOW_ID_CHUNK_SIZE)
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .in('tow_id', chunk)
+      .order(orderColumn, { ascending: true })
+    if (error) {
+      console.error(`Error fetching ${table}:`, error)
+      continue
+    }
+    if (data) results.push(...(data as unknown as Record<string, unknown>[]))
+  }
+  return results
+}
+
+/**
+ * Given raw tow rows already selected with TOW_LIST_SELECT, fetch their
+ * vehicles + legs (chunked, in parallel) and attach them in the slim list shape.
+ * Shared by getTows and searchTowsByField so hydration logic lives in one place.
+ */
+async function hydrateTowListRows(
+  tows: Record<string, unknown>[]
+): Promise<TowWithDetails[]> {
+  if (!tows || tows.length === 0) return []
+
+  const towIds = tows.map(t => t.id as string)
+
+  const [vehicles, legs] = await Promise.all([
+    fetchTowChildrenChunked(
+      'tow_vehicles',
+      'tow_id, plate_number, manufacturer, model, order_index',
+      'order_index',
+      towIds
+    ),
+    fetchTowChildrenChunked(
+      'tow_legs',
+      'tow_id, leg_type, from_address, to_address, leg_order',
+      'leg_order',
+      towIds
+    ),
+  ])
+
+  const vehiclesByTow: Record<string, TowVehicle[]> = {}
+  vehicles.forEach(v => {
+    const towId = v.tow_id as string
+    if (!vehiclesByTow[towId]) vehiclesByTow[towId] = []
+    vehiclesByTow[towId].push(v as unknown as TowVehicle)
+  })
+
+  const legsByTow: Record<string, TowLeg[]> = {}
+  legs.forEach(l => {
+    const towId = l.tow_id as string
+    if (!legsByTow[towId]) legsByTow[towId] = []
+    legsByTow[towId].push(l as unknown as TowLeg)
+  })
+
+  // Cast: TOW_LIST_SELECT drops heavy columns (price_breakdown, notes, etc.).
+  // The tow list page (the only caller) doesn't access those. Future callers
+  // needing them should use getTow / getTowWithPoints instead.
+  return tows.map(tow => ({
+    ...tow,
+    customer: (tow as { customer: unknown }).customer as any,
+    driver: (tow as { driver: unknown }).driver as any,
+    truck: (tow as { truck: unknown }).truck as any,
+    vehicles: vehiclesByTow[tow.id as string] || [],
+    legs: legsByTow[tow.id as string] || [],
+  })) as unknown as TowWithDetails[]
 }
 
 export async function getTows(
@@ -183,46 +314,11 @@ export async function getTows(
       : (options.since ?? defaultSince.toISOString())
   const limitValue =
     options.limit === null ? null : (options.limit ?? 100)
+  const offsetValue = options.offset ?? 0
 
   let query = supabase
     .from('tows')
-    .select(`
-      id,
-      company_id,
-      customer_id,
-      driver_id,
-      second_driver_id,
-      truck_id,
-      status,
-      created_at,
-      scheduled_at,
-      order_number,
-      customer_order_number,
-      final_price,
-      customer:customers (
-        id,
-        name,
-        phone
-      ),
-      driver:drivers!tows_driver_id_fkey (
-        id,
-        user:users!drivers_user_id_fkey (
-          full_name,
-          phone
-        )
-      ),
-      second_driver:drivers!tows_second_driver_id_fkey (
-        id,
-        user:users!drivers_user_id_fkey (
-          full_name,
-          phone
-        )
-      ),
-      truck:tow_trucks (
-        id,
-        plate_number
-      )
-    `)
+    .select(TOW_LIST_SELECT)
     .eq('company_id', companyId)
     .order('created_at', { ascending: false })
 
@@ -230,7 +326,8 @@ export async function getTows(
     query = query.gte('created_at', sinceIso)
   }
   if (limitValue !== null) {
-    query = query.limit(limitValue)
+    // .range is inclusive; offset 0 + limit 100 → range(0, 99) ≡ .limit(100).
+    query = query.range(offsetValue, offsetValue + limitValue - 1)
   }
 
   const { data: tows, error } = await query
@@ -240,49 +337,241 @@ export async function getTows(
     throw error
   }
 
-  if (!tows || tows.length === 0) return []
+  return hydrateTowListRows((tows ?? []) as unknown as Record<string, unknown>[])
+}
 
-  // שליפת כלי רכב עבור כל הגרירות
-  const towIds = tows.map(t => t.id)
-  
-  const { data: vehicles } = await supabase
-    .from('tow_vehicles')
-    .select('*')
-    .in('tow_id', towIds)
-    .order('order_index', { ascending: true })
+// ==================== חיפוש לפי שדה בודד (רשימת גרירות) ====================
 
-  // שליפת רגליים עבור כל הגרירות
-  const { data: legs } = await supabase
-    .from('tow_legs')
-    .select('*')
-    .in('tow_id', towIds)
-    .order('leg_order', { ascending: true })
+export type TowSearchField = 'order' | 'customer' | 'vehicle' | 'date' | 'driver' | 'address'
 
-  // מיפוי לפי tow_id
-  const vehiclesByTow: Record<string, TowVehicle[]> = {}
-  vehicles?.forEach(v => {
-    if (!vehiclesByTow[v.tow_id]) vehiclesByTow[v.tow_id] = []
-    vehiclesByTow[v.tow_id].push(v)
+export interface SearchTowsByFieldResult {
+  rows: TowWithDetails[]
+  total: number
+  /** True when id resolution hit SEARCH_BY_FIELD_ID_CAP — UI should hint to narrow. */
+  capped: boolean
+}
+
+/** Max tow IDs we resolve before hydrating — guards against pathological terms. */
+const SEARCH_BY_FIELD_ID_CAP = 1000
+
+/** Address search needs at least this many chars before we hit the legs table. */
+const ADDRESS_SEARCH_MIN_LENGTH = 2
+
+/**
+ * Build [startOfDay, startOfNextDay) ISO-UTC bounds for a calendar day in
+ * Asia/Jerusalem from a yyyy-mm-dd string. We compute Israel's UTC offset for
+ * that date via Intl (handles IDT/IST DST) and subtract it from the local
+ * midnight to get the correct UTC instant. Avoids date-string substring compares.
+ */
+function israelDayRangeToUtc(ymd: string): { startISO: string; endISO: string } | null {
+  const parts = ymd.split('-').map(Number)
+  if (parts.length !== 3 || parts.some(n => !Number.isFinite(n))) return null
+  const [year, month, day] = parts
+
+  // Offset (minutes) of Asia/Jerusalem from UTC at local noon on that date.
+  const noonUtc = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jerusalem',
+    hour: 'numeric',
+    hour12: false,
   })
+  const israelHour = Number(fmt.format(noonUtc))
+  // If Israel shows e.g. 15:00 when UTC is 12:00, offset is +3h.
+  const offsetMinutes = (israelHour - 12) * 60
 
-  const legsByTow: Record<string, TowLeg[]> = {}
-  legs?.forEach(l => {
-    if (!legsByTow[l.tow_id]) legsByTow[l.tow_id] = []
-    legsByTow[l.tow_id].push(l)
-  })
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0) - offsetMinutes * 60_000
+  const start = new Date(startUtcMs)
+  const end = new Date(startUtcMs + 24 * 60 * 60 * 1000)
+  return { startISO: start.toISOString(), endISO: end.toISOString() }
+}
 
-  // Cast: Task 1.9 dropped heavy columns from the SELECT (price_breakdown,
-  // notes, visibility_overrides, etc.). The tow list page (the only caller)
-  // doesn't access those fields. If a future caller needs them, use getTow
-  // or getTowWithPoints instead, or add the columns back to the SELECT here.
-  return tows.map(tow => ({
-    ...tow,
-    customer: tow.customer as any,
-    driver: tow.driver as any,
-    truck: tow.truck as any,
-    vehicles: vehiclesByTow[tow.id] || [],
-    legs: legsByTow[tow.id] || []
-  })) as unknown as TowWithDetails[]
+/**
+ * Resolve the full set of matching tow IDs for a single search field, newest
+ * first. Returns IDs only (cheap) so we can page hydration + report a total.
+ */
+async function resolveTowIdsByField(
+  companyId: string,
+  field: TowSearchField,
+  value: string
+): Promise<string[]> {
+  const v = value.trim()
+  if (!v) return []
+  const pattern = `%${v}%`
+
+  // order + date filter the tows table directly (already newest-first ordered).
+  if (field === 'order') {
+    const { data, error } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .or(`order_number.ilike.${pattern},customer_order_number.ilike.${pattern}`)
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (error) throw error
+    return (data ?? []).map((r: { id: string }) => r.id)
+  }
+
+  if (field === 'date') {
+    const range = israelDayRangeToUtc(v)
+    if (!range) return []
+    const { data, error } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .gte('scheduled_at', range.startISO)
+      .lt('scheduled_at', range.endISO)
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (error) throw error
+    return (data ?? []).map((r: { id: string }) => r.id)
+  }
+
+  // customer + vehicle resolve foreign IDs first, then map to company tows
+  // (ordered newest-first) so the result set is bounded and consistent.
+  if (field === 'customer') {
+    const { data: customers, error: cErr } = await supabase
+      .from('customers')
+      .select('id')
+      .ilike('name', pattern)
+    if (cErr) throw cErr
+    const customerIds = (customers ?? []).map((c: { id: string }) => c.id)
+    if (customerIds.length === 0) return []
+    const { data, error } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('customer_id', customerIds)
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (error) throw error
+    return (data ?? []).map((r: { id: string }) => r.id)
+  }
+
+  if (field === 'vehicle') {
+    const { data: vehicleRows, error: vErr } = await supabase
+      .from('tow_vehicles')
+      .select('tow_id')
+      .ilike('plate_number', pattern)
+    if (vErr) throw vErr
+    const vehicleTowIds = [
+      ...new Set((vehicleRows ?? []).map((r: { tow_id: string }) => r.tow_id)),
+    ]
+    if (vehicleTowIds.length === 0) return []
+    const { data, error } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('id', vehicleTowIds)
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (error) throw error
+    return (data ?? []).map((r: { id: string }) => r.id)
+  }
+
+  // driver: users.full_name → drivers.user_id → tows (BOTH driver slots).
+  if (field === 'driver') {
+    const { data: users, error: uErr } = await supabase
+      .from('users')
+      .select('id')
+      .ilike('full_name', pattern)
+    if (uErr) throw uErr
+    const userIds = (users ?? []).map((u: { id: string }) => u.id)
+    if (userIds.length === 0) return []
+
+    const { data: driverRows, error: dErr } = await supabase
+      .from('drivers')
+      .select('id')
+      .in('user_id', userIds)
+    if (dErr) throw dErr
+    const driverIds = (driverRows ?? []).map((d: { id: string }) => d.id)
+    if (driverIds.length === 0) return []
+
+    // UUIDs contain no commas/parens, so they're safe inside an .or in-list.
+    const inList = `(${driverIds.join(',')})`
+    const { data, error } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .or(`driver_id.in.${inList},second_driver_id.in.${inList}`)
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (error) throw error
+    return (data ?? []).map((r: { id: string }) => r.id)
+  }
+
+  // address: tow_legs from/to (contains). Min-length guard + capped legs query
+  // so a broad term ("ישראל") can't pull an unbounded tow_id set.
+  if (field === 'address') {
+    if (v.length < ADDRESS_SEARCH_MIN_LENGTH) return []
+    const { data: legRows, error: lErr } = await supabase
+      .from('tow_legs')
+      .select('tow_id')
+      .or(`from_address.ilike.${pattern},to_address.ilike.${pattern}`)
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (lErr) throw lErr
+    const legTowIds = [
+      ...new Set((legRows ?? []).map((r: { tow_id: string }) => r.tow_id)),
+    ]
+    if (legTowIds.length === 0) return []
+    const { data, error } = await supabase
+      .from('tows')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('id', legTowIds)
+      .order('created_at', { ascending: false })
+      .limit(SEARCH_BY_FIELD_ID_CAP)
+    if (error) throw error
+    return (data ?? []).map((r: { id: string }) => r.id)
+  }
+
+  return []
+}
+
+/**
+ * Search tows by ONE explicit field across the company's entire history.
+ * Resolves matching IDs (newest-first, capped), then hydrates a paginated
+ * window with the same slim list shape as getTows. `total` is the full match
+ * count so the UI can show "נמצאו N תוצאות".
+ *
+ * - order    → tows.order_number / customer_order_number (contains)
+ * - customer → customers.name (contains) → tows.customer_id
+ * - vehicle  → tow_vehicles.plate_number (contains) → tow_id
+ * - date     → tows.scheduled_at within the Asia/Jerusalem calendar day
+ * - driver   → users.full_name (contains) → drivers → tows (driver + second_driver)
+ * - address  → tow_legs.from_address / to_address (contains, min 2 chars) → tow_id
+ */
+export async function searchTowsByField(
+  companyId: string,
+  field: TowSearchField,
+  value: string,
+  options: { limit?: number; offset?: number } = {}
+): Promise<SearchTowsByFieldResult> {
+  const limit = options.limit ?? 100
+  const offset = options.offset ?? 0
+
+  const allIds = await resolveTowIdsByField(companyId, field, value)
+  const total = allIds.length
+  const capped = total >= SEARCH_BY_FIELD_ID_CAP
+  if (total === 0) return { rows: [], total: 0, capped: false }
+
+  const pageIds = allIds.slice(offset, offset + limit)
+  if (pageIds.length === 0) return { rows: [], total, capped }
+
+  const { data: tows, error } = await supabase
+    .from('tows')
+    .select(TOW_LIST_SELECT)
+    .in('id', pageIds)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching searched tows:', error)
+    throw error
+  }
+
+  const rows = await hydrateTowListRows(
+    (tows ?? []) as unknown as Record<string, unknown>[]
+  )
+  return { rows, total, capped }
 }
 
 export interface TowListStats {
