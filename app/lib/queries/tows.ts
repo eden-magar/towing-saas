@@ -1049,21 +1049,70 @@ export async function updateTowStatus(
 
 // ==================== סגירה ידנית (מנהל) ====================
 
-export async function manualCloseTow(towId: string, adminUserId: string, endTimeIso?: string) {
-  const tow = await getTowWithPoints(towId)
-  if (!tow) {
+export async function manualCloseTow(
+  towId: string,
+  adminUserId: string,
+  endTimeIso: string | undefined,
+  adminFullName: string
+) {
+  const [towRes, pointsRes] = await Promise.all([
+    supabase.from('tows').select('id, status').eq('id', towId).single(),
+    supabase
+      .from('tow_points')
+      .select('id, status, is_storage')
+      .eq('tow_id', towId)
+      .order('point_order', { ascending: true }),
+  ])
+
+  if (towRes.error) {
+    console.error('Error fetching tow for manual close:', towRes.error)
+    throw towRes.error
+  }
+
+  if (!towRes.data) {
     throw new Error('הגרירה לא נמצאה')
   }
+
+  const tow = towRes.data
 
   if (tow.status !== 'assigned' && tow.status !== 'in_progress') {
     throw new Error('ניתן לסגור ידנית רק גרירות בשיבוץ או בביצוע')
   }
 
-  const points = tow.points ?? []
-  for (const point of points) {
-    if (point.status !== 'completed' && point.status !== 'skipped') {
-      await updatePointStatus(point.id, 'completed')
+  if (pointsRes.error) {
+    console.error('Error fetching tow points for manual close:', pointsRes.error)
+    throw pointsRes.error
+  }
+
+  const points = pointsRes.data ?? []
+  const incompletePoints = points.filter(
+    (p) => p.status !== 'completed' && p.status !== 'skipped'
+  )
+  const nonStoragePoints = incompletePoints.filter((p) => !p.is_storage)
+  const storagePoints = incompletePoints.filter((p) => p.is_storage)
+
+  if (nonStoragePoints.length > 0) {
+    const pointCompletedAt = new Date().toISOString()
+    const { error: batchError } = await supabase
+      .from('tow_points')
+      .update({
+        status: 'completed',
+        completed_at: pointCompletedAt,
+        updated_at: pointCompletedAt,
+      })
+      .in(
+        'id',
+        nonStoragePoints.map((p) => p.id)
+      )
+
+    if (batchError) {
+      console.error('Error batch-completing tow points:', batchError)
+      throw batchError
     }
+  }
+
+  for (const point of storagePoints) {
+    await updatePointStatus(point.id, 'completed')
   }
 
   const now = new Date().toISOString()
@@ -1084,13 +1133,7 @@ export async function manualCloseTow(towId: string, adminUserId: string, endTime
     throw towError
   }
 
-  const { data: adminUser } = await supabase
-    .from('users')
-    .select('full_name')
-    .eq('id', adminUserId)
-    .maybeSingle()
-
-  const adminName = adminUser?.full_name || 'מנהל'
+  const adminName = adminFullName.trim() || 'מנהל'
   const closedAtLabel = new Date(now).toLocaleString('he-IL', {
     day: '2-digit',
     month: '2-digit',
@@ -1108,6 +1151,48 @@ export async function manualCloseTow(towId: string, adminUserId: string, endTime
   ])
 
   return true
+}
+
+/** Light tow fetch for post-close sync — tow row + point statuses only. */
+export async function getTowDetailLight(towId: string): Promise<{
+  tow: NonNullable<Awaited<ReturnType<typeof getTowWithPoints>>>
+  points: Pick<TowPointWithDetails, 'id' | 'status' | 'completed_at'>[]
+} | null> {
+  const [towRes, pointsRes] = await Promise.all([
+    supabase.from('tows').select(TOW_WITH_RELATIONS_SELECT).eq('id', towId).single(),
+    supabase
+      .from('tow_points')
+      .select('id, status, completed_at')
+      .eq('tow_id', towId)
+      .order('point_order', { ascending: true }),
+  ])
+
+  if (towRes.error) {
+    console.error('Error fetching tow (light):', towRes.error)
+    throw towRes.error
+  }
+
+  if (!towRes.data) return null
+
+  if (pointsRes.error) {
+    console.error('Error fetching tow points (light):', pointsRes.error)
+    throw pointsRes.error
+  }
+
+  const towRow = towRes.data
+  return {
+    tow: {
+      ...towRow,
+      customer: towRow.customer as TowWithDetails['customer'],
+      driver: towRow.driver as TowWithDetails['driver'],
+      truck: towRow.truck as TowWithDetails['truck'],
+      manually_closed_by_user: towRow.manually_closed_by_user as TowWithDetails['manually_closed_by_user'],
+      vehicles: [],
+      legs: [],
+      points: [],
+    },
+    points: (pointsRes.data ?? []) as Pick<TowPointWithDetails, 'id' | 'status' | 'completed_at'>[],
+  }
 }
 
 // ==================== שיוך נהג לגרירה ====================

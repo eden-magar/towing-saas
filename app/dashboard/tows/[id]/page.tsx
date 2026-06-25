@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
@@ -45,14 +45,15 @@ import {
   Link2,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
+import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback'
 import { canApproveQuote, canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
-import { approveTowQuote, getTowWithPoints, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
+import { approveTowQuote, getTowWithPoints, getTowDetailLight, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
 import { insertDriverTruckAssignments } from '../../../lib/queries/driver-truck-assignments'
-import { getCustomers, CustomerWithDetails } from '../../../lib/queries/customers'
+import { getCustomersLite, CustomerListItem } from '../../../lib/queries/customers'
 import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
 import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
 
@@ -167,7 +168,7 @@ export default function TowDetailsPage() {
   
   const [drivers, setDrivers] = useState<DriverWithDetails[]>([])
   const [trucks, setTrucks] = useState<TruckWithDetails[]>([])
-  const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'images' | 'portal'>('details')
   const [isEditing, setIsEditing] = useState(false)
@@ -262,6 +263,10 @@ export default function TowDetailsPage() {
     activeSurcharges: TimeSurcharge[]
   } | null>(null)
 
+  const manualClosingRef = useRef(false)
+  const refreshInFlightRef = useRef(false)
+  const refreshPendingRef = useRef(false)
+
   const statusConfig: Record<string, { label: string; color: string }> = {
     pending: { label: 'ממתין לשיבוץ', color: 'bg-orange-100 text-orange-700 border-orange-200' },
     assigned: { label: 'שובץ נהג', color: 'bg-amber-100 text-amber-700 border-amber-200' },
@@ -313,7 +318,67 @@ export default function TowDetailsPage() {
     }
   }, [companyId, towId])
 
-  const refreshTow = useCallback(() => loadEssentialData(false), [loadEssentialData])
+  const runRefreshTow = useCallback(async () => {
+    if (!companyId || !towId) return
+    if (refreshInFlightRef.current) {
+      refreshPendingRef.current = true
+      return
+    }
+    refreshInFlightRef.current = true
+    refreshPendingRef.current = false
+    try {
+      await loadEssentialData(false)
+    } finally {
+      refreshInFlightRef.current = false
+      if (refreshPendingRef.current) {
+        refreshPendingRef.current = false
+        await runRefreshTow()
+      }
+    }
+  }, [companyId, towId, loadEssentialData])
+
+  const debouncedRefreshTow = useDebouncedCallback(() => {
+    void runRefreshTow()
+  }, 300)
+
+  const refreshTow = useCallback(() => runRefreshTow(), [runRefreshTow])
+
+  const refreshTowLight = useCallback(async () => {
+    if (!towId) return
+    try {
+      const light = await getTowDetailLight(towId)
+      if (!light) return
+
+      const pointPatchById = new Map(light.points.map((p) => [p.id, p]))
+
+      setTow((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          ...light.tow,
+          vehicles: prev.vehicles,
+          legs: prev.legs,
+          points:
+            prev.points?.map((p) => {
+              const patch = pointPatchById.get(p.id)
+              if (!patch) return p
+              return {
+                ...p,
+                status: patch.status,
+                completed_at: patch.completed_at,
+              }
+            }) ?? [],
+        }
+      })
+    } catch (err) {
+      console.error('Error refreshing tow (light):', err)
+    }
+  }, [towId])
+
+  const onTowRealtimeUpdate = useCallback(() => {
+    if (manualClosingRef.current) return
+    debouncedRefreshTow()
+  }, [debouncedRefreshTow])
 
   const loadDriversAndTrucks = useCallback(async () => {
     if (!companyId || driversTrucksLoaded || driversTrucksLoading) return
@@ -337,7 +402,7 @@ export default function TowDetailsPage() {
     if (!companyId || customersLoaded || customersLoading) return
     setCustomersLoading(true)
     try {
-      const customersData = await getCustomers(companyId)
+      const customersData = await getCustomersLite(companyId)
       setCustomers(customersData)
       setCustomersLoaded(true)
     } catch (err) {
@@ -437,25 +502,25 @@ export default function TowDetailsPage() {
         schema: 'public',
         table: 'tow_points',
         filter: `tow_id=eq.${towId}`
-      }, () => { void refreshTow() })
+      }, onTowRealtimeUpdate)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'tow_images',
         filter: `tow_id=eq.${towId}`
-      }, () => { void refreshTow() })
+      }, onTowRealtimeUpdate)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'tows',
         filter: `id=eq.${towId}`
-      }, () => { void refreshTow() })
+      }, onTowRealtimeUpdate)
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [towId, refreshTow])
+  }, [towId, onTowRealtimeUpdate])
 
   const canEdit = tow
     ? !isClosedTowStatus(tow.status) || canEditClosedTow(user?.role)
@@ -949,20 +1014,46 @@ export default function TowDetailsPage() {
 
   const handleConfirmManualClose = async () => {
     if (!tow || !user?.id) return
+    const snapshot = structuredClone(tow)
+    manualClosingRef.current = true
     setManualClosing(true)
     try {
       const endTimeIso =
         closeEndDate && closeEndTime
           ? new Date(`${closeEndDate}T${closeEndTime}:00`).toISOString()
           : undefined
-      await manualCloseTow(tow.id, user.id, endTimeIso)
-      await refreshTow()
-      if (changeLogsLoaded) void loadChangeLogs(true)
+      await manualCloseTow(tow.id, user.id, endTimeIso, user.full_name)
+
+      const now = new Date().toISOString()
+      const completedAt = endTimeIso ?? now
+
+      setTow((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          status: 'completed',
+          completed_at: completedAt,
+          manually_closed_at: now,
+          manually_closed_by: user.id,
+          manually_closed_by_user: { full_name: user.full_name },
+          points:
+            prev.points?.map((p) =>
+              p.status === 'skipped'
+                ? p
+                : { ...p, status: 'completed' as const, completed_at: completedAt }
+            ) ?? [],
+        }
+      })
+
       setShowManualCloseModal(false)
+      if (changeLogsLoaded) void loadChangeLogs(true)
+      void refreshTowLight()
     } catch (err) {
+      setTow(snapshot)
       console.error('Error manually closing tow:', err)
       alert(err instanceof Error ? err.message : 'שגיאה בסגירה ידנית של הגרירה')
     } finally {
+      manualClosingRef.current = false
       setManualClosing(false)
     }
   }

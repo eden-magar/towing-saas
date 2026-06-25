@@ -9,7 +9,7 @@ import { getCompanySettings } from '../lib/queries/settings'
 import { getTrucks } from '../lib/queries/trucks'
 import { 
   getBasePriceList, 
-  getCustomersWithPricing, 
+  getCustomerIdsWithPersonalPricing, 
   getFixedPriceItems, 
   getTimeSurcharges, 
   getLocationSurcharges, 
@@ -488,7 +488,7 @@ export function useTowForm(
   const [basePriceList, setBasePriceList] = useState<any>(null)
   const [weightBrackets, setWeightBrackets] = useState<WeightBracket[]>([])
   const [fixedPriceItems, setFixedPriceItems] = useState<FixedPriceItem[]>([])
-  const [customersWithPricing, setCustomersWithPricing] = useState<CustomerWithPricing[]>([])
+  const [customerIdsWithPersonalPricing, setCustomerIdsWithPersonalPricing] = useState<string[]>([])
   const [selectedCustomerPricing, setSelectedCustomerPricing] = useState<CustomerWithPricing | null>(null)
   
   // Surcharges from database
@@ -844,17 +844,12 @@ export function useTowForm(
     if (timeSurchargesData.length === 0) return
 
     const needsCustomerCatalog = priceMode === 'recommended_customer' && !!selectedCustomerId
-    if (needsCustomerCatalog && customersWithPricing.length === 0) return
+    if (needsCustomerCatalog && !selectedCustomerPricing) return
 
-    const customerPricing =
-      selectedCustomerId
-        ? customersWithPricing.find((c) => c.customer_id === selectedCustomerId) ??
-          selectedCustomerPricing
-        : null
     const customerCatalog =
       priceMode === 'recommended_customer' &&
-      (customerPricing?.customer_time_surcharges?.length ?? 0) > 0
-        ? customerPricing!.customer_time_surcharges!
+      (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
+        ? selectedCustomerPricing!.customer_time_surcharges!
         : []
 
     if (inferIsHolidayFromSavedBreakdown(breakdown, [timeSurchargesData, customerCatalog])) {
@@ -868,7 +863,6 @@ export function useTowForm(
     timeSurchargesData,
     selectedCustomerPricing,
     selectedCustomerId,
-    customersWithPricing,
     priceMode,
   ])
 
@@ -1819,7 +1813,7 @@ export function useTowForm(
           setCustomersLoading(false)
         })
 
-      // Populate surcharges as soon as each query resolves — not blocked on getCustomersWithPricing
+      // Populate surcharges as soon as each query resolves — not blocked on customer pricing load
       getTimeSurcharges(companyId)
         .then((value) => setTimeSurchargesData(value))
         .catch((err) => console.error('Error loading timeSurcharges:', err))
@@ -1840,7 +1834,7 @@ export function useTowForm(
         getBasePriceList(companyId),
         getWeightBrackets(companyId),
         getFixedPriceItems(companyId),
-        getCustomersWithPricing(companyId),
+        getCustomerIdsWithPersonalPricing(companyId),
         getCompanySettings(companyId),
       ])
 
@@ -1848,7 +1842,7 @@ export function useTowForm(
         basePriceListResult,
         weightBracketsResult,
         fixedPriceItemsResult,
-        customersWithPricingResult,
+        customerIdsWithPersonalPricingResult,
         companySettingsResult,
       ] = results
 
@@ -1872,10 +1866,13 @@ export function useTowForm(
         console.error('Error loading fixedPriceItems:', fixedPriceItemsResult.reason)
       }
 
-      if (customersWithPricingResult.status === 'fulfilled') {
-        setCustomersWithPricing(customersWithPricingResult.value)
+      if (customerIdsWithPersonalPricingResult.status === 'fulfilled') {
+        setCustomerIdsWithPersonalPricing(customerIdsWithPersonalPricingResult.value)
       } else {
-        console.error('Error loading customersWithPricing:', customersWithPricingResult.reason)
+        console.error(
+          'Error loading customerIdsWithPersonalPricing:',
+          customerIdsWithPersonalPricingResult.reason
+        )
       }
 
       if (companySettingsResult.status === 'fulfilled') {
@@ -1999,7 +1996,7 @@ export function useTowForm(
     selectedPriceItem,
     customPrice,
     selectedCustomerId,
-    customersWithPricing,
+    companyId,
     setSelectedCustomerPricing,
     setPriceMode,
     setSelectedPriceItem,
@@ -2934,8 +2931,9 @@ export function useTowForm(
     // Price list
     basePriceList,
     fixedPriceItems,
-    customersWithPricing,
-    selectedCustomerPricing, setSelectedCustomerPricing,
+    customerIdsWithPersonalPricing,
+    selectedCustomerPricing,
+    setSelectedCustomerPricing,
     // Surcharges
     timeSurchargesData,
     locationSurchargesData,

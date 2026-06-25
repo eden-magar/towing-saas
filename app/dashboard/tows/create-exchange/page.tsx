@@ -94,7 +94,8 @@ function CreateExchangeTowForm({
     customers,
     customersLoading,
     drivers,
-    customersWithPricing,
+    customerIdsWithPersonalPricing,
+    selectedCustomerPricing,
     selectedCustomerId,
     preSelectedDriverId,
     setPreSelectedDriverId,
@@ -103,7 +104,6 @@ function CreateExchangeTowForm({
     trucks,
     basePriceList,
     fixedPriceItems,
-    selectedCustomerPricing,
     setSelectedCustomerPricing,
     locationSurchargesData,
     serviceSurchargesData,
@@ -1016,7 +1016,8 @@ function CreateExchangeTowForm({
           <CreateCustomerSection
             customers={customers}
             customersLoading={customersLoading}
-            customersWithPricing={customersWithPricing}
+            customerIdsWithPersonalPricing={customerIdsWithPersonalPricing}
+            selectedCustomerPricing={selectedCustomerPricing}
             selectedCustomerId={selectedCustomerId}
             customerTab={customerTab}
             onCustomerTabChange={setCustomerTab}

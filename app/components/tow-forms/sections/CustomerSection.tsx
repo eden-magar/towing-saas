@@ -9,7 +9,7 @@ import { TimeInput, DateInput } from '../../ui'
 
 interface CustomerSectionProps {
   customers: CustomerListItem[]
-  customersWithPricing: CustomerWithPricing[]
+  selectedCustomerPricing: CustomerWithPricing | null
   selectedCustomerId: string | null
   onCustomerSelect: (customerId: string | null, name: string, phone: string) => void
   customerName: string
@@ -32,7 +32,7 @@ interface CustomerSectionProps {
 
 export function CustomerSection({
   customers,
-  customersWithPricing,
+  selectedCustomerPricing,
   selectedCustomerId,
   onCustomerSelect,
   customerName,
@@ -54,10 +54,6 @@ export function CustomerSection({
 }: CustomerSectionProps) {
   const [customerType, setCustomerType] = useState<'new' | 'existing'>('new')
   const [searchCustomer, setSearchCustomer] = useState('')
-
-  const selectedCustomerPricing = selectedCustomerId
-    ? customersWithPricing.find((c) => c.customer_id === selectedCustomerId)
-    : null
 
   const filteredCustomers = customers.filter((c) => {
     if (!searchCustomer.trim()) return true

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from '../components/Sidebar'
+import { ServiceWorkerCleanup } from '../components/ServiceWorkerCleanup'
 import { useAuth } from '../lib/AuthContext'
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
@@ -33,6 +34,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <ServiceWorkerCleanup />
       <Sidebar />
       <main className="flex-1 bg-gray-100 p-4 sm:p-6 lg:p-8">
         {children}

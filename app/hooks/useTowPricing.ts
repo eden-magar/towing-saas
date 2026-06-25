@@ -5,7 +5,8 @@ import {
   TimeSurcharge, 
   LocationSurcharge, 
   ServiceSurcharge, 
-  getActiveTimeSurcharges 
+  getActiveTimeSurcharges,
+  getCustomerPricingByCustomerId,
 } from '../lib/queries/price-lists'
 import { SelectedService } from '../components/tow-forms/shared'
 import { TowType } from '../components/tow-forms/sections'
@@ -53,8 +54,8 @@ interface UseTowPricingParams {
   selectedPriceItem: PriceItem | null
   customPrice: string
   // For effects
+  companyId: string | null
   selectedCustomerId: string | null
-  customersWithPricing: CustomerWithPricing[]
   setSelectedCustomerPricing: (v: CustomerWithPricing | null) => void
   setPriceMode: (mode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom') => void
   setSelectedPriceItem: (item: PriceItem | null) => void
@@ -99,7 +100,7 @@ export function useTowPricing(params: UseTowPricingParams) {
     selectedPriceItem,
     customPrice,
     selectedCustomerId,
-    customersWithPricing,
+    companyId,
     setSelectedCustomerPricing,
     setPriceMode,
     setSelectedPriceItem,
@@ -134,26 +135,48 @@ export function useTowPricing(params: UseTowPricingParams) {
         : timeSurchargesData
   }, [priceMode, selectedCustomerPricing?.customer_time_surcharges, timeSurchargesData])
 
-  // Customer pricing
+  // Customer pricing — load only the selected customer (not all customers)
   useEffect(() => {
-    const customerPricing = selectedCustomerId
-      ? customersWithPricing.find(c => c.customer_id === selectedCustomerId) ?? null
-      : null
-
-    if (selectedCustomerId) {
-      setSelectedCustomerPricing(customerPricing)
-    } else {
+    if (!selectedCustomerId) {
       setSelectedCustomerPricing(null)
+      if (!isEditMode) {
+        setPriceMode('recommended')
+        setSelectedPriceItem(null)
+        setCustomPrice('')
+      }
+      return
     }
-    if (!isEditMode) {
-      const isBusinessCustomer = customerPricing?.customer?.customer_type === 'business'
-      const nextMode =
-        selectedCustomerId && isBusinessCustomer ? 'recommended_customer' : 'recommended'
-      setPriceMode(nextMode)
-      setSelectedPriceItem(null)
-      setCustomPrice('')
+
+    let cancelled = false
+
+    ;(async () => {
+      if (!companyId) return
+      try {
+        const customerPricing = await getCustomerPricingByCustomerId(companyId, selectedCustomerId)
+        if (cancelled) return
+
+        setSelectedCustomerPricing(customerPricing)
+
+        if (!isEditMode) {
+          const isBusinessCustomer = customerPricing?.customer?.customer_type === 'business'
+          const nextMode =
+            selectedCustomerId && isBusinessCustomer ? 'recommended_customer' : 'recommended'
+          setPriceMode(nextMode)
+          setSelectedPriceItem(null)
+          setCustomPrice('')
+        }
+      } catch (err) {
+        console.error('Error loading customer pricing:', err)
+        if (!cancelled) {
+          setSelectedCustomerPricing(null)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
     }
-  }, [selectedCustomerId, customersWithPricing, isEditMode])
+  }, [selectedCustomerId, companyId, isEditMode])
 
   // החלפת תוספות כשמשתנה priceMode
   useEffect(() => {

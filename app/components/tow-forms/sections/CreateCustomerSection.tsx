@@ -19,7 +19,8 @@ export type CreateCustomerTab = 'existing' | 'casual'
 export interface CreateCustomerSectionProps {
   customers: CustomerListItem[]
   customersLoading: boolean
-  customersWithPricing: CustomerWithPricing[]
+  customerIdsWithPersonalPricing: string[]
+  selectedCustomerPricing: CustomerWithPricing | null
   selectedCustomerId: string | null
   customerTab: CreateCustomerTab
   onCustomerTabChange: (tab: CreateCustomerTab) => void
@@ -57,17 +58,15 @@ export interface CreateCustomerSectionProps {
   orderNumber?: string | null
 }
 
-function hasPersonalPricing(
-  customersWithPricing: CustomerWithPricing[],
-  customerId: string
-) {
-  return customersWithPricing.some((cp) => cp.customer_id === customerId)
+function hasPersonalPricing(customerIdsWithPersonalPricing: string[], customerId: string) {
+  return customerIdsWithPersonalPricing.includes(customerId)
 }
 
 export function CreateCustomerSection({
   customers,
   customersLoading,
-  customersWithPricing,
+  customerIdsWithPersonalPricing,
+  selectedCustomerPricing: _selectedCustomerPricing,
   selectedCustomerId,
   customerTab,
   onCustomerTabChange,
@@ -124,7 +123,7 @@ export function CreateCustomerSection({
   const clearCustomer = () => onCustomerSelect(null, '', '')
 
   const priceListBadge =
-    selectedCustomerId && hasPersonalPricing(customersWithPricing, selectedCustomerId)
+    selectedCustomerId && hasPersonalPricing(customerIdsWithPersonalPricing, selectedCustomerId)
       ? 'מחירון אישי'
       : null
 
@@ -267,7 +266,7 @@ export function CreateCustomerSection({
             dir="rtl"
           >
             {filteredCustomers.slice(0, 10).map((customer) => {
-              const listBadge = hasPersonalPricing(customersWithPricing, customer.id)
+              const listBadge = hasPersonalPricing(customerIdsWithPersonalPricing, customer.id)
                 ? 'מחירון אישי'
                 : null
               return (

@@ -166,7 +166,8 @@ function CreateTowForm({
     customers,
     customersLoading,
     drivers,
-    customersWithPricing,
+    customerIdsWithPersonalPricing,
+    selectedCustomerPricing,
     selectedCustomerId,
     preSelectedDriverId,
     setPreSelectedDriverId,
@@ -175,7 +176,6 @@ function CreateTowForm({
     trucks,
     basePriceList,
     fixedPriceItems,
-    selectedCustomerPricing,
     setSelectedCustomerPricing,
     locationSurchargesData,
     serviceSurchargesData,
@@ -1647,7 +1647,8 @@ function CreateTowForm({
           <CreateCustomerSection
             customers={customers}
             customersLoading={customersLoading}
-            customersWithPricing={customersWithPricing}
+            customerIdsWithPersonalPricing={customerIdsWithPersonalPricing}
+            selectedCustomerPricing={selectedCustomerPricing}
             selectedCustomerId={selectedCustomerId}
             customerTab={customerTab}
             onCustomerTabChange={setCustomerTab}

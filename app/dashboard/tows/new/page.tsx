@@ -31,13 +31,13 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     // Data
     customers,
     drivers,
-    customersWithPricing,
+    customerIdsWithPersonalPricing,
+    selectedCustomerPricing,
     selectedCustomerId,
     preSelectedDriverId, setPreSelectedDriverId,
     // Price list
     basePriceList,
     fixedPriceItems,
-    selectedCustomerPricing,
     // Surcharges
     locationSurchargesData,
     serviceSurchargesData,
@@ -202,7 +202,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
             {/* Section 1 - Customer */}
             <CustomerSection
               customers={customers}
-              customersWithPricing={customersWithPricing}
+              selectedCustomerPricing={selectedCustomerPricing}
               selectedCustomerId={selectedCustomerId}
               onCustomerSelect={handleCustomerSelect}
               customerName={customerName}

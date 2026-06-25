@@ -106,6 +106,7 @@ export interface BasePriceList {
   night_surcharge_percent: number | null
   weekend_surcharge_percent: number | null
   is_active: boolean
+  customer_company_id?: string | null
   // נקודת בסיס לחישוב מרחק
   base_address: string | null
   base_lat: number | null
@@ -349,6 +350,8 @@ export async function saveServiceSurcharges(companyId: string, surcharges: Omit<
 
 // ==================== מחירוני לקוחות ====================
 
+const CUSTOMER_COMPANY_ID_CHUNK_SIZE = 50
+
 const CUSTOMER_PRICING_SELECT = `
   id,
   customer_id,
@@ -395,6 +398,188 @@ async function collectCustomerCompanyIdsWithPricing(companyId: string): Promise<
   return [...ids]
 }
 
+/** Customer IDs that have custom pricing (badges in tow form — no full price list load). */
+export async function getCustomerIdsWithPersonalPricing(companyId: string): Promise<string[]> {
+  const junctionIds = await collectCustomerCompanyIdsWithPricing(companyId)
+  if (junctionIds.length === 0) return []
+
+  const customerIds = new Set<string>()
+
+  for (let i = 0; i < junctionIds.length; i += CUSTOMER_COMPANY_ID_CHUNK_SIZE) {
+    const chunk = junctionIds.slice(i, i + CUSTOMER_COMPANY_ID_CHUNK_SIZE)
+    const { data, error } = await supabase
+      .from('customer_company')
+      .select('customer_id')
+      .in('id', chunk)
+
+    if (error) throw error
+    data?.forEach((row) => customerIds.add(row.customer_id))
+  }
+
+  return [...customerIds]
+}
+
+async function fetchPriceListsAndItemsForCompanyIds(customerCompanyIds: string[]): Promise<{
+  priceItems: CustomerPriceItem[]
+  priceLists: BasePriceList[]
+}> {
+  if (customerCompanyIds.length === 0) {
+    return { priceItems: [], priceLists: [] }
+  }
+
+  if (customerCompanyIds.length === 1) {
+    const customerCompanyId = customerCompanyIds[0]
+    const [{ data: priceItems, error: itemsError }, { data: priceLists, error: listsError }] =
+      await Promise.all([
+        supabase
+          .from('customer_price_items')
+          .select('*')
+          .eq('customer_company_id', customerCompanyId),
+        supabase
+          .from('price_lists')
+          .select('*')
+          .eq('customer_company_id', customerCompanyId)
+          .eq('is_active', true),
+      ])
+
+    if (itemsError) throw itemsError
+    if (listsError) throw listsError
+
+    return {
+      priceItems: priceItems ?? [],
+      priceLists: (priceLists ?? []) as BasePriceList[],
+    }
+  }
+
+  const priceItems: CustomerPriceItem[] = []
+  const priceLists: BasePriceList[] = []
+
+  for (let i = 0; i < customerCompanyIds.length; i += CUSTOMER_COMPANY_ID_CHUNK_SIZE) {
+    const chunk = customerCompanyIds.slice(i, i + CUSTOMER_COMPANY_ID_CHUNK_SIZE)
+    const [{ data: chunkItems, error: itemsError }, { data: chunkLists, error: listsError }] =
+      await Promise.all([
+        supabase.from('customer_price_items').select('*').in('customer_company_id', chunk),
+        supabase
+          .from('price_lists')
+          .select('*')
+          .in('customer_company_id', chunk)
+          .eq('is_active', true),
+      ])
+
+    if (itemsError) throw itemsError
+    if (listsError) throw listsError
+
+    priceItems.push(...(chunkItems ?? []))
+    priceLists.push(...((chunkLists ?? []) as BasePriceList[]))
+  }
+
+  return { priceItems, priceLists }
+}
+
+function indexPriceItemsByCustomer(
+  priceItems: CustomerPriceItem[]
+): Record<string, CustomerPriceItem[]> {
+  const itemsByCustomer: Record<string, CustomerPriceItem[]> = {}
+  priceItems.forEach((item) => {
+    if (!itemsByCustomer[item.customer_company_id]) {
+      itemsByCustomer[item.customer_company_id] = []
+    }
+    itemsByCustomer[item.customer_company_id].push(item)
+  })
+  return itemsByCustomer
+}
+
+function indexPriceListsByCustomer(priceLists: BasePriceList[]): Record<string, BasePriceList> {
+  const priceListByCustomer: Record<string, BasePriceList> = {}
+  priceLists.forEach((pl) => {
+    if (pl.customer_company_id) {
+      priceListByCustomer[pl.customer_company_id] = pl
+    }
+  })
+  return priceListByCustomer
+}
+
+async function loadCustomerSurchargesMap(
+  priceListByCustomer: Record<string, BasePriceList>
+): Promise<
+  Record<string, { time: TimeSurcharge[]; location: LocationSurcharge[]; service: ServiceSurcharge[] }>
+> {
+  const customerSurchargesMap: Record<
+    string,
+    { time: TimeSurcharge[]; location: LocationSurcharge[]; service: ServiceSurcharge[] }
+  > = {}
+
+  const priceListIds = Object.values(priceListByCustomer).map((pl) => pl.id)
+  if (priceListIds.length === 0) return customerSurchargesMap
+
+  const timeRows: TimeSurcharge[] = []
+  const locationRows: LocationSurcharge[] = []
+  const serviceRows: ServiceSurcharge[] = []
+
+  for (let i = 0; i < priceListIds.length; i += CUSTOMER_COMPANY_ID_CHUNK_SIZE) {
+    const chunk = priceListIds.slice(i, i + CUSTOMER_COMPANY_ID_CHUNK_SIZE)
+    const [timeSurcharges, locationSurcharges, serviceSurcharges] = await Promise.all([
+      supabase.from('time_surcharges').select('*').in('price_list_id', chunk),
+      supabase.from('location_surcharges').select('*').in('price_list_id', chunk),
+      supabase.from('service_surcharges').select('*').in('price_list_id', chunk),
+    ])
+
+    if (timeSurcharges.error) throw timeSurcharges.error
+    if (locationSurcharges.error) throw locationSurcharges.error
+    if (serviceSurcharges.error) throw serviceSurcharges.error
+
+    timeRows.push(...((timeSurcharges.data ?? []) as TimeSurcharge[]))
+    locationRows.push(...((locationSurcharges.data ?? []) as LocationSurcharge[]))
+    serviceRows.push(...((serviceSurcharges.data ?? []) as ServiceSurcharge[]))
+  }
+
+  Object.entries(priceListByCustomer).forEach(([customerCompanyId, pl]) => {
+    customerSurchargesMap[customerCompanyId] = {
+      time: timeRows.filter((s) => (s as { price_list_id?: string }).price_list_id === pl.id),
+      location: locationRows.filter((s) => (s as { price_list_id?: string }).price_list_id === pl.id),
+      service: serviceRows.filter((s) => (s as { price_list_id?: string }).price_list_id === pl.id),
+    }
+  })
+
+  return customerSurchargesMap
+}
+
+async function fetchCustomerCompanyPricingRows(
+  companyId: string,
+  customerCompanyIds: string[]
+): Promise<Awaited<ReturnType<typeof fetchCustomerPricingBase>>['data']> {
+  if (customerCompanyIds.length === 0) return []
+
+  if (customerCompanyIds.length === 1) {
+    const { data, error } = await supabase
+      .from('customer_company')
+      .select(CUSTOMER_PRICING_SELECT)
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .eq('id', customerCompanyIds[0])
+
+    if (error) throw error
+    return data ?? []
+  }
+
+  const all: Awaited<ReturnType<typeof fetchCustomerPricingBase>>['data'] = []
+
+  for (let i = 0; i < customerCompanyIds.length; i += CUSTOMER_COMPANY_ID_CHUNK_SIZE) {
+    const chunk = customerCompanyIds.slice(i, i + CUSTOMER_COMPANY_ID_CHUNK_SIZE)
+    const { data, error } = await supabase
+      .from('customer_company')
+      .select(CUSTOMER_PRICING_SELECT)
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .in('id', chunk)
+
+    if (error) throw error
+    if (data?.length) all.push(...data)
+  }
+
+  return all
+}
+
 async function fetchCustomerPricingForCompanyIds(companyId: string, customerCompanyIds: string[]) {
   if (customerCompanyIds.length === 0) {
     return {
@@ -404,19 +589,9 @@ async function fetchCustomerPricingForCompanyIds(companyId: string, customerComp
     }
   }
 
-  const { data, error } = await supabase
-    .from('customer_company')
-    .select(CUSTOMER_PRICING_SELECT)
-    .eq('company_id', companyId)
-    .eq('is_active', true)
-    .in('id', customerCompanyIds)
+  const data = await fetchCustomerCompanyPricingRows(companyId, customerCompanyIds)
 
-  if (error) {
-    console.error('Error fetching customers with pricing:', error)
-    throw error
-  }
-
-  if (!data || data.length === 0) {
+  if (data.length === 0) {
     return {
       data: [] as typeof data,
       itemsByCustomer: {} as Record<string, CustomerPriceItem[]>,
@@ -424,35 +599,14 @@ async function fetchCustomerPricingForCompanyIds(companyId: string, customerComp
     }
   }
 
-  const ids = data.map(c => c.id)
-  const [{ data: priceItems }, { data: priceLists }] = await Promise.all([
-    supabase
-      .from('customer_price_items')
-      .select('*')
-      .in('customer_company_id', ids),
-    supabase
-      .from('price_lists')
-      .select('*')
-      .in('customer_company_id', ids)
-      .eq('is_active', true),
-  ])
+  const ids = data.map((c) => c.id)
+  const { priceItems, priceLists } = await fetchPriceListsAndItemsForCompanyIds(ids)
 
-  const itemsByCustomer: Record<string, CustomerPriceItem[]> = {}
-  priceItems?.forEach(item => {
-    if (!itemsByCustomer[item.customer_company_id]) {
-      itemsByCustomer[item.customer_company_id] = []
-    }
-    itemsByCustomer[item.customer_company_id].push(item)
-  })
-
-  const priceListByCustomer: Record<string, BasePriceList> = {}
-  priceLists?.forEach(pl => {
-    if (pl.customer_company_id) {
-      priceListByCustomer[pl.customer_company_id] = pl as BasePriceList
-    }
-  })
-
-  return { data, itemsByCustomer, priceListByCustomer }
+  return {
+    data,
+    itemsByCustomer: indexPriceItemsByCustomer(priceItems),
+    priceListByCustomer: indexPriceListsByCustomer(priceLists),
+  }
 }
 
 async function fetchCustomerPricingBase(companyId: string) {
@@ -471,36 +625,14 @@ async function fetchCustomerPricingBase(companyId: string) {
     return { data: [] as typeof data, itemsByCustomer: {} as Record<string, CustomerPriceItem[]>, priceListByCustomer: {} as Record<string, BasePriceList> }
   }
 
-  const customerCompanyIds = data.map(c => c.id)
+  const customerCompanyIds = data.map((c) => c.id)
+  const { priceItems, priceLists } = await fetchPriceListsAndItemsForCompanyIds(customerCompanyIds)
 
-  const [{ data: priceItems }, { data: priceLists }] = await Promise.all([
-    supabase
-      .from('customer_price_items')
-      .select('*')
-      .in('customer_company_id', customerCompanyIds),
-    supabase
-      .from('price_lists')
-      .select('*')
-      .in('customer_company_id', customerCompanyIds)
-      .eq('is_active', true),
-  ])
-
-  const itemsByCustomer: Record<string, CustomerPriceItem[]> = {}
-  priceItems?.forEach(item => {
-    if (!itemsByCustomer[item.customer_company_id]) {
-      itemsByCustomer[item.customer_company_id] = []
-    }
-    itemsByCustomer[item.customer_company_id].push(item)
-  })
-
-  const priceListByCustomer: Record<string, BasePriceList> = {}
-  priceLists?.forEach(pl => {
-    if (pl.customer_company_id) {
-      priceListByCustomer[pl.customer_company_id] = pl as BasePriceList
-    }
-  })
-
-  return { data, itemsByCustomer, priceListByCustomer }
+  return {
+    data,
+    itemsByCustomer: indexPriceItemsByCustomer(priceItems),
+    priceListByCustomer: indexPriceListsByCustomer(priceLists),
+  }
 }
 
 function mapCustomerPricingRows(
@@ -539,6 +671,28 @@ export async function getCustomersWithPricingFiltered(companyId: string): Promis
   return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, {})
 }
 
+/** Load pricing for one customer (tow form, edit, close context). */
+export async function getCustomerPricingByCustomerId(
+  companyId: string,
+  customerId: string
+): Promise<CustomerWithPricing | null> {
+  const { data: junction, error } = await supabase
+    .from('customer_company')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('customer_id', customerId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error resolving customer_company for pricing:', error)
+    throw error
+  }
+  if (!junction) return null
+
+  return getCustomerPricingByCompanyId(companyId, junction.id)
+}
+
 /** Load pricing summary for one customer (search → modal). */
 export async function getCustomerPricingByCompanyId(
   companyId: string,
@@ -549,7 +703,8 @@ export async function getCustomerPricingByCompanyId(
     [customerCompanyId]
   )
   if (data.length === 0) return null
-  return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, {})[0]
+  const customerSurchargesMap = await loadCustomerSurchargesMap(priceListByCustomer)
+  return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, customerSurchargesMap)[0]
 }
 
 export interface CustomerPricingSearchHit {
@@ -618,30 +773,7 @@ export async function getCustomersWithPricing(companyId: string): Promise<Custom
   const { data, itemsByCustomer, priceListByCustomer } = await fetchCustomerPricingBase(companyId)
   if (data.length === 0) return []
 
-  // שליפת תוספות לקוח
-  const priceListIds = Object.values(priceListByCustomer).map(pl => pl.id)
-  const customerSurchargesMap: Record<string, {
-    time: TimeSurcharge[]
-    location: LocationSurcharge[]
-    service: ServiceSurcharge[]
-  }> = {}
-
-  if (priceListIds.length > 0) {
-    const [timeSurcharges, locationSurcharges, serviceSurcharges] = await Promise.all([
-      supabase.from('time_surcharges').select('*').in('price_list_id', priceListIds),
-      supabase.from('location_surcharges').select('*').in('price_list_id', priceListIds),
-      supabase.from('service_surcharges').select('*').in('price_list_id', priceListIds),
-    ])
-
-    Object.entries(priceListByCustomer).forEach(([customerCompanyId, pl]) => {
-      customerSurchargesMap[customerCompanyId] = {
-        time: (timeSurcharges.data || []).filter(s => s.price_list_id === pl.id),
-        location: (locationSurcharges.data || []).filter(s => s.price_list_id === pl.id),
-        service: (serviceSurcharges.data || []).filter(s => s.price_list_id === pl.id),
-      }
-    })
-  }
-
+  const customerSurchargesMap = await loadCustomerSurchargesMap(priceListByCustomer)
   return mapCustomerPricingRows(data, itemsByCustomer, priceListByCustomer, customerSurchargesMap)
 }
 
