@@ -862,6 +862,15 @@ export default function CalendarPage() {
     return { from: '-', to: '-' }
   }
 
+  // מסלול מלא (כתובות מלאות) לבועות היומן — null כשאין כתובות
+  const getFullRoute = (tow: TowWithDetails): { from: string; to: string } | null => {
+    if (!tow.legs || tow.legs.length === 0) return null
+    const from = tow.legs.find(l => l.from_address)?.from_address?.trim()
+    const to = [...tow.legs].reverse().find(l => l.to_address)?.to_address?.trim()
+    if (!from && !to) return null
+    return { from: from || '-', to: to || '-' }
+  }
+
   const goToToday = () => {
     const today = new Date()
     const day = today.getDay()
@@ -1397,6 +1406,18 @@ const handleSkipPriceUpdate = () => {
                         <div className="font-bold truncate text-[10px] sm:text-xs">
                           {tow.customer?.name || 'ללא לקוח'}
                         </div>
+                        {heightPx >= 36 && (() => {
+                          const route = getFullRoute(tow)
+                          if (!route) return null
+                          return (
+                            <div
+                              className="text-[9px] sm:text-[10px] opacity-90 truncate min-w-0"
+                              title={`${route.from} → ${route.to}`}
+                            >
+                              {route.from} ← {route.to}
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                     )
@@ -1610,6 +1631,18 @@ const handleSkipPriceUpdate = () => {
                             <div className="font-bold truncate text-sm">
                               {tow.customer?.name || 'ללא לקוח'}
                             </div>
+                            {heightPx >= 44 && (() => {
+                              const route = getFullRoute(tow)
+                              if (!route) return null
+                              return (
+                                <div
+                                  className="text-[9px] sm:text-[10px] opacity-90 truncate min-w-0"
+                                  title={`${route.from} → ${route.to}`}
+                                >
+                                  {route.from} ← {route.to}
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                       )
