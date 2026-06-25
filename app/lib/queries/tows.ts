@@ -856,10 +856,18 @@ export async function createTow(input: CreateTowInput) {
       .filter((row): row is { tow_point_id: string; tow_vehicle_id: string; action: PreparedTowPoint['point_type'] } => row !== null)
   })
 
-  const [vehiclesResult, legsResult, pointsResult] = await Promise.all([
-    vehicleRows.length > 0
-      ? supabase.from('tow_vehicles').insert(vehicleRows)
-      : Promise.resolve({ error: null } as { error: any }),
+  // tow_vehicles must exist before tow_legs (FK on tow_vehicle_id) and before
+  // tow_point_vehicles; legs and points can be inserted in parallel afterward.
+  if (vehicleRows.length > 0) {
+    const { error: vehiclesError } = await supabase.from('tow_vehicles').insert(vehicleRows)
+    if (vehiclesError) {
+      console.error('Error creating tow vehicle:', vehiclesError)
+      await supabase.from('tows').delete().eq('id', towId)
+      throw vehiclesError
+    }
+  }
+
+  const [legsResult, pointsResult] = await Promise.all([
     legRows.length > 0
       ? supabase.from('tow_legs').insert(legRows)
       : Promise.resolve({ error: null } as { error: any }),
@@ -867,12 +875,6 @@ export async function createTow(input: CreateTowInput) {
       ? supabase.from('tow_points').insert(pointRows)
       : Promise.resolve({ error: null } as { error: any }),
   ])
-
-  if (vehiclesResult.error) {
-    console.error('Error creating tow vehicle:', vehiclesResult.error)
-    await supabase.from('tows').delete().eq('id', towId)
-    throw vehiclesResult.error
-  }
 
   if (legsResult.error) {
     console.error('Error creating tow leg:', legsResult.error)

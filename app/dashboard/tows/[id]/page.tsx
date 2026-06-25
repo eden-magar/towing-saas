@@ -180,7 +180,14 @@ export default function TowDetailsPage() {
   const [showCantEditModal, setShowCantEditModal] = useState(false)
   const [showRemoveDriverConfirm, setShowRemoveDriverConfirm] = useState(false)
   const [showCancelModal, setShowCancelModal] = useState(false)
-  const [cancelStep, setCancelStep] = useState<'warning' | 'reason' | 'confirm'>('reason')
+  const [cancelStep, setCancelStep] = useState<'warning' | 'reason' | 'confirm' | 'linked'>('reason')
+  const [linkedCancelCandidates, setLinkedCancelCandidates] = useState<
+    { id: string; order_number: string | null; status: string }[]
+  >([])
+  const [cancelStatusForCascade, setCancelStatusForCascade] = useState<
+    'cancelled' | 'cancelled_charged' | null
+  >(null)
+  const [cancellingLinked, setCancellingLinked] = useState(false)
   const [selectedCancellationReason, setSelectedCancellationReason] = useState('')
   const [cancellationDetails, setCancellationDetails] = useState('')
   const [chargeCancellationFee, setChargeCancellationFee] = useState(false)
@@ -1093,14 +1100,51 @@ export default function TowDetailsPage() {
         fee && fee > 0 ? fee : undefined,
         user?.id
       )
+
+      // Gather linked tows (both directions) that are still cancellable, so we
+      // can offer an optional cascade. Terminal statuses are excluded so the
+      // prompt never appears for tows that are already done.
+      const isCancellable = (status: string) =>
+        !['cancelled', 'cancelled_charged', 'completed'].includes(status)
+
+      const candidates: { id: string; order_number: string | null; status: string }[] = []
+
+      // Parent direction: this tow points to a parent via linked_tow_id.
+      if (tow.linked_tow_id) {
+        const { data: parent } = await supabase
+          .from('tows')
+          .select('id, order_number, status')
+          .eq('id', tow.linked_tow_id)
+          .maybeSingle()
+        if (parent && isCancellable(parent.status)) {
+          candidates.push({ id: parent.id, order_number: parent.order_number, status: parent.status })
+        }
+      }
+
+      // Child direction: tows whose linked_tow_id points to this tow (already loaded).
+      for (const child of childTows) {
+        if (isCancellable(child.status)) {
+          candidates.push({ id: child.id, order_number: child.order_number, status: child.status })
+        }
+      }
+
       await refreshTow()
       if (changeLogsLoaded) void loadChangeLogs(true)
-      setShowCancelModal(false)
-      setSelectedCancellationReason('')
-      setCancellationDetails('')
-      setChargeCancellationFee(false)
-      setCancellationPercent('')
-      setCancelStep('reason')
+
+      if (candidates.length > 0) {
+        // Keep the modal open and move to the linked-cancel prompt. Reason/details
+        // are intentionally retained so the cascade can reuse them.
+        setLinkedCancelCandidates(candidates)
+        setCancelStatusForCascade(cancelStatus)
+        setCancelStep('linked')
+      } else {
+        setShowCancelModal(false)
+        setSelectedCancellationReason('')
+        setCancellationDetails('')
+        setChargeCancellationFee(false)
+        setCancellationPercent('')
+        setCancelStep('reason')
+      }
     } catch (err) {
       console.error('Error cancelling tow:', err)
     } finally {
@@ -1108,13 +1152,53 @@ export default function TowDetailsPage() {
     }
   }
 
-  const closeCancelModal = () => {
+  const resetCancelState = () => {
     setShowCancelModal(false)
     setSelectedCancellationReason('')
     setCancellationDetails('')
     setChargeCancellationFee(false)
     setCancellationPercent('')
     setCancelStep('reason')
+    setLinkedCancelCandidates([])
+    setCancelStatusForCascade(null)
+    setCancellingLinked(false)
+  }
+
+  // Cascade cancellation: cancel each linked tow with the SAME status the user
+  // picked, but with NO fee (fee is per-tow). Calls updateTowStatus directly so
+  // it never re-enters handleConfirmCancel — no prompt loop.
+  const handleCascadeCancelLinked = async () => {
+    if (!cancelStatusForCascade || linkedCancelCandidates.length === 0) {
+      resetCancelState()
+      return
+    }
+    setCancellingLinked(true)
+    try {
+      for (const candidate of linkedCancelCandidates) {
+        await updateTowStatus(
+          candidate.id,
+          cancelStatusForCascade,
+          selectedCancellationReason || 'ביטול גרירה מקושרת',
+          cancellationDetails.trim() || undefined,
+          undefined,
+          user?.id
+        )
+      }
+      await refreshTow()
+      if (changeLogsLoaded) void loadChangeLogs(true)
+      resetCancelState()
+    } catch (err) {
+      console.error('Error cancelling linked tow:', err)
+      setCancellingLinked(false)
+    }
+  }
+
+  const handleSkipLinkedCancel = () => {
+    resetCancelState()
+  }
+
+  const closeCancelModal = () => {
+    resetCancelState()
   }
 
   const closeDriverModal = () => {
@@ -3237,6 +3321,63 @@ export default function TowDetailsPage() {
                     className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                   >
                     {isCancelling ? 'מבטל...' : 'בטל גרירה'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {cancelStep === 'linked' && (
+              <>
+                <div className="px-5 py-4 border-b border-gray-200 bg-red-600 text-white">
+                  <h2 className="font-bold text-lg">האם לבטל גם את הגרירה המקושרת?</h2>
+                </div>
+                <div className="p-5 space-y-3">
+                  <p className="text-sm text-gray-600">
+                    הגרירה בוטלה. קיימת גרירה מקושרת — ניתן לבטל גם אותה באותו הסטטוס.
+                  </p>
+                  {linkedCancelCandidates.map((candidate) => (
+                    <div
+                      key={candidate.id}
+                      className="flex items-center justify-between gap-3 border border-gray-200 rounded-xl p-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-mono text-sm font-bold text-gray-800">
+                          {candidate.order_number ? `#${candidate.order_number}` : candidate.id.slice(0, 8)}
+                        </div>
+                        <span
+                          className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full border ${
+                            statusConfig[candidate.status]?.color || 'bg-gray-100 text-gray-700 border-gray-200'
+                          }`}
+                        >
+                          {statusConfig[candidate.status]?.label || candidate.status}
+                        </span>
+                      </div>
+                      <Link
+                        href={`/dashboard/tows/${candidate.id}`}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-1"
+                      >
+                        צפה בגרירה
+                        <ChevronLeft size={14} />
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 px-5 pb-5">
+                  <button
+                    type="button"
+                    onClick={handleSkipLinkedCancel}
+                    disabled={cancellingLinked}
+                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  >
+                    השאר אותה
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCascadeCancelLinked}
+                    disabled={cancellingLinked}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {cancellingLinked ? 'מבטל...' : 'בטל גם אותה'}
                   </button>
                 </div>
               </>
