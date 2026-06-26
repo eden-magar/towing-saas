@@ -1366,6 +1366,11 @@ const handleSkipPriceUpdate = () => {
                   const right = displayIndex * dayWidth + offsetPct
                   const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                   const isPlainCancelled = tow.status === 'cancelled'
+                  const towName = tow.customer?.name || 'ללא לקוח'
+                  const route = getFullRoute(tow)
+                  const bubbleTitle = route
+                    ? `${towName} | ${route.from} ← ${route.to}`
+                    : towName
 
                   return (
                     <div
@@ -1376,6 +1381,7 @@ const handleSkipPriceUpdate = () => {
                         e.stopPropagation()
                         setTowActionMenu(tow)
                       }}
+                      title={bubbleTitle}
                       className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
                         draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
                       } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
@@ -1402,22 +1408,15 @@ const handleSkipPriceUpdate = () => {
                       <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
                         {formatTowTimeRange(startMs, endMs)}
                       </div>
-                      <div className={`pt-3 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
-                        <div className="font-bold truncate text-[10px] sm:text-xs">
-                          {tow.customer?.name || 'ללא לקוח'}
+                      <div className={`pt-2.5 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
+                        <div className="font-bold truncate leading-tight text-[10px] sm:text-xs">
+                          {towName}
                         </div>
-                        {heightPx >= 36 && (() => {
-                          const route = getFullRoute(tow)
-                          if (!route) return null
-                          return (
-                            <div
-                              className="text-[9px] sm:text-[10px] opacity-90 truncate min-w-0"
-                              title={`${route.from} → ${route.to}`}
-                            >
-                              {route.from} ← {route.to}
-                            </div>
-                          )
-                        })()}
+                        {route && heightPx >= 32 && (
+                          <div className="text-[9px] sm:text-[10px] opacity-90 truncate leading-tight min-w-0">
+                            {route.from} ← {route.to}
+                          </div>
+                        )}
                       </div>
                     </div>
                     )
@@ -1591,6 +1590,11 @@ const handleSkipPriceUpdate = () => {
                       })
                       const elapsedMinutes = (endMs - startMs) / 60000
                       const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_DAY
+                      const towName = tow.customer?.name || 'ללא לקוח'
+                      const route = getFullRoute(tow)
+                      const bubbleTitle = route
+                        ? `${towName} | ${route.from} ← ${route.to}`
+                        : towName
 
                       return (
                         <div
@@ -1601,6 +1605,7 @@ const handleSkipPriceUpdate = () => {
                             e.stopPropagation()
                             setTowActionMenu(tow)
                           }}
+                          title={bubbleTitle}
                           className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-2 sm:p-3 text-white overflow-hidden shadow-md hover:shadow-lg transition-all border-r-4 ${
                             draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
                           } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
@@ -1628,21 +1633,14 @@ const handleSkipPriceUpdate = () => {
                             {formatTowTimeRange(startMs, endMs)}
                           </div>
                           <div className={`pt-4 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
-                            <div className="font-bold truncate text-sm">
-                              {tow.customer?.name || 'ללא לקוח'}
+                            <div className="font-bold truncate leading-tight text-sm">
+                              {towName}
                             </div>
-                            {heightPx >= 44 && (() => {
-                              const route = getFullRoute(tow)
-                              if (!route) return null
-                              return (
-                                <div
-                                  className="text-[9px] sm:text-[10px] opacity-90 truncate min-w-0"
-                                  title={`${route.from} → ${route.to}`}
-                                >
-                                  {route.from} ← {route.to}
-                                </div>
-                              )
-                            })()}
+                            {route && heightPx >= 40 && (
+                              <div className="text-[9px] sm:text-[10px] opacity-90 truncate leading-tight min-w-0">
+                                {route.from} ← {route.to}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )

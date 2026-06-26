@@ -18,7 +18,7 @@ import {
   getVehiclesReservedForTow,
 } from '../lib/queries/storage'
 import { AddressData } from '../lib/google-maps'
-import type { RouteStop } from './useTowForm'
+import { findPickupRouteStop, findDropoffRouteStop, type RouteStop } from './useTowForm'
 import { DistanceResult, PriceItem, TowType } from '../components/tow-forms/sections'
 import { CustomerWithPricing, LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../lib/queries/price-lists'
 import { VehicleLookupResult, VehicleType } from '../lib/types'
@@ -313,6 +313,17 @@ export function useTowSave(params: UseTowSaveParams) {
   if (towType === 'single') {
     if (requiredTruckTypes.length === 0) {
       setError('יש לבחור סוג גרר נדרש')
+      return
+    }
+    // Block saving a single tow with no usable pickup/dropoff address —
+    // otherwise it persists with null tow_legs and zero tow_points.
+    const pickupStop = findPickupRouteStop(routeStops)
+    const dropoffStop = findDropoffRouteStop(routeStops)
+    if (
+      !pickupStop?.address?.address?.trim() ||
+      !dropoffStop?.address?.address?.trim()
+    ) {
+      setError('יש להזין כתובת מוצא ויעד לגרירה')
       return
     }
   }
