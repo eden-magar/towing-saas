@@ -140,7 +140,7 @@ export interface TaskDetailFull {
   company_id: string
   order_number: string | null
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
-  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom'
+  tow_type: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'custom' | 'exchange'
   scheduled_at: string | null
   notes: string | null
   final_price: number | null

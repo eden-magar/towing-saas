@@ -536,6 +536,7 @@ export default function TaskFlowPage({ params }: { params: Promise<{ id: string 
             onMarkStopVisited={handleStopVisited}
             taskId={id}
             priceBreakdown={task.price_breakdown}
+            towType={task.tow_type}
           />
         )}
 

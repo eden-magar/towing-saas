@@ -19,6 +19,32 @@ import { toWhatsApp } from '@/app/lib/utils/phone'
 import { DriverVehicleCoreCompact } from '@/app/driver/components/DriverVehicleCoreCompact'
 import LicensePlate from '@/app/driver/components/LicensePlate'
 
+/**
+ * Exchange-only label for the "arrived" button. Returns null to fall back to the
+ * generic "הגעתי" (non-exchange tows, or anything we can't resolve from data).
+ * Resolves purely from point_vehicles → tow_vehicles.is_working; no legacy
+ * point_order heuristics (new tows always carry point_vehicles).
+ */
+function getExchangeArrivedLabel(
+  towType: string | null | undefined,
+  point: DriverTaskPoint,
+  pointVehicles: DriverTaskVehicle[]
+): string | null {
+  if (towType !== 'exchange') return null
+
+  // Exchange hub carries both vehicles — one תקין/תקול label can't represent it.
+  if (point.point_type === 'exchange') return 'הגעתי לנקודת החלפה'
+
+  // Single resolved vehicle → label by condition.
+  if (pointVehicles.length === 1) {
+    const v = pointVehicles[0]
+    if (v.is_working === true) return 'הגעתי לתקין'
+    if (v.is_working === false) return 'הגעתי לתקול'
+  }
+
+  return null
+}
+
 function StoragePointBadge({
   pointType,
 }: {
@@ -55,6 +81,7 @@ interface StepOnTheWayProps {
   onMarkStopVisited: (driverNotes?: string) => Promise<void>
   taskId: string
   priceBreakdown?: any
+  towType?: string | null
 }
 
 export default function StepOnTheWay({
@@ -66,7 +93,8 @@ export default function StepOnTheWay({
   onArrived,
   onMarkStopVisited,
   taskId,
-  priceBreakdown
+  priceBreakdown,
+  towType
 }: StepOnTheWayProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -128,6 +156,9 @@ export default function StepOnTheWay({
 
   const { displayName: contactName, phone: contactPhone, canCall } =
     resolveDriverContact(point, customer)
+
+  // Exchange tows: label arrival by the point's vehicle (תקין/תקול/hub); else generic.
+  const arrivedLabel = getExchangeArrivedLabel(towType, point, vehicles) ?? 'הגעתי'
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-70px)]">
@@ -343,7 +374,7 @@ export default function StepOnTheWay({
             ) : (
               <>
                 <MapPin size={22} />
-                {isStop ? 'הייתי כאן' : 'הגעתי'}
+                {isStop ? 'הייתי כאן' : arrivedLabel}
               </>
             )}
           </button>
