@@ -16,6 +16,12 @@ import {
   assignExistingVehicleIds,
 } from './tow-reconcile-match'
 import type { AddressData } from '../google-maps'
+import {
+  type ManualSurcharge,
+  manualSurchargesToBreakdown,
+  manualSurchargesToCalcInput,
+  sanitizeManualSurcharges,
+} from './manual-surcharge'
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100
@@ -126,7 +132,11 @@ export interface SaveTowInput {
   /** Exchange: separate lists so service_surcharges can store vehicle_role */
   workingSelectedServices?: SelectedService[]
   defectiveSelectedServices?: SelectedService[]
+  /** Whole-tow catalog selections (exchange/custom) — stored flagged is_tow_level. */
+  towServiceSurcharges?: SelectedService[]
   serviceSurchargesData?: ServiceSurcharge[]
+  /** Manual (ad-hoc) add-on lines — order-only, not from the catalog. */
+  manualSurcharges?: ManualSurcharge[]
   
   // Additional
   notes?: string
@@ -188,12 +198,14 @@ export type ExchangePriceAffectingFields = {
   selectedLocationSurcharges?: string[]
   workingSelectedServices?: SelectedService[]
   defectiveSelectedServices?: SelectedService[]
+  towServiceSurcharges?: SelectedService[]
   activeTimeSurchargeIds?: string[]
   timeSurchargesData?: TimeSurcharge[]
   selectedCustomerPricing?: CustomerWithPricing | null
   isHoliday?: boolean
   hasManualTimeSurchargeOverride?: boolean
   manualAdjustmentPercent?: number
+  manualSurcharges?: ManualSurcharge[]
   towDate?: string
   towTime?: string
 }
@@ -250,6 +262,14 @@ function exchangeServicesSignature(services?: SelectedService[]): string {
   )
 }
 
+function manualSurchargesSignature(list?: ManualSurcharge[]): string {
+  return JSON.stringify(
+    sanitizeManualSurcharges(list)
+      .map((m) => ({ id: m.id, label: m.label, amount: m.amount }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+  )
+}
+
 /** Stable signature of exchange inputs that affect recommended/custom price calculation. */
 export function buildExchangePriceAffectingSignature(
   fields: ExchangePriceAffectingFields
@@ -270,6 +290,8 @@ export function buildExchangePriceAffectingSignature(
     location: [...(fields.selectedLocationSurcharges ?? [])].sort().join(','),
     workingSvc: exchangeServicesSignature(fields.workingSelectedServices),
     defectiveSvc: exchangeServicesSignature(fields.defectiveSelectedServices),
+    towSvc: exchangeServicesSignature(fields.towServiceSurcharges),
+    manualSvc: manualSurchargesSignature(fields.manualSurcharges),
     timeIds: exchangeTimeSurchargeIds(fields),
     towDate: fields.towDate ?? '',
     towTime: fields.towTime ?? '',
@@ -294,12 +316,14 @@ export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string
     selectedLocationSurcharges: input.selectedLocationSurcharges,
     workingSelectedServices: input.workingSelectedServices,
     defectiveSelectedServices: input.defectiveSelectedServices,
+    towServiceSurcharges: input.towServiceSurcharges,
     activeTimeSurchargeIds: (input.activeTimeSurcharges ?? []).map((s) => s.id),
     timeSurchargesData: input.timeSurchargesData,
     selectedCustomerPricing: input.selectedCustomerPricing,
     isHoliday: input.isHoliday,
     hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
     manualAdjustmentPercent: input.manualAdjustmentPercent,
+    manualSurcharges: input.manualSurcharges,
     towDate: input.towDate,
     towTime: input.towTime,
   })
@@ -321,6 +345,7 @@ export type SinglePriceAffectingFields = {
   isHoliday?: boolean
   hasManualTimeSurchargeOverride?: boolean
   manualAdjustmentPercent?: number
+  manualSurcharges?: ManualSurcharge[]
   towDate?: string
   towTime?: string
 }
@@ -347,6 +372,7 @@ export function buildSinglePriceAffectingSignature(fields: SinglePriceAffectingF
     discountPercent: fields.discountPercent ?? 0,
     location: [...(fields.selectedLocationSurcharges ?? [])].sort().join(','),
     services: exchangeServicesSignature(fields.selectedServices),
+    manualSvc: manualSurchargesSignature(fields.manualSurcharges),
     timeIds: exchangeTimeSurchargeIds({
       priceMode: fields.priceMode,
       activeTimeSurchargeIds: fields.activeTimeSurchargeIds,
@@ -382,6 +408,7 @@ export function singlePriceSignatureFromSaveInput(input: SaveTowInput): string {
     isHoliday: input.isHoliday,
     hasManualTimeSurchargeOverride: input.hasManualTimeSurchargeOverride,
     manualAdjustmentPercent: input.manualAdjustmentPercent,
+    manualSurcharges: input.manualSurcharges,
     towDate: input.towDate,
     towTime: input.towTime,
   })
@@ -1003,17 +1030,39 @@ function buildExchangeServiceSurchargesBreakdown(
   return [...build(workingServices, 'working'), ...build(defectiveServices, 'defective')]
 }
 
-function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['service_surcharges'] {
-  return (input.selectedServices || [])
-    .map(selected => {
-      const surcharge = input.serviceSurchargesData?.find(s => s.id === selected.id)
+function buildCatalogServiceCalcInput(
+  selected: SelectedService[],
+  serviceSurchargesData: ServiceSurcharge[] | undefined,
+): { amount: number; label?: string }[] {
+  return selected
+    .map((sel) => {
+      const s = serviceSurchargesData?.find((x) => x.id === sel.id)
+      if (!s) return { amount: 0 }
+      if (s.price_type === 'manual') return { amount: sel.manualPrice || 0, label: s.label }
+      if (s.price_type === 'per_unit') {
+        const qty = sel.quantity || 1
+        return { amount: s.price * qty, label: `${s.label} (×${qty})` }
+      }
+      return { amount: s.price, label: s.label }
+    })
+    .filter((x) => x.amount > 0)
+}
+
+/** Catalog (service_surcharges table) selections as stored breakdown lines — no manual lines. */
+function buildCatalogServiceBreakdown(
+  selected: SelectedService[] | undefined,
+  serviceSurchargesData: ServiceSurcharge[] | undefined,
+): { id: string; label: string; price: number; units?: number; amount: number }[] {
+  return (selected || [])
+    .map((sel) => {
+      const surcharge = serviceSurchargesData?.find((s) => s.id === sel.id)
       if (!surcharge) return null
       let amount = 0
       let units: number | undefined = undefined
       if (surcharge.price_type === 'manual') {
-        amount = selected.manualPrice || 0
+        amount = sel.manualPrice || 0
       } else if (surcharge.price_type === 'per_unit') {
-        units = selected.quantity || 1
+        units = sel.quantity || 1
         amount = surcharge.price * units
       } else {
         amount = surcharge.price
@@ -1021,6 +1070,25 @@ function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['s
       return { id: surcharge.id, label: surcharge.label, price: surcharge.price, units, amount }
     })
     .filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
+}
+
+/** Whole-tow catalog selections as stored breakdown lines, flagged is_tow_level. */
+function buildTowLevelServiceBreakdown(
+  selected: SelectedService[] | undefined,
+  serviceSurchargesData: ServiceSurcharge[] | undefined,
+): PriceBreakdown['service_surcharges'] {
+  return buildCatalogServiceBreakdown(selected, serviceSurchargesData).map((s) => ({
+    ...s,
+    is_tow_level: true as const,
+  }))
+}
+
+function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['service_surcharges'] {
+  return [
+    ...buildCatalogServiceBreakdown(input.selectedServices, input.serviceSurchargesData),
+    ...buildTowLevelServiceBreakdown(input.towServiceSurcharges, input.serviceSurchargesData),
+    ...manualSurchargesToBreakdown(input.manualSurcharges),
+  ]
 }
 
   function buildLocationSurchargesBreakdown(
@@ -1057,15 +1125,11 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     .filter(Boolean)
     .map(s => ({ percent: s!.surcharge_percent }))
 
-  const serviceSurcharges = (input.selectedServices || [])
-    .map(selected => {
-      const s = input.serviceSurchargesData?.find(x => x.id === selected.id)
-      if (!s) return { amount: 0 }
-      if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-      if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
-      return { amount: s.price }
-    })
-    .filter(x => x.amount > 0)
+  const serviceSurcharges = [
+    ...buildCatalogServiceCalcInput(input.selectedServices || [], input.serviceSurchargesData),
+    ...buildCatalogServiceCalcInput(input.towServiceSurcharges || [], input.serviceSurchargesData),
+    ...manualSurchargesToCalcInput(input.manualSurcharges),
+  ]
 
   const flat = extractBasePrices(activePriceList)
   const brackets = input.weightBrackets ?? []
@@ -1129,21 +1193,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
       amount: round2(result.subtotal * s!.surcharge_percent / 100)
     }))
 
-  const serviceSurchargesBreakdown = (input.selectedServices || [])
-    .map(selected => {
-      const s = input.serviceSurchargesData?.find(x => x.id === selected.id)
-      if (!s) return null
-      let amount = 0
-      let units: number | undefined
-      if (s.price_type === 'manual') amount = selected.manualPrice || 0
-      else if (s.price_type === 'per_unit') {
-        units = selected.quantity || 1
-        amount = s.price * units
-      } else amount = s.price
-      if (amount <= 0) return null
-      return { id: s.id, label: s.label, price: s.price, units, amount }
-    })
-    .filter((s): s is NonNullable<typeof s> => s !== null)
+  const serviceSurchargesBreakdown = buildServiceSurchargesBreakdown(input)
 
   return {
     base_price: round2(result.basePrice),
@@ -1204,15 +1254,11 @@ export function buildCustomTowPriceBreakdown(
     .filter(Boolean)
     .map((s) => ({ percent: s!.surcharge_percent }))
 
-  const serviceSurcharges = routeServices
-    .map((selected) => {
-      const s = input.serviceSurchargesData?.find((x) => x.id === selected.id)
-      if (!s) return { amount: 0 }
-      if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-      if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
-      return { amount: s.price }
-    })
-    .filter((x) => x.amount > 0)
+  const serviceSurcharges = [
+    ...buildCatalogServiceCalcInput(routeServices, input.serviceSurchargesData),
+    ...buildCatalogServiceCalcInput(input.towServiceSurcharges || [], input.serviceSurchargesData),
+    ...manualSurchargesToCalcInput(input.manualSurcharges),
+  ]
 
   const timeSurchargesForCalc = timeSurchargesForPriceCalc(input)
 
@@ -1264,21 +1310,10 @@ export function buildCustomTowPriceBreakdown(
       amount: round2(result.subtotal * s!.surcharge_percent / 100),
     }))
 
-  const serviceSurchargesBreakdown = routeServices
-    .map((selected) => {
-      const s = input.serviceSurchargesData?.find((x) => x.id === selected.id)
-      if (!s) return null
-      let amount = 0
-      let units: number | undefined
-      if (s.price_type === 'manual') amount = selected.manualPrice || 0
-      else if (s.price_type === 'per_unit') {
-        units = selected.quantity || 1
-        amount = s.price * units
-      } else amount = s.price
-      if (amount <= 0) return null
-      return { id: s.id, label: s.label, price: s.price, units, amount }
-    })
-    .filter((s): s is NonNullable<typeof s> => s !== null)
+  const serviceSurchargesBreakdown = buildServiceSurchargesBreakdown({
+    ...input,
+    selectedServices: routeServices,
+  })
 
   return {
     base_price: round2(result.basePrice),
@@ -1512,11 +1547,15 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
   if (priceBreakdown && useExchangeServiceRoles && !exchangePriceInputsUnchanged) {
     priceBreakdown = {
       ...priceBreakdown,
-      service_surcharges: buildExchangeServiceSurchargesBreakdown(
-        input.workingSelectedServices ?? [],
-        input.defectiveSelectedServices ?? [],
-        input.serviceSurchargesData
-      ),
+      service_surcharges: [
+        ...buildExchangeServiceSurchargesBreakdown(
+          input.workingSelectedServices ?? [],
+          input.defectiveSelectedServices ?? [],
+          input.serviceSurchargesData
+        ),
+        ...buildTowLevelServiceBreakdown(input.towServiceSurcharges, input.serviceSurchargesData),
+        ...manualSurchargesToBreakdown(input.manualSurcharges),
+      ],
     }
   }
 

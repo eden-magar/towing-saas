@@ -23,6 +23,7 @@ import { DistanceResult, PriceItem, TowType } from '../components/tow-forms/sect
 import { CustomerWithPricing, LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../lib/queries/price-lists'
 import { VehicleLookupResult, VehicleType } from '../lib/types'
 import { SelectedService } from '../components/tow-forms/shared'
+import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { RoutePoint } from '../components/tow-forms/routes'
 import { supabase } from '../lib/supabase'
 import { insertDriverTruckAssignments } from '../lib/queries/driver-truck-assignments'
@@ -104,6 +105,8 @@ interface UseTowSaveParams {
   selectedLocationSurcharges: string[]
   locationSurchargesData: LocationSurcharge[]
   selectedServices: SelectedService[]
+  towServiceSurcharges?: SelectedService[]
+  manualSurcharges?: ManualSurcharge[]
   serviceSurchargesData: ServiceSurcharge[]
   notes: string
   paymentMethod: 'cash' | 'credit' | 'invoice'
@@ -228,6 +231,8 @@ export function useTowSave(params: UseTowSaveParams) {
     selectedLocationSurcharges,
     locationSurchargesData,
     selectedServices,
+    towServiceSurcharges,
+    manualSurcharges,
     serviceSurchargesData,
     notes,
     paymentMethod,
@@ -433,6 +438,8 @@ export function useTowSave(params: UseTowSaveParams) {
         towType === 'exchange'
           ? [...(workingSelectedServices ?? []), ...(defectiveSelectedServices ?? [])]
           : selectedServices,
+      towServiceSurcharges,
+      manualSurcharges,
       serviceSurchargesData,
       // Additional
       notes,

@@ -1,6 +1,7 @@
 'use client'
 
-import { Plus, Minus } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Minus, Check } from 'lucide-react'
 import { ServiceSurcharge } from '../../../lib/queries/price-lists'
 
 // מייצג בחירת שירות עם כמות/מחיר
@@ -17,7 +18,23 @@ interface ServiceSurchargeSelectorProps {
   label?: string
 }
 
-import { useState } from 'react'
+const HEBREW_SORT = 'he' as const
+
+/** Strip invisible bidi marks / normalize so localeCompare matches visible Hebrew order. */
+function serviceLabelSortKey(label: string): string {
+  return label
+    .normalize('NFKC')
+    .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+    .trim()
+}
+
+function compareServiceLabels(a: ServiceSurcharge, b: ServiceSurcharge): number {
+  return serviceLabelSortKey(a.label).localeCompare(
+    serviceLabelSortKey(b.label),
+    HEBREW_SORT,
+    { numeric: true, sensitivity: 'base' }
+  )
+}
 
 export function ServiceSurchargeSelector({
   services,
@@ -26,8 +43,13 @@ export function ServiceSurchargeSelector({
   label = 'שירותים נוספים'
 }: ServiceSurchargeSelectorProps) {
   const [showModal, setShowModal] = useState(false)
-  const activeServices = services.filter(s => s.is_active)
-  
+  // Display order only: Hebrew A-Z on visible label text. Copy before sort so the
+  // source `services` prop is never mutated.
+  const activeServices = useMemo(
+    () => [...services].filter((s) => s.is_active).sort(compareServiceLabels),
+    [services]
+  )
+
   if (activeServices.length === 0) return null
 
   const isSelected = (id: string) => selectedServices.some(s => s.id === id)
@@ -164,23 +186,41 @@ export function ServiceSurchargeSelector({
         </div>
       )}
 
-      {/* דסקטופ */}
-      <div className="hidden sm:flex flex-wrap gap-2">
+      {/* דסקטופ - רשימת שורות אחידה (גלילה פנימית כשהרשימה ארוכה) */}
+      <div className="hidden sm:block border border-gray-200 rounded-xl overflow-y-auto max-h-72 divide-y divide-gray-100">
         {activeServices.map((service) => {
           const selected = isSelected(service.id)
-          
+
           return (
             <button
               key={service.id}
               type="button"
               onClick={() => toggleService(service)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                selected
-                  ? 'bg-[#33d4ff] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-right transition-colors ${
+                selected ? 'bg-[#33d4ff]/5' : 'bg-white hover:bg-gray-50'
               }`}
             >
-              {service.label} ({getPriceDisplay(service)})
+              <span
+                className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                  selected ? 'bg-[#33d4ff] border-[#33d4ff] text-white' : 'border-gray-300 bg-white'
+                }`}
+              >
+                {selected && <Check size={14} />}
+              </span>
+              <span
+                className={`flex-1 min-w-0 text-sm leading-snug whitespace-normal break-words ${
+                  selected ? 'text-gray-800 font-medium' : 'text-gray-700'
+                }`}
+              >
+                {service.label}
+              </span>
+              <span
+                className={`shrink-0 text-sm font-medium ${
+                  selected ? 'text-[#33d4ff]' : 'text-gray-500'
+                }`}
+              >
+                {getPriceDisplay(service)}
+              </span>
             </button>
           )
         })}

@@ -9,6 +9,8 @@ import {
   getCustomerPricingByCustomerId,
 } from '../lib/queries/price-lists'
 import { SelectedService } from '../components/tow-forms/shared'
+import { manualSurchargesToCalcInput } from '../lib/utils/manual-surcharge'
+import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
 import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, TowPriceResult } from '../lib/utils/price-calculator'
@@ -43,6 +45,9 @@ interface UseTowPricingParams {
   selectedLocationSurcharges: string[]
   locationSurchargesData: LocationSurcharge[]
   selectedServices: SelectedService[]
+  /** Whole-tow catalog selections (exchange/custom), priced on top of per-leg/per-point ones. */
+  towServiceSurcharges?: SelectedService[]
+  manualSurcharges?: ManualSurcharge[]
   serviceSurchargesData: ServiceSurcharge[]
   selectedCustomerPricing: CustomerWithPricing | null
   customRouteData: {
@@ -80,6 +85,25 @@ interface UseTowPricingParams {
   manualAdjustmentType?: 'discount' | 'markup'
 }
 
+/** Map catalog selections to flat ₪ calc inputs (uniform with service surcharges), dropping ₪0 lines. */
+function servicesToCalcInput(
+  services: SelectedService[],
+  serviceSurchargesData: ServiceSurcharge[],
+): { amount: number; label?: string }[] {
+  return services
+    .map((selected) => {
+      const surcharge = serviceSurchargesData.find((s) => s.id === selected.id)
+      if (!surcharge) return { amount: 0 }
+      if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0, label: surcharge.label }
+      if (surcharge.price_type === 'per_unit') {
+        const qty = selected.quantity || 1
+        return { amount: surcharge.price * qty, label: `${surcharge.label} (×${qty})` }
+      }
+      return { amount: surcharge.price, label: surcharge.label }
+    })
+    .filter((s) => s.amount > 0)
+}
+
 export function useTowPricing(params: UseTowPricingParams) {
   const {
     towType,
@@ -93,6 +117,8 @@ export function useTowPricing(params: UseTowPricingParams) {
     selectedLocationSurcharges,
     locationSurchargesData,
     selectedServices,
+    towServiceSurcharges = [],
+    manualSurcharges = [],
     serviceSurchargesData,
     selectedCustomerPricing,
     customRouteData,
@@ -223,6 +249,8 @@ export function useTowPricing(params: UseTowPricingParams) {
   const activeTimeSurchargeIds = activeTimeSurchargesList.map((s) => s.id).join(',')
   const selectedLocationKey = selectedLocationSurcharges.join(',')
   const selectedServicesKey = JSON.stringify(selectedServices)
+  const towServiceSurchargesKey = JSON.stringify(towServiceSurcharges)
+  const manualSurchargesKey = JSON.stringify(manualSurcharges)
   const customRouteVehiclesKey = JSON.stringify(customRouteData.vehicles)
   const customRouteServicesKey = JSON.stringify(customRouteData.services)
 
@@ -246,18 +274,22 @@ export function useTowPricing(params: UseTowPricingParams) {
         .filter(Boolean)
         .map(s => ({ percent: s!.surcharge_percent }))
       const routeServices = aggregateRouteServices(customRouteData.services)
-      const svcSurcharges = routeServices
-        .map((selected) => {
-          const s = serviceSurchargesData.find((x) => x.id === selected.id)
-          if (!s) return { amount: 0 }
-          if (s.price_type === 'manual') return { amount: selected.manualPrice || 0, label: s.label }
-          if (s.price_type === 'per_unit') {
-            const qty = selected.quantity || 1
-            return { amount: s.price * qty, label: `${s.label} (×${qty})` }
-          }
-          return { amount: s.price, label: s.label }
-        })
-        .filter((x) => x.amount > 0)
+      const svcSurcharges = [
+        ...routeServices
+          .map((selected) => {
+            const s = serviceSurchargesData.find((x) => x.id === selected.id)
+            if (!s) return { amount: 0 }
+            if (s.price_type === 'manual') return { amount: selected.manualPrice || 0, label: s.label }
+            if (s.price_type === 'per_unit') {
+              const qty = selected.quantity || 1
+              return { amount: s.price * qty, label: `${s.label} (×${qty})` }
+            }
+            return { amount: s.price, label: s.label }
+          })
+          .filter((x) => x.amount > 0),
+        ...servicesToCalcInput(towServiceSurcharges, serviceSurchargesData),
+        ...manualSurchargesToCalcInput(manualSurcharges),
+      ]
 
       const result = calculateTowPrice({
         priceList: priceListForTowCalc(activePriceList, { globalKmOnly: true }),
@@ -290,16 +322,20 @@ export function useTowPricing(params: UseTowPricingParams) {
       .filter(Boolean)
       .map(s => ({ percent: s!.surcharge_percent }))
 
-    const serviceSurcharges = selectedServices.map(selected => {
-      const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
-      if (!surcharge) return { amount: 0 }
-      if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0, label: surcharge.label }
-      if (surcharge.price_type === 'per_unit') {
-        const qty = selected.quantity || 1
-        return { amount: surcharge.price * qty, label: `${surcharge.label} (×${qty})` }
-      }
-      return { amount: surcharge.price, label: surcharge.label }
-    }).filter(s => s.amount > 0)
+    const serviceSurcharges = [
+      ...selectedServices.map(selected => {
+        const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
+        if (!surcharge) return { amount: 0 }
+        if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0, label: surcharge.label }
+        if (surcharge.price_type === 'per_unit') {
+          const qty = selected.quantity || 1
+          return { amount: surcharge.price * qty, label: `${surcharge.label} (×${qty})` }
+        }
+        return { amount: surcharge.price, label: surcharge.label }
+      }).filter(s => s.amount > 0),
+      ...servicesToCalcInput(towServiceSurcharges, serviceSurchargesData),
+      ...manualSurchargesToCalcInput(manualSurcharges),
+    ]
 
     const result = calculateTowPrice({
       priceList: priceListForTowCalc(activePriceList),
@@ -334,6 +370,8 @@ export function useTowPricing(params: UseTowPricingParams) {
     selectedLocationKey,
     locationSurchargesData,
     selectedServicesKey,
+    towServiceSurchargesKey,
+    manualSurchargesKey,
     serviceSurchargesData,
     selectedCustomerPricing,
     customRouteData.totalDistanceKm,

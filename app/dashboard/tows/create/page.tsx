@@ -44,6 +44,7 @@ import {
   PinDropModal,
   VehicleLookup,
   ServiceSurchargeSelector,
+  ManualSurchargeSection,
   VehicleCoreLookupChips,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
@@ -183,6 +184,10 @@ function CreateTowForm({
     setSelectedLocationSurcharges,
     selectedServices,
     setSelectedServices,
+    towServiceSurcharges,
+    setTowServiceSurcharges,
+    manualSurcharges,
+    setManualSurcharges,
     isHoliday,
     setIsHoliday,
     activeTimeSurchargesList,
@@ -1354,6 +1359,8 @@ function CreateTowForm({
           towType === 'exchange'
             ? [...(workingSelectedServices ?? []), ...(defectiveSelectedServices ?? [])]
             : selectedServices,
+        towServiceSurcharges,
+        manualSurcharges,
         serviceSurchargesData,
         notes,
         paymentMethod: paymentMethod || undefined,
@@ -2070,6 +2077,12 @@ function CreateTowForm({
                               services={serviceSurchargesData}
                               selectedServices={selectedServices}
                               onChange={setSelectedServices}
+                            />
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-gray-100">
+                            <ManualSurchargeSection
+                              manualSurcharges={manualSurcharges}
+                              onChange={setManualSurcharges}
                             />
                           </div>
                         </div>
@@ -3034,6 +3047,23 @@ function CreateTowForm({
                         setSelectedLocationSurcharges={setSelectedLocationSurcharges}
                       />
                     </FormSubcard>
+
+                    <FormSubcard title="שירותים נוספים">
+                      <ServiceSurchargeSelector
+                        services={serviceSurchargesData}
+                        selectedServices={towServiceSurcharges}
+                        onChange={setTowServiceSurcharges}
+                        label=" "
+                      />
+                    </FormSubcard>
+
+                    <FormSubcard title="תוספות ידניות">
+                      <ManualSurchargeSection
+                        manualSurcharges={manualSurcharges}
+                        onChange={setManualSurcharges}
+                        label="תוספת ידנית"
+                      />
+                    </FormSubcard>
                   </>
                 )}
 
@@ -3092,6 +3122,31 @@ function CreateTowForm({
                           locationSurchargesData={locationSurchargesData}
                           selectedLocationSurcharges={selectedLocationSurcharges}
                           setSelectedLocationSurcharges={setSelectedLocationSurcharges}
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">שירותים נוספים</h3>
+                      </div>
+                      <div className="p-4">
+                        <ServiceSurchargeSelector
+                          services={serviceSurchargesData}
+                          selectedServices={towServiceSurcharges}
+                          onChange={setTowServiceSurcharges}
+                          label=" "
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="font-semibold text-gray-700 text-sm">תוספות ידניות</h3>
+                      </div>
+                      <div className="p-4">
+                        <ManualSurchargeSection
+                          manualSurcharges={manualSurcharges}
+                          onChange={setManualSurcharges}
+                          label="תוספת ידנית"
                         />
                       </div>
                     </div>

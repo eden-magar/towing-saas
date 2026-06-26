@@ -43,6 +43,14 @@ import {
 } from '../lib/utils/storage-vehicle'
 import { TowType, PriceItem, DistanceResult } from '../components/tow-forms/sections'
 import { SelectedService } from '../components/tow-forms/shared'
+import {
+  type ManualSurcharge,
+  extractManualSurcharges,
+} from '../lib/utils/manual-surcharge'
+import {
+  extractTowLevelServices,
+  excludeTowLevelServices,
+} from '../lib/utils/tow-service-surcharge'
 import { RoutePoint, type VehicleOnTruck } from '../components/tow-forms/routes'
 import {
   buildRoutePointsFromExchangeState,
@@ -503,6 +511,10 @@ export function useTowForm(
   // Selected surcharges
   const [selectedLocationSurcharges, setSelectedLocationSurcharges] = useState<string[]>([])
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
+  // Whole-tow catalog selections (exchange/custom) — parallel to manualSurcharges at tow level.
+  const [towServiceSurcharges, setTowServiceSurcharges] = useState<SelectedService[]>([])
+  // Manual (ad-hoc) add-on lines — order-only, not from the catalog.
+  const [manualSurcharges, setManualSurcharges] = useState<ManualSurcharge[]>([])
   const [isHoliday, setIsHoliday] = useState(false)
   const [activeTimeSurchargesList, setActiveTimeSurchargesList] = useState<TimeSurcharge[]>([])
   const [hasManualTimeSurchargeOverride, setHasManualTimeSurchargeOverride] = useState(false)
@@ -893,12 +905,14 @@ export function useTowForm(
       selectedLocationSurcharges,
       workingSelectedServices,
       defectiveSelectedServices,
+      towServiceSurcharges,
       activeTimeSurchargeIds: activeTimeSurchargesList.map((s) => s.id),
       timeSurchargesData,
       isHoliday,
       hasManualTimeSurchargeOverride,
       manualAdjustmentPercent:
         manualAdjustmentType === 'discount' ? -manualAdj : manualAdj,
+      manualSurcharges,
       towDate,
       towTime,
     })
@@ -923,12 +937,14 @@ export function useTowForm(
     selectedLocationSurcharges,
     workingSelectedServices,
     defectiveSelectedServices,
+    towServiceSurcharges,
     activeTimeSurchargesList,
     timeSurchargesData,
     isHoliday,
     hasManualTimeSurchargeOverride,
     manualAdjustmentPercent,
     manualAdjustmentType,
+    manualSurcharges,
   ])
 
   // Capture single-tow edit price-affecting baseline once after hydration + isHoliday restore
@@ -967,6 +983,7 @@ export function useTowForm(
       hasManualTimeSurchargeOverride,
       manualAdjustmentPercent:
         manualAdjustmentType === 'discount' ? -manualAdj : manualAdj,
+      manualSurcharges,
       towDate,
       towTime,
     })
@@ -994,6 +1011,7 @@ export function useTowForm(
     hasManualTimeSurchargeOverride,
     manualAdjustmentPercent,
     manualAdjustmentType,
+    manualSurcharges,
   ])
 
   // Calculate base to pickup distance
@@ -1362,17 +1380,27 @@ export function useTowForm(
         if (tow.required_truck_types) {
           setRequiredTruckTypes(tow.required_truck_types as string[])
         }
-        // Selected services from price breakdown
+        // Selected services from price breakdown (ad-hoc manual lines are handled separately so
+        // they are not mistaken for catalog selections and dropped on re-save).
         if (tow.price_breakdown?.service_surcharges?.length) {
+          const catalogLines = excludeTowLevelServices(
+            tow.price_breakdown.service_surcharges.filter(
+              (s: { is_ad_hoc?: boolean }) => s.is_ad_hoc !== true
+            )
+          )
           setSelectedServices(
-            tow.price_breakdown.service_surcharges.map((s: { id: string; price: number; units?: number; amount: number }) => ({
+            catalogLines.map((s: { id: string; price: number; units?: number; amount: number }) => ({
               id: s.id,
               quantity: s.units,
               manualPrice: s.units === undefined && s.amount !== s.price ? s.amount : undefined
             }))
           )
+          setTowServiceSurcharges(extractTowLevelServices(tow.price_breakdown.service_surcharges))
+          setManualSurcharges(extractManualSurcharges(tow.price_breakdown.service_surcharges))
         } else {
           setSelectedServices([])
+          setTowServiceSurcharges([])
+          setManualSurcharges([])
         }
 
         // Selected location surcharges from price breakdown
@@ -1550,7 +1578,9 @@ export function useTowForm(
             quantity: s.units,
             manualPrice: s.units === undefined && s.amount !== s.price ? s.amount : undefined,
           })
-          const serviceSurcharges = tow.price_breakdown?.service_surcharges ?? []
+          const serviceSurcharges = (tow.price_breakdown?.service_surcharges ?? []).filter(
+            (s: { is_ad_hoc?: boolean }) => s.is_ad_hoc !== true
+          )
           setWorkingSelectedServices(
             serviceSurcharges
               .filter((s: any) => s.vehicle_role === 'working')
@@ -1562,6 +1592,8 @@ export function useTowForm(
               .map(mapExchangeService)
           )
           setSelectedServices([])
+          // Ad-hoc lines carry no vehicle_role; keep them as order-level manual add-ons.
+          setManualSurcharges(extractManualSurcharges(tow.price_breakdown?.service_surcharges))
         } else {
           // Single tow - vehicle (tow_vehicles row wins over point junction for full columns)
           const vehicleFromPoints = tow.points
@@ -1993,6 +2025,8 @@ export function useTowForm(
     selectedServices: towType === 'exchange'
       ? [...workingSelectedServices, ...defectiveSelectedServices]
       : selectedServices,
+    towServiceSurcharges,
+    manualSurcharges,
     serviceSurchargesData,
     selectedCustomerPricing,
     customRouteData,
@@ -2459,6 +2493,7 @@ export function useTowForm(
       setDefectiveFaultDescription('')
       setWorkingSelectedServices([])
       setDefectiveSelectedServices([])
+      setTowServiceSurcharges([])
       setHasStorageFollowUp(false)
       setInheritCustomerOrderNumber(false)
       setFollowUpAddress({ address: '' })
@@ -2746,6 +2781,8 @@ export function useTowForm(
     // Reset surcharges
     setSelectedLocationSurcharges([])
     setSelectedServices([])
+    setTowServiceSurcharges([])
+    setManualSurcharges([])
     setStartFromBase(false)
     setSelectedStoredVehicleId(null)
     setDropoffToStorage(false)
@@ -2864,6 +2901,8 @@ export function useTowForm(
     selectedLocationSurcharges,
     locationSurchargesData,
     selectedServices,
+    towServiceSurcharges,
+    manualSurcharges,
     serviceSurchargesData,
     notes,
     paymentMethod,
@@ -2948,6 +2987,8 @@ export function useTowForm(
     serviceSurchargesData,
     selectedLocationSurcharges, setSelectedLocationSurcharges,
     selectedServices, setSelectedServices,
+    towServiceSurcharges, setTowServiceSurcharges,
+    manualSurcharges, setManualSurcharges,
     isHoliday, setIsHoliday,
     activeTimeSurchargesList, setActiveTimeSurchargesList,
     hasManualTimeSurchargeOverride, setHasManualTimeSurchargeOverride,

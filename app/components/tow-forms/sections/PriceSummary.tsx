@@ -3,6 +3,8 @@
 import { FileText } from 'lucide-react'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge, CustomerWithPricing } from '../../../lib/queries/price-lists'
 import { SelectedService } from '../shared'
+import { manualSurchargesToCalcInput } from '../../../lib/utils/manual-surcharge'
+import type { ManualSurcharge } from '../../../lib/utils/manual-surcharge'
 import { calculateTowPrice, extractBasePrices, mergePriceLists } from '../../../lib/utils/price-calculator'
 import { VehicleType } from '../../../lib/types'
 
@@ -55,6 +57,9 @@ interface PriceSummaryProps {
   selectedLocationSurcharges: string[]
   locationSurchargesData: LocationSurcharge[]
   selectedServices: SelectedService[]
+  /** Whole-tow catalog selections (exchange/custom), priced/displayed on top of per-leg/per-point. */
+  towServiceSurcharges?: SelectedService[]
+  manualSurcharges?: ManualSurcharge[]
   serviceSurchargesData: ServiceSurcharge[]
   
   // לקוח
@@ -97,6 +102,8 @@ export function PriceSummary({
   selectedLocationSurcharges,
   locationSurchargesData,
   selectedServices,
+  towServiceSurcharges = [],
+  manualSurcharges = [],
   serviceSurchargesData,
   selectedCustomerPricing,
   priceMode,
@@ -171,13 +178,16 @@ export function PriceSummary({
       isCustomRoute && customRouteData
         ? aggregateRouteServices(customRouteData.services ?? [])
         : selectedServices
-    const serviceSurcharges = routeServicesForPrice.map(selected => {
-      const s = serviceSurchargesData.find(x => x.id === selected.id)
-      if (!s) return { amount: 0 }
-      if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-      if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
-      return { amount: s.price }
-    }).filter(x => x.amount > 0)
+    const serviceSurcharges = [
+      ...[...routeServicesForPrice, ...towServiceSurcharges].map(selected => {
+        const s = serviceSurchargesData.find(x => x.id === selected.id)
+        if (!s) return { amount: 0 }
+        if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
+        if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
+        return { amount: s.price }
+      }).filter(x => x.amount > 0),
+      ...manualSurchargesToCalcInput(manualSurcharges),
+    ]
 
     priceResult = calculateTowPrice({
       priceList: {
@@ -214,10 +224,12 @@ export function PriceSummary({
     .map(id => locationSurchargesData.find(l => l.id === id))
     .filter(Boolean) as LocationSurcharge[]
   const locationAmount = priceResult?.locationSurchargeAmount ?? 0
-  const servicesForDisplay =
-    isCustomRoute && customRouteData
+  const servicesForDisplay = [
+    ...(isCustomRoute && customRouteData
       ? aggregateRouteServices(customRouteData.services ?? [])
-      : selectedServices
+      : selectedServices),
+    ...towServiceSurcharges,
+  ]
   const activeServices: { label: string; amount: number }[] = []
   servicesForDisplay.forEach(selected => {
     const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
@@ -233,6 +245,13 @@ export function PriceSummary({
       if (amount > 0) {
         activeServices.push({ label, amount })
       }
+    }
+  })
+  manualSurcharges.forEach((m) => {
+    const label = (m.label ?? '').trim()
+    const amount = Number(m.amount) || 0
+    if (label && amount > 0) {
+      activeServices.push({ label, amount })
     }
   })
   const discountAmount = priceResult?.discountAmount ?? 0

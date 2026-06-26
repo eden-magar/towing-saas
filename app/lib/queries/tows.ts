@@ -40,6 +40,10 @@ export interface PriceBreakdown {
     units?: number
     amount: number
     vehicle_role?: 'working' | 'defective'
+    /** Manual ad-hoc line added directly on this order (not from the service_surcharges catalog). */
+    is_ad_hoc?: boolean
+    /** Catalog line chosen at the whole-tow level (exchange/custom), not per-leg or per-point. */
+    is_tow_level?: boolean
   }[]
   subtotal: number
   discount_percent: number

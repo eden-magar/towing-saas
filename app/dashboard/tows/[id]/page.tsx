@@ -18,7 +18,14 @@ import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { getVehicleTypeLabel, isKnownVehicleType } from '../../../lib/vehicle-lookup'
 import { toTowVehicleCoreInfo } from '../../../lib/utils/tow-vehicle-core'
-import { ServiceSurchargeSelector, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
+import { ServiceSurchargeSelector, ManualSurchargeSection, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
+import {
+  extractManualSurcharges,
+  manualSurchargesToBreakdown,
+  excludeManualSurcharges,
+  type ManualSurcharge,
+} from '../../../lib/utils/manual-surcharge'
+import { excludeTowLevelServices } from '../../../lib/utils/tow-service-surcharge'
 import { 
   ArrowRight, 
   Edit2, 
@@ -228,6 +235,9 @@ export default function TowDetailsPage() {
   // Service surcharges
   const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
   const [editSelectedServices, setEditSelectedServices] = useState<SelectedService[]>([])
+  const [editManualSurcharges, setEditManualSurcharges] = useState<ManualSurcharge[]>([])
+  // Tow-level catalog lines are preserved verbatim here (no editor on this quick-edit surface).
+  const [editTowLevelLines, setEditTowLevelLines] = useState<any[]>([])
 
   const [editScheduledDate, setEditScheduledDate] = useState('')
   const [editScheduledTime, setEditScheduledTime] = useState('')
@@ -677,16 +687,25 @@ export default function TowDetailsPage() {
         color: v.color || '',
         towReason: v.tow_reason || ''
       })) || [])
-      // Initialize selected services from price breakdown
+      // Initialize selected services from price breakdown (catalog only; ad-hoc lines are separate)
       if (tow.price_breakdown?.service_surcharges) {
-        const services: SelectedService[] = tow.price_breakdown.service_surcharges.map((s: any) => ({
+        const catalogLines = excludeTowLevelServices(
+          excludeManualSurcharges(tow.price_breakdown.service_surcharges)
+        )
+        const services: SelectedService[] = catalogLines.map((s: any) => ({
           id: s.id,
           quantity: s.units || undefined,
           manualPrice: s.price_type === 'manual' ? s.amount : undefined
         }))
         setEditSelectedServices(services)
+        setEditTowLevelLines(
+          tow.price_breakdown.service_surcharges.filter((s: any) => s.is_tow_level === true)
+        )
+        setEditManualSurcharges(extractManualSurcharges(tow.price_breakdown.service_surcharges))
       } else {
         setEditSelectedServices([])
+        setEditTowLevelLines([])
+        setEditManualSurcharges([])
       }
 
       setIsEditing(true)
@@ -718,7 +737,7 @@ export default function TowDetailsPage() {
 
     if (newPriceBreakdown) {
       // חישוב תוספות שירות חדשות
-      const newServiceSurcharges = editSelectedServices.map(selected => {
+      const catalogServiceSurcharges = editSelectedServices.map(selected => {
         const service = serviceSurchargesData.find(s => s.id === selected.id)
         if (!service) return null
 
@@ -743,6 +762,12 @@ export default function TowDetailsPage() {
           amount
         }
       }).filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
+
+      const newServiceSurcharges = [
+        ...catalogServiceSurcharges,
+        ...editTowLevelLines,
+        ...manualSurchargesToBreakdown(editManualSurcharges),
+      ]
 
       // עדכון ה-breakdown
       newPriceBreakdown.service_surcharges = newServiceSurcharges
@@ -2375,11 +2400,17 @@ export default function TowDetailsPage() {
                 </div>
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
-                    <ServiceSurchargeSelector
-                      services={serviceSurchargesData}
-                      selectedServices={editSelectedServices}
-                      onChange={setEditSelectedServices}
-                    />
+                    <div className="space-y-4">
+                      <ServiceSurchargeSelector
+                        services={serviceSurchargesData}
+                        selectedServices={editSelectedServices}
+                        onChange={setEditSelectedServices}
+                      />
+                      <ManualSurchargeSection
+                        manualSurcharges={editManualSurcharges}
+                        onChange={setEditManualSurcharges}
+                      />
+                    </div>
                   ) : (
                     <div>
                       {tow.price_breakdown?.service_surcharges && tow.price_breakdown.service_surcharges.length > 0 ? (
