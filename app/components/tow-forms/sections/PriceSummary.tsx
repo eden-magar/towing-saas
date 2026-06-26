@@ -5,7 +5,7 @@ import { LocationSurcharge, ServiceSurcharge, TimeSurcharge, CustomerWithPricing
 import { SelectedService } from '../shared'
 import { manualSurchargesToCalcInput } from '../../../lib/utils/manual-surcharge'
 import type { ManualSurcharge } from '../../../lib/utils/manual-surcharge'
-import { calculateTowPrice, extractBasePrices, mergePriceLists } from '../../../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
 import { VehicleType } from '../../../lib/types'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
@@ -51,6 +51,9 @@ interface PriceSummaryProps {
   distance: DistanceResult | null
   baseToPickupDistance?: DistanceResult | null
   startFromBase?: boolean
+  /** Deadhead (נסיעת סרק): return-leg toggle + last dropoff → base distance. */
+  chargeDeadheadReturn?: boolean
+  dropoffToBaseDistance?: DistanceResult | null
   
   // תוספות
   activeTimeSurcharges: TimeSurcharge[]
@@ -98,6 +101,8 @@ export function PriceSummary({
   distance,
   baseToPickupDistance,
   startFromBase = false,
+  chargeDeadheadReturn = false,
+  dropoffToBaseDistance = null,
   activeTimeSurcharges,
   selectedLocationSurcharges,
   locationSurchargesData,
@@ -154,6 +159,9 @@ export function PriceSummary({
   if ((priceMode === 'recommended' || priceMode === 'recommended_customer') && hasDataForCalculation) {
     const baseToPickupKm = (!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm) || 0
     const distanceKm = (distance?.distanceKm ?? 0) + baseToPickupKm
+    // Deadhead (נסיעת סרק): last dropoff → base, priced separately. Custom skipped.
+    const deadheadKm = (!isCustomRoute && chargeDeadheadReturn && dropoffToBaseDistance?.distanceKm) || 0
+    const deadheadRate = resolveDeadheadRate(activePriceList)
     const basePrices = extractBasePrices(activePriceList)
     let basePriceOverride: number | undefined
     let calcVehicleType: VehicleType = (vehicleType as VehicleType) || 'private'
@@ -197,6 +205,8 @@ export function PriceSummary({
       },
       vehicleType: calcVehicleType,
       distanceKm,
+      deadheadKm,
+      deadheadRate,
       ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       timeSurcharges: activeTimeSurcharges,
       towDate,
@@ -213,6 +223,8 @@ export function PriceSummary({
 
   const basePrice = priceResult?.basePrice ?? 0
   const distancePrice = priceResult?.distancePrice ?? 0
+  const deadheadKmDisplay = priceResult?.deadheadKm ?? 0
+  const deadheadPrice = priceResult?.deadheadPrice ?? 0
   const subtotal = priceResult?.subtotal ?? 0
   const beforeVat = priceResult?.beforeVat ?? 0
   const pricePerKm = activePriceList?.price_per_km || 12
@@ -306,6 +318,14 @@ export function PriceSummary({
                 {!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm && (
                   <div className="flex justify-between text-sm text-gray-400">
                     <span>מתוכם יציאה מהחניון ({baseToPickupDistance.distanceKm.toFixed(1)} ק״מ)</span>
+                  </div>
+                )}
+
+                {/* נסיעת סרק (חזרה לאחסנה) */}
+                {!isCustomRoute && deadheadPrice > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">מרחק סרק ({deadheadKmDisplay.toFixed(1)} ק״מ)</span>
+                    <span className="text-gray-700">₪{deadheadPrice.toFixed(2)}</span>
                   </div>
                 )}
                 

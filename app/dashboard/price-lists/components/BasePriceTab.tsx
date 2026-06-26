@@ -29,11 +29,13 @@ interface BasePriceTabProps {
   vehiclePrices: VehiclePrice[]
   vehicleKmRates: VehicleKmRate[]
   pricePerKm: number
+  pricePerKmDeadhead: number | null
   minimumPrice: number
   onBaseLocationChange: (location: BaseLocationData) => void
   onVehiclePriceChange: (id: string, value: number) => void
   onVehicleKmRateChange: (id: string, value: number | null) => void
   onPricePerKmChange: (value: number) => void
+  onPricePerKmDeadheadChange: (value: number | null) => void
   onMinimumPriceChange: (value: number) => void
   weightBrackets: { id: string; min_kg: number; max_kg: number | null; base_price: number }[]
   onWeightBracketAdd: () => void
@@ -75,11 +77,13 @@ export function BasePriceTab({
   vehiclePrices,
   vehicleKmRates,
   pricePerKm,
+  pricePerKmDeadhead,
   minimumPrice,
   onBaseLocationChange,
   onVehiclePriceChange,
   onVehicleKmRateChange,
   onPricePerKmChange,
+  onPricePerKmDeadheadChange,
   onMinimumPriceChange,
   weightBrackets,
   onWeightBracketAdd,
@@ -129,12 +133,26 @@ export function BasePriceTab({
 
         <div className="border-t border-gray-100 pt-4">
           <h3 className="font-semibold text-gray-800 text-sm mb-3">תעריף מרחק</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <PriceInput
               label='מחיר לקילומטר'
               value={pricePerKm}
               onChange={onPricePerKmChange}
             />
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">מחיר לק״מ סרק</label>
+              <div className="relative">
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
+                <input
+                  type="number"
+                  value={pricePerKmDeadhead ?? ''}
+                  onChange={(e) => onPricePerKmDeadheadChange(Number(e.target.value) || null)}
+                  placeholder="לא נגבה"
+                  className="w-full pr-8 pl-3 py-2.5 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30 focus:border-[#33d4ff] transition-colors"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">נסיעת סרק (חזרה ריקה)</p>
+            </div>
             <PriceInput
               label="מחיר מינימום"
               value={minimumPrice}

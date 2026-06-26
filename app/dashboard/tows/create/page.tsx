@@ -55,6 +55,7 @@ import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
@@ -351,6 +352,10 @@ function CreateTowForm({
     setStartFromBase,
     baseToPickupDistance,
     baseToPickupLoading,
+    chargeDeadheadReturn,
+    setChargeDeadheadReturn,
+    dropoffToBaseDistance,
+    dropoffToBaseLoading,
     customerOrderNumber,
     setCustomerOrderNumber,
     department,
@@ -883,37 +888,40 @@ function CreateTowForm({
 
         {isLastDropoff && (
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (dropoffToStorage) {
-                  setDropoffToStorage(false)
-                  updateStop(stop.id, { address: { address: '' } })
-                  setHasStorageFollowUp(false)
-                  setFollowUpAddress({ address: '' })
-                  setFollowUpContactName('')
-                  setFollowUpContactPhone('')
-                  return
-                }
-                setDropoffToStorage(true)
-                if (storageAddress) {
-                  updateStop(stop.id, {
-                    address: {
-                      address: storageAddress,
-                      lat: basePriceList?.base_lat,
-                      lng: basePriceList?.base_lng,
-                    },
-                  })
-                }
-              }}
-              className={`inline-flex px-3 py-1.5 rounded-lg text-sm ${
-                dropoffToStorage
-                  ? 'bg-gt-brand text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 font-medium'
-              }`}
-            >
-              הורדה לאחסנה
-            </button>
+            <div className="flex flex-wrap items-start gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (dropoffToStorage) {
+                    setDropoffToStorage(false)
+                    updateStop(stop.id, { address: { address: '' } })
+                    setHasStorageFollowUp(false)
+                    setFollowUpAddress({ address: '' })
+                    setFollowUpContactName('')
+                    setFollowUpContactPhone('')
+                    return
+                  }
+                  setDropoffToStorage(true)
+                  if (storageAddress) {
+                    updateStop(stop.id, {
+                      address: {
+                        address: storageAddress,
+                        lat: basePriceList?.base_lat,
+                        lng: basePriceList?.base_lng,
+                      },
+                    })
+                  }
+                }}
+                className={`inline-flex px-3 py-1.5 rounded-lg text-sm ${
+                  dropoffToStorage
+                    ? 'bg-gt-brand text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 font-medium'
+                }`}
+              >
+                הורדה לאחסנה
+              </button>
+              {renderDeadheadToggle('pill')}
+            </div>
             {dropoffToStorage && (
               <div className="flex gap-2 items-center flex-wrap">
                 <span className="text-sm text-gray-600">מצב הרכב:</span>
@@ -1556,6 +1564,55 @@ function CreateTowForm({
         (startFromBase && baseToPickupDistance ? baseToPickupDistance.distanceKm : 0)
 
   const storageAddress = basePriceList?.base_address || ''
+
+  // Deadhead (נסיעת סרק): resolve the rate from the active (merged) price list for the hint.
+  const activeDeadheadRate = resolveDeadheadRate(
+    priceMode === 'recommended_customer'
+      ? mergePriceLists(basePriceList, selectedCustomerPricing?.price_list ?? null)
+      : basePriceList
+  )
+
+  // Single + exchange only; custom intentionally excluded.
+  // Rendered beside the "הורדה לאחסנה"/"שמור באחסנה" control so the two storage controls read as a pair.
+  const renderDeadheadToggle = (variant: 'pill' | 'compact' = 'pill') => {
+    if (towType !== 'single' && towType !== 'exchange') return null
+    const buttonClass =
+      variant === 'compact'
+        ? `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border w-fit transition-colors ${
+            chargeDeadheadReturn
+              ? 'bg-gt-brand text-white border-gt-brand'
+              : 'border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-600'
+          }`
+        : `inline-flex px-3 py-1.5 rounded-lg text-sm ${
+            chargeDeadheadReturn
+              ? 'bg-gt-brand text-white'
+              : 'bg-white text-gray-700 border border-gray-300 font-medium'
+          }`
+    return (
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setChargeDeadheadReturn(!chargeDeadheadReturn)}
+          className={buttonClass}
+        >
+          חייב נסיעת סרק
+        </button>
+        {chargeDeadheadReturn && dropoffToBaseLoading && (
+          <p className="text-xs text-gray-400">מחשב מרחק חזרה לאחסנה...</p>
+        )}
+        {chargeDeadheadReturn &&
+          !dropoffToBaseLoading &&
+          dropoffToBaseDistance?.distanceKm != null && (
+            <p className="text-xs text-gray-400">
+              מרחק חזרה לאחסנה: {dropoffToBaseDistance.distanceKm.toFixed(1)} ק״מ
+            </p>
+          )}
+        {chargeDeadheadReturn && activeDeadheadRate <= 0 && (
+          <p className="text-xs text-amber-600">לא הוגדר מחיר לק״מ סרק במחירון</p>
+        )}
+      </div>
+    )
+  }
 
   const TRUCK_OPTIONS = [
     { value: 'wheel_lift_cradle', label: 'משקפיים' },
@@ -2894,6 +2951,7 @@ function CreateTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
                                 />
+                                <div className="flex flex-wrap items-start gap-2">
                                 {defectiveDestination !== 'storage' ? (
                                   <button
                                     type="button"
@@ -2924,6 +2982,8 @@ function CreateTowForm({
                                     </button>
                                   </div>
                                 )}
+                                {renderDeadheadToggle('compact')}
+                                </div>
                                 {defectiveDestination === 'storage' && (
                                   <div className="mt-3 pt-3 border-t border-gray-200">
                                     <button

@@ -728,6 +728,11 @@ export function useTowForm(
   const [startFromBase, setStartFromBase] = useState(false)
   const [baseToPickupDistance, setBaseToPickupDistance] = useState<DistanceResult | null>(null)
   const [baseToPickupLoading, setBaseToPickupLoading] = useState(false)
+
+  // Deadhead return (נסיעת סרק): last dropoff → base, priced separately
+  const [chargeDeadheadReturn, setChargeDeadheadReturn] = useState(false)
+  const [dropoffToBaseDistance, setDropoffToBaseDistance] = useState<DistanceResult | null>(null)
+  const [dropoffToBaseLoading, setDropoffToBaseLoading] = useState(false)
   
   const [notes, setNotes] = useState('')
   
@@ -1119,6 +1124,90 @@ export function useTowForm(
     const timeout = setTimeout(calcExchangeDistance, 500)
     return () => clearTimeout(timeout)
   }, [
+    editTowId,
+    workingVehicleAddress.address,
+    workingVehicleAddress.lat,
+    workingVehicleAddress.lng,
+    workingVehicleDestinationAddress.address,
+    workingVehicleDestinationAddress.lat,
+    workingVehicleDestinationAddress.lng,
+    exchangeAddress.address,
+    exchangeAddress.lat,
+    exchangeAddress.lng,
+    defectiveDestinationAddress.address,
+    defectiveDestinationAddress.lat,
+    defectiveDestinationAddress.lng,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+  ])
+
+  // Calculate last dropoff → base distance (deadhead / נסיעת סרק).
+  // Mirrors the base-to-pickup effect, but in reverse: final dropoff back to base.
+  useEffect(() => {
+    if (!chargeDeadheadReturn || !basePriceList?.base_lat || !basePriceList?.base_lng) {
+      setDropoffToBaseDistance(null)
+      return
+    }
+
+    // Resolve the final dropoff for the active flow.
+    let lastDropoff: AddressData | undefined
+    if (towType === 'exchange') {
+      const waypoints = buildExchangeDistanceWaypoints(
+        editTowId ? editExchangeRouteLayoutRef.current : null,
+        !!editTowId,
+        workingVehicleAddress,
+        workingVehicleDestinationAddress,
+        exchangeAddress,
+        defectiveDestinationAddress,
+        stopsBeforeExchange,
+        stopsAfterExchange
+      )
+      lastDropoff = waypoints[waypoints.length - 1]
+    } else if (towType === 'custom') {
+      // TODO(deadhead): custom routes compute distance in RouteBuilder; wire last point → base later.
+      setDropoffToBaseDistance(null)
+      return
+    } else {
+      lastDropoff = findDropoffRouteStop(routeStops)?.address
+    }
+
+    if (!lastDropoff?.address) {
+      setDropoffToBaseDistance(null)
+      return
+    }
+
+    let cancelled = false
+    const calcDeadheadDistance = async () => {
+      setDropoffToBaseLoading(true)
+      try {
+        await loadGoogleMaps()
+        if (cancelled) return
+        const baseAddress: AddressData = {
+          address: basePriceList.base_address || '',
+          lat: basePriceList.base_lat,
+          lng: basePriceList.base_lng,
+        }
+        const result = await calculateDistance(lastDropoff!, baseAddress)
+        if (!cancelled) setDropoffToBaseDistance(result)
+      } catch (err) {
+        console.error('Deadhead distance calculation error:', err)
+        if (!cancelled) setDropoffToBaseDistance(null)
+      } finally {
+        if (!cancelled) setDropoffToBaseLoading(false)
+      }
+    }
+    const timeout = setTimeout(calcDeadheadDistance, 500)
+    return () => {
+      cancelled = true
+      clearTimeout(timeout)
+    }
+  }, [
+    chargeDeadheadReturn,
+    towType,
+    routeStops,
+    basePriceList?.base_lat,
+    basePriceList?.base_lng,
+    basePriceList?.base_address,
     editTowId,
     workingVehicleAddress.address,
     workingVehicleAddress.lat,
@@ -2018,6 +2107,8 @@ export function useTowForm(
     distance: towType === 'exchange' ? exchangeTotalDistance : distance,
     startFromBase,
     baseToPickupDistance,
+    chargeDeadheadReturn,
+    dropoffToBaseDistance,
     basePriceList,
     activeTimeSurchargesList,
     selectedLocationSurcharges,
@@ -2784,6 +2875,8 @@ export function useTowForm(
     setTowServiceSurcharges([])
     setManualSurcharges([])
     setStartFromBase(false)
+    setChargeDeadheadReturn(false)
+    setDropoffToBaseDistance(null)
     setSelectedStoredVehicleId(null)
     setDropoffToStorage(false)
     setPreSelectedTruckId(null)
@@ -2887,6 +2980,8 @@ export function useTowForm(
     exchangeTotalDistance,
     startFromBase,
     baseToPickupDistance,
+    chargeDeadheadReturn,
+    dropoffToBaseDistance,
     routePoints,
     customRouteData,
     priceMode,
@@ -3149,6 +3244,9 @@ export function useTowForm(
     startFromBase, setStartFromBase,
     baseToPickupDistance,
     baseToPickupLoading,
+    chargeDeadheadReturn, setChargeDeadheadReturn,
+    dropoffToBaseDistance,
+    dropoffToBaseLoading,
     // Contacts
     notes, setNotes,
     // Payment

@@ -13,7 +13,7 @@ import { manualSurchargesToCalcInput } from '../lib/utils/manual-surcharge'
 import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, TowPriceResult } from '../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, TowPriceResult } from '../lib/utils/price-calculator'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
   if (!services?.length) return []
@@ -40,6 +40,9 @@ interface UseTowPricingParams {
   distance: DistanceResult | null
   startFromBase: boolean
   baseToPickupDistance: DistanceResult | null
+  /** Deadhead (נסיעת סרק) return-leg toggle + last dropoff → base distance. */
+  chargeDeadheadReturn?: boolean
+  dropoffToBaseDistance?: DistanceResult | null
   basePriceList: any
   activeTimeSurchargesList: TimeSurcharge[]
   selectedLocationSurcharges: string[]
@@ -112,6 +115,8 @@ export function useTowPricing(params: UseTowPricingParams) {
     distance,
     startFromBase,
     baseToPickupDistance,
+    chargeDeadheadReturn = false,
+    dropoffToBaseDistance = null,
     basePriceList,
     activeTimeSurchargesList,
     selectedLocationSurcharges,
@@ -317,6 +322,10 @@ export function useTowPricing(params: UseTowPricingParams) {
     const baseToPickupKm = (startFromBase && baseToPickupDistance?.distanceKm) || 0
     const distanceKm = pickupToDropoffKm + baseToPickupKm
 
+    // Deadhead (נסיעת סרק): last dropoff → base, priced separately. Custom tows handled elsewhere.
+    const deadheadKm = (chargeDeadheadReturn && dropoffToBaseDistance?.distanceKm) || 0
+    const deadheadRate = resolveDeadheadRate(activePriceList)
+
     const locationSurcharges = selectedLocationSurcharges
       .map(id => locationSurchargesData.find(l => l.id === id))
       .filter(Boolean)
@@ -342,6 +351,8 @@ export function useTowPricing(params: UseTowPricingParams) {
       vehicleType: vehicleType as VehicleType,
       ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       distanceKm,
+      deadheadKm,
+      deadheadRate,
       timeSurcharges: effectiveTimeSurcharges,
       towDate: towDate || '',
       towTime: towTime || '',
@@ -364,6 +375,8 @@ export function useTowPricing(params: UseTowPricingParams) {
     distance?.durationMinutes,
     startFromBase,
     baseToPickupDistance?.distanceKm,
+    chargeDeadheadReturn,
+    dropoffToBaseDistance?.distanceKm,
     basePriceList,
     activeTimeSurchargeIds,
     hasManualTimeSurchargeOverride,

@@ -8,7 +8,7 @@ import {
 } from '../queries/price-lists'
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveVehicleBasePrice } from './price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, resolveVehicleBasePrice } from './price-calculator'
 import { VehicleType, VehicleLookupResult } from '../types'
 import { normalizePlate } from './plate-number'
 import {
@@ -104,6 +104,9 @@ export interface SaveTowInput {
   distance?: DistanceResult | null
   startFromBase?: boolean
   baseToPickupDistance?: DistanceResult | null
+  /** Deadhead (נסיעת סרק) return leg: charge toggle + last dropoff → base distance. */
+  chargeDeadheadReturn?: boolean
+  dropoffToBaseDistance?: DistanceResult | null
   
   // Custom Tow Data
   routePoints?: RoutePoint[]
@@ -190,6 +193,8 @@ export type ExchangePriceAffectingFields = {
   defectiveDestinationAddress?: AddressData
   stopsBeforeExchange?: { address: AddressData }[]
   stopsAfterExchange?: { address: AddressData }[]
+  chargeDeadheadReturn?: boolean
+  deadheadKm?: number
   workingVehicleType?: string
   defectiveVehicleType?: string
   workingManualWeight?: string
@@ -282,6 +287,7 @@ export function buildExchangePriceAffectingSignature(
     defective: exchangeAddressPart(fields.defectiveDestinationAddress),
     stopsBefore: exchangeStopsSignature(fields.stopsBeforeExchange),
     stopsAfter: exchangeStopsSignature(fields.stopsAfterExchange),
+    deadhead: fields.chargeDeadheadReturn ? (fields.deadheadKm ?? 0) : 0,
     workingType: fields.workingVehicleType ?? '',
     defectiveType: fields.defectiveVehicleType ?? '',
     workingWeight: fields.workingManualWeight ?? '',
@@ -308,6 +314,8 @@ export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string
     defectiveDestinationAddress: input.defectiveDestinationAddress,
     stopsBeforeExchange: input.stopsBeforeExchange,
     stopsAfterExchange: input.stopsAfterExchange,
+    chargeDeadheadReturn: input.chargeDeadheadReturn,
+    deadheadKm: input.chargeDeadheadReturn ? (input.dropoffToBaseDistance?.distanceKm ?? 0) : 0,
     workingVehicleType: input.workingVehicleType,
     defectiveVehicleType: input.defectiveVehicleType,
     workingManualWeight: input.workingManualWeight,
@@ -332,6 +340,8 @@ export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string
 export type SinglePriceAffectingFields = {
   routeStops?: SaveTowInput['routeStops']
   startFromBase?: boolean
+  chargeDeadheadReturn?: boolean
+  deadheadKm?: number
   vehicleType?: string
   manualWeight?: string
   priceMode: string
@@ -365,6 +375,7 @@ export function buildSinglePriceAffectingSignature(fields: SinglePriceAffectingF
   return JSON.stringify({
     route: singleRouteStopsSignature(fields.routeStops),
     startFromBase: fields.startFromBase ?? false,
+    deadhead: fields.chargeDeadheadReturn ? (fields.deadheadKm ?? 0) : 0,
     vehicleType: fields.vehicleType ?? '',
     manualWeight: fields.manualWeight ?? '',
     priceMode: fields.priceMode,
@@ -395,6 +406,8 @@ export function singlePriceSignatureFromSaveInput(input: SaveTowInput): string {
   return buildSinglePriceAffectingSignature({
     routeStops: input.routeStops,
     startFromBase: input.startFromBase,
+    chargeDeadheadReturn: input.chargeDeadheadReturn,
+    deadheadKm: input.chargeDeadheadReturn ? (input.dropoffToBaseDistance?.distanceKm ?? 0) : 0,
     vehicleType: input.vehicleType,
     manualWeight: input.manualWeight,
     priceMode: input.priceMode,
@@ -1120,6 +1133,10 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
   const baseToPickupKm = (input.startFromBase && input.baseToPickupDistance?.distanceKm) || 0
   const distanceKm = pickupToDropoffKm + baseToPickupKm
 
+  // Deadhead (נסיעת סרק): last dropoff → base, priced separately. Custom handled elsewhere (TODO).
+  const deadheadKm = (input.chargeDeadheadReturn && input.dropoffToBaseDistance?.distanceKm) || 0
+  const deadheadRate = resolveDeadheadRate(activePriceList)
+
   const locationSurcharges = (input.selectedLocationSurcharges || [])
     .map(id => input.locationSurchargesData?.find(l => l.id === id))
     .filter(Boolean)
@@ -1155,6 +1172,8 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     priceList: priceListForTowCalc(activePriceList),
     vehicleType: kmRateVehicleType,
     distanceKm,
+    deadheadKm,
+    deadheadRate,
     ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
     timeSurcharges: timeSurchargesForCalc,
     towDate: input.towDate || '',
@@ -1200,6 +1219,8 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     vehicle_type: input.vehicleType || '',
     distance_km: roundKm1(distanceKm),
     distance_price: round2(result.distancePrice),
+    deadhead_km: roundKm1(result.deadheadKm),
+    deadhead_price: round2(result.deadheadPrice),
     time_surcharges: timeSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     location_surcharges: locationSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),

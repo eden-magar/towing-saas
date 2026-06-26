@@ -31,6 +31,9 @@ export interface PriceBreakdown {
   vehicle_count?: number      
   distance_km: number
   distance_price: number
+  /** Deadhead (נסיעת סרק) return-leg km, priced at the separate price_per_km_deadhead rate. */
+  deadhead_km?: number
+  deadhead_price?: number
   time_surcharges: { id: string; label: string; percent: number; amount: number }[]
   location_surcharges: { id: string; label: string; percent: number; amount: number }[]
   service_surcharges: {

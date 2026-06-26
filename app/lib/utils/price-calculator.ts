@@ -33,6 +33,10 @@ export interface TowPriceInput {
   /** Override base price (e.g. for custom route with multiple vehicles) */
   basePriceOverride?: number
 
+  // deadhead (נסיעת סרק) — return leg priced at its own rate, kept separate from distanceKm
+  deadheadKm?: number
+  deadheadRate?: number
+
   // surcharges
   timeSurcharges: TimeSurcharge[]
   towDate: string // YYYY-MM-DD
@@ -70,6 +74,8 @@ export interface PriceBreakdownItem {
 export interface TowPriceResult {
   basePrice: number
   distancePrice: number
+  deadheadKm: number
+  deadheadPrice: number
   subtotal: number
   maxTimeSurchargePercent: number
   maxTimeSurchargeLabel: string
@@ -100,6 +106,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     return {
       basePrice: 0,
       distancePrice: 0,
+      deadheadKm: 0,
+      deadheadPrice: 0,
       subtotal: 0,
       maxTimeSurchargePercent: 0,
       maxTimeSurchargeLabel: '',
@@ -127,6 +135,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     return {
       basePrice: 0,
       distancePrice: 0,
+      deadheadKm: 0,
+      deadheadPrice: 0,
       subtotal: 0,
       maxTimeSurchargePercent: 0,
       maxTimeSurchargeLabel: '',
@@ -152,6 +162,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     return {
       basePrice: 0,
       distancePrice: 0,
+      deadheadKm: 0,
+      deadheadPrice: 0,
       subtotal: 0,
       maxTimeSurchargePercent: 0,
       maxTimeSurchargeLabel: '',
@@ -178,7 +190,14 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
   const minimumPrice = input.priceList.minimum_price
 
   const distancePrice = input.distanceKm * pricePerKm
-  const subtotal = basePrice + distancePrice
+
+  // Deadhead (נסיעת סרק): return leg priced at its own rate, kept separate from distanceKm.
+  // If the rate is null/0 it is simply not charged.
+  const deadheadKm = input.deadheadKm ?? 0
+  const deadheadRate = input.deadheadRate ?? 0
+  const deadheadPrice = deadheadKm > 0 && deadheadRate > 0 ? deadheadKm * deadheadRate : 0
+
+  const subtotal = basePrice + distancePrice + deadheadPrice
 
   // Time surcharge: max of active ones (or use override IDs)
   let activeTime: TimeSurcharge[] = []
@@ -231,6 +250,9 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     { label: 'מחיר בסיס', amount: basePrice, type: 'base' },
     { label: `מרחק (${input.distanceKm} ק״מ)`, amount: distancePrice, type: 'distance' }
   ]
+  if (deadheadPrice > 0) {
+    breakdown.push({ label: `מרחק סרק (${deadheadKm} ק״מ)`, amount: deadheadPrice, type: 'distance' })
+  }
   if (maxTimePercent > 0) {
     breakdown.push({
       label: maxTimeLabel,
@@ -284,6 +306,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
   return {
     basePrice,
     distancePrice,
+    deadheadKm,
+    deadheadPrice,
     subtotal,
     maxTimeSurchargePercent: maxTimePercent,
     maxTimeSurchargeLabel: maxTimeLabel,
@@ -331,6 +355,7 @@ const MERGE_NUMERIC_FIELDS = [
   'price_per_km_motorcycle',
   'price_per_km_heavy',
   'price_per_km_machinery',
+  'price_per_km_deadhead',
   'minimum_price',
   'base_lat',
   'base_lng',
@@ -359,6 +384,17 @@ export function resolvePricePerKm(
   const global = normalizeNullableNumber(priceList.price_per_km)
   if (global != null) return global
   return 12
+}
+
+/**
+ * Resolve the deadhead (נסיעת סרק) per-km rate from a merged/active price list.
+ * Returns 0 when not configured (null/0), meaning deadhead is not charged.
+ */
+export function resolveDeadheadRate(
+  priceList: { price_per_km_deadhead?: number | null } | null | undefined
+): number {
+  const rate = normalizeNullableNumber(priceList?.price_per_km_deadhead)
+  return rate != null && rate > 0 ? rate : 0
 }
 
 export function priceListForTowCalc(

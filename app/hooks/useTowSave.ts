@@ -90,6 +90,8 @@ interface UseTowSaveParams {
   distance: DistanceResult | null
   startFromBase: boolean
   baseToPickupDistance: DistanceResult | null
+  chargeDeadheadReturn: boolean
+  dropoffToBaseDistance: DistanceResult | null
   // Route - custom
   routePoints: RoutePoint[]
   customRouteData: { totalDistanceKm: number; vehicles: { type: string; isWorking: boolean }[] }
@@ -218,6 +220,8 @@ export function useTowSave(params: UseTowSaveParams) {
     distance,
     startFromBase,
     baseToPickupDistance,
+    chargeDeadheadReturn,
+    dropoffToBaseDistance,
     routePoints,
     customRouteData,
     priceMode,
@@ -418,6 +422,8 @@ export function useTowSave(params: UseTowSaveParams) {
             : distance,
       startFromBase,
       baseToPickupDistance,
+      chargeDeadheadReturn,
+      dropoffToBaseDistance,
       // Custom tow
       routePoints,
       customRouteData,

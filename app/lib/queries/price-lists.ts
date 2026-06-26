@@ -102,6 +102,7 @@ export interface BasePriceList {
   price_per_km_motorcycle: number | null
   price_per_km_heavy: number | null
   price_per_km_machinery: number | null
+  price_per_km_deadhead: number | null   // נסיעת סרק (deadhead return)
   minimum_price: number | null
   night_surcharge_percent: number | null
   weekend_surcharge_percent: number | null
@@ -144,6 +145,7 @@ export async function upsertBasePriceList(
     price_per_km_motorcycle?: number | null
     price_per_km_heavy?: number | null
     price_per_km_machinery?: number | null
+    price_per_km_deadhead?: number | null
     minimum_price?: number
     // נקודת בסיס
     base_address?: string | null
@@ -1063,6 +1065,7 @@ export async function upsertCustomerPriceList(
     price_per_km_motorcycle?: number | null
     price_per_km_heavy?: number | null
     price_per_km_machinery?: number | null
+    price_per_km_deadhead?: number | null
     minimum_price?: number | null
   }
 ): Promise<string> {
@@ -1076,6 +1079,7 @@ export async function upsertCustomerPriceList(
     price_per_km_motorcycle: data.price_per_km_motorcycle ?? null,
     price_per_km_heavy: data.price_per_km_heavy ?? null,
     price_per_km_machinery: data.price_per_km_machinery ?? null,
+    price_per_km_deadhead: data.price_per_km_deadhead ?? null,
     minimum_price: data.minimum_price ?? null,
   }
 
