@@ -650,6 +650,8 @@ export interface DriverCashTransaction {
   notes: string | null
   created_at: string
   created_by: string
+  /** Set ONLY on 'approval' rows: the id of the 'transfer' row being approved. Null otherwise. */
+  transfer_id?: string | null
 }
 
 export interface TowChangeLog {

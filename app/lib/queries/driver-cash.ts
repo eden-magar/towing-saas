@@ -17,12 +17,15 @@ export async function getDriverCashBalance(driverId: string): Promise<number> {
 
   if (!data) return 0
 
+  // Balance model: collection +, approval - (money leaves the driver only once the
+  // company approves). transfer is status-only ("reported, awaiting approval") and
+  // has NO effect on the balance.
   let balance = 0
   for (const tx of data) {
     if (tx.type === 'collection') {
       balance += Number(tx.amount)
     }
-    if (tx.type === 'transfer' || tx.type === 'approval') {
+    if (tx.type === 'approval') {
       balance -= Number(tx.amount)
     }
   }
@@ -87,8 +90,38 @@ export async function createCashTransfer(
   createdBy: string,
   notes?: string
 ): Promise<void> {
-  const balance = await getDriverCashBalance(driverId)
-  if (amount > balance) {
+  // The amount a driver may still report =
+  //   collected - approved - (already-reported transfers still awaiting approval).
+  // NOTE: read-then-insert is still racy; atomicity handled separately.
+  const { data: txs, error: txError } = await supabase
+    .from('driver_cash_transactions')
+    .select('id, amount, type, transfer_id')
+    .eq('driver_id', driverId)
+
+  if (txError) {
+    console.error('Error fetching cash transactions:', txError)
+    throw txError
+  }
+
+  let collected = 0
+  let approved = 0
+  const approvedTransferIds = new Set<string>()
+  for (const tx of txs || []) {
+    if (tx.type === 'collection') collected += Number(tx.amount)
+    else if (tx.type === 'approval') {
+      approved += Number(tx.amount)
+      if (tx.transfer_id) approvedTransferIds.add(tx.transfer_id)
+    }
+  }
+  let pendingTransfersTotal = 0
+  for (const tx of txs || []) {
+    if (tx.type === 'transfer' && !approvedTransferIds.has(tx.id)) {
+      pendingTransfersTotal += Number(tx.amount)
+    }
+  }
+
+  const reportable = collected - approved - pendingTransfersTotal
+  if (amount > reportable) {
     throw new Error('לא ניתן להעביר סכום גבוה מהיתרה')
   }
 
@@ -196,14 +229,32 @@ export async function approveCashTransfer(
   driverId: string,
   amount: number,
   approvedBy: string,
+  transferId: string,
   notes?: string
 ): Promise<void> {
+  // Idempotency by transfer id (not by amount): refuse if this transfer is already approved.
+  const { data: existingApproval, error: existingError } = await supabase
+    .from('driver_cash_transactions')
+    .select('id')
+    .eq('type', 'approval')
+    .eq('transfer_id', transferId)
+    .maybeSingle()
+
+  if (existingError) {
+    console.error('Error checking existing approval:', existingError)
+    throw existingError
+  }
+  if (existingApproval) {
+    throw new Error('העברה זו כבר אושרה')
+  }
+
   const { error } = await supabase
     .from('driver_cash_transactions')
     .insert({
       driver_id: driverId,
       amount,
       type: 'approval',
+      transfer_id: transferId,
       notes: notes || null,
       created_by: approvedBy
     })

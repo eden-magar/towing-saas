@@ -21,8 +21,6 @@ import {
   ChevronLeft,
   BarChart2
 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
-
 interface DriverBalance {
   driverId: string
   driverName: string
@@ -90,21 +88,8 @@ export default function CashManagementPage() {
     if (!confirm(`לאשר העברה של ₪${Number(tx.amount).toLocaleString()}?`)) return
     setApproving(tx.id)
     try {
-      const { data: existing } = await supabase
-        .from('driver_cash_transactions')
-        .select('id')
-        .eq('driver_id', tx.driver_id)
-        .eq('amount', tx.amount)
-        .eq('type', 'approval')
-        .gte('created_at', tx.created_at)
-        .maybeSingle()
-
-      if (existing) {
-        alert('העברה זו כבר אושרה')
-        return
-      }
-
-      await approveCashTransfer(tx.driver_id, Number(tx.amount), user.id, 'אישור העברה')
+      // Pairing + idempotency are by transfer id (handled inside approveCashTransfer).
+      await approveCashTransfer(tx.driver_id, Number(tx.amount), user.id, tx.id, 'אישור העברה')
       await loadData()
       if (selectedDriver) {
         await loadDriverTransactions(selectedDriver.driverId)
@@ -133,42 +118,48 @@ export default function CashManagementPage() {
     return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
   }
 
-  const getBalanceBadge = (balance: number) => {
-    if (balance === 0) return { text: '₪0', bg: 'bg-emerald-50', color: 'text-emerald-700' }
-    if (balance > 500) return { text: `₪${balance.toLocaleString()}`, bg: 'bg-red-50', color: 'text-red-700' }
-    return { text: `₪${balance.toLocaleString()}`, bg: 'bg-amber-50', color: 'text-amber-700' }
+  // Display-only color cue by magnitude (no logic/threshold tie to data writes).
+  const balanceTone = (balance: number) => {
+    if (balance <= 0) return 'text-gt-text-tertiary'
+    if (balance > 500) return 'text-gt-danger'
+    return 'text-gt-text-primary'
   }
 
   const getTypeInfo = (type: string) => {
     switch (type) {
       case 'collection':
-        return { label: 'גבייה', icon: ArrowDownCircle, color: 'text-red-500' }
+        return { label: 'גבייה', icon: ArrowDownCircle, pill: 'bg-blue-50 text-blue-600' }
       case 'transfer':
-        return { label: 'העברה (ממתין)', icon: ArrowUpCircle, color: 'text-amber-500' }
+        return { label: 'העברה (ממתין)', icon: ArrowUpCircle, pill: 'bg-amber-50 text-amber-700' }
       case 'approval':
-        return { label: 'אושר', icon: CheckCircle2, color: 'text-emerald-500' }
+        return { label: 'אושר', icon: CheckCircle2, pill: 'bg-gt-success-subtle text-gt-success' }
       default:
-        return { label: type, icon: Clock, color: 'text-gray-500' }
+        return { label: type, icon: Clock, pill: 'bg-gray-100 text-gray-500' }
     }
   }
 
   const filteredDrivers = drivers.filter(d => d.driverName.includes(searchQuery))
+  // Display-only sort: drivers with a balance first (highest at top), zero-balance last.
+  const sortedDrivers = [...filteredDrivers].sort((a, b) => b.balance - a.balance)
   const totalCash = drivers.reduce((sum, d) => sum + d.balance, 0)
   const driversWithBalance = drivers.filter(d => d.balance > 0).length
-  const approvedAmounts = transactions
-  .filter(t => t.type === 'approval')
-  .map(t => t.driver_id + '_' + t.amount)
+  // Pairing is by transfer id: a transfer is "pending" iff no approval row points to it.
+  const approvedTransferIds = new Set(
+    transactions
+      .filter(t => t.type === 'approval' && t.transfer_id)
+      .map(t => t.transfer_id as string)
+  )
 
-const pendingTransfers = transactions.filter(t => 
-  t.type === 'transfer' && 
-  !approvedAmounts.includes(t.driver_id + '_' + t.amount)
-).length
+  const isTransferPending = (t: DriverCashTransaction) =>
+    t.type === 'transfer' && !approvedTransferIds.has(t.id)
+
+  const pendingTransfers = transactions.filter(isTransferPending).length
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 gap-3">
-        <Loader2 className="animate-spin text-[#33d4ff]" size={28} />
-        <span className="text-gray-500">טוען נתוני קופה...</span>
+        <Loader2 className="animate-spin text-gt-brand" size={28} />
+        <span className="text-gt-text-tertiary">טוען נתוני קופה...</span>
       </div>
     )
   }
@@ -177,54 +168,71 @@ const pendingTransfers = transactions.filter(t =>
     return (
       <div>
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => { setSelectedDriver(null); setDriverTransactions([]) }}
-              className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+              aria-label="חזרה לרשימת הנהגים"
+              className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gt-border-subtle text-gt-text-secondary hover:bg-gt-surface-hover hover:border-gt-border-strong transition-colors shrink-0"
             >
-              <ChevronLeft size={18} className="text-gray-600" />
+              <ChevronLeft size={18} className="rotate-180" />
             </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">{selectedDriver.driverName}</h1>
-              <p className="text-sm text-gray-500">היסטוריית קופה</p>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-gt-text-primary truncate">{selectedDriver.driverName}</h1>
+              <p className="text-sm text-gt-text-tertiary">היסטוריית קופה</p>
             </div>
           </div>
-          <div className={`px-4 py-2 rounded-xl font-bold text-base ${getBalanceBadge(selectedDriver.balance).bg} ${getBalanceBadge(selectedDriver.balance).color}`}>
-            יתרה: {getBalanceBadge(selectedDriver.balance).text}
+          <div className="flex items-baseline gap-2 px-4 py-2 rounded-xl bg-white border border-gt-border-subtle shadow-sm shrink-0">
+            <span className="text-xs text-gt-text-tertiary">יתרה</span>
+            <span className={`font-bold text-lg tabular-nums ${balanceTone(selectedDriver.balance)}`}>
+              ₪{selectedDriver.balance.toLocaleString()}
+            </span>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 text-gray-600 font-medium text-sm">
+        <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm p-4 mb-4">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center gap-2 text-gt-text-secondary font-medium text-sm hover:text-gt-text-primary transition-colors"
+          >
             <Filter size={15} />
             סינון לפי תאריך
           </button>
           {showFilters && (
             <div className="flex gap-3 mt-3 items-end flex-wrap">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">מתאריך</label>
+                <label className="block text-xs text-gt-text-tertiary mb-1">מתאריך</label>
                 <DateInput value={filterFrom} onChange={setFilterFrom} className="min-w-[10rem]" />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">עד תאריך</label>
+                <label className="block text-xs text-gt-text-tertiary mb-1">עד תאריך</label>
                 <DateInput value={filterTo} onChange={setFilterTo} className="min-w-[10rem]" />
               </div>
-              <button onClick={handleFilterApply} className="bg-[#33d4ff] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#21b8e6] transition-colors">סנן</button>
-              <button onClick={() => { setFilterFrom(''); setFilterTo(''); handleFilterApply() }} className="text-gray-400 px-2 py-2 text-sm hover:text-gray-600">נקה</button>
+              <button
+                onClick={handleFilterApply}
+                className="bg-gt-brand text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-gt-brand-hover transition-colors"
+              >
+                סנן
+              </button>
+              <button
+                onClick={() => { setFilterFrom(''); setFilterTo(''); handleFilterApply() }}
+                className="text-gt-text-tertiary px-2 py-2 text-sm hover:text-gt-text-secondary transition-colors"
+              >
+                נקה
+              </button>
             </div>
           )}
         </div>
 
         {/* Transactions Table */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm overflow-hidden">
           {loadingTransactions ? (
             <div className="flex items-center justify-center p-8">
-              <Loader2 className="animate-spin text-[#33d4ff]" size={24} />
+              <Loader2 className="animate-spin text-gt-brand" size={24} />
             </div>
           ) : driverTransactions.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-gt-text-tertiary">
               <Wallet size={32} className="mx-auto mb-2 opacity-30" />
               אין עסקאות
             </div>
@@ -232,15 +240,15 @@ const pendingTransfers = transactions.filter(t =>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">סוג</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">גרירה</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">לקוח</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">סכום</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">תאריך</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">הערות</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">אושר על ידי</th>
-                    <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">פעולה</th>
+                  <tr className="bg-gt-surface-subtle/50 border-b border-gt-border-subtle">
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">סוג</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">גרירה</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">לקוח</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">סכום</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">תאריך</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">הערות</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">אושר על ידי</th>
+                    <th className="text-right px-5 py-3 font-medium text-gt-text-tertiary text-xs">פעולה</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -248,35 +256,35 @@ const pendingTransfers = transactions.filter(t =>
                     const info = getTypeInfo(tx.type)
                     const Icon = info.icon
                     return (
-                      <tr key={tx.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <tr key={tx.id} className="border-b border-gt-border-subtle/60 last:border-0 hover:bg-gt-surface-hover transition-colors">
                         <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <Icon size={15} className={info.color} />
-                            <span className="font-medium text-gray-700">{info.label}</span>
-                          </div>
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${info.pill}`}>
+                            <Icon size={13} />
+                            {info.label}
+                          </span>
                         </td>
                         <td className="px-5 py-3.5">
                           {(tx as any).order_number
-                            ? <span className="text-[#33d4ff] font-medium">#{(tx as any).order_number}</span>
-                            : <span className="text-gray-300">—</span>}
+                            ? <span className="text-gt-brand-text font-medium">#{(tx as any).order_number}</span>
+                            : <span className="text-gt-text-muted">—</span>}
                         </td>
-                        <td className="px-5 py-3.5 text-gray-600">{(tx as any).customer_name || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-5 py-3.5 text-gt-text-secondary">{(tx as any).customer_name || <span className="text-gt-text-muted">—</span>}</td>
                         <td className="px-5 py-3.5">
-                          <span className="font-bold text-gray-800">₪{Number(tx.amount).toLocaleString()}</span>
+                          <span className="font-bold text-gt-text-primary tabular-nums">₪{Number(tx.amount).toLocaleString()}</span>
                         </td>
-                        <td className="px-5 py-3.5 text-gray-500 text-xs">{formatDate(tx.created_at)} {formatTime(tx.created_at)}</td>
-                        <td className="px-5 py-3.5 text-gray-500">{tx.notes || <span className="text-gray-300">—</span>}</td>
+                        <td className="px-5 py-3.5 text-gt-text-tertiary text-xs whitespace-nowrap">{formatDate(tx.created_at)} {formatTime(tx.created_at)}</td>
+                        <td className="px-5 py-3.5 text-gt-text-secondary">{tx.notes || <span className="text-gt-text-muted">—</span>}</td>
                         <td className="px-5 py-3.5">
                           {(tx as any).approved_by_name
-                            ? <span className="text-emerald-600 font-medium">{(tx as any).approved_by_name}</span>
-                            : <span className="text-gray-300">—</span>}
+                            ? <span className="text-gt-success font-medium">{(tx as any).approved_by_name}</span>
+                            : <span className="text-gt-text-muted">—</span>}
                         </td>
                         <td className="px-5 py-3.5">
-                          {tx.type === 'transfer' && (
+                          {isTransferPending(tx) && (
                             <button
                               onClick={() => handleApprove(tx)}
                               disabled={approving === tx.id}
-                              className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-medium hover:bg-emerald-100 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                              className="inline-flex items-center gap-1.5 bg-gt-success-subtle text-gt-success border border-gt-success-border px-3 py-1.5 rounded-lg text-xs font-semibold hover:brightness-95 disabled:opacity-50 transition-all"
                             >
                               {approving === tx.id ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                               אשר
@@ -299,90 +307,93 @@ const pendingTransfers = transactions.filter(t =>
     <div>
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-800">קופות נהגים</h1>
-        <p className="text-sm text-gray-500 mt-1">ניהול מזומנים שנגבו על ידי נהגים</p>
+        <h1 className="text-xl font-bold text-gt-text-primary">קופות נהגים</h1>
+        <p className="text-sm text-gt-text-tertiary mt-1">ניהול מזומנים שנגבו על ידי נהגים</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#33d4ff]/10 flex items-center justify-center flex-shrink-0">
-            <Wallet size={18} className="text-[#33d4ff]" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gt-brand-subtle flex items-center justify-center shrink-0">
+            <Wallet size={18} className="text-gt-brand-text" />
           </div>
           <div>
-            <p className="text-xl font-bold text-gray-800">₪{totalCash.toLocaleString()}</p>
-            <p className="text-xs text-gray-500">סה״כ מזומן</p>
+            <p className="text-xl font-bold text-gt-text-primary tabular-nums">₪{totalCash.toLocaleString()}</p>
+            <p className="text-xs text-gt-text-tertiary">סה״כ מזומן</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
-            <BarChart2 size={18} className="text-amber-500" />
+        <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gt-surface-subtle flex items-center justify-center shrink-0">
+            <BarChart2 size={18} className="text-gt-text-secondary" />
           </div>
           <div>
-            <p className="text-xl font-bold text-gray-800">{driversWithBalance}</p>
-            <p className="text-xs text-gray-500">נהגים עם יתרה</p>
+            <p className="text-xl font-bold text-gt-text-primary tabular-nums">{driversWithBalance}</p>
+            <p className="text-xs text-gt-text-tertiary">נהגים עם יתרה</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-            <Clock size={18} className="text-blue-500" />
+        {/* Pending transfers — accent only when action is needed (> 0) */}
+        <div className={`rounded-2xl border shadow-sm p-4 flex items-center gap-3 transition-colors ${
+          pendingTransfers > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gt-border-subtle'
+        }`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            pendingTransfers > 0 ? 'bg-amber-100' : 'bg-gt-surface-subtle'
+          }`}>
+            <Clock size={18} className={pendingTransfers > 0 ? 'text-amber-600' : 'text-gt-text-tertiary'} />
           </div>
           <div>
-            <p className="text-xl font-bold text-gray-800">{pendingTransfers}</p>
-            <p className="text-xs text-gray-500">העברות ממתינות</p>
+            <p className={`text-xl font-bold tabular-nums ${pendingTransfers > 0 ? 'text-amber-700' : 'text-gt-text-primary'}`}>
+              {pendingTransfers}
+            </p>
+            <p className={`text-xs ${pendingTransfers > 0 ? 'text-amber-600' : 'text-gt-text-tertiary'}`}>העברות ממתינות</p>
           </div>
         </div>
       </div>
 
-      {/* Drivers table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+      {/* Drivers list */}
+      <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gt-border-subtle">
           <div className="relative">
-            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gt-text-tertiary" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="חפש נהג..."
-              className="w-full pr-9 pl-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/30"
+              className="w-full pr-9 pl-4 py-2.5 bg-gt-surface-subtle/40 border border-gt-border-subtle rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary focus:outline-none focus:bg-white focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 transition-all"
             />
           </div>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100">
-              <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">נהג</th>
-              <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">יתרת מזומן</th>
-              <th className="text-right px-5 py-3.5 font-medium text-gray-500 text-xs">פעולה</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDrivers.map((driver) => {
-              const badge = getBalanceBadge(driver.balance)
-              return (
-                <tr key={driver.driverId} className="border-b border-gray-50 hover:bg-gray-50/50 cursor-pointer transition-colors" onClick={() => handleSelectDriver(driver)}>
-                  <td className="px-5 py-3.5 font-medium text-gray-800">{driver.driverName}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`inline-flex px-3 py-1 rounded-xl text-xs font-bold ${badge.bg} ${badge.color}`}>
-                      {badge.text}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="text-[#33d4ff] text-xs font-medium hover:underline">הצג היסטוריה ←</span>
-                  </td>
-                </tr>
-              )
-            })}
-            {filteredDrivers.length === 0 && (
-              <tr>
-                <td colSpan={3} className="text-center py-12 text-gray-400">
-                  <Wallet size={24} className="mx-auto mb-2 opacity-30" />
-                  לא נמצאו נהגים
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+        <div className="divide-y divide-gt-border-subtle">
+          {sortedDrivers.map((driver) => (
+            <button
+              key={driver.driverId}
+              type="button"
+              onClick={() => handleSelectDriver(driver)}
+              className="group w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 text-right hover:bg-gt-surface-hover transition-colors"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <ChevronLeft
+                  size={18}
+                  className="text-gt-text-muted group-hover:text-gt-text-secondary group-hover:-translate-x-0.5 transition-all shrink-0"
+                />
+                <div className="w-9 h-9 rounded-full bg-gt-surface-subtle flex items-center justify-center text-sm font-bold text-gt-text-secondary shrink-0">
+                  {driver.driverName.trim().charAt(0) || '?'}
+                </div>
+                <span className="font-medium text-gt-text-primary truncate">{driver.driverName}</span>
+              </div>
+              <span className={`font-bold text-base sm:text-lg tabular-nums shrink-0 ${balanceTone(driver.balance)}`}>
+                ₪{driver.balance.toLocaleString()}
+              </span>
+            </button>
+          ))}
+          {sortedDrivers.length === 0 && (
+            <div className="text-center py-12 text-gt-text-tertiary">
+              <Wallet size={24} className="mx-auto mb-2 opacity-30" />
+              לא נמצאו נהגים
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
