@@ -1074,11 +1074,12 @@ function CreateTowForm({
 
   // URL params (date/time only — driver goes through truck step when ?driver= is present)
   useEffect(() => {
+    if (editTowId) return
     if (dateParam) {
       setTowDate(dateParam)
     }
     if (timeParam) setTowTime(timeParam)
-  }, [dateParam, timeParam])
+  }, [editTowId, dateParam, timeParam])
 
   useEffect(() => {
     if (truckPickerFromUrlAppliedRef.current) return

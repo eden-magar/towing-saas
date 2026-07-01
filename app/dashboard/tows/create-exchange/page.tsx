@@ -485,9 +485,10 @@ function CreateExchangeTowForm({
   }, [editTowId, setTowType])
 
   useEffect(() => {
+    if (editTowId) return
     if (dateParam) setTowDate(dateParam)
     if (timeParam) setTowTime(timeParam)
-  }, [dateParam, timeParam, setTowDate, setTowTime])
+  }, [editTowId, dateParam, timeParam, setTowDate, setTowTime])
 
   useEffect(() => {
     if (truckPickerFromUrlAppliedRef.current) return

@@ -638,6 +638,10 @@ export function useTowForm(
   const [editCustomerPricingHydrationSettled, setEditCustomerPricingHydrationSettled] =
     useState(false)
   const editCustomerPricingHydratedRef = useRef(false)
+  const editSelectedPriceItemHydratedRef = useRef(false)
+  const [fixedPriceItemsHydrationSettled, setFixedPriceItemsHydrationSettled] = useState(false)
+  const [editSelectedPriceItemHydrationSettled, setEditSelectedPriceItemHydrationSettled] =
+    useState(false)
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
@@ -779,9 +783,11 @@ export function useTowForm(
     editSinglePriceBaselineCapturedRef.current = false
     editIsHolidayHydratedRef.current = false
     editCustomerPricingHydratedRef.current = false
+    editSelectedPriceItemHydratedRef.current = false
     setEditIsHolidayHydrationSettled(false)
     setEditManualAdjustmentHydrationSettled(false)
     setEditCustomerPricingHydrationSettled(false)
+    setEditSelectedPriceItemHydrationSettled(false)
     setIsHoliday(false)
     setEditHydrationSettled(false)
   }, [editTowId])
@@ -930,11 +936,69 @@ export function useTowForm(
     setEditCustomerPricingHydrationSettled(true)
   }, [editTowId, selectedCustomerId, selectedCustomerPricing])
 
+  // Edit-only: restore fixed/customer catalog price item after pricing lists are available
+  useEffect(() => {
+    if (!editTowId || !editHydrationSettled) return
+    if (editSelectedPriceItemHydratedRef.current) return
+
+    const source = editTowSnapshot?.price_breakdown?.selected_price_item_source
+    const itemId = editTowSnapshot?.price_breakdown?.selected_price_item_id
+
+    if (source !== 'fixed' && source !== 'customer') {
+      editSelectedPriceItemHydratedRef.current = true
+      setEditSelectedPriceItemHydrationSettled(true)
+      return
+    }
+
+    if (source === 'customer' && !editCustomerPricingHydrationSettled) return
+    if (source === 'fixed' && !fixedPriceItemsHydrationSettled) return
+
+    if (!itemId) {
+      editSelectedPriceItemHydratedRef.current = true
+      setEditSelectedPriceItemHydrationSettled(true)
+      return
+    }
+
+    let item: PriceItem | null = null
+    if (source === 'fixed') {
+      const found = fixedPriceItems.find((i) => i.id === itemId)
+      if (found) {
+        item = { id: found.id, label: found.label, price: found.price }
+      }
+    } else {
+      const found = selectedCustomerPricing?.price_items?.find((i) => i.id === itemId)
+      if (found) {
+        item = { id: found.id, label: found.label, price: found.price }
+      }
+    }
+
+    if (!item) {
+      item = {
+        id: itemId,
+        label: '(פריט לא זמין)',
+        price: editTowSnapshot?.final_price ?? 0,
+      }
+    }
+
+    setSelectedPriceItem(item)
+    editSelectedPriceItemHydratedRef.current = true
+    setEditSelectedPriceItemHydrationSettled(true)
+  }, [
+    editTowId,
+    editHydrationSettled,
+    editTowSnapshot,
+    editCustomerPricingHydrationSettled,
+    fixedPriceItemsHydrationSettled,
+    fixedPriceItems,
+    selectedCustomerPricing,
+  ])
+
   // Capture exchange edit price-affecting baseline once after hydration settles
   useEffect(() => {
     if (!editTowId || towType !== 'exchange' || !editHydrationSettled) return
     if (!editManualAdjustmentHydrationSettled) return
     if (!editCustomerPricingHydrationSettled) return
+    if (!editSelectedPriceItemHydrationSettled) return
     if (editExchangePriceBaselineCapturedRef.current) return
     if (!towDate || !towTime) return
 
@@ -965,6 +1029,7 @@ export function useTowForm(
       manualSurcharges,
       towDate,
       towTime,
+      selectedPriceItemId: selectedPriceItem?.id ?? null,
     })
     editExchangePriceBaselineCapturedRef.current = true
   }, [
@@ -973,6 +1038,7 @@ export function useTowForm(
     editHydrationSettled,
     editManualAdjustmentHydrationSettled,
     editCustomerPricingHydrationSettled,
+    editSelectedPriceItemHydrationSettled,
     towDate,
     towTime,
     workingVehicleAddress,
@@ -997,6 +1063,7 @@ export function useTowForm(
     manualAdjustmentPercent,
     manualAdjustmentType,
     manualSurcharges,
+    selectedPriceItem,
   ])
 
   // Capture single-tow edit price-affecting baseline once after hydration + isHoliday restore
@@ -1004,6 +1071,7 @@ export function useTowForm(
     if (!editTowId || towType !== 'single' || !editHydrationSettled) return
     if (!editManualAdjustmentHydrationSettled) return
     if (!editCustomerPricingHydrationSettled) return
+    if (!editSelectedPriceItemHydrationSettled) return
     if (editSinglePriceBaselineCapturedRef.current) return
     if (!editIsHolidayHydrationSettled) return
     if (!towDate || !towTime) return
@@ -1045,6 +1113,7 @@ export function useTowForm(
       towTime,
       customPrice: parseFloat(customPrice ?? '') || 0,
       customPriceIncludesVat,
+      selectedPriceItemId: selectedPriceItem?.id ?? null,
     })
     editSinglePriceBaselineCapturedRef.current = true
   }, [
@@ -1053,6 +1122,7 @@ export function useTowForm(
     editHydrationSettled,
     editManualAdjustmentHydrationSettled,
     editCustomerPricingHydrationSettled,
+    editSelectedPriceItemHydrationSettled,
     editIsHolidayHydrationSettled,
     editTowSnapshot,
     towDate,
@@ -1076,6 +1146,7 @@ export function useTowForm(
     manualSurcharges,
     customPrice,
     customPriceIncludesVat,
+    selectedPriceItem,
   ])
 
   // Calculate base to pickup distance
@@ -2083,6 +2154,7 @@ export function useTowForm(
       } else {
         console.error('Error loading fixedPriceItems:', fixedPriceItemsResult.reason)
       }
+      setFixedPriceItemsHydrationSettled(true)
 
       if (customerIdsWithPersonalPricingResult.status === 'fulfilled') {
         setCustomerIdsWithPersonalPricing(customerIdsWithPersonalPricingResult.value)
@@ -3079,6 +3151,7 @@ export function useTowForm(
     customRouteData,
     priceMode,
     finalPrice,
+    selectedPriceItem,
     customPrice,
     customPriceIncludesVat,
     vatPercent,

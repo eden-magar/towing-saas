@@ -98,6 +98,7 @@ interface UseTowSaveParams {
   // Pricing
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
+  selectedPriceItem?: { id: string; label: string; price: number } | null
   customPrice?: string
   customPriceIncludesVat?: boolean
   vatPercent?: number
@@ -228,6 +229,7 @@ export function useTowSave(params: UseTowSaveParams) {
     customRouteData,
     priceMode,
     finalPrice,
+    selectedPriceItem,
     customPrice,
     customPriceIncludesVat,
     vatPercent,
@@ -445,6 +447,7 @@ export function useTowSave(params: UseTowSaveParams) {
       // Pricing
       priceMode,
       finalPrice,
+      selectedPriceItem,
       customPrice,
       customPriceIncludesVat,
       vatPercent,

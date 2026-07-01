@@ -119,6 +119,7 @@ export interface SaveTowInput {
   // Pricing
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
+  selectedPriceItem?: { id: string; label: string; price: number } | null
   customPrice?: string
   customPriceIncludesVat?: boolean
   vatPercent?: number
@@ -215,6 +216,31 @@ export type ExchangePriceAffectingFields = {
   manualSurcharges?: ManualSurcharge[]
   towDate?: string
   towTime?: string
+  selectedPriceItemId?: string | null
+}
+
+function selectedPriceItemBreakdownFields(
+  input: Pick<SaveTowInput, 'priceMode' | 'selectedPriceItem'>
+): {
+  selected_price_item_id: string | null
+  selected_price_item_source: 'fixed' | 'customer' | null
+} {
+  if (input.priceMode === 'fixed') {
+    return {
+      selected_price_item_id: input.selectedPriceItem?.id ?? null,
+      selected_price_item_source: 'fixed',
+    }
+  }
+  if (input.priceMode === 'customer') {
+    return {
+      selected_price_item_id: input.selectedPriceItem?.id ?? null,
+      selected_price_item_source: 'customer',
+    }
+  }
+  return {
+    selected_price_item_id: null,
+    selected_price_item_source: null,
+  }
 }
 
 function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string {
@@ -319,6 +345,7 @@ export function buildExchangePriceAffectingSignature(
     towDate: fields.towDate ?? '',
     towTime: fields.towTime ?? '',
     manualAdj: fields.manualAdjustmentPercent ?? 0,
+    selectedPriceItemId: fields.selectedPriceItemId ?? '',
   })
 }
 
@@ -351,6 +378,7 @@ export function exchangePriceSignatureFromSaveInput(input: SaveTowInput): string
     manualSurcharges: input.manualSurcharges,
     towDate: input.towDate,
     towTime: input.towTime,
+    selectedPriceItemId: input.selectedPriceItem?.id ?? null,
   })
 }
 
@@ -377,6 +405,7 @@ export type SinglePriceAffectingFields = {
   towTime?: string
   customPrice?: number
   customPriceIncludesVat?: boolean
+  selectedPriceItemId?: string | null
 }
 
 function singleRouteStopsSignature(routeStops?: SaveTowInput['routeStops']): string {
@@ -420,6 +449,7 @@ export function buildSinglePriceAffectingSignature(fields: SinglePriceAffectingF
     manualAdj: fields.manualAdjustmentPercent ?? 0,
     customPrice: fields.customPrice ?? 0,
     customPriceIncludesVat: fields.customPriceIncludesVat ?? true,
+    selectedPriceItemId: fields.selectedPriceItemId ?? '',
   })
 }
 
@@ -447,6 +477,7 @@ export function singlePriceSignatureFromSaveInput(input: SaveTowInput): string {
     towTime: input.towTime,
     customPrice: parseFloat(String(input.customPrice ?? '')) || 0,
     customPriceIncludesVat: input.customPriceIncludesVat ?? true,
+    selectedPriceItemId: input.selectedPriceItem?.id ?? null,
   })
 }
 
@@ -1251,6 +1282,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
     discount_amount: round2(result.discountAmount),
     ...manualAdjustmentBreakdownFields(input),
+    ...selectedPriceItemBreakdownFields(input),
     vat_amount: round2(result.vatAmount),
     total: round2(result.total),
   }
@@ -1268,6 +1300,8 @@ export function buildSingleTowPriceBreakdownForSave(input: SaveTowInput): PriceB
         total: round2(manual),
         custom_price_includes_vat: input.customPriceIncludesVat ?? true,
         custom_price_amount: Number.isFinite(rawCustom) ? round2(rawCustom) : null,
+        selected_price_item_id: null,
+        selected_price_item_source: null,
       }
     }
   }
@@ -1379,6 +1413,7 @@ export function buildCustomTowPriceBreakdown(
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
     discount_amount: round2(result.discountAmount),
     ...manualAdjustmentBreakdownFields(input),
+    ...selectedPriceItemBreakdownFields(input),
     vat_amount: round2(result.vatAmount),
     total: round2(result.total),
     route_points: routePoints,

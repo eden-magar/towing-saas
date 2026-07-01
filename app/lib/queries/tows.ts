@@ -58,6 +58,10 @@ export interface PriceBreakdown {
   custom_price_includes_vat?: boolean | null
   /** Custom priceMode only: raw value typed in the custom price input (pre- or post-VAT per flag). */
   custom_price_amount?: number | null
+  /** fixed/customer priceMode: catalog item id chosen at save time. */
+  selected_price_item_id?: string | null
+  /** fixed/customer priceMode: which catalog the item came from. */
+  selected_price_item_source?: 'fixed' | 'customer' | null
   vat_amount: number
   total: number
   route_points?: any[]
