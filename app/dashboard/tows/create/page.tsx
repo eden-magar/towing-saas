@@ -1389,6 +1389,8 @@ function CreateTowForm({
         customRouteData,
         priceMode,
         finalPrice,
+        customPrice,
+        customPriceIncludesVat,
         vatPercent,
         manualAdjustmentPercent: (() => {
           const adj = parseFloat(manualAdjustmentPercent ?? '') || 0

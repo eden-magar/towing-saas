@@ -119,6 +119,8 @@ export interface SaveTowInput {
   // Pricing
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
+  customPrice?: string
+  customPriceIncludesVat?: boolean
   vatPercent?: number
   manualAdjustmentPercent?: number
   basePriceList: any
@@ -373,6 +375,8 @@ export type SinglePriceAffectingFields = {
   manualSurcharges?: ManualSurcharge[]
   towDate?: string
   towTime?: string
+  customPrice?: number
+  customPriceIncludesVat?: boolean
 }
 
 function singleRouteStopsSignature(routeStops?: SaveTowInput['routeStops']): string {
@@ -414,6 +418,8 @@ export function buildSinglePriceAffectingSignature(fields: SinglePriceAffectingF
     isHoliday: fields.isHoliday ?? false,
     hasManualTimeSurchargeOverride: fields.hasManualTimeSurchargeOverride ?? false,
     manualAdj: fields.manualAdjustmentPercent ?? 0,
+    customPrice: fields.customPrice ?? 0,
+    customPriceIncludesVat: fields.customPriceIncludesVat ?? true,
   })
 }
 
@@ -439,6 +445,8 @@ export function singlePriceSignatureFromSaveInput(input: SaveTowInput): string {
     manualSurcharges: input.manualSurcharges,
     towDate: input.towDate,
     towTime: input.towTime,
+    customPrice: parseFloat(String(input.customPrice ?? '')) || 0,
+    customPriceIncludesVat: input.customPriceIncludesVat ?? true,
   })
 }
 
@@ -1253,8 +1261,14 @@ export function buildSingleTowPriceBreakdownForSave(input: SaveTowInput): PriceB
   const fresh = buildSingleTowPriceBreakdown(input)
   if (input.priceMode === 'custom') {
     const manual = Number(input.finalPrice)
+    const rawCustom = parseFloat(String(input.customPrice ?? ''))
     if (Number.isFinite(manual) && manual >= 0) {
-      return { ...fresh, total: round2(manual) }
+      return {
+        ...fresh,
+        total: round2(manual),
+        custom_price_includes_vat: input.customPriceIncludesVat ?? true,
+        custom_price_amount: Number.isFinite(rawCustom) ? round2(rawCustom) : null,
+      }
     }
   }
   return fresh

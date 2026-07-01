@@ -525,6 +525,7 @@ export function useTowForm(
   const [customPrice, setCustomPrice] = useState<string>('')
   const [customPriceIncludesVat, setCustomPriceIncludesVat] = useState(true)
   const [vatPercent, setVatPercent] = useState<number>(0.18)
+  const vatPercentRef = useRef(vatPercent)
   const [manualAdjustmentPercent, setManualAdjustmentPercent] = useState<string>('')
   const [manualAdjustmentType, setManualAdjustmentType] = useState<'discount' | 'markup'>('discount')
 
@@ -634,6 +635,9 @@ export function useTowForm(
   const [editIsHolidayHydrationSettled, setEditIsHolidayHydrationSettled] = useState(false)
   const [editManualAdjustmentHydrationSettled, setEditManualAdjustmentHydrationSettled] =
     useState(false)
+  const [editCustomerPricingHydrationSettled, setEditCustomerPricingHydrationSettled] =
+    useState(false)
+  const editCustomerPricingHydratedRef = useRef(false)
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
@@ -758,6 +762,10 @@ export function useTowForm(
   useEffect(() => { loadGoogleMaps() }, [])
 
   useEffect(() => {
+    vatPercentRef.current = vatPercent
+  }, [vatPercent])
+
+  useEffect(() => {
     editRouteBaselineRef.current = null
     loadedEditPriceModeRef.current = null
     editSeededDistanceRef.current = null
@@ -770,8 +778,10 @@ export function useTowForm(
     editSinglePriceBaselineRef.current = null
     editSinglePriceBaselineCapturedRef.current = false
     editIsHolidayHydratedRef.current = false
+    editCustomerPricingHydratedRef.current = false
     setEditIsHolidayHydrationSettled(false)
     setEditManualAdjustmentHydrationSettled(false)
+    setEditCustomerPricingHydrationSettled(false)
     setIsHoliday(false)
     setEditHydrationSettled(false)
   }, [editTowId])
@@ -841,6 +851,18 @@ export function useTowForm(
     if (!editTowId || towType !== 'single' || !editHydrationSettled) return
     if (!editRouteBaselineRef.current) return
 
+    const loadedMode = loadedEditPriceModeRef.current
+    if (
+      loadedMode === 'custom' ||
+      loadedMode === 'fixed' ||
+      loadedMode === 'customer'
+    ) {
+      return
+    }
+    if (priceMode !== 'recommended' && priceMode !== 'recommended_customer') {
+      return
+    }
+
     if (routeStopsDistanceSignature !== editRouteBaselineRef.current) {
       editSeededDistanceRef.current = null
       setPriceMode((prev) => {
@@ -854,7 +876,7 @@ export function useTowForm(
       })
       editRouteBaselineRef.current = routeStopsDistanceSignature
     }
-  }, [editTowId, towType, editHydrationSettled, routeStopsDistanceSignature])
+  }, [editTowId, towType, editHydrationSettled, routeStopsDistanceSignature, priceMode])
 
   // Edit-only: restore isHoliday from saved breakdown (catalog id → day_type === 'holiday')
   useEffect(() => {
@@ -869,8 +891,10 @@ export function useTowForm(
 
     if (timeSurchargesData.length === 0) return
 
-    const needsCustomerCatalog = priceMode === 'recommended_customer' && !!selectedCustomerId
-    if (needsCustomerCatalog && !selectedCustomerPricing) return
+    const needsCustomerPricing =
+      !!selectedCustomerId &&
+      (priceMode === 'recommended_customer' || priceMode === 'recommended')
+    if (needsCustomerPricing && !selectedCustomerPricing) return
 
     const customerCatalog =
       priceMode === 'recommended_customer' &&
@@ -892,10 +916,25 @@ export function useTowForm(
     priceMode,
   ])
 
+  // Edit-only: wait for async customer pricing before baseline capture (recommended + recommended_customer)
+  useEffect(() => {
+    if (!editTowId) return
+    if (editCustomerPricingHydratedRef.current) return
+    if (!selectedCustomerId) {
+      editCustomerPricingHydratedRef.current = true
+      setEditCustomerPricingHydrationSettled(true)
+      return
+    }
+    if (!selectedCustomerPricing) return
+    editCustomerPricingHydratedRef.current = true
+    setEditCustomerPricingHydrationSettled(true)
+  }, [editTowId, selectedCustomerId, selectedCustomerPricing])
+
   // Capture exchange edit price-affecting baseline once after hydration settles
   useEffect(() => {
     if (!editTowId || towType !== 'exchange' || !editHydrationSettled) return
     if (!editManualAdjustmentHydrationSettled) return
+    if (!editCustomerPricingHydrationSettled) return
     if (editExchangePriceBaselineCapturedRef.current) return
     if (!towDate || !towTime) return
 
@@ -933,6 +972,7 @@ export function useTowForm(
     towType,
     editHydrationSettled,
     editManualAdjustmentHydrationSettled,
+    editCustomerPricingHydrationSettled,
     towDate,
     towTime,
     workingVehicleAddress,
@@ -963,6 +1003,7 @@ export function useTowForm(
   useEffect(() => {
     if (!editTowId || towType !== 'single' || !editHydrationSettled) return
     if (!editManualAdjustmentHydrationSettled) return
+    if (!editCustomerPricingHydrationSettled) return
     if (editSinglePriceBaselineCapturedRef.current) return
     if (!editIsHolidayHydrationSettled) return
     if (!towDate || !towTime) return
@@ -986,7 +1027,10 @@ export function useTowForm(
       manualWeight,
       priceMode,
       customerId: selectedCustomerId,
-      discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      discountPercent:
+        editTowSnapshot?.price_breakdown?.discount_percent ??
+        selectedCustomerPricing?.discount_percent ??
+        0,
       selectedLocationSurcharges,
       selectedServices,
       activeTimeSurchargeIds: activeTimeSurchargesList.map((s) => s.id),
@@ -999,6 +1043,8 @@ export function useTowForm(
       manualSurcharges,
       towDate,
       towTime,
+      customPrice: parseFloat(customPrice ?? '') || 0,
+      customPriceIncludesVat,
     })
     editSinglePriceBaselineCapturedRef.current = true
   }, [
@@ -1006,7 +1052,9 @@ export function useTowForm(
     towType,
     editHydrationSettled,
     editManualAdjustmentHydrationSettled,
+    editCustomerPricingHydrationSettled,
     editIsHolidayHydrationSettled,
+    editTowSnapshot,
     towDate,
     towTime,
     routeStops,
@@ -1026,6 +1074,8 @@ export function useTowForm(
     manualAdjustmentPercent,
     manualAdjustmentType,
     manualSurcharges,
+    customPrice,
+    customPriceIncludesVat,
   ])
 
   // Calculate base to pickup distance
@@ -1384,6 +1434,8 @@ export function useTowForm(
         editIsHolidayHydratedRef.current = false
         setEditIsHolidayHydrationSettled(false)
         setEditManualAdjustmentHydrationSettled(false)
+        setEditCustomerPricingHydrationSettled(false)
+        editCustomerPricingHydratedRef.current = false
       }
       try {
         const tow = await getTowWithPoints(sourceTowId)
@@ -1456,7 +1508,18 @@ export function useTowForm(
         setNotes(tow.notes || '')
         // Price mode (duplicate: recompute amount at new datetime; edit: also preserve custom total)
         if (editTowId) {
-          setCustomPrice(String(tow.final_price ?? 0))
+          const storedRawAmount = tow.price_breakdown?.custom_price_amount
+          if (storedRawAmount != null) {
+            setCustomPrice(String(storedRawAmount))
+          } else {
+            const includesVat = tow.price_breakdown?.custom_price_includes_vat ?? true
+            const savedFinalPrice = tow.final_price ?? 0
+            const fallbackAmount = includesVat
+              ? savedFinalPrice
+              : savedFinalPrice / (1 + vatPercentRef.current)
+            setCustomPrice(String(fallbackAmount))
+          }
+          setCustomPriceIncludesVat(tow.price_breakdown?.custom_price_includes_vat ?? true)
           loadedEditPriceModeRef.current = tow.price_mode || 'custom'
         }
         const loadedMode = String(tow.price_mode || 'custom')
@@ -3016,6 +3079,8 @@ export function useTowForm(
     customRouteData,
     priceMode,
     finalPrice,
+    customPrice,
+    customPriceIncludesVat,
     vatPercent,
     manualAdjustmentPercent,
     manualAdjustmentType,

@@ -98,6 +98,8 @@ interface UseTowSaveParams {
   // Pricing
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   finalPrice: number
+  customPrice?: string
+  customPriceIncludesVat?: boolean
   vatPercent?: number
   manualAdjustmentPercent?: string
   manualAdjustmentType?: 'discount' | 'markup'
@@ -226,6 +228,8 @@ export function useTowSave(params: UseTowSaveParams) {
     customRouteData,
     priceMode,
     finalPrice,
+    customPrice,
+    customPriceIncludesVat,
     vatPercent,
     manualAdjustmentPercent,
     manualAdjustmentType,
@@ -441,6 +445,8 @@ export function useTowSave(params: UseTowSaveParams) {
       // Pricing
       priceMode,
       finalPrice,
+      customPrice,
+      customPriceIncludesVat,
       vatPercent,
       manualAdjustmentPercent: (() => {
         const adj = parseFloat(manualAdjustmentPercent ?? '') || 0

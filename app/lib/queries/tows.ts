@@ -54,6 +54,10 @@ export interface PriceBreakdown {
   /** Order-level manual discount/markup % (unsigned); null when not applied. */
   manual_adjustment_percent?: number | null
   manual_adjustment_type?: 'discount' | 'markup' | null
+  /** Custom priceMode only: whether final_price includes VAT. */
+  custom_price_includes_vat?: boolean | null
+  /** Custom priceMode only: raw value typed in the custom price input (pre- or post-VAT per flag). */
+  custom_price_amount?: number | null
   vat_amount: number
   total: number
   route_points?: any[]
