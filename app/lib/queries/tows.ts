@@ -51,6 +51,9 @@ export interface PriceBreakdown {
   subtotal: number
   discount_percent: number
   discount_amount: number
+  /** Order-level manual discount/markup % (unsigned); null when not applied. */
+  manual_adjustment_percent?: number | null
+  manual_adjustment_type?: 'discount' | 'markup' | null
   vat_amount: number
   total: number
   route_points?: any[]

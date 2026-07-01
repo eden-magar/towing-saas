@@ -275,6 +275,21 @@ function manualSurchargesSignature(list?: ManualSurcharge[]): string {
   )
 }
 
+/** Persist unsigned manual adjustment fields from signed save input (discount = negative). */
+function manualAdjustmentBreakdownFields(input: SaveTowInput): {
+  manual_adjustment_percent: number | null
+  manual_adjustment_type: 'discount' | 'markup' | null
+} {
+  const signed = input.manualAdjustmentPercent ?? 0
+  if (signed === 0) {
+    return { manual_adjustment_percent: null, manual_adjustment_type: null }
+  }
+  if (signed > 0) {
+    return { manual_adjustment_percent: signed, manual_adjustment_type: 'markup' }
+  }
+  return { manual_adjustment_percent: Math.abs(signed), manual_adjustment_type: 'discount' }
+}
+
 /** Stable signature of exchange inputs that affect recommended/custom price calculation. */
 export function buildExchangePriceAffectingSignature(
   fields: ExchangePriceAffectingFields
@@ -1227,6 +1242,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     subtotal: round2(result.beforeVat),
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
     discount_amount: round2(result.discountAmount),
+    ...manualAdjustmentBreakdownFields(input),
     vat_amount: round2(result.vatAmount),
     total: round2(result.total),
   }
@@ -1348,6 +1364,7 @@ export function buildCustomTowPriceBreakdown(
     subtotal: round2(result.beforeVat),
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
     discount_amount: round2(result.discountAmount),
+    ...manualAdjustmentBreakdownFields(input),
     vat_amount: round2(result.vatAmount),
     total: round2(result.total),
     route_points: routePoints,

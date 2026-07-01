@@ -622,6 +622,7 @@ export function useTowForm(
   const editRouteBaselineRef = useRef<string | null>(null)
   const loadedEditPriceModeRef = useRef<string | null>(null)
   const editSeededDistanceRef = useRef<number | null>(null)
+  const editSeededDeadheadRef = useRef<number | null>(null)
   const editSeededExchangeBaseRef = useRef<number | null>(null)
   const editExchangeRouteLayoutRef = useRef<'four_point' | 'hub' | null>(null)
   const editExchangeRouteBaselineRef = useRef<string | null>(null)
@@ -631,6 +632,8 @@ export function useTowForm(
   const editSinglePriceBaselineCapturedRef = useRef(false)
   const editIsHolidayHydratedRef = useRef(false)
   const [editIsHolidayHydrationSettled, setEditIsHolidayHydrationSettled] = useState(false)
+  const [editManualAdjustmentHydrationSettled, setEditManualAdjustmentHydrationSettled] =
+    useState(false)
   const [editHydrationSettled, setEditHydrationSettled] = useState(false)
   const previousTowTypeRef = useRef<TowType>('')
   const storagePrefillAppliedRef = useRef(false)
@@ -758,6 +761,7 @@ export function useTowForm(
     editRouteBaselineRef.current = null
     loadedEditPriceModeRef.current = null
     editSeededDistanceRef.current = null
+    editSeededDeadheadRef.current = null
     editSeededExchangeBaseRef.current = null
     editExchangeRouteLayoutRef.current = null
     editExchangeRouteBaselineRef.current = null
@@ -767,6 +771,7 @@ export function useTowForm(
     editSinglePriceBaselineCapturedRef.current = false
     editIsHolidayHydratedRef.current = false
     setEditIsHolidayHydrationSettled(false)
+    setEditManualAdjustmentHydrationSettled(false)
     setIsHoliday(false)
     setEditHydrationSettled(false)
   }, [editTowId])
@@ -890,6 +895,7 @@ export function useTowForm(
   // Capture exchange edit price-affecting baseline once after hydration settles
   useEffect(() => {
     if (!editTowId || towType !== 'exchange' || !editHydrationSettled) return
+    if (!editManualAdjustmentHydrationSettled) return
     if (editExchangePriceBaselineCapturedRef.current) return
     if (!towDate || !towTime) return
 
@@ -926,6 +932,7 @@ export function useTowForm(
     editTowId,
     towType,
     editHydrationSettled,
+    editManualAdjustmentHydrationSettled,
     towDate,
     towTime,
     workingVehicleAddress,
@@ -955,6 +962,7 @@ export function useTowForm(
   // Capture single-tow edit price-affecting baseline once after hydration + isHoliday restore
   useEffect(() => {
     if (!editTowId || towType !== 'single' || !editHydrationSettled) return
+    if (!editManualAdjustmentHydrationSettled) return
     if (editSinglePriceBaselineCapturedRef.current) return
     if (!editIsHolidayHydrationSettled) return
     if (!towDate || !towTime) return
@@ -997,6 +1005,7 @@ export function useTowForm(
     editTowId,
     towType,
     editHydrationSettled,
+    editManualAdjustmentHydrationSettled,
     editIsHolidayHydrationSettled,
     towDate,
     towTime,
@@ -1144,8 +1153,11 @@ export function useTowForm(
   // Calculate last dropoff → base distance (deadhead / נסיעת סרק).
   // Mirrors the base-to-pickup effect, but in reverse: final dropoff back to base.
   useEffect(() => {
+    const preserveSeededDeadhead = () =>
+      !!(editTowId && editSeededDeadheadRef.current != null)
+
     if (!chargeDeadheadReturn || !basePriceList?.base_lat || !basePriceList?.base_lng) {
-      setDropoffToBaseDistance(null)
+      if (!preserveSeededDeadhead()) setDropoffToBaseDistance(null)
       return
     }
 
@@ -1165,14 +1177,14 @@ export function useTowForm(
       lastDropoff = waypoints[waypoints.length - 1]
     } else if (towType === 'custom') {
       // TODO(deadhead): custom routes compute distance in RouteBuilder; wire last point → base later.
-      setDropoffToBaseDistance(null)
+      if (!preserveSeededDeadhead()) setDropoffToBaseDistance(null)
       return
     } else {
       lastDropoff = findDropoffRouteStop(routeStops)?.address
     }
 
     if (!lastDropoff?.address) {
-      setDropoffToBaseDistance(null)
+      if (!preserveSeededDeadhead()) setDropoffToBaseDistance(null)
       return
     }
 
@@ -1188,10 +1200,13 @@ export function useTowForm(
           lng: basePriceList.base_lng,
         }
         const result = await calculateDistance(lastDropoff!, baseAddress)
-        if (!cancelled) setDropoffToBaseDistance(result)
+        if (!cancelled) {
+          editSeededDeadheadRef.current = null
+          setDropoffToBaseDistance(result)
+        }
       } catch (err) {
         console.error('Deadhead distance calculation error:', err)
-        if (!cancelled) setDropoffToBaseDistance(null)
+        if (!cancelled && !preserveSeededDeadhead()) setDropoffToBaseDistance(null)
       } finally {
         if (!cancelled) setDropoffToBaseLoading(false)
       }
@@ -1360,6 +1375,7 @@ export function useTowForm(
         setEditHydrationSettled(false)
         editRouteBaselineRef.current = null
         editSeededDistanceRef.current = null
+        editSeededDeadheadRef.current = null
         editSeededExchangeBaseRef.current = null
         editExchangePriceBaselineRef.current = null
         editExchangePriceBaselineCapturedRef.current = false
@@ -1367,6 +1383,7 @@ export function useTowForm(
         editSinglePriceBaselineCapturedRef.current = false
         editIsHolidayHydratedRef.current = false
         setEditIsHolidayHydrationSettled(false)
+        setEditManualAdjustmentHydrationSettled(false)
       }
       try {
         const tow = await getTowWithPoints(sourceTowId)
@@ -1893,6 +1910,19 @@ export function useTowForm(
               setSelectedWorkingVehicleId(rv.id)
               setWorkingVehicleSource('storage')
             }
+          }
+
+          setManualAdjustmentPercent(
+            String(tow.price_breakdown?.manual_adjustment_percent ?? '')
+          )
+          setManualAdjustmentType(tow.price_breakdown?.manual_adjustment_type ?? 'discount')
+          setEditManualAdjustmentHydrationSettled(true)
+
+          const savedDeadheadKm = Number(tow.price_breakdown?.deadhead_km ?? 0)
+          if (savedDeadheadKm > 0) {
+            setChargeDeadheadReturn(true)
+            editSeededDeadheadRef.current = savedDeadheadKm
+            setDropoffToBaseDistance({ distanceKm: savedDeadheadKm, durationMinutes: 0 })
           }
 
           setEditHydrationSettled(true)

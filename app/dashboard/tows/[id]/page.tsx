@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { TimeInput, DateInput } from '../../../components/ui'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
-import { calculateTowPrice, type TowPriceResult } from '../../../lib/utils/price-calculator'
+import { calculateTowPrice, computeStoredPriceBreakdownTotals, type TowPriceResult } from '../../../lib/utils/price-calculator'
 import {
   computeCancellationFee,
   computeCancellationFeeBreakdown,
@@ -2529,23 +2529,35 @@ export default function TowDetailsPage() {
                       />
                     </div>
                   ) : tow.price_breakdown && tow.price_mode !== 'custom' ? (
+                    (() => {
+                      const bd = tow.price_breakdown
+                      const priceTotals = computeStoredPriceBreakdownTotals(bd, vatRate)
+                      const { manualAdjustment } = priceTotals
+                      return (
                     <div className="space-y-2 text-sm">
                       {/* מחיר בסיס */}
                       <div className="flex justify-between">
-                        <span className="text-gray-600">מחיר בסיס ({isKnownVehicleType(tow.price_breakdown.vehicle_type) ? getVehicleTypeLabel(tow.price_breakdown.vehicle_type) : '—'})</span>
-                        <span className="font-medium text-gray-800">₪{tow.price_breakdown.base_price.toFixed(2)}</span>
+                        <span className="text-gray-600">מחיר בסיס ({isKnownVehicleType(bd.vehicle_type) ? getVehicleTypeLabel(bd.vehicle_type) : '—'})</span>
+                        <span className="font-medium text-gray-800">₪{bd.base_price.toFixed(2)}</span>
                       </div>
                       
                       {/* מרחק */}
-                      {tow.price_breakdown.distance_km > 0 && (
+                      {bd.distance_km > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">מרחק ({tow.price_breakdown.distance_km.toFixed(1)} ק״מ)</span>
-                          <span className="font-medium text-gray-800">₪{tow.price_breakdown.distance_price.toFixed(2)}</span>
+                          <span className="text-gray-600">מרחק ({bd.distance_km.toFixed(1)} ק״מ)</span>
+                          <span className="font-medium text-gray-800">₪{bd.distance_price.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      {(bd.deadhead_km ?? 0) > 0 && (bd.deadhead_price ?? 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">מרחק סרק ({bd.deadhead_km!.toFixed(1)} ק״מ)</span>
+                          <span className="font-medium text-gray-800">₪{bd.deadhead_price!.toFixed(2)}</span>
                         </div>
                       )}
                       
                       {/* תוספות זמן */}
-                      {tow.price_breakdown.time_surcharges?.filter((s: any) => s.amount > 0).map((surcharge: any, idx: number) => (
+                      {bd.time_surcharges?.filter((s: any) => s.amount > 0).map((surcharge: any, idx: number) => (
                         <div key={surcharge.id || idx} className="flex justify-between text-amber-600">
                           <span>{surcharge.label} (+{surcharge.percent}%)</span>
                           <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
@@ -2553,7 +2565,7 @@ export default function TowDetailsPage() {
                       ))}
                       
                       {/* תוספות מיקום */}
-                      {tow.price_breakdown.location_surcharges?.map((surcharge: any, idx: number) => (
+                      {bd.location_surcharges?.map((surcharge: any, idx: number) => (
                         <div key={surcharge.id || idx} className="flex justify-between text-blue-600">
                           <span>{surcharge.label} (+{surcharge.percent}%)</span>
                           <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
@@ -2561,31 +2573,71 @@ export default function TowDetailsPage() {
                       ))}
                       
                       {/* תוספות שירותים */}
-                      {tow.price_breakdown.service_surcharges?.map((surcharge: any, idx: number) => (
+                      {bd.service_surcharges?.map((surcharge: any, idx: number) => (
                         <div key={surcharge.id || idx} className="flex justify-between text-purple-600">
                           <span>{surcharge.label}{surcharge.units ? ` (×${surcharge.units})` : ''}</span>
                           <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
                         </div>
                       ))}
                       
-                      {/* הנחה */}
-                      {tow.price_breakdown.discount_amount > 0 && (
+                      {/* הנחת לקוח */}
+                      {bd.discount_amount > 0 && (
                         <div className="flex justify-between text-green-600">
-                          <span>הנחה ({tow.price_breakdown.discount_percent}%)</span>
-                          <span className="font-medium">-₪{tow.price_breakdown.discount_amount.toFixed(2)}</span>
+                          <span>הנחה ({bd.discount_percent}%)</span>
+                          <span className="font-medium">-₪{bd.discount_amount.toFixed(2)}</span>
                         </div>
                       )}
-                      
-                      {/* מע"מ */}
-                      <div className="flex justify-between text-gray-500">
-                        <span>מע״מ (18%)</span>
-                        <span className="font-medium">₪{tow.price_breakdown.vat_amount.toFixed(2)}</span>
+
+                      <div className="flex justify-between text-gray-600">
+                        <span>סה״כ לפני מע״מ</span>
+                        <span className="font-medium text-gray-800">₪{priceTotals.beforeVat.toFixed(2)}</span>
                       </div>
+
+                      <div className="flex justify-between text-gray-500">
+                        <span>מע״מ ({vatPercentLabel}%)</span>
+                        <span className="font-medium">₪{priceTotals.preManualVat.toFixed(2)}</span>
+                      </div>
+
+                      <div className="flex justify-between font-semibold text-gray-800">
+                        <span>סה״כ</span>
+                        <span>₪{priceTotals.totalBeforeManual.toFixed(2)}</span>
+                      </div>
+
+                      {manualAdjustment && (
+                        <>
+                          <div
+                            className={`flex justify-between ${
+                              manualAdjustment.type === 'discount' ? 'text-green-600' : 'text-gray-800'
+                            }`}
+                          >
+                            <span>
+                              {manualAdjustment.type === 'discount'
+                                ? `הנחה ידנית (${manualAdjustment.percent}%)`
+                                : `תוספת ידנית (${manualAdjustment.percent}%)`}
+                            </span>
+                            <span className="font-medium">
+                              {manualAdjustment.type === 'discount' ? '-' : '+'}
+                              ₪{manualAdjustment.amount.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-gray-600">
+                            <span>לפני מע״מ</span>
+                            <span className="font-medium text-gray-800">
+                              ₪{priceTotals.postManualBeforeVat.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-gray-500">
+                            <span>מע״מ ({vatPercentLabel}%)</span>
+                            <span className="font-medium">₪{priceTotals.postManualVat.toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
                       
-                      {/* סה"כ */}
                       <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200 mt-2">
-                        <span>סה״כ כולל מע״מ</span>
-                        <span className="text-gray-800">₪{((tow.price_mode as string) === 'custom' ? (tow.final_price ?? 0) : tow.price_breakdown.total).toFixed(2)}</span>
+                        <span>
+                          {manualAdjustment ? 'סך הכל אחרי הנחה' : 'סה״כ כולל מע״מ'}
+                        </span>
+                        <span className="text-gray-800">₪{priceTotals.finalTotal.toFixed(2)}</span>
                       </div>
                       {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
                         <div className="pt-2 border-t border-amber-200 mt-2 bg-amber-50 -mx-4 px-4 py-2 rounded-lg">
@@ -2598,6 +2650,8 @@ export default function TowDetailsPage() {
                         </div>
                       )}
                     </div>
+                      )
+                    })()
                   ) : tow.price_mode === 'custom' ? (
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between text-gray-600">

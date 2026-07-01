@@ -466,6 +466,7 @@ export function useTowPricing(params: UseTowPricingParams) {
 
   return {
     recommendedPrice: recommendedResult?.total ?? 0,
+    // `total` and `finalPrice` are identical in TowPriceResult; minimum is applied pre-manual only.
     finalPrice: finalResult?.total ?? 0,
     priceResult: finalResult,
   }

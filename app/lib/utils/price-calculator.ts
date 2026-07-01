@@ -7,7 +7,7 @@
  *   before_vat = subtotal × (1 + max(time surcharge %)) + sum(location % of subtotal) + sum(service ₪)
  *   before_discount = before_vat × (1 + vat_percent)
  *   final_price = before_discount × (1 - discount_percent/100)
- *   total = max(final_price, minimum_price)
+ *   total = max(pre_manual_total, minimum_price); manual adjustment applies after that floor and is not re-capped
  */
 
 import { VehicleType } from '../types'
@@ -235,16 +235,27 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
 
   const beforeVat = beforeDiscount - discountAmount
   const vatAmount = Math.round(beforeVat * vatRate)
-  const totalBeforeManual = beforeVat + vatAmount
+  const totalBeforeManualRaw = beforeVat + vatAmount
+  const roundedPreManual = Math.round(totalBeforeManualRaw)
+  const minimumApplied = roundedPreManual < minimumPrice
+  const totalBeforeManual = minimumApplied ? minimumPrice : totalBeforeManualRaw
+
   const manualAdjBase = input.manualAdjustmentPercent ?? 0
   const manualAdjAmountCalc = Math.round(Math.abs(totalBeforeManual * manualAdjBase / 100))
-  const total = totalBeforeManual + (manualAdjBase > 0 ? manualAdjAmountCalc : manualAdjBase < 0 ? -manualAdjAmountCalc : 0)
+  const totalAfterManual =
+    manualAdjBase !== 0
+      ? totalBeforeManual +
+        (manualAdjBase > 0 ? manualAdjAmountCalc : manualAdjBase < 0 ? -manualAdjAmountCalc : 0)
+      : totalBeforeManual
+
+  // Minimum floor applies to pre-manual total only; post-manual amount is final as-is.
+  const total =
+    manualAdjBase !== 0 ? totalAfterManual : Math.max(roundedPreManual, minimumPrice)
+
   const totalBeforeVat = Math.round(total / (1 + vatRate))
   const finalVatAmount = total - totalBeforeVat
 
   const finalPrice = total
-  const minimumApplied = Math.max(Math.round(total), minimumPrice) > Math.round(total)
-  const cappedTotal = Math.max(Math.round(total), minimumPrice)
 
   const breakdown: PriceBreakdownItem[] = [
     { label: 'מחיר בסיס', amount: basePrice, type: 'base' },
@@ -320,8 +331,74 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     discountAmount,
     finalPrice,
     minimumApplied,
-    total: cappedTotal,
+    total,
     breakdown
+  }
+}
+
+/** Inputs persisted on tows.price_breakdown (subtotal = beforeVat, vat_amount = pre-manual VAT). */
+export type StoredPriceBreakdownForTotals = {
+  subtotal: number
+  vat_amount: number
+  manual_adjustment_percent?: number | null
+  manual_adjustment_type?: 'discount' | 'markup' | null
+  total?: number
+}
+
+/** Display totals from stored breakdown — mirrors manual-adjustment steps in calculateTowPrice (lines 236-243). */
+export function computeStoredPriceBreakdownTotals(
+  breakdown: StoredPriceBreakdownForTotals,
+  vatRate: number
+): {
+  beforeVat: number
+  preManualVat: number
+  totalBeforeManual: number
+  manualAdjustment: {
+    percent: number
+    type: 'discount' | 'markup'
+    amount: number
+  } | null
+  finalTotal: number
+  postManualBeforeVat: number
+  postManualVat: number
+} {
+  const beforeVat = breakdown.subtotal
+  const preManualVat = breakdown.vat_amount
+  const totalBeforeManual = beforeVat + preManualVat
+
+  const percent = breakdown.manual_adjustment_percent ?? 0
+  if (percent <= 0) {
+    const finalTotal = breakdown.total ?? totalBeforeManual
+    const postManualBeforeVat = Math.round(finalTotal / (1 + vatRate))
+    const postManualVat = finalTotal - postManualBeforeVat
+    return {
+      beforeVat,
+      preManualVat,
+      totalBeforeManual,
+      manualAdjustment: null,
+      finalTotal,
+      postManualBeforeVat,
+      postManualVat,
+    }
+  }
+
+  const type = breakdown.manual_adjustment_type === 'markup' ? 'markup' : 'discount'
+  const manualAdjBase = type === 'markup' ? percent : -percent
+  const manualAdjAmountCalc = Math.round(Math.abs(totalBeforeManual * manualAdjBase / 100))
+  const finalTotal =
+    totalBeforeManual +
+    (manualAdjBase > 0 ? manualAdjAmountCalc : manualAdjBase < 0 ? -manualAdjAmountCalc : 0)
+  const postManualBeforeVat = Math.round(finalTotal / (1 + vatRate))
+  const postManualVat = finalTotal - postManualBeforeVat
+
+  return {
+    beforeVat,
+    preManualVat,
+    totalBeforeManual,
+    manualAdjustment: { percent, type, amount: manualAdjAmountCalc },
+    finalTotal,
+    postManualBeforeVat,
+    postManualVat,
   }
 }
 
