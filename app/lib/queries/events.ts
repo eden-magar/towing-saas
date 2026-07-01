@@ -7,7 +7,9 @@ const EVENT_WITH_RELATIONS_SELECT = `
   customer:customers (
     id,
     name,
-    phone
+    phone,
+    email,
+    address
   ),
   driver:drivers (
     id,
@@ -22,6 +24,8 @@ export interface EventCustomer {
   id: string
   name: string
   phone: string | null
+  email?: string | null
+  address?: string | null
 }
 
 export interface EventDriverUser {
@@ -137,7 +141,9 @@ const EVENT_LIST_SELECT = `
   customer:customers (
     id,
     name,
-    phone
+    phone,
+    email,
+    address
   ),
   driver:drivers (
     id,

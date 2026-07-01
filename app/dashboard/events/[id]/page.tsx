@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
-import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowRight,
   User,
@@ -23,6 +22,7 @@ import {
   Search,
   AlertTriangle,
   CheckCircle,
+  RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { canApproveQuote } from '../../../lib/utils/can-edit-closed-tow'
@@ -88,6 +88,9 @@ const CANCELLATION_REASONS = [
   'כפילות',
   'אחר',
 ] as const
+
+/** Matches TOWS_FILTER_STORAGE.kind in app/dashboard/tows/page.tsx */
+const TOWS_FILTER_KIND_SESSION_KEY = 'towsFilter_kind'
 
 function getStatusLabel(status: string): string {
   return statusConfig[status]?.label ?? status
@@ -502,8 +505,16 @@ function VehiclePhaseDocumentation({
 
 export default function EventDetailsPage() {
   const params = useParams()
+  const router = useRouter()
   const eventId = params.id as string
   const { user, companyId } = useAuth()
+
+  const navigateToEventsList = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(TOWS_FILTER_KIND_SESSION_KEY, 'events')
+    }
+    router.push('/dashboard/tows')
+  }, [router])
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1159,9 +1170,13 @@ export default function EventDetailsPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error || 'האירוע לא נמצא'}</p>
-          <Link href="/dashboard/events" className="text-[#33d4ff]">
+          <button
+            type="button"
+            onClick={navigateToEventsList}
+            className="text-[#33d4ff] hover:underline"
+          >
             חזרה לרשימת אירועים
-          </Link>
+          </button>
         </div>
       </div>
     )
@@ -1198,12 +1213,14 @@ export default function EventDetailsPage() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center gap-3 h-16 sm:h-[4.5rem]">
-            <Link
-              href="/dashboard/events"
+            <button
+              type="button"
+              onClick={navigateToEventsList}
               className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg shrink-0"
+              aria-label="חזרה לרשימת אירועים"
             >
               <ArrowRight size={20} />
-            </Link>
+            </button>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="w-8 h-8 rounded-lg bg-[#33d4ff]/15 text-[#33d4ff] flex items-center justify-center shrink-0">
@@ -1264,6 +1281,14 @@ export default function EventDetailsPage() {
                   <span className="hidden sm:inline">בטל אירוע</span>
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/tows/create?duplicateEvent=${event.id}`)}
+                className="p-2 sm:px-3 sm:py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm flex items-center gap-2"
+              >
+                <RefreshCw size={18} />
+                <span className="hidden sm:inline">שכפל אירוע</span>
+              </button>
             </div>
           </div>
         </div>

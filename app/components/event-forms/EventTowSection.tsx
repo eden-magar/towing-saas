@@ -11,7 +11,7 @@ import { PinDropModal } from '../tow-forms/shared/PinDropModal'
 import { useAuth } from '../../lib/AuthContext'
 import { getDrivers } from '../../lib/queries/drivers'
 import { createCustomer } from '../../lib/queries/customers'
-import { createEvent } from '../../lib/queries/events'
+import { createEvent, getEvent } from '../../lib/queries/events'
 import { syncEventToLegacyCalendar } from '../../lib/integrations/legacy-calendar/client-sync'
 import { getCompanySettings } from '../../lib/queries/settings'
 import {
@@ -35,7 +35,21 @@ interface EventTowSectionProps {
   towDate: string
   towTime: string
   towEndTime: string
+  duplicateFromEventId?: string
+  onHydrateCustomer?: (customer: {
+    id: string | null
+    name: string
+    phone: string
+    email?: string
+    address?: string
+  }) => void
 }
+
+const EVENT_SAVE_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'draft', label: 'טיוטה' },
+  { value: 'quote', label: 'הצעת מחיר' },
+  { value: 'approved', label: 'אושר' },
+]
 
 export function EventTowSection({
   selectedCustomerId,
@@ -44,6 +58,8 @@ export function EventTowSection({
   towDate,
   towTime,
   towEndTime,
+  duplicateFromEventId,
+  onHydrateCustomer,
 }: EventTowSectionProps) {
   const router = useRouter()
   const { user, companyId } = useAuth()
@@ -67,6 +83,72 @@ export function EventTowSection({
   const [vatRate, setVatRate] = useState(0.18)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [duplicateLoading, setDuplicateLoading] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<string>('draft')
+  const isDuplicateEventLoad = Boolean(duplicateFromEventId)
+
+  useEffect(() => {
+    if (!duplicateFromEventId || !companyId) return
+
+    let cancelled = false
+    const loadSourceEvent = async () => {
+      setDuplicateLoading(true)
+      setError('')
+      try {
+        const event = await getEvent(duplicateFromEventId)
+        if (cancelled || !event) return
+
+        onHydrateCustomer?.({
+          id: event.customer_id ?? null,
+          name: event.customer?.name ?? '',
+          phone: event.customer?.phone ?? '',
+          email: event.customer?.email ?? undefined,
+          address: event.customer?.address ?? undefined,
+        })
+
+        setLocation({
+          address: event.location_address ?? '',
+          lat: event.location_lat ?? undefined,
+          lng: event.location_lng ?? undefined,
+        })
+        setContactName(event.contact_name ?? '')
+        setContactPhone(event.contact_phone ?? '')
+        setDetails(event.details ?? '')
+        setSelectedDriverId(event.driver_id ?? '')
+        setSaveStatus(event.status || 'draft')
+
+        const breakdown = event.price_breakdown
+        if (breakdown) {
+          setManualPrice(String(breakdown.enteredPrice ?? event.manual_price ?? ''))
+          setIncludesVat(breakdown.includesVat ?? true)
+          if (breakdown.surchargePercent > 0) {
+            setAdjustmentType('surcharge')
+            setAdjustmentPercent(String(breakdown.surchargePercent))
+          } else if (breakdown.discountPercent > 0) {
+            setAdjustmentType('discount')
+            setAdjustmentPercent(String(breakdown.discountPercent))
+          } else {
+            setAdjustmentType('discount')
+            setAdjustmentPercent('')
+          }
+        } else if (event.manual_price != null) {
+          setManualPrice(String(event.manual_price))
+        }
+      } catch (err) {
+        console.error('Error loading event for duplicate:', err)
+        if (!cancelled) {
+          setError('שגיאה בטעינת האירוע לשכפול')
+        }
+      } finally {
+        if (!cancelled) setDuplicateLoading(false)
+      }
+    }
+
+    void loadSourceEvent()
+    return () => {
+      cancelled = true
+    }
+  }, [duplicateFromEventId, companyId, onHydrateCustomer])
 
   useEffect(() => {
     if (!companyId) return
@@ -89,10 +171,11 @@ export function EventTowSection({
   }, [companyId])
 
   useEffect(() => {
+    if (isDuplicateEventLoad) return
     setContactName('')
     setContactPhone('')
     setSaveContactToCustomer(false)
-  }, [selectedCustomerId])
+  }, [selectedCustomerId, isDuplicateEventLoad])
 
   useEffect(() => {
     if (!companyId) return
@@ -184,7 +267,7 @@ export function EventTowSection({
     return parts.join(' • ')
   }, [towDate, towTime, towEndTime, location.address])
 
-  const handleSave = async (status: 'approved' | 'quote') => {
+  const handleSave = async (status: string) => {
     if (!companyId || !user) return
 
     let finalCustomerId = selectedCustomerId
@@ -280,6 +363,13 @@ export function EventTowSection({
       description="מיקום, איש קשר ופרטים נוספים"
     >
       <div className="p-3 sm:p-4 space-y-3" dir="rtl">
+        {duplicateLoading && (
+          <div className="flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
+            <Loader2 size={16} className="animate-spin shrink-0" />
+            טוען פרטי אירוע לשכפול...
+          </div>
+        )}
+
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -495,7 +585,46 @@ export function EventTowSection({
           </div>
         </section>
 
-        {/* הצעת מחיר — אישור טלפוני */}
+        {/* שמירה */}
+        {isDuplicateEventLoad ? (
+          <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-300">
+              <h2 className="font-bold text-gray-800 text-sm">שמירת אירוע משוכפל</h2>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">סטטוס</label>
+                <select
+                  value={saveStatus}
+                  onChange={(e) => setSaveStatus(e.target.value)}
+                  disabled={saving || duplicateLoading}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gt-brand/30 disabled:opacity-50"
+                >
+                  {EVENT_SAVE_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSave(saveStatus)}
+                disabled={saving || duplicateLoading}
+                className="w-full py-3 bg-[#33d4ff] text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50 hover:bg-[#21b8e6]"
+              >
+                {saving ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <>
+                    <Check size={20} />
+                    שמור אירוע
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        ) : (
         <section className="bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-sm overflow-hidden">
           <div className="px-4 sm:px-5 py-4 sm:py-5">
             <h3 className="font-bold text-amber-900 text-lg mb-2">
@@ -511,7 +640,7 @@ export function EventTowSection({
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => handleSave('quote')}
+                onClick={() => void handleSave('quote')}
                 disabled={saving}
                 className="flex-1 py-3 bg-red-500 text-white rounded-xl font-medium disabled:opacity-50"
               >
@@ -523,7 +652,7 @@ export function EventTowSection({
               </button>
               <button
                 type="button"
-                onClick={() => handleSave('approved')}
+                onClick={() => void handleSave('approved')}
                 disabled={saving}
                 className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
@@ -539,6 +668,7 @@ export function EventTowSection({
             </div>
           </div>
         </section>
+        )}
       </div>
 
       <PinDropModal

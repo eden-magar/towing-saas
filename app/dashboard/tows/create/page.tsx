@@ -132,12 +132,14 @@ function VehicleRegistryStatusBanner({
 function CreateTowForm({
   editTowId,
   duplicateFromId,
+  duplicateFromEventId,
   dateParam,
   timeParam,
   driverParam,
 }: {
   editTowId?: string
   duplicateFromId?: string
+  duplicateFromEventId?: string
   dateParam: string | null
   timeParam: string | null
   driverParam: string | null
@@ -208,6 +210,8 @@ function CreateTowForm({
     setCustomerName,
     customerPhone,
     setCustomerPhone,
+    setCustomerEmail,
+    setCustomerAddress,
     towDate,
     setTowDate,
     towTime,
@@ -431,6 +435,38 @@ function CreateTowForm({
     (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) === 0
 
   const [entryKind, setEntryKind] = useState<TowEntryKind>(null)
+  const isDuplicateEventLoad = Boolean(duplicateFromEventId)
+
+  const handleHydrateCustomerFromEvent = useCallback(
+    (customer: {
+      id: string | null
+      name: string
+      phone: string
+      email?: string
+      address?: string
+    }) => {
+      handleCustomerSelect(customer.id, customer.name, customer.phone)
+      setCustomerEmail(customer.email ?? '')
+      setCustomerAddress(customer.address ?? '')
+    },
+    [handleCustomerSelect, setCustomerEmail, setCustomerAddress]
+  )
+
+  useEffect(() => {
+    if (!duplicateFromEventId) return
+    setEntryKind('events')
+    const now = new Date()
+    setTowDate(now.toISOString().split('T')[0])
+    setTowTime(now.toTimeString().slice(0, 5))
+    setTowEndTime('')
+    setIsToday(true)
+  }, [
+    duplicateFromEventId,
+    setTowDate,
+    setTowTime,
+    setTowEndTime,
+    setIsToday,
+  ])
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
   const [quoteSavedId, setQuoteSavedId] = useState<string | null>(null)
@@ -1688,16 +1724,20 @@ function CreateTowForm({
                 <h1 className="font-bold text-gray-800 text-base sm:text-lg">
                   {editTowId
                     ? 'עריכת גרירה'
-                    : isDuplicateLoad
-                      ? 'שכפול גרירה'
-                      : 'גרירה חדשה'}
+                    : isDuplicateEventLoad
+                      ? 'שכפול אירוע'
+                      : isDuplicateLoad
+                        ? 'שכפול גרירה'
+                        : 'גרירה חדשה'}
                 </h1>
                 <p className="text-xs text-gray-500 hidden sm:block">
                   {editTowId
                     ? 'עדכון פרטי הגרירה'
-                    : isDuplicateLoad
-                      ? 'גרירה חדשה על בסיס גרירה קיימת — בדוק ועדכן לפני שמירה'
-                      : 'מילוי פרטי הגרירה'}
+                    : isDuplicateEventLoad
+                      ? 'אירוע חדש על בסיס אירוע קיים — בדוק ועדכן לפני שמירה'
+                      : isDuplicateLoad
+                        ? 'גרירה חדשה על בסיס גרירה קיימת — בדוק ועדכן לפני שמירה'
+                        : 'מילוי פרטי הגרירה'}
                 </p>
               </div>
             </div>
@@ -1820,6 +1860,8 @@ function CreateTowForm({
               towDate={towDate}
               towTime={towTime}
               towEndTime={towEndTime}
+              duplicateFromEventId={duplicateFromEventId}
+              onHydrateCustomer={handleHydrateCustomerFromEvent}
             />
           )}
 
@@ -4363,6 +4405,7 @@ export default function CreateTowPage() {
   const searchParams = useSearchParams()
   const editTowId = searchParams.get('edit') || undefined
   const duplicateFromId = searchParams.get('duplicate') || undefined
+  const duplicateFromEventId = searchParams.get('duplicateEvent') || undefined
   const dateParam = searchParams.get('date')
   const timeParam = searchParams.get('time')
   const driverParam = searchParams.get('driver')
@@ -4378,6 +4421,7 @@ export default function CreateTowPage() {
       <CreateTowForm
         editTowId={editTowId}
         duplicateFromId={duplicateFromId}
+        duplicateFromEventId={duplicateFromEventId}
         dateParam={dateParam}
         timeParam={timeParam}
         driverParam={driverParam}
