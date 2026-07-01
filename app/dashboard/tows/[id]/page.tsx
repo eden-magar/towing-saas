@@ -14,6 +14,10 @@ import {
 } from '../../../lib/utils/cancellation-fee'
 import { getCompanySettings } from '../../../lib/queries/settings'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import {
+  buildCalendarViewSnapshotForScheduledDate,
+  persistCalendarViewForReturn,
+} from '../../../lib/utils/calendar-view-session'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { getVehicleTypeLabel, isKnownVehicleType } from '../../../lib/vehicle-lookup'
@@ -50,6 +54,7 @@ import {
   Receipt,
   Eye,
   Link2,
+  Calendar,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback'
@@ -488,6 +493,18 @@ export default function TowDetailsPage() {
     setActiveTab(tab)
     if (tab === 'history') void loadChangeLogs()
   }, [loadChangeLogs])
+
+  const handleBackToCalendar = useCallback(() => {
+    if (tow?.scheduled_at) {
+      const scheduled = new Date(tow.scheduled_at)
+      if (!Number.isNaN(scheduled.getTime())) {
+        persistCalendarViewForReturn(
+          buildCalendarViewSnapshotForScheduledDate(scheduled)
+        )
+      }
+    }
+    router.push('/dashboard/calendar')
+  }, [tow?.scheduled_at, router])
 
   useEffect(() => {
     setDriversTrucksLoaded(false)
@@ -1426,13 +1443,27 @@ export default function TowDetailsPage() {
       )}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="flex justify-between items-center h-14 sm:h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard/tows" className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-                <ArrowRight size={20} />
+          <div className="flex justify-between items-center h-14 sm:h-16 gap-3">
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                href="/dashboard/tows"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                חזרה לעמוד הגרירות
               </Link>
-              <div>
-                <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={handleBackToCalendar}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                חזרה ליומן
+              </button>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                   <h1 className="font-bold text-gray-800 text-base sm:text-lg font-mono">
                   {tow.order_number ? `#${tow.order_number}${tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}` : tow.id.slice(0, 8)}                  </h1>
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${statusConfig[tow.status]?.color}`}>
@@ -1453,7 +1484,7 @@ export default function TowDetailsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {isEditing ? (
                 <>
                   <button 

@@ -56,6 +56,10 @@ import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import {
+  buildCalendarViewSnapshotForScheduledDate,
+  persistCalendarViewForReturn,
+} from '../../../lib/utils/calendar-view-session'
 import { mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
@@ -1708,6 +1712,18 @@ function CreateTowForm({
     setQuoteApproved(true)
   }, [editTowId, loadedTowStatus, user?.role, setError, setLoadedTowStatus])
 
+  const handleBackToCalendar = useCallback(() => {
+    if (editTowId && editTowSnapshot?.scheduled_at) {
+      const scheduled = new Date(editTowSnapshot.scheduled_at)
+      if (!Number.isNaN(scheduled.getTime())) {
+        persistCalendarViewForReturn(
+          buildCalendarViewSnapshotForScheduledDate(scheduled)
+        )
+      }
+    }
+    router.push('/dashboard/calendar')
+  }, [editTowId, editTowSnapshot?.scheduled_at, router])
+
   return (
     <div className="min-h-screen bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
       {error && (
@@ -1719,13 +1735,21 @@ function CreateTowForm({
       <header className="bg-white border-b border-gray-300 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4">
           <div className="flex justify-between items-center h-14 sm:h-16">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <Link
                 href="/dashboard/tows"
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
               >
                 <ArrowRight size={20} />
               </Link>
+              <button
+                type="button"
+                onClick={handleBackToCalendar}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                חזרה ליומן
+              </button>
               <div>
                 <h1 className="font-bold text-gray-800 text-base sm:text-lg">
                   {editTowId

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, type CSSProperties, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/AuthContext'
 import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
@@ -35,6 +35,10 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
+import {
+  consumeRestoredCalendarView,
+  persistCalendarViewForReturn,
+} from '../../lib/utils/calendar-view-session'
 import { getOverlapLayout, getOverlapBlockWidthPct, type OverlapPosition } from '../../lib/utils/tow-overlap-layout'
 
 // צבעים לנהגים — ~20 well-separated hues (id-based via getDriverColor)
@@ -633,6 +637,23 @@ export default function CalendarPage() {
     return new Date().getDay()
   })
 
+  useEffect(() => {
+    const restored = consumeRestoredCalendarView()
+    if (!restored) return
+    setCurrentWeekStart(restored.weekStart)
+    setSelectedDate(restored.selectedDate)
+    setView(restored.view)
+    setMobileDayIndex(restored.selectedDate.getDay())
+  }, [])
+
+  const persistCalendarViewBeforeCreate = useCallback(() => {
+    persistCalendarViewForReturn({
+      weekStart: currentWeekStart,
+      selectedDate,
+      view,
+    })
+  }, [currentWeekStart, selectedDate, view])
+
   // ניווט בין שבועות
   const navigateWeek = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentWeekStart)
@@ -1094,6 +1115,7 @@ const handleSkipPriceUpdate = () => {
       const day = pendingSlot.date.getDate().toString().padStart(2, '0')
       const dateStr = `${year}-${month}-${day}`
       const timeStr = `${pendingSlot.hour.toString().padStart(2, '0')}:00`
+      persistCalendarViewBeforeCreate()
       window.location.href = `/dashboard/tows/new?date=${dateStr}&time=${timeStr}&driver=${driverId}`
     } else if (towToAssign) {
       const driverTrucks = getDriverTrucks(driverId)
@@ -1179,6 +1201,7 @@ const handleSkipPriceUpdate = () => {
             
             <Link
               href="/dashboard/tows/new"
+              onClick={persistCalendarViewBeforeCreate}
               className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
             >
               <Plus size={18} />
@@ -1264,6 +1287,7 @@ const handleSkipPriceUpdate = () => {
         {/* Mobile Add Button */}
         <Link
           href="/dashboard/tows/new"
+          onClick={persistCalendarViewBeforeCreate}
           className="sm:hidden flex items-center justify-center gap-2 px-4 py-3 bg-[#33d4ff] text-white rounded-xl font-medium w-full"
         >
           <Plus size={20} />
@@ -1716,6 +1740,7 @@ const handleSkipPriceUpdate = () => {
           <p className="text-gray-500 mb-4">אין גרירות מתוזמנות לשבוע זה</p>
           <Link
             href="/dashboard/tows/new"
+            onClick={persistCalendarViewBeforeCreate}
             className="inline-flex items-center gap-2 px-4 py-2 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
           >
             <Plus size={18} />
@@ -2101,6 +2126,7 @@ const handleSkipPriceUpdate = () => {
                     <div className="pt-2 border-t border-gray-200 mt-3">
                       <Link
                         href={`/dashboard/tows/new?date=${pendingSlot.date.toISOString().split('T')[0]}&time=${pendingSlot.hour.toString().padStart(2, '0')}:00`}
+                        onClick={persistCalendarViewBeforeCreate}
                         className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all text-gray-500"
                       >
                         <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
