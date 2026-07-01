@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Car, Key, X, Search, Loader2 } from 'lucide-react'
+import { Car, Key, X, Search, Loader2, PenLine } from 'lucide-react'
 import { VehicleData } from './VehicleInfoCard'
 import { VehicleCoreLookupChips } from '../shared/VehicleCoreLookupChips'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
@@ -69,6 +69,22 @@ export function VehicleCard({
       setOtherDefectText('')
     }
     setShowDefectsModal(true)
+  }
+
+  const handleSkipToManualEntry = () => {
+    if (vehicle.fromStorage) return
+    onChange({
+      ...vehicle,
+      isLoading: false,
+      isFound: false,
+      vehicleNotFound: true,
+      vehicleType: undefined,
+      registrySource: null,
+      vehicleData: undefined,
+      manualManufacturer: undefined,
+      manualColor: undefined,
+      manualWeight: undefined,
+    })
   }
 
   const handleSearch = async () => {
@@ -252,6 +268,16 @@ export function VehicleCard({
               </button>
             )}
           </div>
+          {!vehicle.fromStorage && (
+            <button
+              type="button"
+              onClick={handleSkipToManualEntry}
+              className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+            >
+              <PenLine className="w-3.5 h-3.5" />
+              הזן פרטי רכב ידנית
+            </button>
+          )}
           {(isSearching || vehicle.isLoading) && (
             <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
               <Loader2 size={14} className="animate-spin" />

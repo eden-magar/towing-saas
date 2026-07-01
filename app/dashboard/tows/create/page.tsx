@@ -31,6 +31,7 @@ import {
   X,
   User,
   AlertTriangle,
+  PenLine,
 } from 'lucide-react'
 import {
   useTowForm,
@@ -1275,6 +1276,8 @@ function CreateTowForm({
         setDefectiveVehicleNotFound(false)
       } else {
         setDefectiveVehicleData(null)
+        setDefectiveVehicleType('')
+        setDefectiveVehicleNotFound(true)
       }
     } catch {
       setDefectiveVehicleData(null)
@@ -1916,6 +1919,23 @@ function CreateTowForm({
                                 )}
                               </button>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPlateStorageWarning(null)
+                                setVehicleData(null)
+                                setVehicleLookupNotFound(true)
+                                setVehicleType('')
+                                setManualManufacturer('')
+                                setManualColor('')
+                                setManualWeight('')
+                                setManualChassis('')
+                              }}
+                              className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                            >
+                              <PenLine className="w-3.5 h-3.5" />
+                              הזן פרטי רכב ידנית
+                            </button>
                             {plateStorageWarning && (
                               <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>
                             )}
@@ -2611,6 +2631,22 @@ function CreateTowForm({
                                     className="text-xs"
                                   />
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPlateStorageWarning(null)
+                                    setWorkingVehicleData(null)
+                                    setWorkingVehicleNotFound(true)
+                                    setWorkingVehicleType('')
+                                    setWorkingManualManufacturer('')
+                                    setWorkingManualColor('')
+                                    setWorkingManualWeight('')
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors w-fit"
+                                >
+                                  <PenLine className="w-3.5 h-3.5" />
+                                  הזן פרטי רכב ידנית
+                                </button>
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
                             <div className="flex flex-col">
@@ -2822,6 +2858,22 @@ function CreateTowForm({
                                   className="text-xs"
                                 />
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPlateStorageWarning(null)
+                                  setDefectiveVehicleData(null)
+                                  setDefectiveVehicleNotFound(true)
+                                  setDefectiveVehicleType('')
+                                  setDefectiveManualManufacturer('')
+                                  setDefectiveManualColor('')
+                                  setDefectiveManualWeight('')
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors w-fit"
+                              >
+                                <PenLine className="w-3.5 h-3.5" />
+                                הזן פרטי רכב ידנית
+                              </button>
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
                                 <div className="flex flex-col">
                                   <VehicleRegistryStatusBanner status={defectiveVehicleData.registryStatus} />

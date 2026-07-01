@@ -180,6 +180,25 @@ export async function DELETE(req: NextRequest) {
       if (!relation) {
         return forbiddenResponse('אין הרשאה למחוק משתמש מלקוח מחברה אחרת')
       }
+    } else if (currentUser.role === 'customer') {
+      const { data: callerCu, error: callerCuError } = await supabaseAdmin
+        .from('customer_users')
+        .select('role, customer_id')
+        .eq('user_id', currentUser.id)
+        .single()
+
+      if (callerCuError || !callerCu) {
+        return forbiddenResponse()
+      }
+
+      // Same as PATCH: isPortalAdmin = customerUser?.role === 'admin'
+      if (callerCu.role !== 'admin') {
+        return forbiddenResponse()
+      }
+
+      if (cu.customer_id !== callerCu.customer_id) {
+        return forbiddenResponse('אין הרשאה למחוק משתמש מלקוח אחר')
+      }
     }
 
     const userId = cu.user_id
