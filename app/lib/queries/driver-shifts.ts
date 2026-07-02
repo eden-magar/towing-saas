@@ -73,15 +73,25 @@ export async function startShift(driverId: string, companyId: string, lat?: numb
 
   if (existingShift) return existingShift
 
+  const insertData: any = {
+    driver_id: driverId,
+    company_id: companyId,
+    started_at: new Date().toISOString(),
+    start_lat: lat ?? null,
+    start_lng: lng ?? null
+  }
+
+  if (lat && lng) {
+    try {
+      insertData.start_address = await getAddressFromCoords(lat, lng)
+    } catch {
+      insertData.start_address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+    }
+  }
+
   const { data, error } = await supabase
     .from('driver_shifts')
-    .insert({
-      driver_id: driverId,
-      company_id: companyId,
-      started_at: new Date().toISOString(),
-      start_lat: lat ?? null,
-      start_lng: lng ?? null
-    })
+    .insert(insertData)
     .select()
     .single()
   if (error) throw error
@@ -535,19 +545,18 @@ export async function getDriverHoursReport(
 
   const shifts = data || []
 
-  // לכל משמרת — שולפים את הגרירה האחרונה של הנהג באותו יום
+  // לכל משמרת — שולפים את הגרירה האחרונה של הנהג בתוך חלון המשמרת עצמה
+  // (start_at עד ended_at, או "עכשיו" אם המשמרת עדיין פעילה)
   const shiftsWithLastTow = await Promise.all(shifts.map(async (shift: any) => {
-    const dayStart = new Date(shift.started_at)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(shift.started_at)
-    dayEnd.setHours(23, 59, 59, 999)
+    const windowStart = shift.started_at
+    const windowEnd = shift.ended_at ?? new Date().toISOString()
 
     const { data: towData } = await supabase
       .from('tows')
       .select('id, status, updated_at, tow_points(address)')
       .eq('driver_id', (shift.driver as any).id)
-      .gte('created_at', dayStart.toISOString())
-      .lte('created_at', dayEnd.toISOString())
+      .gte('created_at', windowStart)
+      .lte('created_at', windowEnd)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle()
