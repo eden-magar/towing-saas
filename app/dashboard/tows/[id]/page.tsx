@@ -65,7 +65,7 @@ import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionReque
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
-import { insertDriverTruckAssignments } from '../../../lib/queries/driver-truck-assignments'
+import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../../../lib/queries/driver-truck-assignments'
 import { getCustomersLite, CustomerListItem } from '../../../lib/queries/customers'
 import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
 import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
@@ -946,14 +946,16 @@ export default function TowDetailsPage() {
     if (!selectedDriverId || !selectedTruckId || !tow) return
     setAssigning(true)
     try {
-      const hadNoTruckAssignments = getDriverTrucks(selectedDriverId).length === 0
       await assignDriver(tow.id, selectedDriverId, selectedTruckId, scheduleDate?.toISOString())
-      if (hadNoTruckAssignments) {
-        try {
+      try {
+        // Check the DB (not possibly-stale local state) before seeding a permanent
+        // assignment. insertDriverTruckAssignments is idempotent against the unique
+        // index, so a concurrent seed is a benign no-op rather than a thrown error.
+        if (!(await driverHasCurrentAssignment(selectedDriverId))) {
           await insertDriverTruckAssignments(selectedDriverId, [selectedTruckId])
-        } catch (err) {
-          console.error('Failed to create permanent driver-truck assignment:', err)
         }
+      } catch (err) {
+        console.error('Failed to create permanent driver-truck assignment:', err)
       }
       if (useNewPrice && priceChangeModal) {
         await updateTow({

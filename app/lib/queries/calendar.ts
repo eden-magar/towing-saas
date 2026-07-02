@@ -1,6 +1,6 @@
 import { supabase } from '../supabase'
 import { TowWithDetails, TowVehicle, TowLeg } from './tows'
-import { insertDriverTruckAssignments } from './driver-truck-assignments'
+import { insertDriverTruckAssignments, driverHasCurrentAssignment } from './driver-truck-assignments'
 
 type CalendarTowVehicleSummary = Pick<TowVehicle, 'id' | 'tow_id' | 'plate_number' | 'order_index'>
 type CalendarTowLegSummary = Pick<TowLeg, 'id' | 'tow_id' | 'leg_order' | 'from_address' | 'to_address'>
@@ -167,14 +167,10 @@ export async function updateTowSchedule(
 
   if (driverId && truckId) {
     try {
-      const { data: existing } = await supabase
-        .from('driver_truck_assignments')
-        .select('id')
-        .eq('driver_id', driverId)
-        .eq('is_current', true)
-        .limit(1)
-
-      if (!existing || existing.length === 0) {
+      // Only seed a permanent assignment if the driver has none yet.
+      // insertDriverTruckAssignments is idempotent against the unique index,
+      // so a concurrent seed is a benign no-op rather than a thrown error.
+      if (!(await driverHasCurrentAssignment(driverId))) {
         await insertDriverTruckAssignments(driverId, [truckId])
       }
     } catch (err) {

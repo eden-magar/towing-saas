@@ -58,14 +58,20 @@ export async function getDrivers(companyId: string): Promise<DriverWithDetails[]
   })
 
   // מיפוי שיוכים (מספר גררים לכל נהג)
+  // Defense-in-depth: dedupe by truck id so a stray duplicate assignment row can
+  // never surface a repeated truck (which would crash the list with a duplicate key).
   const assignmentsByDriver: Record<string, TowTruck[]> = {}
+  const seenTruckByDriver: Record<string, Set<string>> = {}
   assignments?.forEach((a) => {
-    if (a.truck) {
-      if (!assignmentsByDriver[a.driver_id]) {
-        assignmentsByDriver[a.driver_id] = []
-      }
-      assignmentsByDriver[a.driver_id].push(a.truck as unknown as TowTruck)
+    const truck = a.truck as unknown as TowTruck | null
+    if (!truck) return
+    if (!assignmentsByDriver[a.driver_id]) {
+      assignmentsByDriver[a.driver_id] = []
+      seenTruckByDriver[a.driver_id] = new Set()
     }
+    if (seenTruckByDriver[a.driver_id].has(truck.id)) return
+    seenTruckByDriver[a.driver_id].add(truck.id)
+    assignmentsByDriver[a.driver_id].push(truck)
   })
 
   // חיבור הכל יחד

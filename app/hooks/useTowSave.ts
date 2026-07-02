@@ -25,8 +25,7 @@ import { VehicleLookupResult, VehicleType } from '../lib/types'
 import { SelectedService } from '../components/tow-forms/shared'
 import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { RoutePoint } from '../components/tow-forms/routes'
-import { supabase } from '../lib/supabase'
-import { insertDriverTruckAssignments } from '../lib/queries/driver-truck-assignments'
+import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib/queries/driver-truck-assignments'
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
 
 interface UseTowSaveParams {
@@ -585,14 +584,10 @@ export function useTowSave(params: UseTowSaveParams) {
 
       if (preSelectedDriverId && preSelectedTruckId) {
         try {
-          const { data: existing } = await supabase
-            .from('driver_truck_assignments')
-            .select('id')
-            .eq('driver_id', preSelectedDriverId)
-            .eq('is_current', true)
-            .limit(1)
-
-          if (!existing || existing.length === 0) {
+          // Only seed a permanent assignment if the driver has none yet.
+          // insertDriverTruckAssignments is idempotent against the unique index,
+          // so a concurrent seed is a benign no-op rather than a thrown error.
+          if (!(await driverHasCurrentAssignment(preSelectedDriverId))) {
             await insertDriverTruckAssignments(preSelectedDriverId, [preSelectedTruckId])
           }
         } catch (err) {

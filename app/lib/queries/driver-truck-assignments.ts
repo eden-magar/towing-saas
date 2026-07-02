@@ -1,5 +1,27 @@
 import { supabase } from '../supabase'
 
+/** Postgres unique_violation — benign here (row already exists as current). */
+const UNIQUE_VIOLATION = '23505'
+
+/**
+ * Whether a driver currently has ANY active truck assignment (server-side check).
+ * Use this instead of possibly-stale client state before seeding a permanent assignment.
+ */
+export async function driverHasCurrentAssignment(driverId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('driver_truck_assignments')
+    .select('id')
+    .eq('driver_id', driverId)
+    .eq('is_current', true)
+    .limit(1)
+
+  if (error) {
+    console.error('Error checking driver truck assignments:', error)
+    throw error
+  }
+  return (data?.length ?? 0) > 0
+}
+
 /**
  * Sync current truck assignments for a driver (diff add/remove, leave unchanged).
  */
@@ -116,17 +138,26 @@ export async function insertDriverTruckAssignments(
 ): Promise<void> {
   if (truckIds.length === 0) return
   const now = new Date().toISOString()
-  const { error } = await supabase.from('driver_truck_assignments').insert(
-    truckIds.map((truck_id) => ({
+  // Insert per-row so a benign duplicate (unique_violation from the partial index
+  // driver_truck_assignments_current_uniq) is skipped without aborting the batch.
+  for (const truck_id of truckIds) {
+    const { error } = await supabase.from('driver_truck_assignments').insert({
       driver_id: driverId,
       truck_id,
       is_current: true,
       assigned_at: now,
-    }))
-  )
-  if (error) {
-    console.error('Error inserting driver truck assignments:', error)
-    throw error
+    })
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        console.warn(
+          '[driver-truck] current assignment already exists, skipping insert',
+          { driverId, truck_id }
+        )
+        continue
+      }
+      console.error('Error inserting driver truck assignments:', error)
+      throw error
+    }
   }
 }
 
@@ -136,16 +167,23 @@ export async function insertTruckDriverAssignments(
 ): Promise<void> {
   if (driverIds.length === 0) return
   const now = new Date().toISOString()
-  const { error } = await supabase.from('driver_truck_assignments').insert(
-    driverIds.map((driver_id) => ({
+  for (const driver_id of driverIds) {
+    const { error } = await supabase.from('driver_truck_assignments').insert({
       driver_id,
       truck_id: truckId,
       is_current: true,
       assigned_at: now,
-    }))
-  )
-  if (error) {
-    console.error('Error inserting truck driver assignments:', error)
-    throw error
+    })
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        console.warn(
+          '[driver-truck] current assignment already exists, skipping insert',
+          { driver_id, truckId }
+        )
+        continue
+      }
+      console.error('Error inserting truck driver assignments:', error)
+      throw error
+    }
   }
 }
