@@ -23,6 +23,71 @@ function endOfDayMs(date: Date): number {
   return d.getTime()
 }
 
+export function startOfCalendarDayMs(date: Date): number {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+export interface TowDaySegment {
+  startMs: number
+  endMs: number
+  isTopClipped: boolean
+  isBottomClipped: boolean
+  towStartMs: number
+  towEndMs: number
+}
+
+/** Whether a tow's time range overlaps a calendar day at all. */
+export function towOverlapsCalendarDay(
+  tow: TowTimeBoundsInput,
+  dayDate: Date,
+  now: number,
+): boolean {
+  const { startMs, endMs } = getTowTimeBounds(tow, now)
+  const dayStart = startOfCalendarDayMs(dayDate)
+  const dayEnd = endOfDayMs(dayDate)
+  return startMs < dayEnd && endMs > dayStart
+}
+
+/**
+ * Clip a tow's time range to a single calendar day for rendering.
+ * Returns null when the tow does not overlap that day.
+ */
+export function computeDaySegmentForTow(
+  tow: TowTimeBoundsInput,
+  dayDate: Date,
+  now: number,
+): TowDaySegment | null {
+  const { startMs: towStartMs, endMs: towEndMs } = getTowTimeBounds(tow, now)
+  const dayStart = startOfCalendarDayMs(dayDate)
+  const dayEnd = endOfDayMs(dayDate)
+
+  if (towStartMs >= dayEnd || towEndMs <= dayStart) {
+    return null
+  }
+
+  const segmentStartMs = Math.max(towStartMs, dayStart)
+  const segmentEndMs = Math.min(towEndMs, dayEnd)
+
+  if (segmentEndMs <= segmentStartMs) {
+    return null
+  }
+
+  return {
+    startMs: segmentStartMs,
+    endMs: segmentEndMs,
+    isTopClipped: segmentStartMs > towStartMs,
+    isBottomClipped: segmentEndMs < towEndMs,
+    towStartMs,
+    towEndMs,
+  }
+}
+
+export function towSegmentOverlapKey(towId: string, dayDate: Date): string {
+  return `${towId}:${dayDate.toDateString()}`
+}
+
 /**
  * Calendar block start/end in epoch ms.
  *

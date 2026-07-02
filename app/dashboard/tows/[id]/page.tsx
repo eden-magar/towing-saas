@@ -21,6 +21,7 @@ import {
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { getVehicleTypeLabel, isKnownVehicleType } from '../../../lib/vehicle-lookup'
+import { dateToYyyyMmDd, formatTodayYyyyMmDd, yyyyMmDdToDisplay } from '../../../lib/utils/date-input-normalize'
 import { toTowVehicleCoreInfo } from '../../../lib/utils/tow-vehicle-core'
 import { ServiceSurchargeSelector, ManualSurchargeSection, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import {
@@ -207,6 +208,7 @@ export default function TowDetailsPage() {
   const [notifyCustomer, setNotifyCustomer] = useState(true)
   const [showCantCancelModal, setShowCantCancelModal] = useState(false)
   const [showManualCloseModal, setShowManualCloseModal] = useState(false)
+  const [showManualCloseDateConfirm, setShowManualCloseDateConfirm] = useState(false)
   const [manualClosing, setManualClosing] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [closeEndDate, setCloseEndDate] = useState('')
@@ -583,7 +585,7 @@ export default function TowDetailsPage() {
     const source = getEndTimeDisplaySource()
     if (source) {
       const d = new Date(source)
-      setEndEditDate(d.toISOString().split('T')[0])
+      setEndEditDate(dateToYyyyMmDd(d))
       setEndEditTime(d.toTimeString().slice(0, 5))
     } else {
       setEndEditDate('')
@@ -1094,6 +1096,7 @@ export default function TowDetailsPage() {
         }
       })
 
+      setShowManualCloseDateConfirm(false)
       setShowManualCloseModal(false)
       if (changeLogsLoaded) void loadChangeLogs(true)
       void refreshTowLight()
@@ -1107,12 +1110,41 @@ export default function TowDetailsPage() {
     }
   }
 
+  const handleManualCloseSubmit = () => {
+    if (closeEndDateDiffersFromScheduled) {
+      setShowManualCloseDateConfirm(true)
+      return
+    }
+    void handleConfirmManualClose()
+  }
+
   const openManualCloseModal = () => {
     const n = new Date()
-    setCloseEndDate(n.toISOString().split('T')[0])
+    setCloseEndDate(formatTodayYyyyMmDd(n))
     setCloseEndTime(n.toTimeString().slice(0, 5))
+    setShowManualCloseDateConfirm(false)
     setShowManualCloseModal(true)
   }
+
+  const closeEndDateDiffersFromScheduled = useMemo(() => {
+    if (!tow?.scheduled_at || !closeEndDate) return false
+    const scheduledLocalDate = dateToYyyyMmDd(new Date(tow.scheduled_at))
+    return closeEndDate !== scheduledLocalDate
+  }, [tow?.scheduled_at, closeEndDate])
+
+  const scheduledCloseDisplay = useMemo(() => {
+    if (!tow?.scheduled_at) return ''
+    const d = new Date(tow.scheduled_at)
+    const date = yyyyMmDdToDisplay(dateToYyyyMmDd(d))
+    const time = d.toTimeString().slice(0, 5)
+    return `${date} בשעה ${time}`
+  }, [tow?.scheduled_at])
+
+  const selectedCloseDisplay = useMemo(() => {
+    if (!closeEndDate) return ''
+    const date = yyyyMmDdToDisplay(closeEndDate)
+    return closeEndTime ? `${date} בשעה ${closeEndTime}` : date
+  }, [closeEndDate, closeEndTime])
 
   const parsedCancellationPercent = parseFloat(cancellationPercent)
   const vatPercentLabel = Math.round(vatRate * 100)
@@ -1962,7 +1994,7 @@ export default function TowDetailsPage() {
                                 if (v && !endEditDate) {
                                   const startSource = tow.scheduled_at || tow.created_at
                                   if (startSource) {
-                                    setEndEditDate(new Date(startSource).toISOString().split('T')[0])
+                                    setEndEditDate(dateToYyyyMmDd(new Date(startSource)))
                                   }
                                 }
                               }}
@@ -3201,30 +3233,49 @@ export default function TowDetailsPage() {
                 האם לסגור את הגרירה ידנית? פעולה זו תסמן את כל הנקודות כהושלמו ולא ניתן יהיה לפתוח שוב.
               </p>
               <div className="mt-4 text-right">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  שעת סיום בפועל (אופציונלי)
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  תאריך ושעת סיום בפועל
                 </label>
-                <p className="text-xs text-gray-500 mb-2">אם לא תשנה, ייקבע הזמן הנוכחי</p>
+                <p className="text-xs text-gray-500 mb-3">
+                  בדוק/י שהתאריך והשעה משקפים מתי הגרירה הסתיימה בפועל — במיוחד אם הסגירה מתבצעת ימים אחרי הביצוע.
+                </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <DateInput
-                    value={closeEndDate}
-                    onChange={setCloseEndDate}
-                    disabled={manualClosing}
-                    className="w-full"
-                  />
-                  <TimeInput
-                    value={closeEndTime}
-                    onChange={setCloseEndTime}
-                    disabled={manualClosing}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-violet-400"
-                  />
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">תאריך</label>
+                    <DateInput
+                      value={closeEndDate}
+                      onChange={setCloseEndDate}
+                      disabled={manualClosing}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">שעה</label>
+                    <TimeInput
+                      value={closeEndTime}
+                      onChange={setCloseEndTime}
+                      disabled={manualClosing}
+                      className="w-full px-3 py-2.5 rounded-xl text-sm focus:ring-2 focus:ring-violet-400"
+                    />
+                  </div>
                 </div>
+                {closeEndDateDiffersFromScheduled && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-right">
+                    <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800 leading-relaxed">
+                      התאריך שנבחר שונה מהתאריך שבו הגרירה משובצת — ודא/י שהתאריך והשעה נכונים לפני האישור.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-3 px-5 pb-5">
               <button
                 type="button"
-                onClick={() => setShowManualCloseModal(false)}
+                onClick={() => {
+                  setShowManualCloseModal(false)
+                  setShowManualCloseDateConfirm(false)
+                }}
                 disabled={manualClosing}
                 className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
               >
@@ -3232,11 +3283,46 @@ export default function TowDetailsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void handleConfirmManualClose()}
+                onClick={() => void handleManualCloseSubmit()}
                 disabled={manualClosing}
                 className="flex-1 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors disabled:opacity-50"
               >
                 {manualClosing ? 'סוגר...' : 'אשר סגירה'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showManualCloseDateConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden" dir="rtl">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-amber-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">אימות תאריך סיום</h2>
+              <p className="text-gray-600 text-sm leading-relaxed text-right">
+                התאריך שבחרת ({selectedCloseDisplay}) שונה מהתאריך שבו הגרירה משובצת ({scheduledCloseDisplay}).
+                האם אתה בטוח שהתאריך והשעה נכונים?
+              </p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setShowManualCloseDateConfirm(false)}
+                disabled={manualClosing}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                חזרה לעריכה
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmManualClose()}
+                disabled={manualClosing}
+                className="flex-1 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors disabled:opacity-50"
+              >
+                {manualClosing ? 'סוגר...' : 'כן, התאריך נכון — סגור גרירה'}
               </button>
             </div>
           </div>

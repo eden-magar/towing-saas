@@ -34,12 +34,20 @@ import {
   Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getEffectiveTowStartIso, getTowTimeBounds } from '../../lib/utils/tow-time-bounds'
+import {
+  computeDaySegmentForTow,
+  getEffectiveTowStartIso,
+  getTowTimeBounds,
+  towOverlapsCalendarDay,
+  towSegmentOverlapKey,
+  type TowDaySegment,
+} from '../../lib/utils/tow-time-bounds'
 import {
   consumeRestoredCalendarView,
   persistCalendarViewForReturn,
 } from '../../lib/utils/calendar-view-session'
 import { getOverlapLayout, getOverlapBlockWidthPct, type OverlapPosition } from '../../lib/utils/tow-overlap-layout'
+import { TowBlockClipIndicators } from '../../components/TowBlockClipIndicators'
 
 // צבעים לנהגים — ~20 well-separated hues (id-based via getDriverColor)
 const DRIVER_COLORS = [
@@ -95,6 +103,29 @@ interface EventCalendarItem {
 
 function eventOverlapKey(eventId: string): string {
   return `event:${eventId}`
+}
+
+const MIN_SEGMENT_BLOCK_HEIGHT = 20
+
+function segmentToCalendarBlockPixels(
+  segment: TowDaySegment,
+  pixelsPerHour: number,
+  view: 'day' | 'week',
+): { top: number; heightPx: number } {
+  const startDate = new Date(segment.startMs)
+  const hour =
+    startDate.getHours() +
+    startDate.getMinutes() / 60 +
+    startDate.getSeconds() / 3600
+  const top = hour * pixelsPerHour
+  const elapsedMinutes = (segment.endMs - segment.startMs) / 60000
+  let heightPx = (elapsedMinutes / 60) * pixelsPerHour
+  if (view === 'week') {
+    heightPx = Math.max(heightPx - 4, MIN_SEGMENT_BLOCK_HEIGHT)
+  } else {
+    heightPx = Math.max(heightPx, MIN_SEGMENT_BLOCK_HEIGHT)
+  }
+  return { top, heightPx }
 }
 
 function formatTowTimeRange(startMs: number, endMs: number): string {
@@ -788,11 +819,10 @@ export default function CalendarPage() {
 
   // גרירות לתצוגה יומית
   const dayFilteredTows = useMemo(() => {
-    return filteredTows.filter(tow => {
-      const towDate = new Date(getEffectiveTowStartIso(tow))
-      return towDate.toDateString() === selectedDate.toDateString()
-    })
-  }, [filteredTows, selectedDate])
+    return filteredTows.filter((tow) =>
+      towOverlapsCalendarDay(tow, selectedDate, now),
+    )
+  }, [filteredTows, selectedDate, now])
 
   const dayFilteredEvents = useMemo(() => {
     return filteredEvents.filter((event) => {
@@ -803,44 +833,37 @@ export default function CalendarPage() {
 
   const weekOverlapLayout = useMemo(() => {
     const layout = new Map<string, OverlapPosition>()
-    const byDay = new Map<string, { tows: TowWithDetails[]; events: EventCalendarItem[] }>()
 
-    for (const tow of filteredTows) {
-      const cellDay = new Date(getEffectiveTowStartIso(tow))
-      const dayKey = cellDay.toDateString()
-      if (!byDay.has(dayKey)) byDay.set(dayKey, { tows: [], events: [] })
-      byDay.get(dayKey)!.tows.push(tow)
-    }
-
-    for (const event of filteredEvents) {
-      const dayKey = new Date(event.startMs).toDateString()
-      if (!byDay.has(dayKey)) byDay.set(dayKey, { tows: [], events: [] })
-      byDay.get(dayKey)!.events.push(event)
-    }
-
-    for (const { tows: dayTows, events: dayEvents } of byDay.values()) {
-      const towItems = dayTows.map((tow) => {
-        const cellDay = new Date(getEffectiveTowStartIso(tow))
-        const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: cellDay })
-        return { id: tow.id, startMs, endMs }
+    for (const day of weekDays) {
+      const towItems = filteredTows.flatMap((tow) => {
+        const segment = computeDaySegmentForTow(tow, day.fullDate, now)
+        if (!segment) return []
+        return [{
+          id: towSegmentOverlapKey(tow.id, day.fullDate),
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+        }]
       })
-      const eventItems = dayEvents.map((event) => ({
-        id: eventOverlapKey(event.id),
-        startMs: event.startMs,
-        endMs: event.endMs,
-      }))
+      const eventItems = filteredEvents
+        .filter((event) => new Date(event.startMs).toDateString() === day.fullDate.toDateString())
+        .map((event) => ({
+          id: eventOverlapKey(event.id),
+          startMs: event.startMs,
+          endMs: event.endMs,
+        }))
       for (const [id, pos] of getOverlapLayout([...towItems, ...eventItems])) {
         layout.set(id, pos)
       }
     }
 
     return layout
-  }, [filteredTows, filteredEvents, now])
+  }, [filteredTows, filteredEvents, now, weekDays])
 
   const dayOverlapLayout = useMemo(() => {
-    const towItems = dayFilteredTows.map((tow) => {
-      const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: selectedDate })
-      return { id: tow.id, startMs, endMs }
+    const towItems = dayFilteredTows.flatMap((tow) => {
+      const segment = computeDaySegmentForTow(tow, selectedDate, now)
+      if (!segment) return []
+      return [{ id: tow.id, startMs: segment.startMs, endMs: segment.endMs }]
     })
     const eventItems = dayFilteredEvents.map((event) => ({
       id: eventOverlapKey(event.id),
@@ -849,17 +872,6 @@ export default function CalendarPage() {
     }))
     return getOverlapLayout([...towItems, ...eventItems])
   }, [dayFilteredTows, dayFilteredEvents, now, selectedDate])
-
-  // חישוב מיקום גרירה בלוח
-  const getTowPosition = (tow: TowWithDetails) => {
-    const towDate = new Date(getEffectiveTowStartIso(tow))
-    const dayIndex = weekDays.findIndex(d => 
-      d.fullDate.toDateString() === towDate.toDateString()
-    )
-    const hour = towDate.getHours() + towDate.getMinutes() / 60
-    
-    return { dayIndex, hour }
-  }
 
   const getEventWeekPosition = (event: EventCalendarItem) => {
     const eventDate = new Date(event.startMs)
@@ -1364,87 +1376,89 @@ const handleSkipPriceUpdate = () => {
 
               {/* Tow Events */}
               <div className={`absolute top-0 left-0 bottom-0 pointer-events-none ${isMobile ? 'right-[50%]' : 'right-[12.5%]'}`}>
-                {filteredTows.map((tow) => {
-                  const { dayIndex, hour } = getTowPosition(tow)
+                {displayedDays.flatMap((day, displayIndex) =>
+                  filteredTows.map((tow) => {
+                    const segment = computeDaySegmentForTow(tow, day.fullDate, now)
+                    if (!segment) return null
 
-                  // בדיקה אם היום מוצג
-                  const displayIndex = displayedDays.findIndex(d => d.dayIndex === dayIndex)
-                  if (displayIndex === -1) return null
+                    const segmentKey = towSegmentOverlapKey(tow.id, day.fullDate)
+                    const { top, heightPx } = segmentToCalendarBlockPixels(
+                      segment,
+                      PIXELS_PER_HOUR_WEEK,
+                      'week',
+                    )
+                    const numDays = isMobile ? 1 : 7
+                    const dayWidth = 100 / numDays
+                    const overlap = weekOverlapLayout.get(segmentKey) || {
+                      columnIndex: 0,
+                      totalColumns: 1,
+                      span: 1,
+                    }
+                    const { offsetPct, widthPct } = getOverlapBlockWidthPct(overlap, dayWidth)
+                    const right = displayIndex * dayWidth + offsetPct
+                    const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
+                    const isPlainCancelled = tow.status === 'cancelled'
+                    const towName = tow.customer?.name || 'ללא לקוח'
+                    const route = getFullRoute(tow)
+                    const bubbleTitle = route
+                      ? `${towName} | ${route.from} ← ${route.to}`
+                      : towName
 
-                  const cellDay = displayedDays[displayIndex].fullDate
-                  const { startMs, endMs } = getTowTimeBounds(tow, now, {
-                    clampEndToDay: cellDay,
-                  })
-
-                  const top = hour * PIXELS_PER_HOUR_WEEK
-                  const elapsedMinutes = (endMs - startMs) / 60000
-                  const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_WEEK
-                  const numDays = isMobile ? 1 : 7
-                  const dayWidth = 100 / numDays
-                  const overlap = weekOverlapLayout.get(tow.id) || {
-                    columnIndex: 0,
-                    totalColumns: 1,
-                    span: 1,
-                  }
-                  const { offsetPct, widthPct } = getOverlapBlockWidthPct(overlap, dayWidth)
-                  const right = displayIndex * dayWidth + offsetPct
-                  const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
-                  const isPlainCancelled = tow.status === 'cancelled'
-                  const towName = tow.customer?.name || 'ללא לקוח'
-                  const route = getFullRoute(tow)
-                  const bubbleTitle = route
-                    ? `${towName} | ${route.from} ← ${route.to}`
-                    : towName
-
-                  return (
-                    <div
-                      key={tow.id}
-                      draggable={!isMobile}
-                      onDragStart={(e) => handleDragStart(e, tow)}
-                      onClick={(e) => { 
-                        e.stopPropagation()
-                        setTowActionMenu(tow)
-                      }}
-                      title={bubbleTitle}
-                      className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
-                        draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
-                      } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
-                      style={{
-                        top: `${top}px`,
-                        height: `${Math.max(heightPx - 4, 20)}px`,
-                        right: `${right + 0.3}%`,
-                        width: `${Math.max(widthPct - 0.6, 0)}%`,
-                        backgroundColor: getTowCalendarBackgroundColor(tow.status, driverColor),
-                        borderRightColor: getTowCalendarBackgroundColor(tow.status, driverColor),
-                      }}
-                    >
-                      <TowBlockStatusBadge status={tow.status} />
-                      {tow.status === 'quote' && (
-                        <div className="absolute top-0 left-0 bg-amber-400 text-white text-[8px] px-1 rounded-br font-bold">
-                          הצעה
-                        </div>
-                      )}
-                      {!tow.driver_id && tow.status !== 'quote' && (
-                        <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
-                          לשיבוץ
-                        </div>
-                      )}
-                      <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
-                        {formatTowTimeRange(startMs, endMs)}
-                      </div>
-                      <div className={`pt-2.5 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
-                        <div className="font-bold truncate leading-tight text-[10px] sm:text-xs">
-                          {towName}
-                        </div>
-                        {route && heightPx >= 32 && (
-                          <div className="text-[9px] sm:text-[10px] opacity-90 truncate leading-tight min-w-0">
-                            {route.from} ← {route.to}
+                    return (
+                      <div
+                        key={segmentKey}
+                        draggable={!isMobile}
+                        onDragStart={(e) => handleDragStart(e, tow)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setTowActionMenu(tow)
+                        }}
+                        title={bubbleTitle}
+                        className={`absolute pointer-events-auto cursor-grab active:cursor-grabbing rounded-lg p-1 sm:p-2 text-xs text-white overflow-hidden shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all border-r-4 ${
+                          draggedTow?.id === tow.id ? 'opacity-50' : isPlainCancelled ? 'opacity-60' : ''
+                        } ${!tow.driver_id ? 'animate-pulse ring-2 ring-white ring-offset-1' : ''}`}
+                        style={{
+                          top: `${top}px`,
+                          height: `${heightPx}px`,
+                          right: `${right + 0.3}%`,
+                          width: `${Math.max(widthPct - 0.6, 0)}%`,
+                          backgroundColor: getTowCalendarBackgroundColor(tow.status, driverColor),
+                          borderRightColor: getTowCalendarBackgroundColor(tow.status, driverColor),
+                        }}
+                      >
+                        <TowBlockClipIndicators
+                          isTopClipped={segment.isTopClipped}
+                          isBottomClipped={segment.isBottomClipped}
+                          size="sm"
+                        />
+                        <TowBlockStatusBadge status={tow.status} />
+                        {tow.status === 'quote' && (
+                          <div className="absolute top-0 left-0 bg-amber-400 text-white text-[8px] px-1 rounded-br font-bold">
+                            הצעה
                           </div>
                         )}
+                        {!tow.driver_id && tow.status !== 'quote' && (
+                          <div className="absolute top-0 left-0 bg-white text-gray-600 text-[8px] px-1 rounded-br font-bold">
+                            לשיבוץ
+                          </div>
+                        )}
+                        <div className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
+                          {formatTowTimeRange(segment.towStartMs, segment.towEndMs)}
+                        </div>
+                        <div className={`pt-2.5 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
+                          <div className="font-bold truncate leading-tight text-[10px] sm:text-xs">
+                            {towName}
+                          </div>
+                          {route && heightPx >= 32 && (
+                            <div className="text-[9px] sm:text-[10px] opacity-90 truncate leading-tight min-w-0">
+                              {route.from} ← {route.to}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
                     )
-                  })}
+                  }),
+                )}
 
                 {filteredEvents.map((event) => {
                   const { dayIndex, hour } = getEventWeekPosition(event)
@@ -1595,25 +1609,22 @@ const handleSkipPriceUpdate = () => {
 
                   <div className="absolute inset-0 pointer-events-none">
                     {dayFilteredTows.map((tow) => {
+                      const segment = computeDaySegmentForTow(tow, selectedDate, now)
+                      if (!segment) return null
+
                       const pos = dayOverlapLayout.get(tow.id) || {
                         columnIndex: 0,
                         totalColumns: 1,
                         span: 1,
                       }
                       const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
-                      const effectiveStartIso = getEffectiveTowStartIso(tow)
-                      const hour =
-                        new Date(effectiveStartIso).getHours() +
-                        new Date(effectiveStartIso).getMinutes() / 60
-                      const top = hour * PIXELS_PER_HOUR_DAY
+                      const { top, heightPx } = segmentToCalendarBlockPixels(
+                        segment,
+                        PIXELS_PER_HOUR_DAY,
+                        'day',
+                      )
                       const driverColor = tow.driver_id ? getDriverColor(tow.driver_id) : '#6b7280'
                       const isPlainCancelled = tow.status === 'cancelled'
-
-                      const { startMs, endMs } = getTowTimeBounds(tow, now, {
-                        clampEndToDay: selectedDate,
-                      })
-                      const elapsedMinutes = (endMs - startMs) / 60000
-                      const heightPx = (elapsedMinutes / 60) * PIXELS_PER_HOUR_DAY
                       const towName = tow.customer?.name || 'ללא לקוח'
                       const route = getFullRoute(tow)
                       const bubbleTitle = route
@@ -1642,6 +1653,11 @@ const handleSkipPriceUpdate = () => {
                             borderRightColor: getTowCalendarBackgroundColor(tow.status, driverColor),
                           }}
                         >
+                          <TowBlockClipIndicators
+                            isTopClipped={segment.isTopClipped}
+                            isBottomClipped={segment.isBottomClipped}
+                            size="md"
+                          />
                           <TowBlockStatusBadge status={tow.status} size="md" />
                           {tow.status === 'quote' && (
                             <div className="absolute top-0 left-0 bg-amber-400 text-white text-[10px] px-1.5 py-0.5 rounded-br font-bold">
@@ -1654,7 +1670,7 @@ const handleSkipPriceUpdate = () => {
                             </div>
                           )}
                           <div className="absolute top-1 left-2 text-[10px] opacity-90 font-medium truncate max-w-[70%] pointer-events-none">
-                            {formatTowTimeRange(startMs, endMs)}
+                            {formatTowTimeRange(segment.towStartMs, segment.towEndMs)}
                           </div>
                           <div className={`pt-4 min-w-0 ${isPlainCancelled ? 'line-through decoration-white/70' : ''}`}>
                             <div className="font-bold truncate leading-tight text-sm">

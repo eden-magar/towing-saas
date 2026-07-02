@@ -10,7 +10,7 @@
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
-  import { getDayTows } from '../lib/queries/calendar'
+  import { getDayTowsWithPrevDay } from '../lib/queries/calendar'
   import { getDayEvents, getQuoteEvents, getPendingUnassignedEvents, type EventListItem } from '../lib/queries/events'
   import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
   import { supabase } from '../lib/supabase'
@@ -21,12 +21,18 @@
   import { formatOpenShiftDuration, formatShiftStartJerusalem } from '../lib/shift-datetime'
   import Link from 'next/link'
   import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play, X, Sparkles } from 'lucide-react'
-  import { getEffectiveTowStartIso, getTowTimeBounds } from '../lib/utils/tow-time-bounds'
+  import {
+    getEffectiveTowStartIso,
+    computeDaySegmentForTow,
+    towOverlapsCalendarDay,
+    towSegmentOverlapKey,
+  } from '../lib/utils/tow-time-bounds'
   import {
     getOverlapLayout,
     getOverlapBlockWidthPct,
     type OverlapPosition,
   } from '../lib/utils/tow-overlap-layout'
+  import { TowBlockClipIndicators } from '../components/TowBlockClipIndicators'
 
   type EndShiftModalTarget = {
     shiftId: string
@@ -381,7 +387,7 @@
       if (!companyId) return
       try {
         const [tows, events] = await Promise.all([
-          getDayTows(companyId, listDate),
+          getDayTowsWithPrevDay(companyId, listDate),
           getDayEvents(companyId, listDate),
         ])
         setListTows(tows || [])
@@ -594,8 +600,11 @@
     }, [companyId, realtimeAuthReady])
 
     const assignedListTows = useMemo(
-      () => listTows.filter((t) => t.driver_id),
-      [listTows],
+      () =>
+        listTows.filter(
+          (t) => t.driver_id && towOverlapsCalendarDay(t, listDate, now),
+        ),
+      [listTows, listDate, now],
     )
 
     const sortedAssignedListTows = useMemo(() => {
@@ -629,9 +638,14 @@
     }, [assignedListEvents])
 
     const listDayOverlapLayout = useMemo(() => {
-      const towItems = sortedAssignedListTows.map((tow) => {
-        const { startMs, endMs } = getTowTimeBounds(tow, now, { clampEndToDay: listDate })
-        return { id: tow.id, startMs, endMs }
+      const towItems = sortedAssignedListTows.flatMap((tow) => {
+        const segment = computeDaySegmentForTow(tow, listDate, now)
+        if (!segment) return []
+        return [{
+          id: towSegmentOverlapKey(tow.id, listDate),
+          startMs: segment.startMs,
+          endMs: segment.endMs,
+        }]
       })
       const eventItems = normalizedListEvents.map((event) => ({
         id: dashEventOverlapKey(event.id),
@@ -922,31 +936,32 @@
                         ))}
                         <div className="absolute inset-0 pointer-events-none">
                           {sortedAssignedListTows.map((tow) => {
-                            const pos: OverlapPosition = listDayOverlapLayout.get(tow.id) ?? {
-                              columnIndex: 0,
-                              totalColumns: 1,
-                              span: 1,
-                            }
+                            const segment = computeDaySegmentForTow(tow, listDate, now)
+                            if (!segment) return null
+
+                            const pos: OverlapPosition =
+                              listDayOverlapLayout.get(towSegmentOverlapKey(tow.id, listDate)) ?? {
+                                columnIndex: 0,
+                                totalColumns: 1,
+                                span: 1,
+                              }
                             const { offsetPct, widthPct } = getOverlapBlockWidthPct(pos, 100)
-                            const effectiveStartIso = getEffectiveTowStartIso(tow)
+                            const segmentStart = new Date(segment.startMs)
                             const hour =
-                              new Date(effectiveStartIso).getHours() +
-                              new Date(effectiveStartIso).getMinutes() / 60
+                              segmentStart.getHours() +
+                              segmentStart.getMinutes() / 60
                             const top = hour * PIXELS_PER_HOUR_DASH
                             const driverColor = getDriverColor(tow.driver_id!, allDrivers)
                             const isPlainCancelled = tow.status === 'cancelled'
                             const isChargedCancel = tow.status === 'cancelled_charged'
-                            const { startMs, endMs } = getTowTimeBounds(tow, now, {
-                              clampEndToDay: listDate,
-                            })
                             const heightPx = Math.max(
                               16,
-                              ((endMs - startMs) / 60000 / 60) * PIXELS_PER_HOUR_DASH,
+                              ((segment.endMs - segment.startMs) / 60000 / 60) * PIXELS_PER_HOUR_DASH,
                             )
 
                             return (
                               <button
-                                key={tow.id}
+                                key={towSegmentOverlapKey(tow.id, listDate)}
                                 type="button"
                                 onClick={() => router.push(`/dashboard/tows/${tow.id}`)}
                                 className={`absolute pointer-events-auto rounded px-1 py-0.5 text-white overflow-hidden text-[10px] leading-tight text-right hover:brightness-95 transition-[filter] ${
@@ -967,6 +982,11 @@
                                           : driverColor,
                                 }}
                               >
+                                <TowBlockClipIndicators
+                                  isTopClipped={segment.isTopClipped}
+                                  isBottomClipped={segment.isBottomClipped}
+                                  size="sm"
+                                />
                                 <CompactTowBlockStatusBadge status={tow.status} />
                                 <span className="block truncate pr-3">
                                   {tow.customer?.name || 'ללא לקוח'}

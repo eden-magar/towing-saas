@@ -115,6 +115,26 @@ export async function getDayTows(companyId: string, date: Date): Promise<TowWith
   return getCalendarTows(companyId, startOfDay, endOfDay)
 }
 
+/**
+ * Like getDayTows, but widens the fetch to also include the previous day so
+ * that midnight-crossing tows (scheduled the day before, continuing into
+ * `date`) are available for client-side day-overlap filtering via
+ * towOverlapsCalendarDay. Mirrors how the main calendar fetches a wide range
+ * (a whole week) and filters per-day in the component. Kept separate from
+ * getDayTows so its other callers (single-day pickers that position by start
+ * hour) are not affected.
+ */
+export async function getDayTowsWithPrevDay(companyId: string, date: Date): Promise<TowWithDetails[]> {
+  const rangeStart = new Date(date)
+  rangeStart.setDate(rangeStart.getDate() - 1)
+  rangeStart.setHours(0, 0, 0, 0)
+
+  const endOfDay = new Date(date)
+  endOfDay.setHours(23, 59, 59, 999)
+
+  return getCalendarTows(companyId, rangeStart, endOfDay)
+}
+
 // ==================== עדכון זמן מתוזמן ====================
 
 export async function updateTowSchedule(
