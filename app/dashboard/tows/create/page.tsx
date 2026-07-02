@@ -32,6 +32,8 @@ import {
   User,
   AlertTriangle,
   PenLine,
+  Coins,
+  Wallet,
 } from 'lucide-react'
 import {
   useTowForm,
@@ -1024,7 +1026,7 @@ function CreateTowForm({
                       placeholder="כתובת היעד של הגרירה הבאה"
                       onPinDropClick={() => handlePinDropOpen('followUp')}
                     />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <input
                         type="text"
                         value={followUpContactName}
@@ -1909,7 +1911,7 @@ function CreateTowForm({
                     {/* Block 1 — פרטי רכב */}
                     <FormSubcard title="פרטי רכב">
                       <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               מספר רכב
@@ -2043,7 +2045,7 @@ function CreateTowForm({
                         {vehicleLookupNotFound && (
                           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
                             <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
                                 <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value as any)}
@@ -2104,7 +2106,7 @@ function CreateTowForm({
                     {/* Block 2 — תקלות וגרר */}
                     <div ref={truckTypeSectionRef}>
                       <FormSubcard title="תקלות וגרר">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <button
                             type="button"
                             onClick={openDefectsModal}
@@ -2320,7 +2322,7 @@ function CreateTowForm({
                                 })
                                 setShowDefectsModal(false)
                               }}
-                              className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                              className="flex-1 py-2.5 bg-gt-brand text-white rounded-xl font-medium text-sm"
                             >
                               אישור
                             </button>
@@ -2376,7 +2378,7 @@ function CreateTowForm({
                             <button
                               type="button"
                               onClick={() => setShowTruckModal(false)}
-                              className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                              className="flex-1 py-2.5 bg-gt-brand text-white rounded-xl font-medium text-sm"
                             >
                               אישור
                             </button>
@@ -2531,7 +2533,7 @@ function CreateTowForm({
                                 })
                                 setShowDefectsExchangeModal(false)
                               }}
-                              className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
+                              className="flex-1 py-2.5 bg-gt-brand text-white rounded-xl font-medium text-sm"
                             >
                               אישור
                             </button>
@@ -2562,7 +2564,7 @@ function CreateTowForm({
                             />
                           </div>
                           <div className="px-4 pb-4">
-                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="w-full py-2.5 bg-blue-500 text-white rounded-xl text-sm font-medium">אישור</button>
+                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="w-full py-2.5 bg-gt-brand text-white rounded-xl text-sm font-medium">אישור</button>
                           </div>
                         </div>
                       </div>
@@ -2716,7 +2718,7 @@ function CreateTowForm({
                             {workingVehicleNotFound && (
                               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
                                 <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div>
                                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">סוג רכב *</label>
                                     <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
@@ -2947,7 +2949,7 @@ function CreateTowForm({
                                 {defectiveVehicleNotFound && (
                                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
                                     <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       <div>
                                         <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
                                         <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value as VehicleType)}
@@ -3169,7 +3171,7 @@ function CreateTowForm({
                                           />
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                           <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                               שם איש קשר ביעד
@@ -3293,60 +3295,40 @@ function CreateTowForm({
                       onSaveContactToggle={toggleCustomPointSaveContact}
                       onContactSelected={clearCustomPointSaveContact}
                     />
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">תוספות זמן</h3>
-                      </div>
-                      <div className="p-4">
-                        <TimeSurchargesSection
-                          timeSurchargesData={displayTimeSurcharges}
-                          towDate={towDate}
-                          towTime={towTime}
-                          isHoliday={isHoliday}
-                          setIsHoliday={setIsHoliday}
-                          activeTimeSurchargesList={activeTimeSurchargesList}
-                          setActiveTimeSurchargesList={setActiveTimeSurchargesList}
-                          setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
-                        />
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">תוספות מיקום</h3>
-                      </div>
-                      <div className="p-4">
-                        <LocationSurchargesSection
-                          locationSurchargesData={locationSurchargesData}
-                          selectedLocationSurcharges={selectedLocationSurcharges}
-                          setSelectedLocationSurcharges={setSelectedLocationSurcharges}
-                        />
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">שירותים נוספים</h3>
-                      </div>
-                      <div className="p-4">
-                        <ServiceSurchargeSelector
-                          services={serviceSurchargesData}
-                          selectedServices={towServiceSurcharges}
-                          onChange={setTowServiceSurcharges}
-                          label=" "
-                        />
-                      </div>
-                    </div>
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">תוספות ידניות</h3>
-                      </div>
-                      <div className="p-4">
-                        <ManualSurchargeSection
-                          manualSurcharges={manualSurcharges}
-                          onChange={setManualSurcharges}
-                          label="תוספת ידנית"
-                        />
-                      </div>
-                    </div>
+                    <FormSubcard title="תוספות זמן">
+                      <TimeSurchargesSection
+                        timeSurchargesData={displayTimeSurcharges}
+                        towDate={towDate}
+                        towTime={towTime}
+                        isHoliday={isHoliday}
+                        setIsHoliday={setIsHoliday}
+                        activeTimeSurchargesList={activeTimeSurchargesList}
+                        setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                        setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
+                      />
+                    </FormSubcard>
+                    <FormSubcard title="תוספות מיקום">
+                      <LocationSurchargesSection
+                        locationSurchargesData={locationSurchargesData}
+                        selectedLocationSurcharges={selectedLocationSurcharges}
+                        setSelectedLocationSurcharges={setSelectedLocationSurcharges}
+                      />
+                    </FormSubcard>
+                    <FormSubcard title="שירותים נוספים">
+                      <ServiceSurchargeSelector
+                        services={serviceSurchargesData}
+                        selectedServices={towServiceSurcharges}
+                        onChange={setTowServiceSurcharges}
+                        label=" "
+                      />
+                    </FormSubcard>
+                    <FormSubcard title="תוספות ידניות">
+                      <ManualSurchargeSection
+                        manualSurcharges={manualSurcharges}
+                        onChange={setManualSurcharges}
+                        label="תוספת ידנית"
+                      />
+                    </FormSubcard>
                   </>
                 )}
               </div>
@@ -3355,13 +3337,8 @@ function CreateTowForm({
 
           {/* Section 5 — מחיר */}
           {towType && (
-            <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
-              <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
-                <h2 className="font-bold text-gray-800 text-sm sm:text-base">
-                  מחיר
-                </h2>
-              </div>
-              <div className="p-4 sm:p-5 space-y-4">
+            <FormCard icon={Coins} title="מחיר">
+              <div className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -3372,7 +3349,7 @@ function CreateTowForm({
                     }}
                     className={`px-4 py-2 rounded-xl text-sm ${
                       priceMode === 'recommended'
-                        ? 'bg-blue-500 text-white'
+                        ? 'bg-gt-brand text-white'
                         : 'bg-gray-100'
                     }`}
                   >
@@ -3388,7 +3365,7 @@ function CreateTowForm({
                       }}
                       className={`px-4 py-2 rounded-xl text-sm ${
                         priceMode === 'recommended_customer'
-                          ? 'bg-blue-500 text-white'
+                          ? 'bg-gt-brand text-white'
                           : 'bg-gray-100'
                       }`}
                     >
@@ -3402,7 +3379,7 @@ function CreateTowForm({
                       setCustomPrice('')
                     }}
                     className={`px-4 py-2 rounded-xl text-sm ${
-                      priceMode === 'fixed' ? 'bg-blue-500 text-white' : 'bg-gray-100'
+                      priceMode === 'fixed' ? 'bg-gt-brand text-white' : 'bg-gray-100'
                     }`}
                   >
                     פריט קבוע
@@ -3415,7 +3392,7 @@ function CreateTowForm({
                     }}
                     className={`px-4 py-2 rounded-xl text-sm ${
                       priceMode === 'custom'
-                        ? 'bg-blue-500 text-white'
+                        ? 'bg-gt-brand text-white'
                         : 'bg-gray-100'
                     }`}
                   >
@@ -3551,12 +3528,12 @@ function CreateTowForm({
                   </div>
                 )}
               </div>
-            </section>
+            </FormCard>
           )}
 
           {/* Section 6 — הצעת מחיר (GATE) */}
           {towType && !isEditingClosedTow && (
-            <section className="bg-amber-50 rounded-2xl border-2 border-amber-300 shadow-sm overflow-hidden mb-6">
+            <section className="bg-amber-50 rounded-xl border-2 border-amber-300 shadow-sm overflow-hidden mb-6">
               <div className="px-4 sm:px-5 py-4 sm:py-5">
                 {quoteSavedId ? (
                   <div className="text-center">
@@ -3636,7 +3613,7 @@ function CreateTowForm({
           >
             {/* Section 7 — גרר ונהג */}
             {towType && quoteApproved && (
-              <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+              <section className="bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden mb-6">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                   <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                     גרר ונהג
@@ -3690,7 +3667,7 @@ function CreateTowForm({
 
             {/* Section 8 — אנשי קשר */}
             {towType && quoteApproved && (
-              <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
+              <section className="bg-white rounded-xl border border-gray-300 shadow-sm overflow-hidden mb-6">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
                   <h2 className="font-bold text-gray-800 text-sm sm:text-base">
                     אנשי קשר
@@ -3699,7 +3676,7 @@ function CreateTowForm({
                 <div className="p-4 sm:p-5 space-y-4">
                   {towType === 'exchange' ? (
                     <>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <CustomerContactFields
                         name={workingVehicleContact}
                         phone={workingVehicleContactPhone}
@@ -3838,7 +3815,7 @@ function CreateTowForm({
                             </button>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <ContactNameAutocomplete
                             value={pickupContactName}
                             onChange={(name) => {
@@ -3891,7 +3868,7 @@ function CreateTowForm({
                             </button>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <ContactNameAutocomplete
                             value={dropoffContactName}
                             onChange={(name) => {
@@ -3946,20 +3923,15 @@ function CreateTowForm({
 
             {/* Section 9 — תשלום ושמירה */}
             {towType && quoteApproved && (
-              <section className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden mb-6">
-                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-300">
-                  <h2 className="font-bold text-gray-800 text-sm sm:text-base">
-                    תשלום ושמירה
-                  </h2>
-                </div>
-                <div className="p-4 sm:p-5 space-y-4">
+              <FormCard icon={Wallet} title="תשלום ושמירה">
+                <div className="space-y-4">
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('cash' as any)}
                       className={`px-4 py-2 rounded-xl text-sm ${
                         paymentMethod === 'cash'
-                          ? 'bg-blue-500 text-white'
+                          ? 'bg-gt-brand text-white'
                           : 'bg-white text-gray-700 border border-gray-300 font-medium'
                       }`}
                     >
@@ -3970,7 +3942,7 @@ function CreateTowForm({
                       onClick={() => setPaymentMethod('credit' as any)}
                       className={`px-4 py-2 rounded-xl text-sm ${
                         paymentMethod === 'credit'
-                          ? 'bg-blue-500 text-white'
+                          ? 'bg-gt-brand text-white'
                           : 'bg-white text-gray-700 border border-gray-300 font-medium'
                       }`}
                     >
@@ -3981,7 +3953,7 @@ function CreateTowForm({
                       onClick={() => setPaymentMethod('invoice' as any)}
                       className={`px-4 py-2 rounded-xl text-sm ${
                         paymentMethod === 'invoice'
-                          ? 'bg-blue-500 text-white'
+                          ? 'bg-gt-brand text-white'
                           : 'bg-white text-gray-700 border border-gray-300 font-medium'
                       }`}
                     >
@@ -4024,7 +3996,7 @@ function CreateTowForm({
                     type="button"
                     onClick={handleSave}
                     disabled={saving}
-                    className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium flex items-center justify-center gap-2"
+                    className="w-full py-3 bg-gt-brand text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-gt-brand-hover"
                   >
                     {saving ? (
                       <Loader2 size={20} className="animate-spin" />
@@ -4032,7 +4004,7 @@ function CreateTowForm({
                     שמור גרירה
                   </button>
                 </div>
-              </section>
+              </FormCard>
             )}
           </div>
         </div>
@@ -4482,7 +4454,7 @@ function LocationSurchargesSection({
                   ])
               }}
               className={`px-3 py-1.5 rounded-lg text-sm ${
-                isSelected ? 'bg-blue-500 text-white' : 'border border-gray-300'
+                isSelected ? 'bg-gt-brand text-white' : 'border border-gray-300'
               }`}
             >
               {s.label} ({s.surcharge_percent}%)
