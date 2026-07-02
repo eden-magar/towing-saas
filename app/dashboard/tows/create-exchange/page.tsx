@@ -39,6 +39,7 @@ import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
@@ -1237,7 +1238,12 @@ function CreateExchangeTowForm({
                                     onChange={(e) => { setWorkingVehiclePlate(normalizePlate(e.target.value)); setWorkingVehicleNotFound(false); setPlateStorageWarning(null) }}
                                     onBlur={async (e) => {
                                       const val = e.target.value.trim()
-                                      if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                      if (
+                                        shouldTriggerPlateLookupOnBlur(val, {
+                                          hasFoundData: workingVehicleData?.found,
+                                          lookupAlreadyFailed: workingVehicleNotFound,
+                                        })
+                                      ) {
                                         handleWorkingVehicleLookup(val)
                                       }
                                     }}
@@ -1444,7 +1450,12 @@ function CreateExchangeTowForm({
                                   onChange={(e) => { handleDefectiveVehiclePlateInputChange(e.target.value); setPlateStorageWarning(null) }}
                                   onBlur={async (e) => {
                                     const val = e.target.value.trim()
-                                    if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                    if (
+                                      shouldTriggerPlateLookupOnBlur(val, {
+                                        hasFoundData: defectiveVehicleData?.found,
+                                        lookupAlreadyFailed: defectiveVehicleNotFound,
+                                      })
+                                    ) {
                                       handleDefectiveLookup()
                                     }
                                   }}

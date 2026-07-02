@@ -56,6 +56,7 @@ import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 import {
   buildCalendarViewSnapshotForScheduledDate,
   persistCalendarViewForReturn,
@@ -1920,7 +1921,12 @@ function CreateTowForm({
                                 onChange={(e) => { handleVehiclePlateInputChange(e.target.value); setPlateStorageWarning(null) }}
                                 onBlur={async (e) => {
                                   const val = e.target.value.trim()
-                                  if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                  if (
+                                    shouldTriggerPlateLookupOnBlur(val, {
+                                      hasFoundData: vehicleData?.found,
+                                      lookupAlreadyFailed: vehicleLookupNotFound,
+                                    })
+                                  ) {
                                     handleVehicleLookup()
                                   }
                                 }}
@@ -2639,7 +2645,12 @@ function CreateTowForm({
                                     onChange={(e) => { setWorkingVehiclePlate(normalizePlate(e.target.value)); setWorkingVehicleNotFound(false); setPlateStorageWarning(null) }}
                                     onBlur={async (e) => {
                                       const val = e.target.value.trim()
-                                      if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                      if (
+                                        shouldTriggerPlateLookupOnBlur(val, {
+                                          hasFoundData: workingVehicleData?.found,
+                                          lookupAlreadyFailed: workingVehicleNotFound,
+                                        })
+                                      ) {
                                         handleWorkingVehicleLookup(val)
                                       }
                                     }}
@@ -2866,7 +2877,12 @@ function CreateTowForm({
                                   onChange={(e) => { handleDefectiveVehiclePlateInputChange(e.target.value); setPlateStorageWarning(null) }}
                                   onBlur={async (e) => {
                                     const val = e.target.value.trim()
-                                    if (val && val.replace(/[^0-9]/g, '').length >= 5) {
+                                    if (
+                                      shouldTriggerPlateLookupOnBlur(val, {
+                                        hasFoundData: defectiveVehicleData?.found,
+                                        lookupAlreadyFailed: defectiveVehicleNotFound,
+                                      })
+                                    ) {
                                       handleDefectiveLookup()
                                     }
                                   }}

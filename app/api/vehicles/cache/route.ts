@@ -13,6 +13,10 @@ type CacheVehicleBody = {
   sourceType?: string
   mappedData?: VehicleLookupResult['data']
   rawData?: unknown
+  /** When true, record a negative lookup miss (plate not in registry). */
+  isMiss?: boolean
+  /** Optional TTL override in days (default 7). */
+  missTtlDays?: number
 }
 
 export async function POST(request: NextRequest) {
@@ -26,17 +30,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { licenseNumber, sourceType, mappedData, rawData } = body
-  if (!licenseNumber?.trim() || !sourceType?.trim()) {
+  const { licenseNumber, sourceType, mappedData, rawData, isMiss, missTtlDays } = body
+  if (!licenseNumber?.trim()) {
     return NextResponse.json(
-      { ok: false, error: 'licenseNumber and sourceType are required' },
+      { ok: false, error: 'licenseNumber is required' },
+      { status: 400 }
+    )
+  }
+
+  const cleanLicense = licenseNumber.replace(/\D/g, '')
+
+  if (isMiss) {
+    const ttlDays = Number.isFinite(missTtlDays) && (missTtlDays ?? 0) > 0 ? missTtlDays! : 7
+    const now = new Date()
+    const expiresAt = new Date(now)
+    expiresAt.setDate(expiresAt.getDate() + ttlDays)
+
+    const { error } = await supabaseAdmin.from('vehicle_lookup_misses').upsert(
+      {
+        license_number: cleanLicense,
+        checked_at: now.toISOString(),
+        expires_at: expiresAt.toISOString(),
+      },
+      { onConflict: 'license_number' },
+    )
+
+    if (error) {
+      console.error('[vehicles/cache] miss upsert failed', error)
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  if (!sourceType?.trim()) {
+    return NextResponse.json(
+      { ok: false, error: 'sourceType is required for positive cache writes' },
       { status: 400 }
     )
   }
 
   const { error } = await supabaseAdmin.from('vehicles').upsert(
     {
-      license_number: licenseNumber,
+      license_number: cleanLicense,
       source_type: sourceType,
       manufacturer: mappedData?.manufacturer,
       model: mappedData?.model,
@@ -59,6 +95,15 @@ export async function POST(request: NextRequest) {
   if (error) {
     console.error('[vehicles/cache] upsert failed', error)
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  }
+
+  // Clear any stale negative-cache row for this plate (service-role; client cannot DELETE under RLS).
+  const { error: missClearError } = await supabaseAdmin
+    .from('vehicle_lookup_misses')
+    .delete()
+    .eq('license_number', cleanLicense)
+  if (missClearError) {
+    console.warn('[vehicles/cache] miss clear failed', missClearError)
   }
 
   return NextResponse.json({ ok: true })

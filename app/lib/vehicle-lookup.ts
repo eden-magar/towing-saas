@@ -4,6 +4,49 @@
 import { VehicleLookupResult, VehicleType } from './types'
 import { supabase } from './supabase'
 
+const REGISTRY_FETCH_TIMEOUT_MS = 5000
+/** Suggested default TTL for negative cache; adjust if plates should be re-checked sooner. */
+export const VEHICLE_LOOKUP_MISS_TTL_DAYS = 7
+/** Probe batch size for data.gov.il (no documented rate limit — conservative cap). */
+const REGISTRY_PROBE_CONCURRENCY = 5
+
+function notFoundLookupResult(error?: string): VehicleLookupResult {
+  return {
+    found: false,
+    source: null,
+    sourceLabel: '',
+    data: null,
+    error: error ?? 'הרכב לא נמצא במאגרי משרד התחבורה',
+  }
+}
+
+async function fetchJsonWithTimeout(
+  url: string,
+  externalSignal?: AbortSignal,
+): Promise<unknown> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REGISTRY_FETCH_TIMEOUT_MS)
+
+  const onExternalAbort = () => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timeoutId)
+      controller.abort()
+    } else {
+      externalSignal.addEventListener('abort', onExternalAbort)
+    }
+  }
+
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    return await response.json()
+  } finally {
+    clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', onExternalAbort)
+  }
+}
+
+
 // מזהי המאגרים ב-data.gov.il
 const API_RESOURCES = {
   private: '053cea08-09bc-40ec-8f7a-156f0677aff3',
@@ -95,6 +138,15 @@ const FIELD_MAPPINGS: Record<string, Record<string, string>> = {
     chassis: 'shilda',
     importType: 'sug_yevu',
   },
+}
+
+type ResourceProbe = {
+  resourceId: string
+  source: string
+  fuzzyQFallback?: boolean
+  mapAs?: keyof typeof FIELD_MAPPINGS
+  sourceLabel?: string
+  registryStatus?: 'cancelled' | 'inactive'
 }
 
 /**
@@ -208,6 +260,65 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
 }
 
 /**
+ * Negative cache: recent confirmed miss for this plate (within TTL).
+ */
+async function searchMissInSupabase(licenseNumber: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('vehicle_lookup_misses')
+      .select('expires_at')
+      .eq('license_number', licenseNumber)
+      .maybeSingle()
+
+    if (error || !data?.expires_at) return false
+    return new Date(data.expires_at).getTime() > Date.now()
+  } catch (error) {
+    console.error('Error searching vehicle lookup miss cache:', error)
+    return false
+  }
+}
+
+/**
+ * Record a confirmed registry miss (service-role via /api/vehicles/cache).
+ */
+async function saveMissToSupabase(licenseNumber: string): Promise<void> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) {
+      console.error('Vehicle miss cache write skipped: no session')
+      return
+    }
+
+    void fetch('/api/vehicles/cache', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        licenseNumber,
+        isMiss: true,
+        missTtlDays: VEHICLE_LOOKUP_MISS_TTL_DAYS,
+      }),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          console.error('Error saving vehicle miss to cache:', body)
+        }
+      })
+      .catch((error) => {
+        console.error('Error saving vehicle miss to cache:', error)
+      })
+  } catch (error) {
+    console.error('Error initiating vehicle miss cache write:', error)
+  }
+}
+
+/**
  * שמירת רכב ב-Supabase (לאחר מציאה ב-API) — service-role via /api/vehicles/cache
  */
 async function saveToSupabase(
@@ -260,26 +371,30 @@ async function searchInResource(
   licenseNumber: string,
   resourceId: string,
   source: string,
-  options?: { fuzzyQFallback?: boolean }
+  options?: { fuzzyQFallback?: boolean; signal?: AbortSignal },
 ): Promise<{ found: boolean; data: any }> {
   try {
     const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
-    
+
     const url1 = `https://data.gov.il/api/3/action/datastore_search?resource_id=${resourceId}&filters={"mispar_rechev":"${parseInt(cleanLicense, 10).toString()}"}`
-    
-    const response1 = await fetch(url1)
-    const data1 = await response1.json()
-    
-    if (data1.success && data1.result?.records?.length > 0) {
+
+    const data1 = (await fetchJsonWithTimeout(url1, options?.signal)) as {
+      success?: boolean
+      result?: { records?: unknown[] }
+    }
+
+    if (data1.success && data1.result?.records && data1.result.records.length > 0) {
       return { found: true, data: data1.result.records[0] }
     }
-    
+
     const url2 = `https://data.gov.il/api/3/action/datastore_search?resource_id=${resourceId}&q=${cleanLicense}`
-    
-    const response2 = await fetch(url2)
-    const data2 = await response2.json()
-    
-    if (data2.success && data2.result?.records?.length > 0) {
+
+    const data2 = (await fetchJsonWithTimeout(url2, options?.signal)) as {
+      success?: boolean
+      result?: { records?: any[] }
+    }
+
+    if (data2.success && data2.result?.records && data2.result.records.length > 0) {
       const record = data2.result.records.find((rec: any) => {
         const recLicense = String(rec.mispar_rechev || rec.MISPAR_RECHEV || '')
           .replace(/[^0-9]/g, '')
@@ -288,7 +403,7 @@ async function searchInResource(
         }
         if (options?.fuzzyQFallback) {
           return Object.values(rec).some(
-            (val) => val != null && val.toString().includes(cleanLicense)
+            (val) => val != null && val.toString().includes(cleanLicense),
           )
         }
         return false
@@ -298,15 +413,50 @@ async function searchInResource(
         return { found: true, data: record }
       }
     }
-    
+
     return { found: false, data: null }
   } catch (error) {
-    console.warn(
-      `[vehicle-lookup] ${source} lookup skipped (network):`,
-      error instanceof Error ? error.message : error
-    )
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.warn(`[vehicle-lookup] ${source} lookup timed out or aborted`)
+    } else {
+      console.warn(
+        `[vehicle-lookup] ${source} lookup skipped (network):`,
+        error instanceof Error ? error.message : error,
+      )
+    }
     return { found: false, data: null }
   }
+}
+
+async function raceResourceProbes(
+  licenseNumber: string,
+  probes: ResourceProbe[],
+): Promise<{ found: true; data: any; probe: ResourceProbe } | null> {
+  const parentAbort = new AbortController()
+
+  for (let i = 0; i < probes.length; i += REGISTRY_PROBE_CONCURRENCY) {
+    const batch = probes.slice(i, i + REGISTRY_PROBE_CONCURRENCY)
+    try {
+      const winner = await Promise.any(
+        batch.map(async (probe) => {
+          const result = await searchInResource(
+            licenseNumber,
+            probe.resourceId,
+            probe.source,
+            { fuzzyQFallback: probe.fuzzyQFallback, signal: parentAbort.signal },
+          )
+          if (!result.found) throw new Error('miss')
+          return { found: true as const, data: result.data, probe }
+        }),
+      )
+      parentAbort.abort()
+      return winner
+    } catch {
+      // All probes in this batch missed or timed out — try next batch.
+    }
+  }
+
+  return null
 }
 
 /**
@@ -419,16 +569,18 @@ function mapVehicleData(rawData: any, source: string, licenseNumber: string): Ve
 /**
  * שליפת מידע נוסף מהמאגר המורחב לרכב פרטי
  */
-async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
+async function fetchExtraPrivateInfo(vehicle: any, signal?: AbortSignal): Promise<any> {
   try {
     const model = `${vehicle.tozeret_nm || ''} ${vehicle.kinuy_mishari || ''}`.trim()
     const query = encodeURIComponent(model)
     const url = `https://data.gov.il/api/3/action/datastore_search?resource_id=${API_RESOURCES.private_extra}&q=${query}`
-    
-    const response = await fetch(url)
-    const data = await response.json()
-    
-    if (data.success && data.result?.records?.length > 0) {
+
+    const data = (await fetchJsonWithTimeout(url, signal)) as {
+      success?: boolean
+      result?: { records?: any[] }
+    }
+
+    if (data.success && data.result?.records && data.result.records.length > 0) {
       const match = data.result.records.find((record: any) =>
         record.shnat_yitzur == vehicle.shnat_yitzur &&
         record.degem_cd == vehicle.degem_cd &&
@@ -457,65 +609,52 @@ async function fetchExtraPrivateInfo(vehicle: any): Promise<any> {
  * Not cached to Supabase — status may change if the vehicle is reactivated.
  */
 async function searchCancelledOrInactive(
-  licenseNumber: string
+  licenseNumber: string,
 ): Promise<VehicleLookupResult | null> {
-  const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
-
-  const cancelledResources: Array<{
-    resourceId: string
-    mapAs: keyof typeof FIELD_MAPPINGS
-    sourceLabel: string
-  }> = [
+  const probes: ResourceProbe[] = [
     {
       resourceId: API_RESOURCES.canceled_private,
+      source: 'canceled_private',
       mapAs: 'private',
       sourceLabel: SOURCE_LABELS.private,
+      registryStatus: 'cancelled',
+      fuzzyQFallback: true,
     },
     {
       resourceId: API_RESOURCES.canceled_heavy,
+      source: 'canceled_heavy',
       mapAs: 'heavy',
       sourceLabel: SOURCE_LABELS.heavy,
+      registryStatus: 'cancelled',
+      fuzzyQFallback: true,
     },
     {
       resourceId: API_RESOURCES.canceled_motorcycle,
+      source: 'canceled_motorcycle',
       mapAs: 'motorcycle',
       sourceLabel: SOURCE_LABELS.motorcycle,
+      registryStatus: 'cancelled',
+      fuzzyQFallback: true,
+    },
+    {
+      resourceId: API_RESOURCES.inactive,
+      source: 'inactive',
+      mapAs: 'private',
+      sourceLabel: 'רכב לא פעיל',
+      registryStatus: 'inactive',
     },
   ]
 
-  for (const { resourceId, mapAs, sourceLabel } of cancelledResources) {
-    const result = await searchInResource(cleanLicense, resourceId, `canceled_${mapAs}`, {
-      fuzzyQFallback: true,
-    })
+  const hit = await raceResourceProbes(licenseNumber, probes)
+  if (!hit || !hit.probe.mapAs) return null
 
-    if (result.found) {
-      return {
-        found: true,
-        source: mapAs as VehicleLookupResult['source'],
-        sourceLabel,
-        registryStatus: 'cancelled',
-        data: mapCancelledInactiveVehicleData(result.data, cleanLicense),
-      }
-    }
+  return {
+    found: true,
+    source: hit.probe.mapAs as VehicleLookupResult['source'],
+    sourceLabel: hit.probe.sourceLabel ?? SOURCE_LABELS[hit.probe.mapAs],
+    registryStatus: hit.probe.registryStatus,
+    data: mapCancelledInactiveVehicleData(hit.data, licenseNumber),
   }
-
-  const inactiveResult = await searchInResource(
-    cleanLicense,
-    API_RESOURCES.inactive,
-    'inactive'
-  )
-
-  if (inactiveResult.found) {
-    return {
-      found: true,
-      source: 'private',
-      sourceLabel: 'רכב לא פעיל',
-      registryStatus: 'inactive',
-      data: mapCancelledInactiveVehicleData(inactiveResult.data, cleanLicense),
-    }
-  }
-
-  return null
 }
 
 /**
@@ -523,61 +662,61 @@ async function searchCancelledOrInactive(
  */
 export async function lookupVehicle(licenseNumber: string): Promise<VehicleLookupResult> {
   const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
-  
+
   if (cleanLicense.length < 5) {
-    return {
-      found: false,
-      source: null,
-      sourceLabel: '',
-      data: null,
-      error: 'מספר רישוי קצר מדי',
-    }
+    return notFoundLookupResult('מספר רישוי קצר מדי')
   }
 
-  // שלב 1: חיפוש ב-Supabase (מהיר)
+  // שלב 1: חיפוש ב-Supabase (מהיר) — positive cache
   const supabaseResult = await searchInSupabase(cleanLicense)
   if (supabaseResult) {
     console.log('✅ נמצא ב-Supabase')
     return supabaseResult
   }
 
-  console.log('🔍 לא נמצא ב-Supabase, מחפש ב-API...')
-  
-  // שלב 2: Fallback ל-API
-  const searchOrder: Array<keyof typeof API_RESOURCES> = [
-    'private',
-    'motorcycle',
-    'heavy',
-    'machinery',
-    'personal_import',
-  ]
-  
-  for (const source of searchOrder) {
-    const result = await searchInResource(cleanLicense, API_RESOURCES[source], source)
-    
-    if (result.found) {
-      const mappedData = mapVehicleData(result.data, source, cleanLicense)
-      
-      if (source === 'private' && mappedData) {
-        const extraData = await fetchExtraPrivateInfo(result.data)
-        if (extraData) {
-          mappedData.totalWeight = extraData.mishkal_kolel ? parseFloat(extraData.mishkal_kolel) : mappedData.totalWeight
-          mappedData.driveType = extraData.hanaa_nm || mappedData.driveType
-          mappedData.driveTechnology = extraData.technologiat_hanaa_nm || mappedData.driveTechnology
-          mappedData.gearType = extraData.automatic_ind || mappedData.gearType
-        }
-      }
+  // שלב 1b: negative cache — skip external API if recently confirmed miss
+  const recentMiss = await searchMissInSupabase(cleanLicense)
+  if (recentMiss) {
+    console.log('⏭️ שלילי ב-cache — דילוג על API')
+    return notFoundLookupResult()
+  }
 
-      // שמירה ב-Supabase לפעם הבאה
-      await saveToSupabase(cleanLicense, source, mappedData, result.data)
-      console.log('💾 נשמר ב-Supabase')
-      
-      return {
-        found: true,
-        source: source as VehicleType,
-        sourceLabel: SOURCE_LABELS[source],
-        data: mappedData,
+  console.log('🔍 לא נמצא ב-Supabase, מחפש ב-API...')
+
+  const activeProbes: ResourceProbe[] = [
+    { resourceId: API_RESOURCES.private, source: 'private' },
+    { resourceId: API_RESOURCES.motorcycle, source: 'motorcycle' },
+    { resourceId: API_RESOURCES.heavy, source: 'heavy' },
+    { resourceId: API_RESOURCES.machinery, source: 'machinery' },
+    { resourceId: API_RESOURCES.personal_import, source: 'personal_import' },
+  ]
+
+  const activeHit = await raceResourceProbes(cleanLicense, activeProbes)
+  if (activeHit) {
+    const source = activeHit.probe.source as keyof typeof FIELD_MAPPINGS
+    const mappedData = mapVehicleData(activeHit.data, source, cleanLicense)
+
+    if (source === 'private' && mappedData) {
+      const extraData = await fetchExtraPrivateInfo(activeHit.data)
+      if (extraData) {
+        mappedData.totalWeight = extraData.mishkal_kolel
+          ? parseFloat(extraData.mishkal_kolel)
+          : mappedData.totalWeight
+        mappedData.driveType = extraData.hanaa_nm || mappedData.driveType
+        mappedData.driveTechnology =
+          extraData.technologiat_hanaa_nm || mappedData.driveTechnology
+        mappedData.gearType = extraData.automatic_ind || mappedData.gearType
       }
+    }
+
+    await saveToSupabase(cleanLicense, source, mappedData, activeHit.data)
+    console.log('💾 נשמר ב-Supabase')
+
+    return {
+      found: true,
+      source: source as VehicleType,
+      sourceLabel: SOURCE_LABELS[source],
+      data: mappedData,
     }
   }
 
@@ -587,13 +726,9 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
     return cancelledOrInactive
   }
 
-  return {
-    found: false,
-    source: null,
-    sourceLabel: '',
-    data: null,
-    error: 'הרכב לא נמצא במאגרי משרד התחבורה',
-  }
+  void saveMissToSupabase(cleanLicense)
+
+  return notFoundLookupResult()
 }
 
 /**

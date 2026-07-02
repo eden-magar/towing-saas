@@ -7,6 +7,7 @@ import { VehicleCoreLookupChips } from '../shared/VehicleCoreLookupChips'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 
 // ==================== Types ====================
@@ -243,8 +244,13 @@ export function VehicleCard({
                 })
               }
               onBlur={() => {
-                if (vehicle.plateNumber.length >= 5 && !vehicle.vehicleData && !vehicle.fromStorage) {
-                  handleSearch()
+                if (
+                  shouldTriggerPlateLookupOnBlur(vehicle.plateNumber, {
+                    hasFoundData: vehicle.isFound,
+                    lookupAlreadyFailed: vehicle.vehicleNotFound,
+                  })
+                ) {
+                  void handleSearch()
                 }
               }}
               placeholder="12-345-67"

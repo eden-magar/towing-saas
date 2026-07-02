@@ -5,6 +5,7 @@ import { Search, Loader2, AlertTriangle } from 'lucide-react'
 import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
+import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 
 interface VehicleLookupProps {
   plateNumber: string
@@ -72,6 +73,7 @@ export function VehicleLookup({
           onChange={(e) => {
             const newValue = normalizePlate(e.target.value)
             onPlateChange(newValue)
+            setNotFound(false)
             if (newValue.replace(/[^0-9]/g, '').length < 5) {
               onVehicleDataChange(null)
               onVehicleTypeChange('')
@@ -82,8 +84,13 @@ export function VehicleLookup({
           className="col-span-3 sm:flex-1 sm:min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100"
           onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
           onBlur={() => {
-            if (!vehicleData?.found && plateNumber.replace(/[^0-9]/g, '').length >= 5) {
-              handleLookup()
+            if (
+              shouldTriggerPlateLookupOnBlur(plateNumber, {
+                hasFoundData: vehicleData?.found,
+                lookupAlreadyFailed: notFound,
+              })
+            ) {
+              void handleLookup()
             }
           }}
         />
