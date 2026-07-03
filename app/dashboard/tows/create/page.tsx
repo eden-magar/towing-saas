@@ -805,6 +805,9 @@ function CreateTowForm({
   const [otherDefectText, setOtherDefectText] = useState('')
   const [stopContactModalId, setStopContactModalId] = useState<string | null>(null)
   const [stopContactDraft, setStopContactDraft] = useState({ name: '', phone: '' })
+  const [expandedStopNotesIds, setExpandedStopNotesIds] = useState<Set<string>>(
+    () => new Set()
+  )
 
   const routeRoleLabel = (role: RouteRole) => {
     if (role === 'pickup') return 'מוצא'
@@ -842,6 +845,19 @@ function CreateTowForm({
     { value: 'other', label: 'אחר' },
   ]
 
+  const getRouteStopHeadingLabel = (stop: RouteStop) => {
+    if (stop.role === 'pickup') return 'מוצא'
+    if (stop.role === 'dropoff') return 'יעד'
+    const stopIndex = routeStops.findIndex((s) => s.id === stop.id)
+    const stopOrdinal = routeStops
+      .slice(0, stopIndex + 1)
+      .filter((s) => s.role === 'stop').length
+    return `עצירה ${stopOrdinal}`
+  }
+
+  const isStopNotesExpanded = (stop: RouteStop) =>
+    !!(stop.orderNotes?.trim()) || expandedStopNotesIds.has(stop.id)
+
   const renderRouteStopFields = (stop: RouteStop) => {
     const dropoffRow = findDropoffRouteStop(routeStops)
     const isLastDropoff = stop.role === 'dropoff' && stop.id === dropoffRow?.id
@@ -849,33 +865,33 @@ function CreateTowForm({
     return (
       <div className="space-y-3 w-full">
         <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
-          <span className="text-sm font-medium text-gray-700">
-            {routeRoleLabel(stop.role)}
-            {stop.role === 'stop' && stop.stopSubtype && (
-              <span className="text-gray-400">
-                {' '}
-                ·{' '}
-                {stop.stopSubtype === 'key'
-                  ? 'מפתח'
-                  : stop.stopSubtype === 'customer_pickup'
-                    ? 'איסוף לקוח'
-                    : stop.stopSubtype === 'customer_dropoff'
-                      ? 'הורדת לקוח'
-                      : 'אחר'}
-              </span>
-            )}
+          <span className="text-xs font-semibold text-gt-text-secondary">
+            {getRouteStopHeadingLabel(stop)}
           </span>
           {stop.role === 'stop' && (
             <button
               type="button"
               onClick={() => removeStop(stop.id)}
-              className={isMobile ? 'p-2.5 text-gray-400 hover:text-red-500 shrink-0' : 'p-1 text-gray-400 hover:text-red-500 shrink-0'}
+              className={
+                isMobile
+                  ? 'p-2.5 text-gt-text-tertiary hover:text-red-500 shrink-0'
+                  : 'p-1 text-gt-text-tertiary hover:text-red-500 shrink-0'
+              }
               aria-label="הסר נקודת עצירה"
             >
               <X className="w-4 h-4" />
             </button>
           )}
         </div>
+
+        <AddressInput
+          value={stop.address}
+          onChange={(d: AddressData) => updateStop(stop.id, { address: d })}
+          label={routeRoleLabel(stop.role)}
+          hideLabel
+          onPinDropClick={() => handlePinDropOpen(`routestop:${stop.id}`)}
+          className="[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3"
+        />
 
         {stop.role === 'stop' && (
           <div className="space-y-2">
@@ -907,29 +923,36 @@ function CreateTowForm({
                 className="w-full max-w-xs h-10 px-3 border border-gt-border rounded-xl text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15"
               />
             )}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">
-                הערות לעצירה
-              </label>
-              <textarea
-                value={stop.orderNotes ?? ''}
-                onChange={(e) => updateStop(stop.id, { orderNotes: e.target.value })}
-                placeholder="מידע לנהג לגבי העצירה"
-                rows={2}
-                className="w-full px-3 py-2 border border-gt-border rounded-xl text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 resize-none"
-              />
-            </div>
+            {isStopNotesExpanded(stop) ? (
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-gt-text-tertiary">
+                  הערות לעצירה
+                </label>
+                <textarea
+                  value={stop.orderNotes ?? ''}
+                  onChange={(e) => updateStop(stop.id, { orderNotes: e.target.value })}
+                  placeholder="מידע לנהג לגבי העצירה"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gt-border rounded-xl text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 resize-none"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedStopNotesIds((prev) => {
+                    const next = new Set(prev)
+                    next.add(stop.id)
+                    return next
+                  })
+                }
+                className="text-xs text-gt-text-tertiary hover:text-gt-text-secondary"
+              >
+                + הערות לעצירה
+              </button>
+            )}
           </div>
         )}
-
-        <AddressInput
-          value={stop.address}
-          onChange={(d: AddressData) => updateStop(stop.id, { address: d })}
-          label={routeRoleLabel(stop.role)}
-          hideLabel
-          onPinDropClick={() => handlePinDropOpen(`routestop:${stop.id}`)}
-          className="[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3"
-        />
 
         {stop.role === 'pickup' && (
           <button
@@ -938,7 +961,7 @@ function CreateTowForm({
             className={`inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
               startFromBase
                 ? 'border-blue-300 bg-blue-50 text-blue-700'
-                : 'border-gray-200 bg-gray-50 text-gray-500'
+                : 'border-gt-border-subtle bg-gt-surface-subtle text-gt-text-tertiary'
             }`}
           >
             יציאה מהחניון
@@ -974,7 +997,7 @@ function CreateTowForm({
                 className={`inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
                   dropoffToStorage
                     ? 'border-purple-300 bg-purple-50 text-purple-700'
-                    : 'border-gray-200 bg-gray-50 text-gray-500'
+                    : 'border-gt-border-subtle bg-gt-surface-subtle text-gt-text-tertiary'
                 }`}
               >
                 הורדה לאחסנה
@@ -1086,7 +1109,7 @@ function CreateTowForm({
           <button
             type="button"
             onClick={() => openStopContactModal(stop)}
-            className="text-xs text-cyan-700 hover:text-cyan-900 border border-cyan-200 bg-cyan-50 hover:bg-cyan-100 px-2.5 py-1 rounded-lg font-medium"
+            className="text-xs border border-gt-border bg-white text-gt-text-secondary hover:border-gt-brand px-2.5 py-1 rounded-lg font-medium"
           >
             {stop.contactName?.trim() ? stop.contactName : 'הוסף איש קשר'}
           </button>
@@ -2184,27 +2207,30 @@ function CreateTowForm({
                             )
                           })()
                         ) : (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             {routeStops.map((stop, index) => (
                               <div
                                 key={stop.id}
-                                className="flex gap-3 items-center border-b border-gray-200 pb-4 last:border-b-0 last:pb-0"
+                                className="flex gap-3 items-start rounded-lg border border-gt-border-subtle bg-white p-3"
                               >
-                                <div className="flex flex-col items-center justify-center gap-1.5 shrink-0">
+                                <div className="flex flex-col items-center gap-1 shrink-0 pt-1">
                                   <button
                                     type="button"
                                     onClick={() => moveStopUp(stop.id)}
                                     disabled={index === 0}
-                                    className={`${isMobile ? 'w-10 h-10' : 'w-[30px] h-[30px]'} inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300`}
+                                    className={`${isMobile ? 'w-10 h-10' : 'w-7 h-7'} inline-flex items-center justify-center rounded-lg border border-gt-border text-gt-text-secondary hover:text-gt-brand hover:border-gt-brand disabled:opacity-30 disabled:cursor-not-allowed`}
                                     aria-label="הזז למעלה"
                                   >
                                     <ChevronUp className="w-4 h-4" />
                                   </button>
+                                  <span className="text-[11px] font-semibold text-gt-text-tertiary tabular-nums">
+                                    {index + 1}
+                                  </span>
                                   <button
                                     type="button"
                                     onClick={() => moveStopDown(stop.id)}
                                     disabled={index === routeStops.length - 1}
-                                    className={`${isMobile ? 'w-10 h-10' : 'w-[30px] h-[30px]'} inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300`}
+                                    className={`${isMobile ? 'w-10 h-10' : 'w-7 h-7'} inline-flex items-center justify-center rounded-lg border border-gt-border text-gt-text-secondary hover:text-gt-brand hover:border-gt-brand disabled:opacity-30 disabled:cursor-not-allowed`}
                                     aria-label="הזז למטה"
                                   >
                                     <ChevronDown className="w-4 h-4" />

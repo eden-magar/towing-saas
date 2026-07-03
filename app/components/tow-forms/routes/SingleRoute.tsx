@@ -348,70 +348,97 @@ export function SingleRoute({
        {/* כתובות */}
       {isMobile ? (
         <div className="space-y-2">
-          {/* מוצא - בלוק מקובץ */}
-          <div className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                <MapPin size={16} className="text-emerald-500 shrink-0" />
-                מוצא <span className="text-red-500">*</span>
-              </span>
-              {basePriceList?.base_address && (
-                <button
-                  type="button"
-                  onClick={() => onStartFromBaseChange(!startFromBase)}
-                  aria-pressed={startFromBase}
-                  className={
-                    startFromBase
-                      ? 'shrink-0 inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium transition-colors'
-                      : 'shrink-0 inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                  }
-                >
-                  <Home size={16} />
-                  מהבסיס
-                </button>
-              )}
-            </div>
-            <AddressInput
-              hideLabel
-              value={pickupAddress}
-              onChange={onPickupAddressChange}
-              placeholder="הזן כתובת איסוף..."
-              required
-              onPinDropClick={() => onPinDropClick('pickup')}
-              isMobile
-            />
-          </div>
-          {routeStops
-            .map((stop, index) => ({ stop, index }))
-            .filter(({ stop }) => stop.role === 'stop')
-            .map(({ stop, index: stopIndex }) => {
-              const fullIndex = routeStops.findIndex((s) => s.id === stop.id)
-              return (
-                <div key={stop.id} className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                      <MapPin size={16} className="text-blue-500 shrink-0" />
-                      עצירה {stopIndex + 1}
-                    </span>
-                    <div className="flex items-center gap-1">
+          {routeStops.map((stop, index) => {
+            const stopOrdinal =
+              stop.role === 'stop'
+                ? routeStops.slice(0, index + 1).filter((s) => s.role === 'stop').length
+                : 0
+
+            return (
+              <div key={stop.id} className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+                    <MapPin
+                      size={16}
+                      className={
+                        stop.role === 'pickup'
+                          ? 'text-emerald-500 shrink-0'
+                          : stop.role === 'dropoff'
+                            ? 'text-red-500 shrink-0'
+                            : 'text-blue-500 shrink-0'
+                      }
+                    />
+                    {stop.role === 'pickup' && (
+                      <>
+                        מוצא <span className="text-red-500">*</span>
+                      </>
+                    )}
+                    {stop.role === 'dropoff' && (
+                      <>
+                        יעד <span className="text-red-500">*</span>
+                      </>
+                    )}
+                    {stop.role === 'stop' && <>עצירה {stopOrdinal}</>}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {stop.role === 'pickup' && basePriceList?.base_address && (
                       <button
                         type="button"
-                        onClick={() => moveStopUp(stop.id)}
-                        disabled={fullIndex <= 0}
-                        className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
-                        aria-label="הזז למעלה"
+                        onClick={() => onStartFromBaseChange(!startFromBase)}
+                        aria-pressed={startFromBase}
+                        className={
+                          startFromBase
+                            ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium transition-colors'
+                            : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
+                        }
                       >
-                        <ChevronUp size={16} />
+                        <Home size={16} />
+                        מהבסיס
                       </button>
+                    )}
+                    {stop.role === 'dropoff' && onDropoffToStorageChange && (
                       <button
                         type="button"
-                        onClick={() => moveStopDown(stop.id)}
-                        disabled={fullIndex < 0 || fullIndex >= routeStops.length - 1}
-                        className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
-                        aria-label="הזז למטה"
+                        onClick={() => {
+                          const next = !dropoffToStorage
+                          onDropoffToStorageChange(next)
+                          if (next && storageAddress) {
+                            onDropoffAddressChange({
+                              address: storageAddress,
+                              isPinDropped: false,
+                            })
+                          }
+                        }}
+                        aria-pressed={dropoffToStorage}
+                        className={
+                          dropoffToStorage
+                            ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-purple-300 bg-purple-50 text-purple-700 text-xs font-medium transition-colors'
+                            : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
+                        }
                       >
-                        <ChevronDown size={16} />
+                        <Package size={16} />
+                        לאחסנה
                       </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => moveStopUp(stop.id)}
+                      disabled={index === 0}
+                      className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
+                      aria-label="הזז למעלה"
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveStopDown(stop.id)}
+                      disabled={index === routeStops.length - 1}
+                      className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
+                      aria-label="הזז למטה"
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                    {stop.role === 'stop' && (
                       <button
                         type="button"
                         onClick={() => removeStop(stop.id)}
@@ -420,8 +447,32 @@ export function SingleRoute({
                       >
                         <X size={16} />
                       </button>
-                    </div>
+                    )}
                   </div>
+                </div>
+                {stop.role === 'pickup' && (
+                  <AddressInput
+                    hideLabel
+                    value={pickupAddress}
+                    onChange={onPickupAddressChange}
+                    placeholder="הזן כתובת איסוף..."
+                    required
+                    onPinDropClick={() => onPinDropClick('pickup')}
+                    isMobile
+                  />
+                )}
+                {stop.role === 'dropoff' && (
+                  <AddressInput
+                    hideLabel
+                    value={dropoffAddress}
+                    onChange={onDropoffAddressChange}
+                    placeholder="הזן כתובת יעד..."
+                    required
+                    onPinDropClick={() => onPinDropClick('dropoff')}
+                    isMobile
+                  />
+                )}
+                {stop.role === 'stop' && (
                   <AddressInput
                     hideLabel
                     value={stop.address}
@@ -430,10 +481,10 @@ export function SingleRoute({
                     onPinDropClick={() => onPinDropClick(`routestop:${stop.id}`)}
                     isMobile
                   />
-                </div>
-              )
-            })}
-          {/* הוסף נקודת עצירה - קישור משני, ממוקם לפני היעד (עצירות נוספות באמצע המסלול) */}
+                )}
+              </div>
+            )
+          })}
           <div className="border-t border-gray-100 pt-2 mt-1">
             <button
               type="button"
@@ -443,48 +494,6 @@ export function SingleRoute({
               <Plus size={14} className="shrink-0" />
               הוסף נקודת עצירה
             </button>
-          </div>
-          {/* יעד - בלוק מקובץ */}
-          <div className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                <MapPin size={16} className="text-red-500 shrink-0" />
-                יעד <span className="text-red-500">*</span>
-              </span>
-              {onDropoffToStorageChange && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !dropoffToStorage
-                    onDropoffToStorageChange(next)
-                    if (next && storageAddress) {
-                      onDropoffAddressChange({
-                        address: storageAddress,
-                        isPinDropped: false
-                      })
-                    }
-                  }}
-                  aria-pressed={dropoffToStorage}
-                  className={
-                    dropoffToStorage
-                      ? 'shrink-0 inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-purple-300 bg-purple-50 text-purple-700 text-xs font-medium transition-colors'
-                      : 'shrink-0 inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                  }
-                >
-                  <Package size={16} />
-                  לאחסנה
-                </button>
-              )}
-            </div>
-            <AddressInput
-              hideLabel
-              value={dropoffAddress}
-              onChange={onDropoffAddressChange}
-              placeholder="הזן כתובת יעד..."
-              required
-              onPinDropClick={() => onPinDropClick('dropoff')}
-              isMobile
-            />
           </div>
         </div>
       ) : (
