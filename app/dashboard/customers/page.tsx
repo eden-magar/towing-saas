@@ -407,7 +407,7 @@ export default function CustomersPage() {
 
                 <div className="col-span-2">
                   {customer.phone && (
-                    <a href={`tel:${customer.phone}`} className="text-[#33d4ff] hover:text-[#21b8e6] text-sm">
+                    <a href={`tel:${customer.phone}`} onClick={(e) => e.stopPropagation()} className="text-[#33d4ff] hover:text-[#21b8e6] text-sm">
                       {customer.phone}
                     </a>
                   )}
@@ -440,13 +440,13 @@ export default function CustomersPage() {
                 <div className="col-span-2">
                   <div className="flex items-center gap-1">
                     <button 
-                      onClick={() => handleEditCustomer(customer)}
+                      onClick={(e) => { e.stopPropagation(); handleEditCustomer(customer) }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                     >
                       <Edit2 size={16} />
                     </button>
                     <button 
-                      onClick={() => handleDeleteCustomer(customer)}
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCustomer(customer) }}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     >
                       <Trash2 size={16} />
@@ -489,7 +489,7 @@ export default function CustomersPage() {
 
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   {customer.phone && (
-                    <a href={`tel:${customer.phone}`} className="text-[#33d4ff]">{customer.phone}</a>
+                    <a href={`tel:${customer.phone}`} onClick={(e) => e.stopPropagation()} className="text-[#33d4ff]">{customer.phone}</a>
                   )}
                   <span>•</span>
                   <span>{customer.total_tows} גרירות</span>
