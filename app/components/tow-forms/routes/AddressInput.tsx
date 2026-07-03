@@ -62,6 +62,7 @@ interface AddressInputProps {
   onPinDropClick?: () => void
   // External ref for focus control
   inputRef?: React.RefObject<HTMLInputElement>
+  isMobile?: boolean
 }
 
 const LINK_RESOLVE_ERROR = 'לא הצלחנו לזהות מיקום מהקישור'
@@ -80,7 +81,8 @@ export function AddressInput({
   hideLabel,
   required,
   onPinDropClick,
-  inputRef: externalRef
+  inputRef: externalRef,
+  isMobile = false,
 }: AddressInputProps) {
   const internalRef = useRef<HTMLInputElement>(null)
   const inputRef = externalRef || internalRef
@@ -251,11 +253,13 @@ export function AddressInput({
     }
   }
 
-  const inputClassName =
-    'flex-1 min-w-0 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
+  const inputClassName = isMobile
+    ? 'flex-1 min-w-0 px-4 h-12 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
+    : 'flex-1 min-w-0 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
 
-  const actionButtonClassName =
-    'shrink-0 px-3 py-2.5 border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  const actionButtonClassName = isMobile
+    ? 'shrink-0 px-3 min-h-[48px] min-w-[48px] flex items-center justify-center border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'shrink-0 px-3 py-2.5 border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
   const renderLinkButton = () => {
     if (readOnly) return null
@@ -366,9 +370,13 @@ export function AddressInput({
     return (
       <div className={`flex-1 min-w-0 ${className}`}>
         {renderInputRow(
-          `flex-1 min-w-0 px-3 py-2.5 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
-            readOnly ? 'bg-gray-50' : ''
-          }`
+          isMobile
+            ? `flex-1 min-w-0 px-3 h-12 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
+                readOnly ? 'bg-gray-50' : ''
+              }`
+            : `flex-1 min-w-0 px-3 py-2.5 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
+                readOnly ? 'bg-gray-50' : ''
+              }`
         )}
       </div>
     )

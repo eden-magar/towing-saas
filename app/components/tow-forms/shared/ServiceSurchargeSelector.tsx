@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react'
 import { Plus, Minus, Check } from 'lucide-react'
 import { ServiceSurcharge } from '../../../lib/queries/price-lists'
+import { ManualSurchargeSection } from './ManualSurchargeSection'
+import { ManualSurcharge, sanitizeManualSurcharges } from '../../../lib/utils/manual-surcharge'
 
 // מייצג בחירת שירות עם כמות/מחיר
 export interface SelectedService {
@@ -16,6 +18,9 @@ interface ServiceSurchargeSelectorProps {
   selectedServices: SelectedService[]
   onChange: (services: SelectedService[]) => void
   label?: string
+  isMobile?: boolean
+  manualSurcharges?: ManualSurcharge[]
+  onManualSurchargesChange?: (lines: ManualSurcharge[]) => void
 }
 
 const HEBREW_SORT = 'he' as const
@@ -40,7 +45,10 @@ export function ServiceSurchargeSelector({
   services,
   selectedServices,
   onChange,
-  label = 'שירותים נוספים'
+  label = 'שירותים נוספים',
+  isMobile = false,
+  manualSurcharges = [],
+  onManualSurchargesChange,
 }: ServiceSurchargeSelectorProps) {
   const [showModal, setShowModal] = useState(false)
   // Display order only: Hebrew A-Z on visible label text. Copy before sort so the
@@ -50,7 +58,10 @@ export function ServiceSurchargeSelector({
     [services]
   )
 
-  if (activeServices.length === 0) return null
+  if (activeServices.length === 0 && !(isMobile && onManualSurchargesChange)) return null
+
+  const manualSurchargeCount = sanitizeManualSurcharges(manualSurcharges).length
+  const servicesSelectionCount = selectedServices.length + (isMobile && onManualSurchargesChange ? manualSurchargeCount : 0)
 
   const isSelected = (id: string) => selectedServices.some(s => s.id === id)
   const getSelected = (id: string) => selectedServices.find(s => s.id === id)
@@ -109,37 +120,80 @@ export function ServiceSurchargeSelector({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      {!isMobile && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      )}
       
       {/* כפתור מובייל */}
-      <button
-        type="button"
-        onClick={() => setShowModal(true)}
-        className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
-      >
-        <span className="text-gray-600">
-          {selectedServices.length > 0 
-            ? activeServices.filter(s => isSelected(s.id)).map(s => s.label).join(', ')
-            : 'בחר שירותים...'}
-        </span>
-        <span className="text-gray-400">▼</span>
-      </button>
+      {isMobile ? (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className={`sm:hidden relative flex items-center justify-center w-full min-h-[48px] rounded-xl border text-sm font-medium transition-colors ${
+            servicesSelectionCount > 0
+              ? 'border-[#33d4ff] bg-[#33d4ff]/5 text-gray-800'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          <span>שירותים</span>
+          {servicesSelectionCount > 0 && (
+            <span className="absolute top-1.5 left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#33d4ff] text-white text-[11px] font-bold flex items-center justify-center">
+              {servicesSelectionCount}
+            </span>
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+        >
+          <span className="text-gray-600">
+            {selectedServices.length > 0 
+              ? activeServices.filter(s => isSelected(s.id)).map(s => s.label).join(', ')
+              : 'בחר שירותים...'}
+          </span>
+          <span className="text-gray-400">▼</span>
+        </button>
+      )}
 
       {/* מודל מובייל */}
       {showModal && (
-        <div className="sm:hidden fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white w-full rounded-t-2xl max-h-[80vh] overflow-auto">
+        <div
+          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
               <h3 className="font-bold text-gray-800">{label}</h3>
               <button type="button" onClick={() => setShowModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
             </div>
-            <div className="p-4 space-y-2">
+            <div className="p-4 space-y-4">
+              {isMobile && onManualSurchargesChange && (
+                <>
+                  <ManualSurchargeSection
+                    manualSurcharges={manualSurcharges}
+                    onChange={onManualSurchargesChange}
+                    addButtonLabel="הוספת שירות נוסף"
+                    isMobile
+                  />
+                  {activeServices.length > 0 && (
+                    <div className="border-t border-gray-100 pt-4 space-y-2">
+                      <p className="text-sm font-medium text-gray-700">שירותים מוגדרים</p>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="space-y-2">
               {activeServices.map((service) => (
                 <div key={`modal-${service.id}`} className={`p-3 rounded-xl border transition-all ${isSelected(service.id) ? 'border-[#33d4ff] bg-[#33d4ff]/5' : 'border-gray-200'}`}>
                   <button
                     type="button"
                     onClick={() => toggleService(service)}
-                    className="w-full flex items-center justify-between"
+                    className="w-full min-h-[44px] flex items-center justify-between"
                   >
                     <span className={`font-medium ${isSelected(service.id) ? 'text-[#33d4ff]' : 'text-gray-700'}`}>{service.label}</span>
                     <span className="text-sm text-gray-500">{getPriceDisplay(service)}</span>
@@ -151,11 +205,11 @@ export function ServiceSurchargeSelector({
                       <span className="text-xs text-gray-500">{service.unit_label && `לכל ${service.unit_label}`}</span>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center bg-white rounded-lg border border-gray-200">
-                          <button type="button" onClick={() => updateQuantity(service.id, (getSelected(service.id)?.quantity || 1) - 1)} className="w-8 h-8 flex items-center justify-center text-gray-500">
+                          <button type="button" onClick={() => updateQuantity(service.id, (getSelected(service.id)?.quantity || 1) - 1)} className={isMobile ? 'w-11 h-11 flex items-center justify-center text-gray-500' : 'w-8 h-8 flex items-center justify-center text-gray-500'}>
                             <Minus size={14} />
                           </button>
                           <span className="w-8 text-center text-sm font-medium">{getSelected(service.id)?.quantity || 1}</span>
-                          <button type="button" onClick={() => updateQuantity(service.id, (getSelected(service.id)?.quantity || 1) + 1)} className="w-8 h-8 flex items-center justify-center text-gray-500">
+                          <button type="button" onClick={() => updateQuantity(service.id, (getSelected(service.id)?.quantity || 1) + 1)} className={isMobile ? 'w-11 h-11 flex items-center justify-center text-gray-500' : 'w-8 h-8 flex items-center justify-center text-gray-500'}>
                             <Plus size={14} />
                           </button>
                         </div>
@@ -181,6 +235,7 @@ export function ServiceSurchargeSelector({
                   )}
                 </div>
               ))}
+              </div>
             </div>
           </div>
         </div>
@@ -227,7 +282,7 @@ export function ServiceSurchargeSelector({
       </div>
       
       {/* פקדים נוספים לשירותים שנבחרו - בתיבה אחת */}
-      {selectedWithControls.length > 0 && (
+      {!isMobile && selectedWithControls.length > 0 && (
         <div className="mt-3 p-4 bg-cyan-50 border border-cyan-200 rounded-xl space-y-3">
           {selectedWithControls.map(selected => {
             const service = activeServices.find(s => s.id === selected.id)

@@ -56,6 +56,8 @@ export interface CreateCustomerSectionProps {
   onOrdererSelected?: () => void
   editTowId?: string | null
   orderNumber?: string | null
+  /** When true, applies mobile-only layout/tap-target tweaks. Desktop path is unaffected. */
+  isMobile?: boolean
 }
 
 function hasPersonalPricing(customerIdsWithPersonalPricing: string[], customerId: string) {
@@ -102,8 +104,17 @@ export function CreateCustomerSection({
   onOrdererSelected,
   editTowId,
   orderNumber,
+  isMobile = false,
 }: CreateCustomerSectionProps) {
   const [isFocused, setIsFocused] = useState(false)
+  // Mobile-only: collapse the optional end-time behind a button. Start expanded
+  // if either end field already has a value so existing data is never hidden.
+  const [showEndTime, setShowEndTime] = useState(
+    () => !!(towEndTime || towEndDate),
+  )
+  // Mobile-only: "עכשיו" (default) vs "בחר מועד אחר" toggle. When false the
+  // time/date pickers stay hidden and towDate/towTime hold the "now" values.
+  const [useCustomTime, setUseCustomTime] = useState(false)
 
   const filteredCustomers = customers.filter((c) => {
     const q = customerSearch.trim()
@@ -137,52 +148,147 @@ export function CreateCustomerSection({
           </div>
         </div>
       )}
-      <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          onClick={onNowClick}
-          className="shrink-0"
+      {isMobile ? (
+        <div
+          className="px-3 py-2 border-t border-gray-100 flex flex-col items-stretch gap-2"
+          dir="rtl"
         >
-          עכשיו
-        </Button>
-        <DateInput
-          value={towDate}
-          onChange={onTowDateChange}
-          className="flex-1 min-w-[7rem]"
-        />
-        <TimeInput
-          value={towTime}
-          onChange={onTowTimeChange}
-          className="flex-1 min-w-[7rem]"
-        />
-        <Input
-          type="text"
-          value={customerOrderNumber}
-          onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
-          placeholder="מס׳ הזמנת לקוח"
-          className="flex-1 min-w-[8rem]"
-        />
-      </div>
-      <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
-        <span className="text-sm text-gray-600 shrink-0">שעת סיום (אופציונלי)</span>
-        <TimeInput
-          value={towEndTime}
-          onChange={(v) => {
-            onTowEndTimeChange(v)
-            if (v && !towEndDate && towDate) {
-              onTowEndDateChange(towDate)
-            }
-          }}
-          className="flex-1 min-w-[7rem]"
-        />
-        <DateInput
-          value={towEndDate}
-          onChange={onTowEndDateChange}
-          className="flex-1 min-w-[7rem]"
-        />
-      </div>
+          <Input
+            type="text"
+            value={customerOrderNumber}
+            onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
+            placeholder="מס׳ הזמנת לקוח"
+            className="w-full h-12"
+          />
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onNowClick()
+                setUseCustomTime(false)
+              }}
+              className={
+                !useCustomTime
+                  ? 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
+                  : 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }
+            >
+              עכשיו
+            </button>
+            <button
+              type="button"
+              onClick={() => setUseCustomTime(true)}
+              className={
+                useCustomTime
+                  ? 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
+                  : 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }
+            >
+              מועד אחר
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowEndTime((v) => !v)}
+              className={
+                showEndTime
+                  ? 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
+                  : 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }
+            >
+              מועד סיום
+            </button>
+          </div>
+          {useCustomTime && (
+            <div className="flex items-center gap-2">
+              <TimeInput
+                value={towTime}
+                onChange={onTowTimeChange}
+                isMobile
+                className="flex-1"
+              />
+              <DateInput
+                value={towDate}
+                onChange={onTowDateChange}
+                isMobile
+                className="flex-1"
+              />
+            </div>
+          )}
+          {showEndTime && (
+            <div className="pt-2 mt-1 border-t border-gray-200 flex flex-col items-stretch gap-2">
+              <span className="text-sm text-gray-600">שעת סיום (אופציונלי)</span>
+              <div className="flex items-center gap-2">
+                <TimeInput
+                  value={towEndTime}
+                  onChange={(v) => {
+                    onTowEndTimeChange(v)
+                    if (v && !towEndDate && towDate) {
+                      onTowEndDateChange(towDate)
+                    }
+                  }}
+                  isMobile
+                  className="flex-1"
+                />
+                <DateInput
+                  value={towEndDate}
+                  onChange={onTowEndDateChange}
+                  isMobile
+                  className="flex-1"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={onNowClick}
+            className="shrink-0"
+          >
+            עכשיו
+          </Button>
+          <DateInput
+            value={towDate}
+            onChange={onTowDateChange}
+            className="flex-1 min-w-[7rem]"
+          />
+          <TimeInput
+            value={towTime}
+            onChange={onTowTimeChange}
+            className="flex-1 min-w-[7rem]"
+          />
+          <Input
+            type="text"
+            value={customerOrderNumber}
+            onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
+            placeholder="מס׳ הזמנת לקוח"
+            className="flex-1 min-w-[8rem]"
+          />
+        </div>
+      )}
+      {isMobile ? null : (
+        <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
+          <span className="text-sm text-gray-600 shrink-0">שעת סיום (אופציונלי)</span>
+          <TimeInput
+            value={towEndTime}
+            onChange={(v) => {
+              onTowEndTimeChange(v)
+              if (v && !towEndDate && towDate) {
+                onTowEndDateChange(towDate)
+              }
+            }}
+            className="flex-1 min-w-[7rem]"
+          />
+          <DateInput
+            value={towEndDate}
+            onChange={onTowEndDateChange}
+            className="flex-1 min-w-[7rem]"
+          />
+        </div>
+      )}
     </>
   )
 
@@ -196,24 +302,30 @@ export function CreateCustomerSection({
           <Button
             type="button"
             variant="secondary"
-            size="sm"
+            size={isMobile ? 'md' : 'sm'}
+            className={isMobile ? 'min-h-[48px]' : undefined}
             onClick={switchToExisting}
           >
             חזור ללקוח קיים
           </Button>
         }
       >
-        <div className="p-3 grid grid-cols-2 gap-2" dir="rtl">
+        <div
+          className={isMobile ? 'p-3 grid grid-cols-1 gap-2' : 'p-3 grid grid-cols-2 gap-2'}
+          dir="rtl"
+        >
           <Input
             type="text"
             value={customerName}
             onChange={(e) => onCustomerNameChange(e.target.value)}
             placeholder="שם הלקוח *"
+            className={isMobile ? 'h-12' : undefined}
           />
           <PhoneInput
             value={customerPhone}
             onChange={onCustomerPhoneChange}
             placeholder="טלפון"
+            className={isMobile ? 'h-12' : undefined}
           />
         </div>
         {schedulingFooter}
@@ -231,7 +343,8 @@ export function CreateCustomerSection({
           <Button
             type="button"
             variant="secondary"
-            size="sm"
+            size={isMobile ? 'md' : 'sm'}
+            className={isMobile ? 'min-h-[48px]' : undefined}
             onClick={switchToWalkIn}
           >
             לקוח מזדמן
@@ -249,7 +362,7 @@ export function CreateCustomerSection({
               onBlur={() => setTimeout(() => setIsFocused(false), 150)}
               placeholder="חפש לפי שם, טלפון, ת.ז..."
               disabled={customersLoading}
-              className="pl-9 pr-3 text-right"
+              className={isMobile ? 'pl-9 pr-3 text-right h-12' : 'pl-9 pr-3 text-right'}
             />
           </div>
           {customersLoading && (
@@ -306,7 +419,8 @@ export function CreateCustomerSection({
         <Button
           type="button"
           variant="secondary"
-          size="sm"
+          size={isMobile ? 'md' : 'sm'}
+          className={isMobile ? 'min-h-[48px]' : undefined}
           onClick={clearCustomer}
         >
           <ArrowLeftRight size={12} />
@@ -315,17 +429,35 @@ export function CreateCustomerSection({
       }
     >
       <div className="flex items-center justify-between px-4 py-3 gap-2">
-        <div className="text-right flex-1 min-w-0">
-          <div className="font-medium text-sm text-gray-800 truncate">{customerName}</div>
-          <div className="flex items-center gap-2 justify-end mt-0.5 flex-wrap">
-            <span className="text-xs text-gray-500">{customerPhone}</span>
-            {priceListBadge && (
-              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
-                {priceListBadge}
+        {isMobile ? (
+          <div className="text-right flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-semibold text-gray-900 truncate">
+                {customerName}
               </span>
-            )}
+              {priceListBadge && (
+                <span className="shrink-0 text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                  {priceListBadge}
+                </span>
+              )}
+            </div>
+            <div className="mt-0.5">
+              <span className="text-xs text-gray-500">{customerPhone}</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-right flex-1 min-w-0">
+            <div className="font-medium text-sm text-gray-800 truncate">{customerName}</div>
+            <div className="flex items-center gap-2 justify-end mt-0.5 flex-wrap">
+              <span className="text-xs text-gray-500">{customerPhone}</span>
+              {priceListBadge && (
+                <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                  {priceListBadge}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
         <div className="w-8 h-8 rounded-full bg-[#33d4ff]/20 flex items-center justify-center shrink-0">
           <User className="w-4 h-4 text-[#33d4ff]" />
         </div>
@@ -333,27 +465,60 @@ export function CreateCustomerSection({
 
       {isBusinessCustomer && onDepartmentChange && onOrderedByChange && (
         <div className="px-4 pb-3 border-t border-gray-100 space-y-2" dir="rtl">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Input
-              type="text"
-              value={department}
-              onChange={(e) => onDepartmentChange(e.target.value)}
-              placeholder="מחלקה (אופציונלי)"
-              className="text-right"
-            />
-            <OrdererNameAutocomplete
-              value={orderedBy}
-              onChange={onOrderedByChange}
-              onSelectOrderer={(orderer) => {
-                onDepartmentChange(orderer.department ?? '')
-                onOrderedByChange(orderer.name)
-                onOrdererSelected?.()
-              }}
-              orderers={savedOrderers}
-              loading={orderersLoading}
-              placeholder="מזמין (אופציונלי)"
-              className="text-right"
-            />
+          <div className={isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-2'}>
+            {isMobile ? (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1 text-right">מחלקה</label>
+                <Input
+                  type="text"
+                  value={department}
+                  onChange={(e) => onDepartmentChange(e.target.value)}
+                  placeholder="מחלקה (אופציונלי)"
+                  className="text-right"
+                />
+              </div>
+            ) : (
+              <Input
+                type="text"
+                value={department}
+                onChange={(e) => onDepartmentChange(e.target.value)}
+                placeholder="מחלקה (אופציונלי)"
+                className="text-right"
+              />
+            )}
+            {isMobile ? (
+              <div>
+                <label className="block text-xs text-gray-500 mb-1 text-right">מזמין</label>
+                <OrdererNameAutocomplete
+                  value={orderedBy}
+                  onChange={onOrderedByChange}
+                  onSelectOrderer={(orderer) => {
+                    onDepartmentChange(orderer.department ?? '')
+                    onOrderedByChange(orderer.name)
+                    onOrdererSelected?.()
+                  }}
+                  orderers={savedOrderers}
+                  loading={orderersLoading}
+                  placeholder="מזמין (אופציונלי)"
+                  className="text-right"
+                  isMobile
+                />
+              </div>
+            ) : (
+              <OrdererNameAutocomplete
+                value={orderedBy}
+                onChange={onOrderedByChange}
+                onSelectOrderer={(orderer) => {
+                  onDepartmentChange(orderer.department ?? '')
+                  onOrderedByChange(orderer.name)
+                  onOrdererSelected?.()
+                }}
+                orderers={savedOrderers}
+                loading={orderersLoading}
+                placeholder="מזמין (אופציונלי)"
+                className="text-right"
+              />
+            )}
           </div>
           {showSaveOrdererPill && onSaveOrdererToggle && (
             <SaveCustomerOrdererPill

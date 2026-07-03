@@ -4,6 +4,7 @@ interface TowTruckTypeSelectorProps {
   selectedTypes: string[]
   onChange: (types: string[]) => void
   label?: string
+  isMobile?: boolean
 }
 
 const TRUCK_TYPES = [
@@ -17,7 +18,8 @@ import { useState } from 'react'
 export function TowTruckTypeSelector({ 
   selectedTypes, 
   onChange,
-  label = 'סוגי גרר מתאימים'
+  label = 'סוגי גרר מתאימים',
+  isMobile = false,
 }: TowTruckTypeSelectorProps) {
   const [showModal, setShowModal] = useState(false)
   
@@ -31,27 +33,54 @@ export function TowTruckTypeSelector({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      {!isMobile && (
+        <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      )}
       
       {/* כפתור מובייל */}
-      <button
-        type="button"
-        onClick={() => setShowModal(true)}
-        className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
-      >
-        <span className="text-gray-600">
-          {selectedTypes.length > 0 
-            ? TRUCK_TYPES.filter(t => selectedTypes.includes(t.id)).map(t => `${t.icon} ${t.label}`).join(', ')
-            : 'בחר סוגי גרר...'}
-        </span>
-        <span className="text-gray-400">▼</span>
-      </button>
+      {isMobile ? (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className={`sm:hidden relative flex items-center justify-center w-full min-h-[48px] rounded-xl border text-sm font-medium transition-colors ${
+            selectedTypes.length > 0
+              ? 'border-[#33d4ff] bg-[#33d4ff]/5 text-gray-800'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          <span>גררים</span>
+          {selectedTypes.length > 0 && (
+            <span className="absolute top-1.5 left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#33d4ff] text-white text-[11px] font-bold flex items-center justify-center">
+              {selectedTypes.length}
+            </span>
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+        >
+          <span className="text-gray-600">
+            {selectedTypes.length > 0 
+              ? TRUCK_TYPES.filter(t => selectedTypes.includes(t.id)).map(t => `${t.icon} ${t.label}`).join(', ')
+              : 'בחר סוגי גרר...'}
+          </span>
+          <span className="text-gray-400">▼</span>
+        </button>
+      )}
 
       {/* מודל מובייל */}
       {showModal && (
-        <div className="sm:hidden fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white w-full rounded-t-2xl">
-            <div className="border-b border-gray-200 p-4 flex items-center justify-between">
+        <div
+          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
               <h3 className="font-bold text-gray-800">{label}</h3>
               <button type="button" onClick={() => setShowModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
             </div>
@@ -61,7 +90,7 @@ export function TowTruckTypeSelector({
                   key={`modal-${type.id}`}
                   type="button"
                   onClick={() => toggleType(type.id)}
-                  className={`w-full p-4 rounded-xl text-sm font-medium transition-all border flex items-center gap-3 ${
+                  className={`w-full min-h-[48px] p-4 rounded-xl text-sm font-medium transition-all border flex items-center gap-3 ${
                     selectedTypes.includes(type.id)
                       ? 'bg-[#33d4ff] text-white border-[#33d4ff]'
                       : 'bg-white text-gray-600 border-gray-200'
@@ -94,7 +123,7 @@ export function TowTruckTypeSelector({
           </button>
         ))}
       </div>
-      {selectedTypes.length > 0 && (
+      {!isMobile && selectedTypes.length > 0 && (
         <p className="text-xs text-gray-500 mt-2">
           נבחרו {selectedTypes.length} סוגים
         </p>

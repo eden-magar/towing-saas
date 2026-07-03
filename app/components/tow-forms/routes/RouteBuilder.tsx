@@ -85,6 +85,8 @@ export interface RouteBuilderProps {
   saveContactByPointId?: Record<string, boolean>
   onSaveContactToggle?: (pointId: string) => void
   onContactSelected?: (pointId: string) => void
+  /** Mobile flag from parent (JS viewport check). Defaults false → desktop render path. */
+  isMobile?: boolean
 }
 
 // ==================== Helper Functions ====================
@@ -133,6 +135,7 @@ export function RouteBuilder({
   saveContactByPointId = {},
   onSaveContactToggle,
   onContactSelected,
+  isMobile = false,
 }: RouteBuilderProps) {
   const customerContactPickerEnabled = savedCustomerContacts !== undefined
   const [points, setPoints] = useState<RoutePoint[]>(() =>
@@ -879,7 +882,7 @@ export function RouteBuilder({
                           e.stopPropagation()
                           removePoint(point.id)
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        className={`${isMobile ? 'p-2.5' : 'p-1.5'} text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors`}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -896,7 +899,7 @@ export function RouteBuilder({
                 {isExpanded && (
                   <div className="divide-y divide-gray-100">
                     {/* 1 — סוג נקודה + כתובת (שורה אחת) */}
-                    <div className="flex items-center gap-2 p-3">
+                    <div className={isMobile ? 'flex flex-col items-stretch gap-2 p-3' : 'flex items-center gap-2 p-3'}>
                       {!isBase && (
                         <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0 divide-x divide-gray-200">
                           <button
@@ -944,7 +947,7 @@ export function RouteBuilder({
                         <button
                           type="button"
                           onClick={() => onPinDropClick?.(point.id)}
-                          className="shrink-0 px-3 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50"
+                          className={`shrink-0 px-3 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50${isMobile ? ' min-h-[44px]' : ''}`}
                         >
                           <MapPin size={16} className="text-red-500" />
                         </button>
@@ -1077,7 +1080,7 @@ export function RouteBuilder({
                     {/* 3 — רכבים: שני טורים */}
                     {!isBase && !point.isStopOnly && (
                       <div className="p-4">
-                        <div className="grid grid-cols-2 gap-3 items-stretch">
+                        <div className={isMobile ? 'grid grid-cols-1 gap-3 items-stretch' : 'grid grid-cols-2 gap-3 items-stretch'}>
                           {/* ימין — לאיסוף */}
                           <div className="rounded-xl border border-gray-200 p-3 flex flex-col gap-2 min-h-0">
                             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-gray-700">
@@ -1281,7 +1284,7 @@ export function RouteBuilder({
                                               vehiclesToDropoff: point.vehiclesToDropoff.filter((id) => id !== v.id)
                                             })
                                           }}
-                                          className="shrink-0 p-1 rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                                          className={`shrink-0 ${isMobile ? 'p-2.5' : 'p-1'} rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600`}
                                           aria-label="הסר מהורדה"
                                         >
                                           <X size={14} />
@@ -1301,7 +1304,7 @@ export function RouteBuilder({
 
                     {/* 4 — שירותים + הערות */}
                     {!isBase && (
-                      <div className="grid grid-cols-2 gap-3 p-4">
+                      <div className={isMobile ? 'grid grid-cols-1 gap-3 p-4' : 'grid grid-cols-2 gap-3 p-4'}>
                         {!point.isStopOnly && serviceSurchargesData.length > 0 && (
                           <div className="flex flex-col gap-2 min-w-0">
                             <span className="text-sm font-medium text-gray-500">שירותים נוספים</span>
@@ -1412,7 +1415,7 @@ export function RouteBuilder({
               <button
                 type="button"
                 onClick={() => setServicesModalPointId(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
               >
                 ✕
               </button>

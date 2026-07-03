@@ -43,8 +43,15 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     serviceSurchargesData,
     selectedLocationSurcharges, setSelectedLocationSurcharges,
     selectedServices, setSelectedServices,
+    manualSurcharges, setManualSurcharges,
     isHoliday, setIsHoliday,
     activeTimeSurchargesList,
+    routeStops,
+    addStop,
+    removeStop,
+    moveStopUp,
+    moveStopDown,
+    updateStop,
     // Price selection
     priceMode, setPriceMode,
     selectedPriceItem, setSelectedPriceItem,
@@ -69,6 +76,11 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     vehicleCode, setVehicleCode,
     vehicleData, setVehicleData,
     vehicleType, setVehicleType,
+    vehicleLookupNotFound, setVehicleLookupNotFound,
+    manualManufacturer, setManualManufacturer,
+    manualColor, setManualColor,
+    manualWeight, setManualWeight,
+    manualChassis, setManualChassis,
     selectedDefects, setSelectedDefects,
     requiredTruckTypes, setRequiredTruckTypes,
     truckTypeError,
@@ -239,6 +251,16 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                 onVehicleTypeChange={setVehicleType}
                 vehicleCode={vehicleCode}
                 onVehicleCodeChange={setVehicleCode}
+                vehicleLookupNotFound={vehicleLookupNotFound}
+                onVehicleLookupNotFoundChange={setVehicleLookupNotFound}
+                manualManufacturer={manualManufacturer}
+                onManualManufacturerChange={setManualManufacturer}
+                manualColor={manualColor}
+                onManualColorChange={setManualColor}
+                manualWeight={manualWeight}
+                onManualWeightChange={setManualWeight}
+                manualChassis={manualChassis}
+                onManualChassisChange={setManualChassis}
                 selectedDefects={selectedDefects}
                 onDefectsChange={setSelectedDefects}
                 pickupAddress={pickupAddress}
@@ -246,6 +268,12 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                 dropoffAddress={dropoffAddress}
                 onDropoffAddressChange={setDropoffAddress}
                 onPinDropClick={(field) => setPinDropModal({ isOpen: true, field })}
+                routeStops={routeStops}
+                addStop={addStop}
+                removeStop={removeStop}
+                moveStopUp={moveStopUp}
+                moveStopDown={moveStopDown}
+                updateStop={updateStop}
                 distance={distance}
                 distanceLoading={distanceLoading}
                 basePriceList={basePriceList}
@@ -259,6 +287,8 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                 locationSurchargesData={locationSurchargesData}
                 selectedLocationSurcharges={selectedLocationSurcharges}
                 onLocationSurchargesChange={setSelectedLocationSurcharges}
+                manualSurcharges={manualSurcharges}
+                onManualSurchargesChange={setManualSurcharges}
                 serviceSurchargesData={serviceSurchargesData}
                 selectedServices={selectedServices}
                 onSelectedServicesChange={setSelectedServices}
@@ -525,13 +555,21 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
         onClose={() => setPinDropModal({ isOpen: false, field: null })}
         onConfirm={handlePinDropConfirm}
         initialAddress={
-          pinDropModal.field === 'pickup' ? pickupAddress : 
-          pinDropModal.field === 'dropoff' ? dropoffAddress : 
-          routePoints.find(p => p.id === pinDropModal.field)?.address 
-            ? { address: routePoints.find(p => p.id === pinDropModal.field)?.address || '', lat: routePoints.find(p => p.id === pinDropModal.field)?.addressData?.lat, lng: routePoints.find(p => p.id === pinDropModal.field)?.addressData?.lng }
-            : undefined
+          pinDropModal.field?.startsWith('routestop:')
+            ? routeStops.find((s) => `routestop:${s.id}` === pinDropModal.field)?.address
+            : pinDropModal.field === 'pickup' ? pickupAddress
+            : pinDropModal.field === 'dropoff' ? dropoffAddress
+            : routePoints.find(p => p.id === pinDropModal.field)?.address
+              ? { address: routePoints.find(p => p.id === pinDropModal.field)?.address || '', lat: routePoints.find(p => p.id === pinDropModal.field)?.addressData?.lat, lng: routePoints.find(p => p.id === pinDropModal.field)?.addressData?.lng }
+              : undefined
         }
-        title={pinDropModal.field === 'pickup' ? 'בחר מיקום מוצא' : pinDropModal.field === 'dropoff' ? 'בחר מיקום יעד' : 'בחר מיקום'}
+        title={
+          pinDropModal.field?.startsWith('routestop:')
+            ? 'בחר מיקום עצירה'
+            : pinDropModal.field === 'pickup' ? 'בחר מיקום מוצא'
+            : pinDropModal.field === 'dropoff' ? 'בחר מיקום יעד'
+            : 'בחר מיקום'
+        }
       />
 
       {/* Success Modal */}

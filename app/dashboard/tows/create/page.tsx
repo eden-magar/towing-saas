@@ -54,6 +54,7 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { StorageTakeOutConfirmModal } from '../../../components/tow-forms/StorageTakeOutConfirmModal'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
+import { TowCreateWizard } from '../../../components/tow-wizard/TowCreateWizard'
 import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
@@ -425,6 +426,16 @@ function CreateTowForm({
   // Local state for new form
   const [customerTab, setCustomerTab] = useState<'existing' | 'casual'>('existing')
   const [customerSearch, setCustomerSearch] = useState('')
+
+  // זיהוי מובייל — mirror of app/dashboard/calendar/page.tsx isMobile pattern.
+  // Defaults to false so SSR/first paint render the desktop path (no hydration mismatch).
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const isBusinessCustomer =
     customerTab === 'existing' &&
@@ -854,7 +865,7 @@ function CreateTowForm({
             <button
               type="button"
               onClick={() => removeStop(stop.id)}
-              className="p-1 text-gray-400 hover:text-red-500 shrink-0"
+              className={isMobile ? 'p-2.5 text-gray-400 hover:text-red-500 shrink-0' : 'p-1 text-gray-400 hover:text-red-500 shrink-0'}
               aria-label="הסר נקודת עצירה"
             >
               <X className="w-4 h-4" />
@@ -1741,14 +1752,14 @@ function CreateTowForm({
             <div className="flex items-center gap-2">
               <Link
                 href="/dashboard/tows"
-                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
+                className={isMobile ? 'p-2.5 text-gray-500 hover:bg-gray-100 rounded-lg' : 'p-2 text-gray-500 hover:bg-gray-100 rounded-lg'}
               >
                 <ArrowRight size={20} />
               </Link>
               <button
                 type="button"
                 onClick={handleBackToCalendar}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                className={isMobile ? 'inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors' : 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors'}
               >
                 <Calendar className="w-3.5 h-3.5" />
                 חזרה ליומן
@@ -2180,7 +2191,7 @@ function CreateTowForm({
                                     type="button"
                                     onClick={() => moveStopUp(stop.id)}
                                     disabled={index === 0}
-                                    className="w-[30px] h-[30px] inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300"
+                                    className={`${isMobile ? 'w-10 h-10' : 'w-[30px] h-[30px]'} inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300`}
                                     aria-label="הזז למעלה"
                                   >
                                     <ChevronUp className="w-4 h-4" />
@@ -2189,7 +2200,7 @@ function CreateTowForm({
                                     type="button"
                                     onClick={() => moveStopDown(stop.id)}
                                     disabled={index === routeStops.length - 1}
-                                    className="w-[30px] h-[30px] inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300"
+                                    className={`${isMobile ? 'w-10 h-10' : 'w-[30px] h-[30px]'} inline-flex items-center justify-center rounded-lg border border-gt-border bg-gt-surface-subtle text-gt-text-secondary hover:bg-gt-brand-subtle hover:border-gt-brand hover:text-gt-brand disabled:text-gray-300 disabled:bg-transparent disabled:border-gray-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-100 disabled:hover:text-gray-300`}
                                     aria-label="הזז למטה"
                                   >
                                     <ChevronDown className="w-4 h-4" />
@@ -2264,13 +2275,13 @@ function CreateTowForm({
 
                     {showDefectsModal && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-[480px]">
+                        <div className={isMobile ? 'bg-white rounded-2xl shadow-2xl w-full max-w-full' : 'bg-white rounded-2xl shadow-2xl w-[480px]'}>
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
                             <button
                               type="button"
                               onClick={() => setShowDefectsModal(false)}
-                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                              className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
                             >
                               ✕
                             </button>
@@ -2346,7 +2357,7 @@ function CreateTowForm({
                             <button
                               type="button"
                               onClick={() => setShowTruckModal(false)}
-                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                              className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
                             >
                               ✕
                             </button>
@@ -2402,7 +2413,7 @@ function CreateTowForm({
                             <button
                               type="button"
                               onClick={() => setShowStorageModal(false)}
-                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                              className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
                             >
                               ✕
                             </button>
@@ -2475,13 +2486,13 @@ function CreateTowForm({
                   <>
                     {showDefectsExchangeModal && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-[480px]">
+                        <div className={isMobile ? 'bg-white rounded-2xl shadow-2xl w-full max-w-full' : 'bg-white rounded-2xl shadow-2xl w-[480px]'}>
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
                             <button
                               type="button"
                               onClick={() => setShowDefectsExchangeModal(false)}
-                              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                              className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
                             >
                               ✕
                             </button>
@@ -2554,7 +2565,7 @@ function CreateTowForm({
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקין</h3>
-                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className={`text-gray-400 hover:text-gray-600 text-xl${isMobile ? ' p-2 -m-2' : ''}`}>✕</button>
                           </div>
                           <div className="p-4">
                             <ServiceSurchargeSelector
@@ -2575,7 +2586,7 @@ function CreateTowForm({
                         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
                           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                             <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקול</h3>
-                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className={`text-gray-400 hover:text-gray-600 text-xl${isMobile ? ' p-2 -m-2' : ''}`}>✕</button>
                           </div>
                           <div className="p-4">
                             <ServiceSurchargeSelector
@@ -3270,6 +3281,7 @@ function CreateTowForm({
                   <>
                     <RouteBuilder
                       key={`custom-${routeSeedVersion}`}
+                      isMobile={isMobile}
                       companyId={companyId || ''}
                       customerId={selectedCustomerId}
                       customerName={customerName}
@@ -4040,7 +4052,7 @@ function CreateTowForm({
               <button
                 type="button"
                 onClick={() => setStopContactModalId(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
               >
                 ✕
               </button>
@@ -4127,7 +4139,7 @@ function CreateTowForm({
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="font-bold text-gray-800 text-base">בחר רכב תקין מאחסנה</h3>
-              <button type="button" onClick={() => setShowWorkingStorageModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+              <button type="button" onClick={() => setShowWorkingStorageModal(false)} className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}>✕</button>
             </div>
             <div className="p-4 flex flex-col gap-2">
               {customerStoredVehicles
@@ -4476,6 +4488,45 @@ export default function CreateTowPage() {
   const dateParam = searchParams.get('date')
   const timeParam = searchParams.get('time')
   const driverParam = searchParams.get('driver')
+  const storedVehicleParam = searchParams.get('storedVehicle')
+
+  // Resolve viewport before rendering EITHER tree, so neither the desktop form
+  // nor the mobile wizard flashes on first paint. Mirrors the isMobile pattern
+  // in calendar/page.tsx (window.innerWidth < 640 + resize listener).
+  const [isMobile, setIsMobile] = useState<boolean | null>(null)
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // The wizard (Part 1) only handles a pure fresh create. Edit / duplicate /
+  // stored-vehicle prefill flows keep the existing desktop form, even on mobile.
+  const isFreshCreate =
+    !editTowId && !duplicateFromId && !duplicateFromEventId && !storedVehicleParam
+
+  if (isMobile === null) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-gt-brand" />
+      </div>
+    )
+  }
+
+  if (isMobile && isFreshCreate) {
+    return (
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-gray-500">טוען...</div>
+          </div>
+        }
+      >
+        <TowCreateWizard />
+      </Suspense>
+    )
+  }
 
   return (
     <Suspense

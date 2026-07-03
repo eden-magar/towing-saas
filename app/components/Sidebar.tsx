@@ -50,6 +50,78 @@ export default function Sidebar() {
     window.location.href = '/login'
   }
 
+  // Shared inner content (header + nav + logout) rendered by both the static
+  // desktop sidebar and the mobile off-canvas panel.
+  const sidebarInner = (
+    <>
+      {/* כותרת */}
+      <div className={`p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0 ${collapsed ? 'lg:justify-center' : ''}`}>
+        {!collapsed && <h1 className="text-lg font-bold text-[#33d4ff] truncate">מערכת גרירות</h1>}
+        <div className="flex items-center gap-1">
+          {/* כפתור קיפול — דסקטופ בלבד */}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="hidden lg:flex p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            title={collapsed ? 'הרחב תפריט' : 'כווץ תפריט'}
+          >
+            {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
+          {/* כפתור סגירה — מובייל בלבד */}
+          <button onClick={() => setIsOpen(false)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* ניווט */}
+      <nav className="flex-1 p-2 overflow-y-auto">
+        <ul className="space-y-0.5">
+          {menuItems.map((item) => {
+            const isActive = pathname === item.href ||
+              (item.href !== '/dashboard' && pathname?.startsWith(item.href))
+            const Icon = item.icon
+
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  title={collapsed ? item.label : undefined}
+                  className={`flex items-center gap-3 rounded-lg transition-colors
+                    ${collapsed ? 'lg:justify-center px-2 py-2.5' : 'px-3 py-2.5'}
+                    ${isActive ? 'bg-[#33d4ff] text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
+                  `}
+                >
+                  <Icon size={18} className="flex-shrink-0" />
+                  {!collapsed && (
+                    <>
+                      <span className="text-sm">{item.label}</span>
+                      {isActive && <ChevronLeft size={14} className="mr-auto" />}
+                    </>
+                  )}
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </nav>
+
+      {/* התנתקות */}
+      <div className="p-2 border-t border-gray-200 flex-shrink-0">
+        <button
+          onClick={handleLogout}
+          title={collapsed ? 'התנתקות' : undefined}
+          className={`flex items-center gap-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors
+            ${collapsed ? 'lg:justify-center px-2 py-2.5' : 'px-3 py-2.5'}
+          `}
+        >
+          <LogOut size={18} className="flex-shrink-0" />
+          {!collapsed && <span className="text-sm">התנתקות</span>}
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <>
       {/* מובייל: header */}
@@ -64,87 +136,34 @@ export default function Sidebar() {
       </div>
       <div className="lg:hidden h-16"></div>
 
-      {/* מובייל: overlay */}
-      {isOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/50 z-50" onClick={() => setIsOpen(false)} />
-      )}
-
-      {/* סיידבר */}
-      <aside className={`
-        fixed lg:static inset-y-0 right-0 z-50
-        bg-white flex flex-col border-l border-gray-200 shadow-lg lg:shadow-sm
-        transform transition-all duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0 invisible lg:visible'}
-        ${collapsed ? 'lg:w-16' : 'lg:w-64'}
-        w-72
-      `}>
-
-        {/* כותרת */}
-        <div className={`p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0 ${collapsed ? 'lg:justify-center' : ''}`}>
-          {!collapsed && <h1 className="text-lg font-bold text-[#33d4ff] truncate">מערכת גרירות</h1>}
-          <div className="flex items-center gap-1">
-            {/* כפתור קיפול — דסקטופ בלבד */}
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="hidden lg:flex p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              title={collapsed ? 'הרחב תפריט' : 'כווץ תפריט'}
-            >
-              {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-            </button>
-            {/* כפתור סגירה — מובייל בלבד */}
-            <button onClick={() => setIsOpen(false)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* ניווט */}
-        <nav className="flex-1 p-2 overflow-y-auto">
-          <ul className="space-y-0.5">
-            {menuItems.map((item) => {
-              const isActive = pathname === item.href ||
-                (item.href !== '/dashboard' && pathname?.startsWith(item.href))
-              const Icon = item.icon
-
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    onClick={() => setIsOpen(false)}
-                    title={collapsed ? item.label : undefined}
-                    className={`flex items-center gap-3 rounded-lg transition-colors
-                      ${collapsed ? 'lg:justify-center px-2 py-2.5' : 'px-3 py-2.5'}
-                      ${isActive ? 'bg-[#33d4ff] text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
-                    `}
-                  >
-                    <Icon size={18} className="flex-shrink-0" />
-                    {!collapsed && (
-                      <>
-                        <span className="text-sm">{item.label}</span>
-                        {isActive && <ChevronLeft size={14} className="mr-auto" />}
-                      </>
-                    )}
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
-
-        {/* התנתקות */}
-        <div className="p-2 border-t border-gray-200 flex-shrink-0">
-          <button
-            onClick={handleLogout}
-            title={collapsed ? 'התנתקות' : undefined}
-            className={`flex items-center gap-3 w-full text-gray-600 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors
-              ${collapsed ? 'lg:justify-center px-2 py-2.5' : 'px-3 py-2.5'}
-            `}
-          >
-            <LogOut size={18} className="flex-shrink-0" />
-            {!collapsed && <span className="text-sm">התנתקות</span>}
-          </button>
-        </div>
+      {/* דסקטופ: סיידבר סטטי (ללא עטיפת fixed) */}
+      <aside
+        className={`hidden lg:flex lg:static lg:flex-col bg-white border-l border-gray-200 lg:shadow-sm ${
+          collapsed ? 'lg:w-16' : 'lg:w-64'
+        }`}
+      >
+        {sidebarInner}
       </aside>
+
+      {/* מובייל: עטיפת fixed שממוקמת מול ה-viewport; overflow-hidden שלה מגזיר את
+          הפאנל המוסט מחוץ למסך כך שהמצב הסגור לא מוסיף רוחב גלילה אופקי כלל. */}
+      <div className="lg:hidden fixed inset-0 z-50 overflow-hidden pointer-events-none">
+        {/* רקע כהה — לחיצה סוגרת */}
+        {isOpen && (
+          <div
+            className="absolute inset-0 bg-black/50 pointer-events-auto"
+            onClick={() => setIsOpen(false)}
+          />
+        )}
+        {/* פאנל מחליק */}
+        <aside
+          className={`absolute inset-y-0 right-0 w-72 bg-white flex flex-col border-l border-gray-200 shadow-lg transform transition-all duration-300 ease-in-out ${
+            isOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full'
+          }`}
+        >
+          {sidebarInner}
+        </aside>
+      </div>
     </>
   )
 }

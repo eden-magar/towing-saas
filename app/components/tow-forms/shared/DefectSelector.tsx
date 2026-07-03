@@ -7,6 +7,7 @@ interface DefectSelectorProps {
   label?: string
   /** Chip grid + אחר field only (for embedding in a parent modal). */
   variant?: 'default' | 'chipsOnly'
+  isMobile?: boolean
 }
 
 const DEFAULT_DEFECTS = [
@@ -26,6 +27,7 @@ export function DefectSelector({
   onChange, 
   label = 'תקלה',
   variant = 'default',
+  isMobile = false,
 }: DefectSelectorProps) {
   
   const [otherText, setOtherText] = useState('')
@@ -109,23 +111,50 @@ export function DefectSelector({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      {!isMobile && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      )}
       {/* כפתור מובייל */}
-      <button
-        type="button"
-        onClick={() => setShowModal(true)}
-        className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
-      >
-        <span className="text-gray-600">
-          {selectedDefects.length > 0 ? selectedDefects.join(', ') : 'בחר תקלות...'}
-        </span>
-        <span className="text-gray-400">▼</span>
-      </button>
+      {isMobile ? (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className={`sm:hidden relative flex items-center justify-center w-full min-h-[48px] rounded-xl border text-sm font-medium transition-colors ${
+            selectedDefects.length > 0
+              ? 'border-[#33d4ff] bg-[#33d4ff]/5 text-gray-800'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          <span>תקלות</span>
+          {selectedDefects.length > 0 && (
+            <span className="absolute top-1.5 left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#33d4ff] text-white text-[11px] font-bold flex items-center justify-center">
+              {selectedDefects.length}
+            </span>
+          )}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+        >
+          <span className="text-gray-600">
+            {selectedDefects.length > 0 ? selectedDefects.join(', ') : 'בחר תקלות...'}
+          </span>
+          <span className="text-gray-400">▼</span>
+        </button>
+      )}
 
       {/* מודל מובייל */}
       {showModal && (
-        <div className="sm:hidden fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white w-full rounded-t-2xl max-h-[80vh] overflow-auto">
+        <div
+          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
               <h3 className="font-bold text-gray-800">{label}</h3>
               <button type="button" onClick={() => setShowModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
@@ -136,7 +165,7 @@ export function DefectSelector({
                   key={`modal-${defect}`}
                   type="button"
                   onClick={() => toggleDefect(defect)}
-                  className={`px-4 py-2.5 rounded-xl text-sm transition-colors ${
+                  className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm transition-colors ${
                     isSelected(defect) ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
@@ -151,7 +180,11 @@ export function DefectSelector({
                   value={otherText}
                   onChange={(e) => updateOtherText(e.target.value)}
                   placeholder="פרט את התקלה..."
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  className={
+                    isMobile
+                      ? 'w-full px-4 h-12 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
+                      : 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
+                  }
                 />
               </div>
             )}
@@ -178,7 +211,7 @@ export function DefectSelector({
       </div>
       
       {/* שדה טקסט לאחר */}
-      {isSelected('אחר') && (
+      {!isMobile && isSelected('אחר') && (
         <div className="mt-3">
           <input
             type="text"

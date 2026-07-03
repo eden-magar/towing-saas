@@ -25,6 +25,8 @@ export interface TimeInputProps
   hasError?: boolean
   showNow?: boolean
   nowLabel?: string
+  /** When true, renders a taller touch-friendly input. Default false = unchanged. */
+  isMobile?: boolean
 }
 
 export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
@@ -35,6 +37,7 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
       hasError: hasErrorProp,
       showNow = false,
       nowLabel = 'עכשיו',
+      isMobile = false,
       className = '',
       disabled,
       id: idProp,
@@ -183,7 +186,7 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
           focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
           disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
           transition-colors duration-150
-          ${className}
+          ${isMobile ? 'h-12 ' : ''}${className}
         `.replace(/\s+/g, ' ').trim()}
         aria-invalid={hasError || undefined}
         {...props}

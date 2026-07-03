@@ -37,6 +37,8 @@ export interface DateInputProps
   todayLabel?: string
   min?: string
   max?: string
+  /** When true, renders a taller touch-friendly input + calendar button. Default false = unchanged. */
+  isMobile?: boolean
 }
 
 export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
@@ -49,6 +51,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       todayLabel = 'היום',
       min,
       max,
+      isMobile = false,
       className = '',
       disabled,
       id: idProp,
@@ -317,6 +320,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
             disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
             transition-colors duration-150
+            ${isMobile ? 'h-12 ' : ''}
           `.replace(/\s+/g, ' ').trim()}
           aria-invalid={hasError || undefined}
           {...props}
@@ -331,7 +335,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             if (disabled) return
             setCalendarOpenState(!calendarOpenRef.current)
           }}
-          className="shrink-0 p-2 rounded-lg border border-gt-border text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className={`shrink-0 p-2 rounded-lg border border-gt-border text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors${isMobile ? ' h-12 flex items-center justify-center' : ''}`}
         >
           <Calendar size={16} aria-hidden />
         </button>
