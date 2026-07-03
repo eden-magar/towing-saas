@@ -5,6 +5,10 @@ import { Wallet, Plus, Pencil } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { FormCard } from '../../ui'
 import { TimeSurcharge } from '../../../lib/queries/price-lists'
+import {
+  getActiveTimeSurchargeSummary,
+  getTimeSurchargeLabel,
+} from '../../../lib/utils/time-surcharge-summary'
 
 type Form = ReturnType<typeof useTowForm>
 
@@ -48,23 +52,13 @@ function TimeSurchargesSection({
     (s) => s.is_active && s.day_type !== 'holiday'
   )
 
-  const surchargeLabel = (s: TimeSurcharge) =>
-    s.label?.trim() ||
-    s.name?.trim() ||
-    (s.time_start && s.time_end ? `${s.time_start}-${s.time_end}` : 'תוספת זמן')
+  const surchargeLabel = getTimeSurchargeLabel
 
   // Effective active surcharge for the collapsed summary — only the highest applies.
-  const activeItems: { label: string; percent: number }[] = [
-    ...nonHolidaySurcharges
-      .filter((s) => isActive(s))
-      .map((s) => ({ label: surchargeLabel(s), percent: s.surcharge_percent })),
-    ...(isHoliday && holidaySurcharge
-      ? [{ label: 'חג', percent: holidaySurcharge.surcharge_percent }]
-      : []),
-  ]
-  const topActive = activeItems.reduce<{ label: string; percent: number } | null>(
-    (max, cur) => (!max || cur.percent > max.percent ? cur : max),
-    null
+  const topActive = getActiveTimeSurchargeSummary(
+    timeSurchargesData,
+    activeTimeSurchargesList,
+    isHoliday
   )
 
   const [expanded, setExpanded] = useState(false)

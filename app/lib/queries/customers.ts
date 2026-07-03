@@ -40,30 +40,45 @@ export interface CustomerListItem {
 // ==================== שליפת לקוחות ====================
 
 export async function getCustomersLite(companyId: string): Promise<CustomerListItem[]> {
-  const { data: customerCompanies, error } = await supabase
-    .from('customer_company')
-    .select(`
-      customer:customers (
-        id,
-        customer_type,
-        name,
-        id_number,
-        phone,
-        email,
-        address
-      )
-    `)
-    .eq('company_id', companyId)
-    .eq('is_active', true)
+  const all: CustomerListItem[] = []
+  let from = 0
 
-  if (error) {
-    console.error('Error fetching customers (lite):', error)
-    throw error
+  while (true) {
+    const { data: customerCompanies, error } = await supabase
+      .from('customer_company')
+      .select(`
+        customer:customers (
+          id,
+          customer_type,
+          name,
+          id_number,
+          phone,
+          email,
+          address
+        )
+      `)
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('name', { ascending: true, foreignTable: 'customers' })
+      .range(from, from + COUNT_PAGE_SIZE - 1)
+
+    if (error) {
+      console.error('Error fetching customers (lite):', error)
+      throw error
+    }
+
+    const rows = customerCompanies ?? []
+    if (rows.length === 0) break
+
+    for (const cc of rows) {
+      all.push(cc.customer as any as CustomerListItem)
+    }
+
+    if (rows.length < COUNT_PAGE_SIZE) break
+    from += COUNT_PAGE_SIZE
   }
 
-  if (!customerCompanies || customerCompanies.length === 0) return []
-
-  return customerCompanies.map((cc) => cc.customer as any as CustomerListItem)
+  return all
 }
 
 async function loadTowCountsByCustomer(

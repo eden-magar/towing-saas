@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Plus, Minus, Check } from 'lucide-react'
+import { Plus, Minus } from 'lucide-react'
 import { ServiceSurcharge } from '../../../lib/queries/price-lists'
 import { ManualSurchargeSection } from './ManualSurchargeSection'
 import { ManualSurcharge, sanitizeManualSurcharges } from '../../../lib/utils/manual-surcharge'
@@ -112,19 +112,13 @@ export function ServiceSurchargeSelector({
     return `₪${service.price}`
   }
 
-  // בדיקה אם יש שירותים שנבחרו עם פקדים נוספים
-  const selectedWithControls = selectedServices.filter(s => {
-    const service = activeServices.find(srv => srv.id === s.id)
-    return service && (service.price_type === 'per_unit' || service.price_type === 'manual')
-  })
-
   return (
     <div>
       {!isMobile && (
         <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       )}
       
-      {/* כפתור מובייל */}
+      {/* Compact trigger — opens the shared services modal (mobile + desktop) */}
       {isMobile ? (
         <button
           type="button"
@@ -146,25 +140,29 @@ export function ServiceSurchargeSelector({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+          className={`w-full p-3 border rounded-xl text-sm text-right flex items-center justify-between transition-colors ${
+            servicesSelectionCount > 0
+              ? 'border-[#33d4ff] bg-[#33d4ff]/5 text-gray-800'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
         >
-          <span className="text-gray-600">
-            {selectedServices.length > 0 
-              ? activeServices.filter(s => isSelected(s.id)).map(s => s.label).join(', ')
-              : 'בחר שירותים...'}
+          <span>
+            {servicesSelectionCount > 0
+              ? `${servicesSelectionCount} שירותים נבחרים`
+              : 'אין שירותים'}
           </span>
-          <span className="text-gray-400">▼</span>
+          <span className="text-gray-400">▾</span>
         </button>
       )}
 
-      {/* מודל מובייל */}
+      {/* Services modal — shared by mobile + desktop */}
       {showModal && (
         <div
-          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
           onClick={() => setShowModal(false)}
         >
           <div
-            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
+            className="bg-white w-full max-w-md sm:max-w-lg max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
@@ -238,115 +236,6 @@ export function ServiceSurchargeSelector({
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* דסקטופ - רשימת שורות אחידה (גלילה פנימית כשהרשימה ארוכה) */}
-      <div className="hidden sm:block border border-gray-200 rounded-xl overflow-y-auto max-h-72 divide-y divide-gray-100">
-        {activeServices.map((service) => {
-          const selected = isSelected(service.id)
-
-          return (
-            <button
-              key={service.id}
-              type="button"
-              onClick={() => toggleService(service)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-right transition-colors ${
-                selected ? 'bg-[#33d4ff]/5' : 'bg-white hover:bg-gray-50'
-              }`}
-            >
-              <span
-                className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                  selected ? 'bg-[#33d4ff] border-[#33d4ff] text-white' : 'border-gray-300 bg-white'
-                }`}
-              >
-                {selected && <Check size={14} />}
-              </span>
-              <span
-                className={`flex-1 min-w-0 text-sm leading-snug whitespace-normal break-words ${
-                  selected ? 'text-gray-800 font-medium' : 'text-gray-700'
-                }`}
-              >
-                {service.label}
-              </span>
-              <span
-                className={`shrink-0 text-sm font-medium ${
-                  selected ? 'text-[#33d4ff]' : 'text-gray-500'
-                }`}
-              >
-                {getPriceDisplay(service)}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-      
-      {/* פקדים נוספים לשירותים שנבחרו - בתיבה אחת */}
-      {!isMobile && selectedWithControls.length > 0 && (
-        <div className="mt-3 p-4 bg-cyan-50 border border-cyan-200 rounded-xl space-y-3">
-          {selectedWithControls.map(selected => {
-            const service = activeServices.find(s => s.id === selected.id)
-            if (!service) return null
-            
-            // per_unit - בורר כמות
-            if (service.price_type === 'per_unit') {
-              return (
-                <div key={service.id} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">
-                    {service.label}
-                    {service.unit_label && (
-                      <span className="text-gray-500 mr-1">(לכל {service.unit_label})</span>
-                    )}
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-white rounded-lg border border-gray-200">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(service.id, (selected.quantity || 1) - 1)}
-                        className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-r-lg border-l border-gray-200"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="w-10 text-center text-sm font-medium">
-                        {selected.quantity || 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(service.id, (selected.quantity || 1) + 1)}
-                        className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-l-lg border-r border-gray-200"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                    <span className="text-sm font-bold text-gray-800 w-16 text-left">
-                      ₪{service.price * (selected.quantity || 1)}
-                    </span>
-                  </div>
-                </div>
-              )
-            }
-            
-            // manual - הזנת מחיר
-            if (service.price_type === 'manual') {
-              return (
-                <div key={service.id} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">{service.label}</span>
-                  <div className="relative">
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
-                    <input
-                      type="number"
-                      value={selected.manualPrice || ''}
-                      onChange={(e) => updateManualPrice(service.id, Number(e.target.value))}
-                      placeholder="0"
-                      className="w-24 pr-7 pl-2 py-1.5 border border-gray-200 rounded-lg text-sm text-left focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white"
-                    />
-                  </div>
-                </div>
-              )
-            }
-            
-            return null
-          })}
         </div>
       )}
     </div>

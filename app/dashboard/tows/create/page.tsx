@@ -65,6 +65,10 @@ import {
   persistCalendarViewForReturn,
 } from '../../../lib/utils/calendar-view-session'
 import { mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
+import {
+  getActiveTimeSurchargeSummary,
+  getTimeSurchargeLabel,
+} from '../../../lib/utils/time-surcharge-summary'
 import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
@@ -931,10 +935,10 @@ function CreateTowForm({
           <button
             type="button"
             onClick={() => setStartFromBase(!startFromBase)}
-            className={`inline-flex px-3 py-1.5 rounded-lg text-sm ${
+            className={`inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
               startFromBase
-                ? 'bg-gt-brand text-white'
-                : 'bg-white text-gray-700 border border-gray-300 font-medium'
+                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-gray-50 text-gray-500'
             }`}
           >
             יציאה מהחניון
@@ -967,10 +971,10 @@ function CreateTowForm({
                     })
                   }
                 }}
-                className={`inline-flex px-3 py-1.5 rounded-lg text-sm ${
+                className={`inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
                   dropoffToStorage
-                    ? 'bg-gt-brand text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 font-medium'
+                    ? 'border-purple-300 bg-purple-50 text-purple-700'
+                    : 'border-gray-200 bg-gray-50 text-gray-500'
                 }`}
               >
                 הורדה לאחסנה
@@ -1638,15 +1642,15 @@ function CreateTowForm({
     if (towType !== 'single' && towType !== 'exchange') return null
     const buttonClass =
       variant === 'compact'
-        ? `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border w-fit transition-colors ${
+        ? `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border w-fit font-medium transition-colors ${
             chargeDeadheadReturn
-              ? 'bg-gt-brand text-white border-gt-brand'
-              : 'border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-600'
+              ? 'border-teal-300 bg-teal-50 text-teal-700'
+              : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-teal-300 hover:text-teal-600'
           }`
-        : `inline-flex px-3 py-1.5 rounded-lg text-sm ${
+        : `inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
             chargeDeadheadReturn
-              ? 'bg-gt-brand text-white'
-              : 'bg-white text-gray-700 border border-gray-300 font-medium'
+              ? 'border-teal-300 bg-teal-50 text-teal-700'
+              : 'border-gray-200 bg-gray-50 text-gray-500'
           }`
     return (
       <div className="space-y-1.5">
@@ -1789,7 +1793,7 @@ function CreateTowForm({
         </div>
       </header>
 
-      <div className="px-4 py-4 sm:py-6 flex flex-col items-center gap-6">
+      <div className="px-4 py-4 sm:py-6 flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
         <div className="w-[680px] max-w-full">
           {/* Section 1 — לקוח */}
           <CreateCustomerSection
@@ -2255,23 +2259,18 @@ function CreateTowForm({
                     </FormSubcard>
 
                     {/* Block 4 — תוספות זמן */}
-                    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-4">
-                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="font-semibold text-gray-700 text-sm">תוספות זמן</h3>
-                      </div>
-                      <div className="p-4">
-                        <TimeSurchargesSection
-                          timeSurchargesData={displayTimeSurcharges}
-                          towDate={towDate}
-                          towTime={towTime}
-                          isHoliday={isHoliday}
-                          setIsHoliday={setIsHoliday}
-                          activeTimeSurchargesList={activeTimeSurchargesList}
-                          setActiveTimeSurchargesList={setActiveTimeSurchargesList}
-                          setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
-                        />
-                      </div>
-                    </div>
+                    <FormSubcard title="תוספות זמן">
+                      <TimeSurchargesSection
+                        timeSurchargesData={displayTimeSurcharges}
+                        towDate={towDate}
+                        towTime={towTime}
+                        isHoliday={isHoliday}
+                        setIsHoliday={setIsHoliday}
+                        activeTimeSurchargesList={activeTimeSurchargesList}
+                        setActiveTimeSurchargesList={setActiveTimeSurchargesList}
+                        setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
+                      />
+                    </FormSubcard>
 
                     {showDefectsModal && (
                       <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -3480,7 +3479,7 @@ function CreateTowForm({
                                 key={idx}
                                 className={
                                   item.bold
-                                    ? 'font-bold text-base text-gray-900'
+                                    ? 'text-2xl font-bold text-gray-900'
                                     : 'text-gray-500'
                                 }
                               >
@@ -3499,7 +3498,7 @@ function CreateTowForm({
                         <p>בסיס + מרחק + תוספות</p>
                         <p>לפני מע״מ: ₪{(finalPrice / 1.18).toFixed(2)}</p>
                         <p>מע״מ 18%: ₪{((finalPrice / 1.18) * 0.18).toFixed(2)}</p>
-                        <p className="font-bold">סה״כ: ₪{finalPrice.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-gray-900">סה״כ: ₪{finalPrice.toFixed(2)}</p>
                       </>
                     )}
                     {/* הנחה / תוספת ידנית */}
@@ -4002,7 +4001,7 @@ function CreateTowForm({
                         defectiveVehicleData?.data?.model ||
                         ''}
                     </p>
-                    <p className="font-bold mt-2">₪{finalPrice}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-2">₪{finalPrice}</p>
                   </div>
                   <button
                     type="button"
@@ -4026,7 +4025,7 @@ function CreateTowForm({
           <aside className="hidden lg:block w-[200px] flex-shrink-0 sticky top-24 self-start">
             <div className="bg-white rounded-xl border border-gray-300 p-4 shadow-sm">
               <p className="text-xs text-gray-500 mb-1">מחיר</p>
-              <p className="text-xl font-bold">₪{finalPrice}</p>
+              <p className="text-2xl font-bold text-gray-900">₪{finalPrice}</p>
               <p className="text-sm text-gray-600 mt-2">{customerName}</p>
               <p className="text-xs text-gray-500">
                 {towDate} {towTime}
@@ -4383,50 +4382,80 @@ function TimeSurchargesSection({
   const nonHolidaySurcharges = timeSurchargesData.filter(
     (s) => s.is_active && s.day_type !== 'holiday'
   )
+
+  // Collapsed summary — only the highest active surcharge applies (shared with mobile).
+  const topActive = getActiveTimeSurchargeSummary(
+    timeSurchargesData,
+    activeTimeSurchargesList,
+    isHoliday
+  )
+
+  const [expanded, setExpanded] = useState(false)
+
   return (
     <div>
-      <p className="text-sm font-medium text-gray-700 mb-2">
-        תוספות זמן ומועד
-      </p>
-      <p className="text-xs text-gray-500 mb-2">
-        מופעלת תוספת אחת בלבד — הגבוהה מביניהן
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {nonHolidaySurcharges.map((s) => {
-          const active = isActive(s)
-          const chipLabel =
-            s.label?.trim() ||
-            s.name?.trim() ||
-            (s.time_start && s.time_end ? `${s.time_start}-${s.time_end}` : 'תוספת זמן')
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => toggleSurcharge(s)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                active
-                  ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200 font-medium'
-                  : 'border border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600'
-              }`}
-            >
-              {chipLabel} ({s.surcharge_percent}%)
-            </button>
-          )
-        })}
-        {holidaySurcharge && (
+      {!expanded ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm text-gray-500">
+            {topActive ? (
+              <>
+                תוספת פעילה:{' '}
+                <span className="text-gray-700 font-medium">
+                  {topActive.label} ({topActive.percent}%)
+                </span>
+              </>
+            ) : (
+              'אין תוספת זמן פעילה'
+            )}
+          </p>
           <button
             type="button"
-            onClick={() => setIsHoliday(!isHoliday)}
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              isHoliday
-                ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200 font-medium'
-                : 'border border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600'
-            }`}
+            onClick={() => setExpanded(true)}
+            className="shrink-0 text-sm font-medium text-gt-brand"
           >
-            חג ({holidaySurcharge.surcharge_percent}%)
+            שנה סוג תוספת
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div>
+          <p className="text-xs text-gray-500 mb-2">
+            מופעלת תוספת אחת בלבד — הגבוהה מביניהן
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {nonHolidaySurcharges.map((s) => {
+              const active = isActive(s)
+              const chipLabel = getTimeSurchargeLabel(s)
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleSurcharge(s)}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    active
+                      ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200 font-medium'
+                      : 'border border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                  }`}
+                >
+                  {chipLabel} ({s.surcharge_percent}%)
+                </button>
+              )
+            })}
+            {holidaySurcharge && (
+              <button
+                type="button"
+                onClick={() => setIsHoliday(!isHoliday)}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  isHoliday
+                    ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-200 font-medium'
+                    : 'border border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                }`}
+              >
+                חג ({holidaySurcharge.surcharge_percent}%)
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
