@@ -8,6 +8,7 @@ import { SectionTowType } from './sections/SectionTowType'
 import { SectionCustomer } from './sections/SectionCustomer'
 import { SectionPlaceholder } from './sections/SectionPlaceholder'
 import { SectionSingleRoute } from './sections/SectionSingleRoute'
+import { SectionPricing } from './sections/SectionPricing'
 
 /**
  * Mobile-only tow creation page — a single continuous scrolling page of
@@ -43,6 +44,10 @@ export function TowCreateWizard() {
       </FormCard>
 
       {form.towType === 'single' && <SectionSingleRoute form={form} />}
+
+      {form.towType === 'single' && <SectionPricing form={form} />}
+
+      {/* TODO: SectionQuoteGate — הצעת מחיר (אישור טלפוני) card goes here */}
 
       <SectionPlaceholder />
     </div>

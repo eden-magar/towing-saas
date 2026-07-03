@@ -3,7 +3,7 @@
 import { Hammer } from 'lucide-react'
 import { FormCard } from '../../ui'
 
-const REMAINING = ['רכב ומסלול', 'מחיר', 'הצעת מחיר', 'תשלום ושמירה']
+const REMAINING = ['הצעת מחיר', 'תשלום ושמירה']
 
 /**
  * Placeholder card for the not-yet-built sections (vehicle/route, pricing,
