@@ -3,18 +3,21 @@
 import { Hammer } from 'lucide-react'
 import { FormCard } from '../../ui'
 
-const REMAINING = ['הצעת מחיר', 'תשלום ושמירה']
+const REMAINING = ['גרר ונהג', 'תשלום ושמירה']
 
 /**
- * Placeholder card for the not-yet-built sections (vehicle/route, pricing,
- * quote, payment/save). Rendered at the bottom of the mobile scroll page so the
- * flow is complete-feeling while the remaining sections are built.
+ * Placeholder card for downstream sections (driver/contacts, payment/save).
+ * Visually locked until quoteApproved unlocks the gate (opacity handled by parent).
  */
-export function SectionPlaceholder() {
+export function SectionPlaceholder({ quoteApproved }: { quoteApproved: boolean }) {
   return (
     <FormCard icon={Hammer} title="המשך הטופס">
       <div className="text-center py-6">
-        <p className="text-sm text-gray-500 mb-3">שלבים אלו בבנייה — בקרוב</p>
+        <p className="text-sm text-gray-500 mb-3">
+          {quoteApproved
+            ? 'שלבים אלו בבנייה — בקרוב'
+            : 'יש לאשר את הצעת המחיר כדי להמשיך'}
+        </p>
         <div className="flex flex-wrap justify-center gap-2">
           {REMAINING.map((label) => (
             <span

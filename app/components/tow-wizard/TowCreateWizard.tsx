@@ -3,12 +3,14 @@
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Truck } from 'lucide-react'
 import { useTowForm } from '../../hooks/useTowForm'
+import { useQuoteGate } from '../../hooks/useQuoteGate'
 import { FormCard } from '../ui'
 import { SectionTowType } from './sections/SectionTowType'
 import { SectionCustomer } from './sections/SectionCustomer'
 import { SectionPlaceholder } from './sections/SectionPlaceholder'
 import { SectionSingleRoute } from './sections/SectionSingleRoute'
 import { SectionPricing } from './sections/SectionPricing'
+import { SectionQuoteGate } from './sections/SectionQuoteGate'
 
 /**
  * Mobile-only tow creation page — a single continuous scrolling page of
@@ -20,6 +22,7 @@ import { SectionPricing } from './sections/SectionPricing'
 export function TowCreateWizard() {
   const router = useRouter()
   const form = useTowForm()
+  const quoteGate = useQuoteGate(form)
 
   return (
     <div dir="rtl" className="max-w-2xl mx-auto pb-6">
@@ -36,6 +39,12 @@ export function TowCreateWizard() {
         <h1 className="text-xl font-bold text-gray-900">גרירה חדשה</h1>
       </div>
 
+      {form.error && (
+        <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+          {form.error}
+        </div>
+      )}
+
       {/* Continuous scroll of sections — order matches desktop create/page.tsx */}
       <SectionCustomer form={form} />
 
@@ -47,9 +56,19 @@ export function TowCreateWizard() {
 
       {form.towType === 'single' && <SectionPricing form={form} />}
 
-      {/* TODO: SectionQuoteGate — הצעת מחיר (אישור טלפוני) card goes here */}
+      {form.towType === 'single' && !quoteGate.isEditingClosedTow && (
+        <SectionQuoteGate form={form} quoteGate={quoteGate} />
+      )}
 
-      <SectionPlaceholder />
+      {/* Sections 7–9 — LOCKED until quoteApproved (mirrors desktop create/page.tsx) */}
+      <div
+        style={{
+          opacity: quoteGate.lockedOpacity,
+          pointerEvents: quoteGate.lockedPointer as React.CSSProperties['pointerEvents'],
+        }}
+      >
+        <SectionPlaceholder quoteApproved={quoteGate.quoteApproved} />
+      </div>
     </div>
   )
 }

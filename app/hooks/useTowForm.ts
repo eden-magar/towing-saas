@@ -3222,6 +3222,7 @@ export function useTowForm(
     router,
     user,
     companyId,
+    editTowId,
     // UI State
     showAssignNowModal, setShowAssignNowModal,
     savedTowId, setSavedTowId,
