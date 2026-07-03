@@ -2,18 +2,18 @@
 
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Truck } from 'lucide-react'
+import { ArrowRight, Check, Truck } from 'lucide-react'
 import { useTowForm } from '../../hooks/useTowForm'
 import { useQuoteGate } from '../../hooks/useQuoteGate'
 import { useContactsSave } from '../../hooks/useContactsSave'
 import { FormCard } from '../ui'
 import { SectionTowType } from './sections/SectionTowType'
 import { SectionCustomer } from './sections/SectionCustomer'
-import { SectionPlaceholder } from './sections/SectionPlaceholder'
 import { SectionSingleRoute } from './sections/SectionSingleRoute'
 import { SectionPricing } from './sections/SectionPricing'
 import { SectionQuoteGate } from './sections/SectionQuoteGate'
 import { SectionContacts } from './sections/SectionContacts'
+import { SectionPayment } from './sections/SectionPayment'
 
 /**
  * Mobile-only tow creation page — a single continuous scrolling page of
@@ -80,12 +80,53 @@ export function TowCreateWizard() {
           pointerEvents: quoteGate.lockedPointer as React.CSSProperties['pointerEvents'],
         }}
       >
+        {/* Driver (גרר ונהג) intentionally not built in-form on mobile —
+            relies on the post-save "assign now" modal instead. */}
+
         {form.towType === 'single' && quoteGate.quoteApproved && (
           <SectionContacts form={form} contactsSave={contactsSave} />
         )}
 
-        <SectionPlaceholder quoteApproved={quoteGate.quoteApproved} />
+        {form.towType === 'single' && quoteGate.quoteApproved && (
+          <SectionPayment form={form} />
+        )}
       </div>
+
+      {form.showAssignNowModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check size={32} className="text-emerald-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                הגרירה נשמרה בהצלחה!
+              </h2>
+              <p className="text-gray-500 mb-2">
+                מחיר: <span className="font-bold">₪{form.finalPrice.toFixed(2)}</span>
+              </p>
+              <p className="text-gray-600">האם לשבץ נהג עכשיו?</p>
+            </div>
+            <div className="flex gap-3 p-5 bg-gray-50 border-t border-gray-300">
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="flex-1 min-h-[48px] py-3 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
+              >
+                אחר כך
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/tows/${form.savedTowId}`)}
+                className="flex-1 min-h-[48px] py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] font-medium flex items-center justify-center gap-2"
+              >
+                <Truck size={18} />
+                שבץ נהג
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
