@@ -6,7 +6,7 @@ import { FormCard } from '../../ui'
 const REMAINING = ['גרר ונהג', 'תשלום ושמירה']
 
 /**
- * Placeholder card for downstream sections (driver/contacts, payment/save).
+ * Placeholder card for downstream sections (driver, payment/save).
  * Visually locked until quoteApproved unlocks the gate (opacity handled by parent).
  */
 export function SectionPlaceholder({ quoteApproved }: { quoteApproved: boolean }) {

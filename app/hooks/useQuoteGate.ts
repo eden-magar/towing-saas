@@ -20,6 +20,10 @@ type Form = ReturnType<typeof useTowForm>
 
 export type QuoteGate = ReturnType<typeof useQuoteGate>
 
+type QuoteGateOptions = {
+  persistTowCustomerContacts?: () => Promise<void>
+}
+
 /**
  * Quote-approval gate state + handlers for the mobile tow wizard.
  * Mirrors create/page.tsx local quote state (quoteApproved, quoteDeclined,
@@ -27,7 +31,7 @@ export type QuoteGate = ReturnType<typeof useQuoteGate>
  * handleSaveAsQuote). Kept wizard-local — not in useTowForm — so desktop
  * create/page.tsx stays untouched.
  */
-export function useQuoteGate(form: Form) {
+export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
   const [quoteApproved, setQuoteApproved] = useState(false)
   const [quoteDeclined, setQuoteDeclined] = useState(false)
   const [quoteSavedId, setQuoteSavedId] = useState<string | null>(null)
@@ -104,6 +108,8 @@ export function useQuoteGate(form: Form) {
     form.setSaving(true)
     form.setError('')
     try {
+      await options?.persistTowCustomerContacts?.()
+
       let finalCustomerId = form.selectedCustomerId
       if (!form.selectedCustomerId && form.customerName.trim()) {
         const result = await createCustomer({
@@ -325,7 +331,7 @@ export function useQuoteGate(form: Form) {
     } finally {
       form.setSaving(false)
     }
-  }, [editTowId, form])
+  }, [editTowId, form, options?.persistTowCustomerContacts])
 
   return {
     quoteApproved,

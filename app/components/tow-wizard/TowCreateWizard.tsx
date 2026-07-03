@@ -1,9 +1,11 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Truck } from 'lucide-react'
 import { useTowForm } from '../../hooks/useTowForm'
 import { useQuoteGate } from '../../hooks/useQuoteGate'
+import { useContactsSave } from '../../hooks/useContactsSave'
 import { FormCard } from '../ui'
 import { SectionTowType } from './sections/SectionTowType'
 import { SectionCustomer } from './sections/SectionCustomer'
@@ -11,6 +13,7 @@ import { SectionPlaceholder } from './sections/SectionPlaceholder'
 import { SectionSingleRoute } from './sections/SectionSingleRoute'
 import { SectionPricing } from './sections/SectionPricing'
 import { SectionQuoteGate } from './sections/SectionQuoteGate'
+import { SectionContacts } from './sections/SectionContacts'
 
 /**
  * Mobile-only tow creation page — a single continuous scrolling page of
@@ -21,8 +24,18 @@ import { SectionQuoteGate } from './sections/SectionQuoteGate'
  */
 export function TowCreateWizard() {
   const router = useRouter()
-  const form = useTowForm()
-  const quoteGate = useQuoteGate(form)
+  const persistContactsRef = useRef<() => Promise<void>>(async () => {})
+  const form = useTowForm(undefined, {
+    beforeSaveTow: () => persistContactsRef.current(),
+  })
+  const contactsSave = useContactsSave(form)
+  const quoteGate = useQuoteGate(form, {
+    persistTowCustomerContacts: contactsSave.persistTowCustomerContacts,
+  })
+
+  useEffect(() => {
+    persistContactsRef.current = contactsSave.persistTowCustomerContacts
+  }, [contactsSave.persistTowCustomerContacts])
 
   return (
     <div dir="rtl" className="max-w-2xl mx-auto pb-6">
@@ -67,6 +80,10 @@ export function TowCreateWizard() {
           pointerEvents: quoteGate.lockedPointer as React.CSSProperties['pointerEvents'],
         }}
       >
+        {form.towType === 'single' && quoteGate.quoteApproved && (
+          <SectionContacts form={form} contactsSave={contactsSave} />
+        )}
+
         <SectionPlaceholder quoteApproved={quoteGate.quoteApproved} />
       </div>
     </div>
