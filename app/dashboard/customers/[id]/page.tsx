@@ -606,7 +606,7 @@ export default function CustomerDetailPage() {
 
       {/* Contacts Tab */}
       {activeTab === 'contacts' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-2xl w-full">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-500">
               אנשי קשר תפעוליים ללקוח — יוצעו בטופס גרירה בעת בחירת הלקוח
@@ -631,7 +631,7 @@ export default function CustomerDetailPage() {
               <div className="divide-y divide-gray-100">
                 {customerContacts.map((contact) => (
                   <div key={contact.id} className="p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex w-full items-center justify-between gap-4">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
                           <Contact2 size={20} className="text-teal-600" />
@@ -690,7 +690,7 @@ export default function CustomerDetailPage() {
 
       {/* Orderers Tab */}
       {activeTab === 'orderers' && customer.customer_type === 'business' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-2xl w-full">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-500">
               מזמינים שמורים ללקוח — יוצעו בטופס גרירה בעת בחירת הלקוח העסקי
@@ -715,7 +715,7 @@ export default function CustomerDetailPage() {
               <div className="divide-y divide-gray-100">
                 {customerOrderers.map((orderer) => (
                   <div key={orderer.id} className="p-4 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between gap-4">
+                    <div className="flex w-full items-center justify-between gap-4">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
                           <UserPen size={20} className="text-purple-600" />
@@ -763,7 +763,7 @@ export default function CustomerDetailPage() {
 
       {/* Users Tab */}
       {activeTab === 'users' && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-2xl w-full">
           {/* Add User Button */}
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-500">
@@ -797,8 +797,8 @@ export default function CustomerDetailPage() {
 
                   return (
                     <div key={cu.id} className="p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                      <div className="flex w-full items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             cu.is_active ? 'bg-blue-100' : 'bg-gray-100'
                           }`}>
@@ -825,7 +825,7 @@ export default function CustomerDetailPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           {/* Role Select */}
                           <select
                             value={cu.role}
@@ -870,15 +870,15 @@ export default function CustomerDetailPage() {
 
       {/* Settings Tab */}
       {activeTab === 'settings' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 max-w-2xl w-full">
           <h2 className="font-bold text-gray-800 mb-4">הגדרות פורטל</h2>
           <p className="text-sm text-gray-500 mb-6">מה הלקוח רואה כשנכנס לפורטל — גרירות, תמונות, מחירים ועוד.</p>
 
           <div className="mb-8 pb-6 border-b border-gray-200">
             <h3 className="font-semibold text-gray-800 mb-1">הרשאות</h3>
             <p className="text-sm text-gray-500 mb-4">פעולות שהלקוח יכול לבצע בפורטל (כבוי כברירת מחדל).</p>
-            <div className="flex items-center justify-between py-3">
-              <div>
+            <div className="flex w-full items-center justify-between gap-4 py-3">
+              <div className="min-w-0">
                 <p className="font-medium text-gray-800">הזמנת גרירות דרך הפורטל</p>
                 <p className="text-sm text-gray-500 mt-0.5">מאפשר ללקוח לשלוח בקשות גרירה לטיפול במוקד</p>
               </div>
@@ -903,8 +903,8 @@ export default function CustomerDetailPage() {
               { key: 'show_vehicles', label: 'הצגת פרטי רכבים', desc: 'פרטי הרכבים שנגררו' },
               { key: 'show_notes', label: 'הצגת הערות', desc: 'הערות פנימיות על הגרירה' },
             ].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-                <div>
+              <div key={key} className="flex w-full items-center justify-between gap-4 py-3 border-b border-gray-100 last:border-0">
+                <div className="min-w-0">
                   <p className="font-medium text-gray-800">{label}</p>
                   <p className="text-sm text-gray-500 mt-0.5">{desc}</p>
                 </div>
