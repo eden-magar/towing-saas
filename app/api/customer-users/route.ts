@@ -17,27 +17,73 @@ export async function POST(req: NextRequest) {
     // === AUTH CHECK ===
     const authUser = await getAuthUser(req)
     if (!authUser) return unauthorizedResponse()
-    if (authUser.role !== 'company_admin' && authUser.role !== 'super_admin') {
+    if (
+      authUser.role !== 'company_admin' &&
+      authUser.role !== 'super_admin' &&
+      authUser.role !== 'customer'
+    ) {
       return forbiddenResponse()
     }
     // === END AUTH CHECK ===
-    const { email, fullName, phone, customerId, role } = await req.json()
+    const { email, fullName, phone, customerId: bodyCustomerId, role } = await req.json()
 
-    if (!email || !fullName || !customerId) {
+    if (!email || !fullName) {
       return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
     }
 
-    if (authUser.role !== 'super_admin') {
+    let resolvedCustomerId: string
+
+    if (authUser.role === 'super_admin') {
+      if (!bodyCustomerId) {
+        return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
+      }
+      resolvedCustomerId = bodyCustomerId
+    } else if (authUser.role === 'company_admin') {
+      if (!bodyCustomerId) {
+        return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
+      }
       const { data: relation } = await supabaseAdmin
         .from('customer_company')
         .select('id')
-        .eq('customer_id', customerId)
+        .eq('customer_id', bodyCustomerId)
         .eq('company_id', authUser.company_id)
         .eq('is_active', true)
         .maybeSingle()
       if (!relation) {
         return forbiddenResponse('אין הרשאה ליצור משתמש ללקוח מחברה אחרת')
       }
+      resolvedCustomerId = bodyCustomerId
+    } else {
+      const { data: callerCu, error: callerCuError } = await supabaseAdmin
+        .from('customer_users')
+        .select('role, customer_id')
+        .eq('user_id', authUser.id)
+        .single()
+
+      if (callerCuError || !callerCu) {
+        return forbiddenResponse()
+      }
+
+      if (callerCu.role !== 'admin') {
+        return forbiddenResponse()
+      }
+
+      resolvedCustomerId = callerCu.customer_id
+    }
+
+    let validatedRole: string
+    if (authUser.role === 'customer') {
+      const portalAllowed = ['viewer', 'manager']
+      if (role && !portalAllowed.includes(role)) {
+        return forbiddenResponse('אין הרשאה ליצור מנהל')
+      }
+      validatedRole = role || 'viewer'
+    } else {
+      const dashboardAllowed = ['viewer', 'manager', 'admin']
+      if (role && !dashboardAllowed.includes(role)) {
+        return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
+      }
+      validatedRole = role || 'viewer'
     }
 
     // 1. צור user ב-Auth
@@ -79,9 +125,9 @@ export async function POST(req: NextRequest) {
     const { error: cuError } = await supabaseAdmin
       .from('customer_users')
       .insert({
-        customer_id: customerId,
+        customer_id: resolvedCustomerId,
         user_id: userId,
-        role: role || 'viewer',
+        role: validatedRole,
         is_active: true,
       })
 
