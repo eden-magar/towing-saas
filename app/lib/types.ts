@@ -166,32 +166,89 @@ export interface CustomerOrdererInput {
 
 export type CustomerTowRequestStatus = 'pending' | 'converted' | 'dismissed'
 
+/** Portal request tow type — maps to customer_tow_requests.tow_type (UI: single/exchange/custom). */
+export type CustomerTowRequestPortalType = 'simple' | 'exchange' | 'custom'
+
+export type CustomerTowRequestPointType = 'pickup' | 'dropoff' | 'exchange' | 'stop'
+
+export type CustomerTowRequestPointVehicleAction = 'pickup' | 'dropoff' | 'exchange' | 'stop'
+
 export interface CustomerTowRequest {
   id: string
   company_id: string
   customer_id: string
   submitted_by_user_id: string
-  order_number: string
+  order_number: string | null
+  tow_type: CustomerTowRequestPortalType
+  customer_order_number: string | null
   scheduled_at: string
-  department: string
-  orderer: string
-  plate_number: string
-  defect_description: string
-  pickup_address: string
+  scheduled_end_at: string | null
+  start_from_base: boolean
+  dropoff_to_storage: boolean
+  department: string | null
+  orderer: string | null
+  orderer_phone: string | null
+  plate_number: string | null
+  defect_description: string | null
+  pickup_address: string | null
   pickup_lat: number | null
   pickup_lng: number | null
-  dropoff_address: string
+  dropoff_address: string | null
   dropoff_lat: number | null
   dropoff_lng: number | null
-  pickup_contact_name: string
-  pickup_contact_phone: string
-  dropoff_contact_name: string
-  dropoff_contact_phone: string
+  pickup_contact_name: string | null
+  pickup_contact_phone: string | null
+  dropoff_contact_name: string | null
+  dropoff_contact_phone: string | null
   notes: string | null
   status: CustomerTowRequestStatus
   converted_tow_id: string | null
   created_at: string
   updated_at: string
+}
+
+export interface CustomerTowRequestVehicle {
+  id: string
+  request_id: string
+  plate_number: string
+  vehicle_type: VehicleType | null
+  manufacturer: string | null
+  model: string | null
+  year: number | null
+  color: string | null
+  is_working: boolean
+  tow_reason: string | null
+  notes: string | null
+  order_index: number
+  created_at: string
+}
+
+export interface CustomerTowRequestPoint {
+  id: string
+  request_id: string
+  point_order: number
+  point_type: CustomerTowRequestPointType
+  address: string | null
+  lat: number | null
+  lng: number | null
+  contact_name: string | null
+  contact_phone: string | null
+  recipient_name: string | null
+  recipient_phone: string | null
+  notes: string | null
+  order_notes: string | null
+  is_storage: boolean
+  stop_subtype: string | null
+  created_at: string
+}
+
+export interface CustomerTowRequestPointVehicle {
+  id: string
+  request_id: string
+  point_id: string
+  vehicle_id: string
+  action: CustomerTowRequestPointVehicleAction
+  created_at: string
 }
 
 export interface CreateCustomerTowRequestInput {
@@ -220,6 +277,72 @@ export interface CreateCustomerTowRequestInput {
 export interface CustomerTowRequestWithDetails extends CustomerTowRequest {
   customer?: { id: string; name: string } | null
   submitted_by?: { id: string; full_name: string | null; email: string | null } | null
+}
+
+export interface CreateCustomerTowRequestVehicleInput {
+  /** Client-side key for pointVehicles linking; not persisted unless a valid UUID v4. */
+  tempId?: string
+  plateNumber: string
+  vehicleType?: VehicleType | null
+  manufacturer?: string | null
+  model?: string | null
+  year?: number | null
+  color?: string | null
+  isWorking?: boolean
+  towReason?: string | null
+  notes?: string | null
+  orderIndex?: number
+}
+
+export interface CreateCustomerTowRequestPointInput {
+  tempId?: string
+  pointOrder: number
+  pointType: CustomerTowRequestPointType
+  address?: string | null
+  lat?: number | null
+  lng?: number | null
+  contactName?: string | null
+  contactPhone?: string | null
+  recipientName?: string | null
+  recipientPhone?: string | null
+  notes?: string | null
+  orderNotes?: string | null
+  isStorage?: boolean
+  stopSubtype?: string | null
+}
+
+export interface CreateCustomerTowRequestPointVehicleInput {
+  pointIndex?: number
+  pointTempId?: string
+  vehicleIndex?: number
+  vehicleTempId?: string
+  action: CustomerTowRequestPointVehicleAction
+}
+
+export interface CreateFullCustomerTowRequestInput {
+  companyId: string
+  customerId: string
+  submittedByUserId: string
+  towType: CustomerTowRequestPortalType
+  scheduledAt: string
+  customerOrderNumber?: string | null
+  scheduledEndAt?: string | null
+  department?: string | null
+  orderer?: string | null
+  ordererPhone?: string | null
+  startFromBase?: boolean
+  dropoffToStorage?: boolean
+  notes?: string | null
+  vehicles: CreateCustomerTowRequestVehicleInput[]
+  points: CreateCustomerTowRequestPointInput[]
+  pointVehicles: CreateCustomerTowRequestPointVehicleInput[]
+}
+
+export interface CustomerTowRequestFull {
+  request: CustomerTowRequest
+  vehicles: CustomerTowRequestVehicle[]
+  points: CustomerTowRequestPoint[]
+  pointVehicles: CustomerTowRequestPointVehicle[]
 }
 
 export interface PriceList {
