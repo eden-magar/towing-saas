@@ -96,6 +96,15 @@ interface SingleRouteProps {
   truckTypeSectionRef?: React.RefObject<HTMLDivElement | null>
   truckTypeError?: boolean
   isMobile?: boolean
+  /** Forces single-column internal grids for narrow desktop columns (viewport sm: still applies otherwise). */
+  narrowColumn?: boolean
+  /**
+   * Renders only a subset of the desktop content, without the numbered section
+   * card chrome. Used by the column layout to split vehicle vs route into two
+   * side-by-side sub-columns. Default 'both' preserves the existing desktop
+   * (linear form) and mobile callers exactly.
+   */
+  renderSection?: 'vehicle' | 'route' | 'both'
 }
 
 export function SingleRoute({
@@ -174,6 +183,8 @@ export function SingleRoute({
   truckTypeSectionRef,
   truckTypeError = false,
   isMobile = false,
+  narrowColumn = false,
+  renderSection = 'both',
 }: SingleRouteProps) {
   const toggleLocationSurcharge = (id: string) => {
     if (selectedLocationSurcharges.includes(id)) {
@@ -284,6 +295,7 @@ export function SingleRoute({
         manualChassis={manualChassis}
         onManualChassisChange={onManualChassisChange}
         isMobile={isMobile}
+        narrowColumn={narrowColumn}
       />
 
       {isMobile ? (
@@ -497,7 +509,7 @@ export function SingleRoute({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className={narrowColumn ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
           <div className="flex items-start gap-2">
             <div className="w-3 h-3 bg-emerald-500 rounded-full flex-shrink-0 mt-9"></div>
             <div className="flex-1">
@@ -531,7 +543,7 @@ export function SingleRoute({
 
       {/* צ'קבוקסים - אחסנה + יציאה מהבסיס (דסקטופ בלבד; במובייל הומרו לכפתורים ליד הכתובות) */}
       {!isMobile && (
-        <div className="grid grid-cols-2 gap-2">
+        <div className={narrowColumn ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-2 gap-2'}>
           {/* יעד לאחסנה */}
           {onDropoffToStorageChange && (
             <label className="flex items-center gap-2 cursor-pointer bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors p-2">
@@ -677,6 +689,14 @@ export function SingleRoute({
         </FormCard>
       </>
     )
+  }
+
+  // Bare section rendering (no numbered card chrome) for the column layout split.
+  if (renderSection === 'vehicle') {
+    return <div className="space-y-4">{renderVehicleFields()}</div>
+  }
+  if (renderSection === 'route') {
+    return <div className="space-y-4">{renderRouteFields()}</div>
   }
 
   return (

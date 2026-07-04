@@ -6,7 +6,9 @@ interface DefectSelectorProps {
   onChange: (defects: string[]) => void
   label?: string
   /** Chip grid + אחר field only (for embedding in a parent modal). */
-  variant?: 'default' | 'chipsOnly'
+  variant?: 'default' | 'chipsOnly' | 'triggerOnly'
+  /** Label on the compact trigger button (triggerOnly variant). */
+  triggerLabel?: string
   isMobile?: boolean
 }
 
@@ -27,6 +29,7 @@ export function DefectSelector({
   onChange, 
   label = 'תקלה',
   variant = 'default',
+  triggerLabel = 'תקלות',
   isMobile = false,
 }: DefectSelectorProps) {
   
@@ -103,6 +106,78 @@ export function DefectSelector({
               placeholder="פרט את התקלה..."
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
             />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (variant === 'triggerOnly') {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className={`relative flex w-full min-h-[40px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+            selectedDefects.length > 0
+              ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+              : 'border-gt-border text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
+          }`}
+        >
+          <span>{triggerLabel}</span>
+          {selectedDefects.length > 0 && (
+            <span className="absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white">
+              {selectedDefects.length}
+            </span>
+          )}
+        </button>
+        {showModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
+                <h3 className="font-bold text-gray-800">{label}</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="font-medium text-gt-brand"
+                >
+                  סיום
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 p-4">
+                {DEFAULT_DEFECTS.map((defect) => (
+                  <button
+                    key={`modal-${defect}`}
+                    type="button"
+                    onClick={() => toggleDefect(defect)}
+                    className={`min-h-[44px] rounded-xl px-4 py-2.5 text-sm transition-colors ${
+                      isSelected(defect)
+                        ? 'bg-gt-brand text-white'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {defect}
+                  </button>
+                ))}
+              </div>
+              {isSelected('אחר') && (
+                <div className="px-4 pb-4">
+                  <input
+                    type="text"
+                    value={otherText}
+                    onChange={(e) => updateOtherText(e.target.value)}
+                    placeholder="פרט את התקלה..."
+                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

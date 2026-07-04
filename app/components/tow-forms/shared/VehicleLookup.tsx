@@ -19,6 +19,12 @@ interface VehicleLookupProps {
   onVehicleCodeChange?: (code: string) => void
   disabled?: boolean
   isMobile?: boolean
+  /** Stacked plate/type layout for narrow desktop columns. */
+  narrowColumn?: boolean
+  /** Manual-entry link style in stacked layout: subtle link vs bordered button. */
+  manualEntryStyle?: 'link' | 'button'
+  /** Where to render the manual-entry trigger in stacked layout. */
+  manualEntryPlacement?: 'inline' | 'afterSummary'
   /**
    * Manual entry (shared state, controlled by parent form). When
    * `onVehicleLookupNotFoundChange` is provided the component switches to
@@ -49,6 +55,9 @@ export function VehicleLookup({
   onVehicleCodeChange,
   disabled = false,
   isMobile = false,
+  narrowColumn = false,
+  manualEntryStyle = 'link',
+  manualEntryPlacement = 'inline',
   vehicleLookupNotFound,
   onVehicleLookupNotFoundChange,
   manualManufacturer = '',
@@ -60,6 +69,7 @@ export function VehicleLookup({
   manualChassis = '',
   onManualChassisChange,
 }: VehicleLookupProps) {
+  const stackLayout = isMobile || narrowColumn
   const [loading, setLoading] = useState(false)
   const [localNotFound, setLocalNotFound] = useState(false)
   const [showManualModal, setShowManualModal] = useState(false)
@@ -121,8 +131,27 @@ export function VehicleLookup({
     ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm bg-white'
     : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white'
 
+  const renderManualEntryTrigger = () => {
+    if (!manualEnabled || notFound || vehicleData?.found) return null
+    return (
+      <button
+        type="button"
+        onClick={openManualEntry}
+        disabled={disabled}
+        className={
+          manualEntryStyle === 'button'
+            ? 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors disabled:opacity-50'
+            : 'inline-flex items-center gap-1 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:underline underline-offset-2 transition-colors disabled:opacity-50'
+        }
+      >
+        <PenLine className="w-3.5 h-3.5 shrink-0" />
+        הזן פרטי רכב ידנית
+      </button>
+    )
+  }
+
   const renderManualFields = () => (
-    <div className={isMobile ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+    <div className={stackLayout ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
       <div>
         <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
         <select
@@ -191,93 +220,99 @@ export function VehicleLookup({
 
   return (
     <div className="space-y-2">
-      {isMobile ? (
+      {stackLayout ? (
         <>
           {/* שורה 1: מספר רכב — השדה הראשי (בולט), עם תווית ואייקון חיפוש שקט בקצה */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">מספר רכב</label>
-            <div className="relative">
-              <input
-                type="text"
-                value={plateNumber}
-                onChange={(e) => {
-                  const newValue = normalizePlate(e.target.value)
-                  onPlateChange(newValue)
-                  setNotFound(false)
-                  if (newValue.replace(/[^0-9]/g, '').length < 5) {
-                    onVehicleDataChange(null)
-                    onVehicleTypeChange('')
-                  }
-                }}
-                placeholder="מספר רכב *"
-                disabled={disabled}
-                className="w-full pl-14 pr-3 h-12 bg-white border border-gray-300 rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
-                onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
-                onBlur={() => {
-                  if (
-                    shouldTriggerPlateLookupOnBlur(plateNumber, {
-                      hasFoundData: vehicleData?.found,
-                      lookupAlreadyFailed: notFound,
-                    })
-                  ) {
-                    void handleLookup()
-                  }
-                }}
-              />
+            {/* narrow-column: plate + code on one row; type is hidden when found
+                and provided by the manual panel when not found. */}
+            <div className={narrowColumn ? 'flex gap-2' : 'relative'}>
+              <div className={narrowColumn ? 'relative flex-1 min-w-0' : 'relative'}>
+                <input
+                  type="text"
+                  value={plateNumber}
+                  onChange={(e) => {
+                    const newValue = normalizePlate(e.target.value)
+                    onPlateChange(newValue)
+                    setNotFound(false)
+                    if (newValue.replace(/[^0-9]/g, '').length < 5) {
+                      onVehicleDataChange(null)
+                      onVehicleTypeChange('')
+                    }
+                  }}
+                  placeholder="מספר רכב *"
+                  disabled={disabled}
+                  className="w-full pl-14 pr-3 h-12 bg-white border border-gray-300 rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                  onBlur={() => {
+                    if (
+                      shouldTriggerPlateLookupOnBlur(plateNumber, {
+                        hasFoundData: vehicleData?.found,
+                        lookupAlreadyFailed: notFound,
+                      })
+                    ) {
+                      void handleLookup()
+                    }
+                  }}
+                />
 
-              {/* כפתור חיפוש - אייקון שקט (ghost) בתוך השדה */}
-              <button
-                onClick={handleLookup}
-                disabled={loading || plateNumber.length < 5 || disabled}
-                aria-label="חפש רכב"
-                className="absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40"
-              >
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
-              </button>
+                {/* כפתור חיפוש - אייקון שקט (ghost) בתוך השדה */}
+                <button
+                  onClick={handleLookup}
+                  disabled={loading || plateNumber.length < 5 || disabled}
+                  aria-label="חפש רכב"
+                  className="absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40"
+                >
+                  {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+                </button>
+              </div>
+
+              {narrowColumn && showVehicleCode && onVehicleCodeChange && (
+                <input
+                  type="text"
+                  value={vehicleCode}
+                  onChange={(e) => onVehicleCodeChange(e.target.value)}
+                  placeholder="קוד"
+                  disabled={disabled}
+                  className="w-20 shrink-0 px-2 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+                />
+              )}
             </div>
           </div>
 
-          {/* שורה 2: סוג + קוד — שדות משניים בחלוקה מאוזנת */}
-          <div className="flex gap-2">
-            <select
-              value={vehicleType}
-              onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
-              disabled={vehicleData?.found || disabled}
-              className={`flex-[2] min-w-0 px-2 h-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
-                vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
-              } disabled:bg-gray-100`}
-            >
-              <option value="">סוג</option>
-              <option value="private">🚗 פרטי</option>
-              <option value="motorcycle">🏍️ דו גלגלי</option>
-              <option value="heavy">🚚 כבד</option>
-              <option value="machinery">🚜 צמ״ה</option>
-            </select>
+          {/* שורה 2: סוג + קוד — שדות משניים (מובייל בלבד; ב-narrow column קוד עלה לשורת הרכב והסוג מוסתר עד מצב ידני) */}
+          {!narrowColumn && (
+            <div className="flex gap-2">
+              <select
+                value={vehicleType}
+                onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
+                disabled={vehicleData?.found || disabled}
+                className={`flex-[2] min-w-0 px-2 h-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
+                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+                } disabled:bg-gray-100`}
+              >
+                <option value="">סוג</option>
+                <option value="private">🚗 פרטי</option>
+                <option value="motorcycle">🏍️ דו גלגלי</option>
+                <option value="heavy">🚚 כבד</option>
+                <option value="machinery">🚜 צמ״ה</option>
+              </select>
 
-            {showVehicleCode && onVehicleCodeChange && (
-              <input
-                type="text"
-                value={vehicleCode}
-                onChange={(e) => onVehicleCodeChange(e.target.value)}
-                placeholder="קוד"
-                disabled={disabled}
-                className="flex-1 min-w-0 px-2 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
-              />
-            )}
-          </div>
-
-          {/* הזנה ידנית - קישור טקסט שקט (פעולת גיבוי) */}
-          {manualEnabled && !notFound && !vehicleData?.found && (
-            <button
-              type="button"
-              onClick={openManualEntry}
-              disabled={disabled}
-              className="inline-flex items-center gap-1 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:underline underline-offset-2 transition-colors disabled:opacity-50"
-            >
-              <PenLine className="w-3.5 h-3.5 shrink-0" />
-              הזן פרטי רכב ידנית
-            </button>
+              {showVehicleCode && onVehicleCodeChange && (
+                <input
+                  type="text"
+                  value={vehicleCode}
+                  onChange={(e) => onVehicleCodeChange(e.target.value)}
+                  placeholder="קוד"
+                  disabled={disabled}
+                  className="flex-1 min-w-0 px-2 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+                />
+              )}
+            </div>
           )}
+
+          {manualEntryPlacement === 'inline' && renderManualEntryTrigger()}
         </>
       ) : (
       <>
@@ -425,6 +460,8 @@ export function VehicleLookup({
           </div>
         </div>
       )}
+
+      {manualEntryPlacement === 'afterSummary' && renderManualEntryTrigger()}
 
       {/* רכב לא נמצא / מצב הזנה ידנית */}
       {notFound && !vehicleData?.found && (

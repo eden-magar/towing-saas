@@ -58,6 +58,12 @@ export interface CreateCustomerSectionProps {
   orderNumber?: string | null
   /** When true, applies mobile-only layout/tap-target tweaks. Desktop path is unaffected. */
   isMobile?: boolean
+  /**
+   * When true, renders the compact stacked layout (same density as mobile) but
+   * tuned for a narrow desktop column: department/orderer stack vertically.
+   * Additive — existing desktop/mobile callers are unaffected.
+   */
+  narrowColumn?: boolean
 }
 
 function hasPersonalPricing(customerIdsWithPersonalPricing: string[], customerId: string) {
@@ -105,7 +111,10 @@ export function CreateCustomerSection({
   editTowId,
   orderNumber,
   isMobile = false,
+  narrowColumn = false,
 }: CreateCustomerSectionProps) {
+  // narrow-column reuses the mobile compact/stacked visual treatment
+  const compact = isMobile || narrowColumn
   const [isFocused, setIsFocused] = useState(false)
   // Mobile-only: collapse the optional end-time behind a button. Start expanded
   // if either end field already has a value so existing data is never hidden.
@@ -148,7 +157,7 @@ export function CreateCustomerSection({
           </div>
         </div>
       )}
-      {isMobile ? (
+      {compact ? (
         <div
           className="px-3 py-2 border-t border-gray-100 flex flex-col items-stretch gap-2"
           dir="rtl"
@@ -267,10 +276,6 @@ export function CreateCustomerSection({
             placeholder="מס׳ הזמנת לקוח"
             className="flex-1 min-w-[8rem]"
           />
-        </div>
-      )}
-      {isMobile ? null : (
-        <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2 flex-wrap" dir="rtl">
           <span className="text-sm text-gray-600 shrink-0">שעת סיום (אופציונלי)</span>
           <TimeInput
             value={towEndTime}
@@ -302,8 +307,8 @@ export function CreateCustomerSection({
           <Button
             type="button"
             variant="secondary"
-            size={isMobile ? 'md' : 'sm'}
-            className={isMobile ? 'min-h-[48px]' : undefined}
+            size={compact ? 'md' : 'sm'}
+            className={compact ? 'min-h-[48px]' : undefined}
             onClick={switchToExisting}
           >
             חזור ללקוח קיים
@@ -311,7 +316,7 @@ export function CreateCustomerSection({
         }
       >
         <div
-          className={isMobile ? 'p-3 grid grid-cols-1 gap-2' : 'p-3 grid grid-cols-2 gap-2'}
+          className={compact ? 'p-3 grid grid-cols-1 gap-2' : 'p-3 grid grid-cols-2 gap-2'}
           dir="rtl"
         >
           <Input
@@ -319,13 +324,13 @@ export function CreateCustomerSection({
             value={customerName}
             onChange={(e) => onCustomerNameChange(e.target.value)}
             placeholder="שם הלקוח *"
-            className={isMobile ? 'h-12' : undefined}
+            className={compact ? 'h-12' : undefined}
           />
           <PhoneInput
             value={customerPhone}
             onChange={onCustomerPhoneChange}
             placeholder="טלפון"
-            className={isMobile ? 'h-12' : undefined}
+            className={compact ? 'h-12' : undefined}
           />
         </div>
         {schedulingFooter}
@@ -343,8 +348,8 @@ export function CreateCustomerSection({
           <Button
             type="button"
             variant="secondary"
-            size={isMobile ? 'md' : 'sm'}
-            className={isMobile ? 'min-h-[48px]' : undefined}
+            size={compact ? 'md' : 'sm'}
+            className={compact ? 'min-h-[48px]' : undefined}
             onClick={switchToWalkIn}
           >
             לקוח מזדמן
@@ -362,7 +367,7 @@ export function CreateCustomerSection({
               onBlur={() => setTimeout(() => setIsFocused(false), 150)}
               placeholder="חפש לפי שם, טלפון, ת.ז..."
               disabled={customersLoading}
-              className={isMobile ? 'pl-9 pr-3 text-right h-12' : 'pl-9 pr-3 text-right'}
+              className={compact ? 'pl-9 pr-3 text-right h-12' : 'pl-9 pr-3 text-right'}
             />
           </div>
           {customersLoading && (
@@ -419,8 +424,8 @@ export function CreateCustomerSection({
         <Button
           type="button"
           variant="secondary"
-          size={isMobile ? 'md' : 'sm'}
-          className={isMobile ? 'min-h-[48px]' : undefined}
+          size={compact ? 'md' : 'sm'}
+          className={compact ? 'min-h-[48px]' : undefined}
           onClick={clearCustomer}
         >
           <ArrowLeftRight size={12} />
@@ -429,7 +434,7 @@ export function CreateCustomerSection({
       }
     >
       <div className="flex items-center justify-between px-4 py-3 gap-2">
-        {isMobile ? (
+        {compact ? (
           <div className="text-right flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-base font-semibold text-gray-900 truncate">
@@ -465,8 +470,8 @@ export function CreateCustomerSection({
 
       {isBusinessCustomer && onDepartmentChange && onOrderedByChange && (
         <div className="px-4 pb-3 border-t border-gray-100 space-y-2" dir="rtl">
-          <div className={isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-2'}>
-            {isMobile ? (
+          <div className={narrowColumn ? 'grid grid-cols-1 gap-2' : isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-2'}>
+            {compact ? (
               <div>
                 <label className="block text-xs text-gray-500 mb-1 text-right">מחלקה</label>
                 <Input
@@ -486,7 +491,7 @@ export function CreateCustomerSection({
                 className="text-right"
               />
             )}
-            {isMobile ? (
+            {compact ? (
               <div>
                 <label className="block text-xs text-gray-500 mb-1 text-right">מזמין</label>
                 <OrdererNameAutocomplete

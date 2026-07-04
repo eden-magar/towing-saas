@@ -19,6 +19,10 @@ interface ServiceSurchargeSelectorProps {
   onChange: (services: SelectedService[]) => void
   label?: string
   isMobile?: boolean
+  /** Compact trigger + modal only (no full-width dropdown trigger). */
+  variant?: 'default' | 'triggerOnly'
+  /** Label on the compact trigger button (triggerOnly variant). */
+  triggerLabel?: string
   manualSurcharges?: ManualSurcharge[]
   onManualSurchargesChange?: (lines: ManualSurcharge[]) => void
 }
@@ -47,6 +51,8 @@ export function ServiceSurchargeSelector({
   onChange,
   label = 'שירותים נוספים',
   isMobile = false,
+  variant = 'default',
+  triggerLabel = 'שירותים',
   manualSurcharges = [],
   onManualSurchargesChange,
 }: ServiceSurchargeSelectorProps) {
@@ -61,7 +67,13 @@ export function ServiceSurchargeSelector({
   if (activeServices.length === 0 && !(isMobile && onManualSurchargesChange)) return null
 
   const manualSurchargeCount = sanitizeManualSurcharges(manualSurcharges).length
-  const servicesSelectionCount = selectedServices.length + (isMobile && onManualSurchargesChange ? manualSurchargeCount : 0)
+  const servicesSelectionCount =
+    selectedServices.length +
+    (variant === 'triggerOnly' && onManualSurchargesChange
+      ? manualSurchargeCount
+      : isMobile && onManualSurchargesChange
+        ? manualSurchargeCount
+        : 0)
 
   const isSelected = (id: string) => selectedServices.some(s => s.id === id)
   const getSelected = (id: string) => selectedServices.find(s => s.id === id)
@@ -110,6 +122,154 @@ export function ServiceSurchargeSelector({
     }
     
     return `₪${service.price}`
+  }
+
+  if (variant === 'triggerOnly') {
+    if (activeServices.length === 0 && !onManualSurchargesChange) return null
+
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className={`relative flex w-full min-h-[40px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+            servicesSelectionCount > 0
+              ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+              : 'border-gt-border text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
+          }`}
+        >
+          <span>{triggerLabel}</span>
+          {servicesSelectionCount > 0 && (
+            <span className="absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white">
+              {servicesSelectionCount}
+            </span>
+          )}
+        </button>
+        {showModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-white shadow-xl sm:max-w-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
+                <h3 className="font-bold text-gray-800">{label}</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="font-medium text-gt-brand"
+                >
+                  סיום
+                </button>
+              </div>
+              <div className="space-y-4 p-4">
+                {onManualSurchargesChange && (
+                  <ManualSurchargeSection
+                    manualSurcharges={manualSurcharges}
+                    onChange={onManualSurchargesChange}
+                    addButtonLabel="הוספת שירות נוסף"
+                  />
+                )}
+                {activeServices.length > 0 && (
+                  <div className="space-y-2">
+                    {onManualSurchargesChange && (
+                      <p className="text-sm font-medium text-gray-700">שירותים מוגדרים</p>
+                    )}
+                    {activeServices.map((service) => (
+                      <div
+                        key={`modal-${service.id}`}
+                        className={`rounded-xl border p-3 transition-all ${
+                          isSelected(service.id)
+                            ? 'border-gt-brand bg-gt-brand-subtle'
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleService(service)}
+                          className="flex min-h-[44px] w-full items-center justify-between"
+                        >
+                          <span
+                            className={`font-medium ${
+                              isSelected(service.id) ? 'text-gt-brand' : 'text-gray-700'
+                            }`}
+                          >
+                            {service.label}
+                          </span>
+                          <span className="text-sm text-gray-500">{getPriceDisplay(service)}</span>
+                        </button>
+                        {isSelected(service.id) && service.price_type === 'per_unit' && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-xs text-gray-500">
+                              {service.unit_label && `לכל ${service.unit_label}`}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center rounded-lg border border-gray-200 bg-white">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateQuantity(
+                                      service.id,
+                                      (getSelected(service.id)?.quantity || 1) - 1,
+                                    )
+                                  }
+                                  className="flex h-8 w-8 items-center justify-center text-gray-500"
+                                >
+                                  <Minus size={14} />
+                                </button>
+                                <span className="w-8 text-center text-sm font-medium">
+                                  {getSelected(service.id)?.quantity || 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateQuantity(
+                                      service.id,
+                                      (getSelected(service.id)?.quantity || 1) + 1,
+                                    )
+                                  }
+                                  className="flex h-8 w-8 items-center justify-center text-gray-500"
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                              <span className="w-14 text-left text-sm font-bold">
+                                ₪{service.price * (getSelected(service.id)?.quantity || 1)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {isSelected(service.id) && service.price_type === 'manual' && (
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="text-xs text-gray-500">הזן מחיר</span>
+                            <div className="relative">
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                                ₪
+                              </span>
+                              <input
+                                type="number"
+                                value={getSelected(service.id)?.manualPrice || ''}
+                                onChange={(e) =>
+                                  updateManualPrice(service.id, Number(e.target.value))
+                                }
+                                placeholder="0"
+                                className="w-20 rounded-lg border border-gray-200 py-1.5 pl-2 pr-6 text-left text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (

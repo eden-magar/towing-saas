@@ -34,6 +34,7 @@ import {
   PenLine,
   Coins,
   Wallet,
+  LayoutGrid,
 } from 'lucide-react'
 import {
   useTowForm,
@@ -55,6 +56,7 @@ import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { StorageTakeOutConfirmModal } from '../../../components/tow-forms/StorageTakeOutConfirmModal'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import { TowCreateWizard } from '../../../components/tow-wizard/TowCreateWizard'
+import { ColumnLayout } from './ColumnLayout'
 import { FormCard, FormSubcard, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
@@ -458,6 +460,7 @@ function CreateTowForm({
     (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) === 0
 
   const [entryKind, setEntryKind] = useState<TowEntryKind>(null)
+  const [useColumnLayout, setUseColumnLayout] = useState(false)
   const isDuplicateEventLoad = Boolean(duplicateFromEventId)
 
   const handleHydrateCustomerFromEvent = useCallback(
@@ -1765,6 +1768,32 @@ function CreateTowForm({
     router.push('/dashboard/calendar')
   }, [editTowId, editTowSnapshot?.scheduled_at, router])
 
+  const towEntryOptions: Array<{
+    value: Exclude<TowEntryKind, null>
+    label: string
+    sub: string
+    icon: typeof Truck
+  }> = [
+    { value: 'single', label: 'גרירה פשוטה', sub: 'A→B', icon: Truck },
+    { value: 'exchange', label: 'תקין ↔ תקול', sub: '3 שלבים', icon: ArrowLeftRight },
+    { value: 'custom', label: 'מסלול מותאם', sub: 'נקודות חופשיות', icon: Route },
+    { value: 'events', label: 'אירועים מיוחדים', sub: 'פינוי רכבים מאירוע', icon: Calendar },
+  ]
+
+  // Alternative 4-column layout is opt-in and only for fresh single-tow create.
+  // Edit / duplicate / storage deep-links always use the existing linear form.
+  const isFreshCreate =
+    !editTowId && !duplicateFromId && !duplicateFromEventId && !storedVehicleParam
+
+  if (useColumnLayout && isFreshCreate) {
+    return (
+      <ColumnLayout
+        form={form}
+        onExitColumnLayout={() => setUseColumnLayout(false)}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
       {error && (
@@ -1812,6 +1841,16 @@ function CreateTowForm({
                 </p>
               </div>
             </div>
+            {isFreshCreate && !isMobile && (
+              <button
+                type="button"
+                onClick={() => setUseColumnLayout(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                טופס רוחבי
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1865,7 +1904,7 @@ function CreateTowForm({
           <FormCard
             icon={MapPinned}
             title="סוג גרירה"
-            description="בחר את אופי המשימה"
+            description={entryKind ? undefined : 'בחר את אופי המשימה'}
           >
             {storedVehicleParam && !editTowId && !entryKind && (
               <div className="mb-4 flex items-start gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
@@ -1877,12 +1916,7 @@ function CreateTowForm({
               </div>
             )}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {[
-                { value: 'single' as const, label: 'גרירה פשוטה', sub: 'A→B', icon: Truck },
-                { value: 'exchange' as const, label: 'תקין ↔ תקול', sub: '3 שלבים', icon: ArrowLeftRight },
-                { value: 'custom' as const, label: 'מסלול מותאם', sub: 'נקודות חופשיות', icon: Route },
-                { value: 'events' as const, label: 'אירועים מיוחדים', sub: 'פינוי רכבים מאירוע', icon: Calendar },
-              ].map((option) => {
+              {towEntryOptions.map((option) => {
                 const Icon = option.icon
                 const isActive = entryKind === option.value
                 return (
@@ -1941,7 +1975,7 @@ function CreateTowForm({
             <FormCard
               icon={Car}
               title="רכב ומסלול"
-              description="פרטי הרכב, תקלות, גרר ונקודות מסלול"
+              description={towType ? undefined : 'פרטי הרכב, תקלות, גרר ונקודות מסלול'}
             >
               <div className="space-y-4">
                 {towType === 'single' && (
@@ -4015,20 +4049,6 @@ function CreateTowForm({
                       </button>
                     </div>
                   )}
-                  <div className="p-4 bg-gray-50 rounded-xl text-sm">
-                    <p className="font-medium mb-1">{customerName}</p>
-                    <p className="text-gray-500 mb-1">{customerPhone}</p>
-                    <p className="text-gray-500 mb-1">
-                      {towDate} {towTime}
-                    </p>
-                    <p className="text-gray-500 mb-1">
-                      {vehiclePlate || defectiveVehiclePlate} —{' '}
-                      {vehicleData?.data?.model ||
-                        defectiveVehicleData?.data?.model ||
-                        ''}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900 mt-2">₪{finalPrice}</p>
-                  </div>
                   <button
                     type="button"
                     onClick={handleSave}

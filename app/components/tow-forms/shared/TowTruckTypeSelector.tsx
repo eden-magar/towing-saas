@@ -4,6 +4,10 @@ interface TowTruckTypeSelectorProps {
   selectedTypes: string[]
   onChange: (types: string[]) => void
   label?: string
+  /** Compact trigger + modal only (no inline chip grid). */
+  variant?: 'default' | 'triggerOnly'
+  /** Label on the compact trigger button (triggerOnly variant). */
+  triggerLabel?: string
   isMobile?: boolean
 }
 
@@ -19,6 +23,8 @@ export function TowTruckTypeSelector({
   selectedTypes, 
   onChange,
   label = 'סוגי גרר מתאימים',
+  variant = 'default',
+  triggerLabel = 'סוג גרר',
   isMobile = false,
 }: TowTruckTypeSelectorProps) {
   const [showModal, setShowModal] = useState(false)
@@ -29,6 +35,68 @@ export function TowTruckTypeSelector({
     } else {
       onChange([...selectedTypes, typeId])
     }
+  }
+
+  if (variant === 'triggerOnly') {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className={`relative flex w-full min-h-[40px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+            selectedTypes.length > 0
+              ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+              : 'border-gt-border text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
+          }`}
+        >
+          <span>{triggerLabel}</span>
+          {selectedTypes.length > 0 && (
+            <span className="absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white">
+              {selectedTypes.length}
+            </span>
+          )}
+        </button>
+        {showModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
+                <h3 className="font-bold text-gray-800">{label}</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="font-medium text-gt-brand"
+                >
+                  סיום
+                </button>
+              </div>
+              <div className="space-y-2 p-4">
+                {TRUCK_TYPES.map((type) => (
+                  <button
+                    key={`modal-${type.id}`}
+                    type="button"
+                    onClick={() => toggleType(type.id)}
+                    className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all ${
+                      selectedTypes.includes(type.id)
+                        ? 'border-gt-brand bg-gt-brand text-white'
+                        : 'border-gray-200 bg-white text-gray-600'
+                    }`}
+                  >
+                    <span className="text-xl">{type.icon}</span>
+                    {type.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
