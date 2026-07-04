@@ -21,12 +21,12 @@ import {
 } from 'lucide-react'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  pending: { label: 'ממתינה', color: 'text-yellow-700', bg: 'bg-yellow-50 border-yellow-200', icon: Clock },
-  assigned: { label: 'שובצה לנהג', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', icon: Truck },
-  in_progress: { label: 'בביצוע', color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200', icon: Truck },
-  completed: { label: 'הושלמה', color: 'text-green-700', bg: 'bg-green-50 border-green-200', icon: CheckCircle2 },
-  cancelled: { label: 'בוטלה', color: 'text-red-700', bg: 'bg-red-50 border-red-200', icon: AlertCircle },
-  cancelled_charged: { label: 'בוטל בחיוב', color: 'text-amber-800', bg: 'bg-amber-50 border-amber-200', icon: AlertCircle },
+  pending: { label: 'ממתינה', color: 'text-yellow-800', bg: 'bg-yellow-50 border-yellow-300', icon: Clock },
+  assigned: { label: 'שובצה לנהג', color: 'text-blue-800', bg: 'bg-blue-50 border-blue-300', icon: Truck },
+  in_progress: { label: 'בביצוע', color: 'text-purple-800', bg: 'bg-purple-50 border-purple-300', icon: Truck },
+  completed: { label: 'הושלמה', color: 'text-green-800', bg: 'bg-green-50 border-green-300', icon: CheckCircle2 },
+  cancelled: { label: 'בוטלה', color: 'text-red-800', bg: 'bg-red-50 border-red-300', icon: AlertCircle },
+  cancelled_charged: { label: 'בוטל בחיוב', color: 'text-amber-900', bg: 'bg-amber-50 border-amber-300', icon: AlertCircle },
 }
 
 export default function CustomerDashboard() {
@@ -121,6 +121,44 @@ export default function CustomerDashboard() {
     )
   })
 
+  const getListHeaderText = () => {
+    const loaded = tows.length
+    const visible = filteredTows.length
+
+    if (searchQuery) {
+      return `נמצאו ${visible} מתוך ${loaded} שנטענו${hasMore ? ' · יש עוד גרירות שלא נטענו' : ''}`
+    }
+
+    const totalForFilter =
+      statusFilter === 'all'
+        ? stats.total
+        : statusFilter === 'completed'
+          ? stats.completed
+          : statusFilter === 'in_progress'
+            ? stats.active
+            : !hasMore
+              ? loaded
+              : null
+
+    if (totalForFilter != null) {
+      return `מוצגות ${loaded} מתוך ${totalForFilter} גרירות`
+    }
+
+    return `מוצגות ${loaded} מהגרירות האחרונות`
+  }
+
+  const loadMoreButton = (
+    <button
+      type="button"
+      onClick={() => void handleLoadMore()}
+      disabled={loadingMore}
+      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+    >
+      {loadingMore && <Loader2 size={16} className="animate-spin" />}
+      טען עוד
+    </button>
+  )
+
   const getFirstAndLast = (tow: CustomerPortalTow) => {
     const pickup = tow.points.find(p => p.point_type === 'pickup')
     const dropoff = [...tow.points].reverse().find(p => p.point_type === 'dropoff')
@@ -156,7 +194,7 @@ export default function CustomerDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-4xl mx-auto w-full space-y-6">
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -165,7 +203,7 @@ export default function CustomerDashboard() {
           { label: 'בביצוע', value: stats.active, color: 'text-purple-700', bg: 'bg-purple-50' },
           { label: 'הושלמו', value: stats.completed, color: 'text-green-700', bg: 'bg-green-50' },
         ].map(stat => (
-          <div key={stat.label} className={`${stat.bg} rounded-xl border border-gray-200 p-4`}>
+          <div key={stat.label} className={`${stat.bg} rounded-xl border border-gray-300 shadow-sm p-4`}>
             <p className="text-sm text-gray-500">{stat.label}</p>
             <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
           </div>
@@ -211,14 +249,29 @@ export default function CustomerDashboard() {
       </div>
 
       {/* Tows List */}
-      {filteredTows.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
+      {tows.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-xl border border-gray-300 shadow-sm">
           <Package size={48} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500">לא נמצאו גרירות</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredTows.map(tow => {
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
+            <p className="text-sm text-gray-600">{getListHeaderText()}</p>
+            {hasMore && (
+              <div className="flex sm:justify-end">
+                {loadMoreButton}
+              </div>
+            )}
+          </div>
+
+          {filteredTows.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-300 shadow-sm">
+              <Search size={40} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500">לא נמצאו גרירות התואמות לחיפוש</p>
+            </div>
+          ) : (
+            filteredTows.map(tow => {
             const { from, to } = getFirstAndLast(tow)
             const progress = getProgress(tow)
             const stopCount = tow.points.filter((p) => p.point_type === 'stop').length
@@ -229,7 +282,7 @@ export default function CustomerDashboard() {
               <button
                 key={tow.id}
                 onClick={() => router.push(`/customer/tows/${tow.id}`)}
-                className="w-full bg-white rounded-xl border border-gray-200 p-4 text-right hover:border-blue-300 hover:shadow-sm transition-all"
+                className="w-full bg-white rounded-xl border border-gray-300 shadow-sm p-5 text-right hover:border-blue-400 hover:shadow-md transition-all"
               >
                 {/* Top Row */}
                 <div className="flex items-center justify-between mb-3">
@@ -239,8 +292,8 @@ export default function CustomerDashboard() {
                         #{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}
                       </span>
                     )}
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${config.bg} ${config.color}`}>
-                      <StatusIcon size={12} />
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 ${config.bg} ${config.color}`}>
+                      <StatusIcon size={14} />
                       {config.label}
                     </span>
                   </div>
@@ -290,18 +343,12 @@ export default function CustomerDashboard() {
                 </div>
               </button>
             )
-          })}
-          {hasMore && (
+          })
+          )}
+
+          {filteredTows.length > 0 && hasMore && (
             <div className="flex justify-center pt-2">
-              <button
-                type="button"
-                onClick={() => void handleLoadMore()}
-                disabled={loadingMore}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
-              >
-                {loadingMore && <Loader2 size={16} className="animate-spin" />}
-                טען עוד
-              </button>
+              {loadMoreButton}
             </div>
           )}
         </div>
