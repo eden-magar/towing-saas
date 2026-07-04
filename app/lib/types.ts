@@ -164,6 +164,64 @@ export interface CustomerOrdererInput {
   name: string
 }
 
+export type CustomerTowRequestStatus = 'pending' | 'converted' | 'dismissed'
+
+export interface CustomerTowRequest {
+  id: string
+  company_id: string
+  customer_id: string
+  submitted_by_user_id: string
+  order_number: string
+  scheduled_at: string
+  department: string
+  orderer: string
+  plate_number: string
+  defect_description: string
+  pickup_address: string
+  pickup_lat: number | null
+  pickup_lng: number | null
+  dropoff_address: string
+  dropoff_lat: number | null
+  dropoff_lng: number | null
+  pickup_contact_name: string
+  pickup_contact_phone: string
+  dropoff_contact_name: string
+  dropoff_contact_phone: string
+  notes: string | null
+  status: CustomerTowRequestStatus
+  converted_tow_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateCustomerTowRequestInput {
+  companyId: string
+  customerId: string
+  submittedByUserId: string
+  orderNumber: string
+  scheduledAt: string
+  department: string
+  orderer: string
+  plateNumber: string
+  defectDescription: string
+  pickupAddress: string
+  pickupLat?: number | null
+  pickupLng?: number | null
+  dropoffAddress: string
+  dropoffLat?: number | null
+  dropoffLng?: number | null
+  pickupContactName: string
+  pickupContactPhone: string
+  dropoffContactName: string
+  dropoffContactPhone: string
+  notes?: string | null
+}
+
+export interface CustomerTowRequestWithDetails extends CustomerTowRequest {
+  customer?: { id: string; name: string } | null
+  submitted_by?: { id: string; full_name: string | null; email: string | null } | null
+}
+
 export interface PriceList {
   id: string
   company_id: string
@@ -595,6 +653,8 @@ export interface CustomerPortalTow {
   created_at: string
   started_at: string | null
   completed_at: string | null
+  visibility_overrides?: Record<string, boolean> | null
+  show_driver_info_override?: boolean | null
   vehicles: {
     plate_number: string
     manufacturer: string | null

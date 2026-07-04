@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getCustomerForUser, getCustomerTows, getCustomerStats } from '@/app/lib/queries/customer-portal'
 import type { CustomerPortalTow } from '@/app/lib/types'
+import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 import {
   Truck,
   Clock,
@@ -32,6 +33,7 @@ export default function CustomerDashboard() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [customerId, setCustomerId] = useState<string | null>(null)
+  const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
   const [tows, setTows] = useState<CustomerPortalTow[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
@@ -45,6 +47,7 @@ export default function CustomerDashboard() {
       const info = await getCustomerForUser(user.id)
       if (!info) { setLoading(false); return }
       setCustomerId(info.customerId)
+      setPortalSettings(info.portalSettings || {})
 
       const [towsData, statsData] = await Promise.all([
         getCustomerTows(info.customerId, { status: statusFilter }),
@@ -237,7 +240,8 @@ export default function CustomerDashboard() {
                     {tow.vehicles.length > 0 && (
                       <span>{tow.vehicles.length} רכבים</span>
                     )}
-                    {tow.driver && (
+                    {tow.driver &&
+                      resolvePortalVisibilityFlag('show_driver_info', portalSettings, tow) && (
                       <span>נהג: {tow.driver.full_name}</span>
                     )}
                   </div>

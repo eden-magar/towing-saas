@@ -54,6 +54,8 @@ export async function getCustomerTows(
       created_at,
       started_at,
       completed_at,
+      visibility_overrides,
+      show_driver_info_override,
       driver:drivers (
         user:users (
           full_name,
