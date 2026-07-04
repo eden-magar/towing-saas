@@ -14,6 +14,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     if (loading) return
     if (!session?.user || !user) {
       router.push('/login')
+      return
+    }
+    if (user.role === 'customer') {
+      router.push('/customer')
+      return
+    }
+    if (user.role === 'driver') {
+      router.push('/driver')
+      return
     }
   }, [loading, session, user, router])
 
