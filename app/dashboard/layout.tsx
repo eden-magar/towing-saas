@@ -28,7 +28,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+      <div className="flex flex-1 min-h-0 items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-[#33d4ff] border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
           <p className="text-gray-500">טוען...</p>
@@ -42,7 +42,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex flex-1 min-h-0">
       <ServiceWorkerCleanup />
       <Sidebar />
       <main className="flex-1 min-w-0 bg-gray-100 p-4 sm:p-6 lg:p-8">

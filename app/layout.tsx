@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "./lib/AuthContext";
+import Footer from "./components/ui/Footer";
 
 export const metadata: Metadata = {
   title: "מגרר - מערכת ניהול גרירות",
@@ -41,9 +42,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl">
-      <body className="bg-slate-900 min-h-screen" suppressHydrationWarning>
+      <body className="bg-slate-900 min-h-screen flex flex-col" suppressHydrationWarning>
         <AuthProvider>
-          {children}
+          <div className="flex-1 flex flex-col min-h-0">
+            {children}
+          </div>
+          <Footer />
         </AuthProvider>
       </body>
     </html>

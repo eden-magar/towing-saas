@@ -83,7 +83,7 @@ export default function SuperAdminLayout({
 
   if (loading || authLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="flex flex-1 min-h-0 items-center justify-center bg-slate-900">
         <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
       </div>
     )
@@ -94,7 +94,7 @@ export default function SuperAdminLayout({
   }
 
   return (
-    <div dir="rtl" className="dark-theme min-h-screen bg-slate-900 text-white">      {/* Impersonation Banner */}
+    <div dir="rtl" className="dark-theme flex flex-1 flex-col min-h-0 bg-slate-900 text-white">
       {impersonation && (
         <div className="fixed top-0 left-0 right-0 bg-amber-500 text-amber-900 py-2 px-4 z-[100] flex items-center justify-center gap-4">
           <Shield size={18} />
@@ -174,7 +174,7 @@ export default function SuperAdminLayout({
       </aside>
 
       {/* Main Content */}
-      <main className={`mr-64 min-h-screen ${impersonation ? 'pt-10' : ''}`}>
+      <main className={`mr-64 flex-1 min-h-0 ${impersonation ? 'pt-10' : ''}`}>
         {children}
       </main>
     </div>

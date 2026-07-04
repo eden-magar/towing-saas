@@ -218,7 +218,7 @@ export default function DriverLayout({
       {children}
     </div>
   ) : (
-    <div dir="rtl" className="min-h-screen bg-gray-50 flex flex-col">
+    <div dir="rtl" className="flex flex-1 flex-col min-h-0 bg-gray-50">
       {/* Status Picker Dropdown */}
       {showStatusPicker && (
         <>
