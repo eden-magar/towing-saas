@@ -873,6 +873,26 @@ export default function CustomerDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-bold text-gray-800 mb-4">הגדרות פורטל</h2>
           <p className="text-sm text-gray-500 mb-6">מה הלקוח רואה כשנכנס לפורטל — גרירות, תמונות, מחירים ועוד.</p>
+
+          <div className="mb-8 pb-6 border-b border-gray-200">
+            <h3 className="font-semibold text-gray-800 mb-1">הרשאות</h3>
+            <p className="text-sm text-gray-500 mb-4">פעולות שהלקוח יכול לבצע בפורטל (כבוי כברירת מחדל).</p>
+            <div className="flex items-center justify-between py-3">
+              <div>
+                <p className="font-medium text-gray-800">הזמנת גרירות דרך הפורטל</p>
+                <p className="text-sm text-gray-500 mt-0.5">מאפשר ללקוח לשלוח בקשות גרירה לטיפול במוקד</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handlePortalSettingChange('can_submit_orders', !portalSettings.can_submit_orders)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full p-0.5 transition-colors cursor-pointer ${portalSettings.can_submit_orders ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}
+              >
+                <span className="inline-block h-4 w-4 rounded-full bg-white shadow" />
+              </button>
+            </div>
+          </div>
+
+          <h3 className="font-semibold text-gray-800 mb-4">תצוגה</h3>
           <div className="space-y-4">
             {[
               { key: 'show_photos', label: 'הצגת תמונות', desc: 'תמונות שצולמו במהלך הגרירה' },

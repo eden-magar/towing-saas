@@ -11,14 +11,17 @@ import {
   LogOut,
   Loader2,
   Menu,
-  X
+  X,
+  PlusCircle,
 } from 'lucide-react'
+import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
 
 interface CustomerInfo {
   customerId: string
   customerName: string
   customerType: string
   customerUserRole: string
+  portalSettings: Record<string, boolean>
 }
 
 export default function CustomerLayout({ children }: { children: React.ReactNode }) {
@@ -48,7 +51,13 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         router.push('/login')
         return
       }
-      setCustomerInfo(info)
+      setCustomerInfo({
+        customerId: info.customerId,
+        customerName: info.customerName,
+        customerType: info.customerType,
+        customerUserRole: info.customerUserRole,
+        portalSettings: info.portalSettings,
+      })
       setLoading(false)
     }
 
@@ -75,12 +84,22 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
 
   const navItems = [
     { href: '/customer', label: 'גרירות', icon: LayoutDashboard },
+    {
+      href: '/customer/request/new',
+      label: 'הזמן גרירה',
+      icon: PlusCircle,
+      requiresSubmitOrders: true,
+    },
     { href: '/customer/users', label: 'משתמשים', icon: Users, adminOnly: true },
   ]
 
-  const visibleNavItems = navItems.filter(
-    item => !item.adminOnly || customerInfo.customerUserRole === 'admin'
-  )
+  const canSubmitOrders = canSubmitOrdersViaPortal(customerInfo.portalSettings)
+
+  const visibleNavItems = navItems.filter((item) => {
+    if (item.adminOnly && customerInfo.customerUserRole !== 'admin') return false
+    if (item.requiresSubmitOrders && !canSubmitOrders) return false
+    return true
+  })
 
   return (
     <div dir="rtl" className="min-h-screen bg-gray-50">
@@ -102,7 +121,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <nav className="hidden sm:flex items-center gap-1">
             {visibleNavItems.map(item => {
               const Icon = item.icon
-              const isActive = pathname === item.href
+              const isActive =
+                pathname === item.href ||
+                (item.href !== '/customer' && pathname.startsWith(item.href))
               return (
                 <button
                   key={item.href}
@@ -148,7 +169,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
           <div className="sm:hidden border-t border-gray-100 bg-white px-4 py-3 space-y-1">
             {visibleNavItems.map(item => {
               const Icon = item.icon
-              const isActive = pathname === item.href
+              const isActive =
+                pathname === item.href ||
+                (item.href !== '/customer' && pathname.startsWith(item.href))
               return (
                 <button
                   key={item.href}

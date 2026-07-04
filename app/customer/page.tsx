@@ -4,7 +4,7 @@ import { supabase } from '@/app/lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
-import { getCustomerForUser, getCustomerTows, getCustomerStats } from '@/app/lib/queries/customer-portal'
+import { getCustomerForUser, getCustomerTows, getCustomerStats, CUSTOMER_PORTAL_TOW_PAGE_SIZE } from '@/app/lib/queries/customer-portal'
 import type { CustomerPortalTow } from '@/app/lib/types'
 import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 import {
@@ -37,6 +37,8 @@ export default function CustomerDashboard() {
   const [tows, setTows] = useState<CustomerPortalTow[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -49,12 +51,17 @@ export default function CustomerDashboard() {
       setCustomerId(info.customerId)
       setPortalSettings(info.portalSettings || {})
 
-      const [towsData, statsData] = await Promise.all([
-        getCustomerTows(info.customerId, { status: statusFilter }),
+      const [towsPage, statsData] = await Promise.all([
+        getCustomerTows(info.customerId, {
+          status: statusFilter,
+          limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
+          offset: 0,
+        }),
         getCustomerStats(info.customerId),
       ])
 
-      setTows(towsData)
+      setTows(towsPage.tows)
+      setHasMore(towsPage.hasMore)
       setStats(statsData)
       setLoading(false)
     }
@@ -69,8 +76,14 @@ export default function CustomerDashboard() {
     const channel = supabase
       .channel('customer-tows-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tows' }, () => {
-        // טוען מחדש את הרשימה
-        getCustomerTows(customerId, { status: statusFilter }).then(setTows)
+        getCustomerTows(customerId, {
+          status: statusFilter,
+          limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
+          offset: 0,
+        }).then(({ tows: nextTows, hasMore: nextHasMore }) => {
+          setTows(nextTows)
+          setHasMore(nextHasMore)
+        })
         getCustomerStats(customerId).then(setStats)
       })
       .subscribe()
@@ -79,6 +92,22 @@ export default function CustomerDashboard() {
       supabase.removeChannel(channel)
     }
   }, [customerId, statusFilter])
+
+  const handleLoadMore = async () => {
+    if (!customerId || loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const { tows: nextPage, hasMore: nextHasMore } = await getCustomerTows(customerId, {
+        status: statusFilter,
+        limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
+        offset: tows.length,
+      })
+      setTows((prev) => [...prev, ...nextPage])
+      setHasMore(nextHasMore)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   // סינון חיפוש לוקלי
   const filteredTows = tows.filter(tow => {
@@ -262,6 +291,19 @@ export default function CustomerDashboard() {
               </button>
             )
           })}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => void handleLoadMore()}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                {loadingMore && <Loader2 size={16} className="animate-spin" />}
+                טען עוד
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

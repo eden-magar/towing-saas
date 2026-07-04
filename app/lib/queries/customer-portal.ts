@@ -28,81 +28,170 @@ export async function getCustomerForUser(userId: string) {
     .single()
 
   if (error || !data || !data.customer) return null
+
+  const rawCustomer = data.customer as
+    | {
+        id: string
+        name: string
+        customer_type: string
+        portal_settings?: Record<string, boolean>
+      }
+    | {
+        id: string
+        name: string
+        customer_type: string
+        portal_settings?: Record<string, boolean>
+      }[]
+  const customer = Array.isArray(rawCustomer) ? rawCustomer[0] : rawCustomer
+  if (!customer) return null
+
+  const { data: companyIdData, error: companyIdError } = await supabase.rpc(
+    'get_my_company_id_for_customer'
+  )
+  const companyId = companyIdError ? null : ((companyIdData as string | null) ?? null)
+
   return {
-    customerId: (data.customer as any).id,
-    customerName: (data.customer as any).name,
-    customerType: (data.customer as any).customer_type,
+    customerId: customer.id,
+    companyId,
+    customerName: customer.name,
+    customerType: customer.customer_type,
     customerUserRole: data.role,
-    portalSettings: (data.customer as any).portal_settings || {},
+    portalSettings: customer.portal_settings || {},
   }
 }
 
-// שליפת כל הגרירות של הלקוח
+export type CompanyBaseAddressForCustomer = {
+  address: string
+  lat: number | null
+  lng: number | null
+}
+
+/** Yard/base address for portal storage auto-fill (מאחסנה/לאחסנה). No pricing data. */
+export async function getCompanyBaseAddressForCustomer(): Promise<CompanyBaseAddressForCustomer | null> {
+  const { data, error } = await supabase.rpc('get_company_base_address_for_customer')
+
+  if (error) {
+    console.error('Error fetching company base address for customer:', error)
+    return null
+  }
+
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || typeof row !== 'object' || !('base_address' in row)) {
+    return null
+  }
+
+  const address = typeof row.base_address === 'string' ? row.base_address.trim() : ''
+  if (!address) {
+    return null
+  }
+
+  return {
+    address,
+    lat: row.base_lat != null ? Number(row.base_lat) : null,
+    lng: row.base_lng != null ? Number(row.base_lng) : null,
+  }
+}
+
+// שליפת גרירות לקוח (עמוד / pagination)
+export const CUSTOMER_PORTAL_TOW_PAGE_SIZE = 50
+
+const CUSTOMER_TOW_LIST_SELECT = `
+  id,
+  order_number,
+  customer_order_number,
+  status,
+  tow_type,
+  scheduled_at,
+  created_at,
+  started_at,
+  completed_at,
+  visibility_overrides,
+  show_driver_info_override,
+  driver:drivers!tows_driver_id_fkey (
+    user:users (
+      full_name,
+      phone
+    )
+  ),
+  vehicles:tow_vehicles (
+    plate_number,
+    manufacturer,
+    model,
+    color
+  ),
+  points:tow_points (
+    id,
+    point_order,
+    point_type,
+    stop_subtype,
+    address,
+    status,
+    arrived_at,
+    completed_at
+  )
+`
+
+function mapCustomerPortalTow(tow: any): CustomerPortalTow {
+  const driverRow = Array.isArray(tow.driver) ? tow.driver[0] : tow.driver
+  const userRow = Array.isArray(driverRow?.user) ? driverRow.user[0] : driverRow?.user
+  return {
+    ...tow,
+    driver: userRow
+      ? { full_name: userRow.full_name, phone: userRow.phone }
+      : null,
+    points: [...(tow.points || [])].sort(
+      (a: { point_order: number }, b: { point_order: number }) => a.point_order - b.point_order
+    ),
+  }
+}
+
+export type CustomerTowsPage = {
+  tows: CustomerPortalTow[]
+  hasMore: boolean
+}
+
 export async function getCustomerTows(
   customerId: string,
-  filters?: { status?: string; from?: string; to?: string }
-): Promise<CustomerPortalTow[]> {
+  options?: {
+    status?: string
+    from?: string
+    to?: string
+    limit?: number
+    offset?: number
+  }
+): Promise<CustomerTowsPage> {
+  const limit = options?.limit ?? CUSTOMER_PORTAL_TOW_PAGE_SIZE
+  const offset = options?.offset ?? 0
+
   let query = supabase
     .from('tows')
-    .select(`
-      id,
-      order_number,
-      customer_order_number,
-      status,
-      tow_type,
-      scheduled_at,
-      created_at,
-      started_at,
-      completed_at,
-      visibility_overrides,
-      show_driver_info_override,
-      driver:drivers (
-        user:users (
-          full_name,
-          phone
-        )
-      ),
-      vehicles:tow_vehicles (
-        plate_number,
-        manufacturer,
-        model,
-        color
-      ),
-      points:tow_points (
-        id,
-        point_order,
-        point_type,
-        stop_subtype,
-        address,
-        status,
-        arrived_at,
-        completed_at
-      )
-    `)
+    .select(CUSTOMER_TOW_LIST_SELECT, { count: 'exact' })
     .eq('customer_id', customerId)
+    .order('scheduled_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
 
-  if (filters?.status && filters.status !== 'all') {
-    query = query.eq('status', filters.status)
+  if (options?.status && options.status !== 'all') {
+    query = query.eq('status', options.status)
   }
-  if (filters?.from) {
-    query = query.gte('created_at', filters.from)
+  if (options?.from) {
+    query = query.gte('created_at', options.from)
   }
-  if (filters?.to) {
-    query = query.lte('created_at', filters.to)
+  if (options?.to) {
+    query = query.lte('created_at', options.to)
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query.range(offset, offset + limit - 1)
 
-  if (error || !data) return []
+  if (error) {
+    console.error('Error fetching customer tows:', error)
+    return { tows: [], hasMore: false }
+  }
 
-  return data.map((tow: any) => ({
-    ...tow,
-    driver: tow.driver?.user
-      ? { full_name: tow.driver.user.full_name, phone: tow.driver.user.phone }
-      : null,
-    points: (tow.points || []).sort((a: any, b: any) => a.point_order - b.point_order),
-  }))
+  const tows = (data ?? []).map(mapCustomerPortalTow)
+  const hasMore =
+    count != null ? offset + tows.length < count : tows.length === limit
+
+  return { tows, hasMore }
 }
 
 // שליפת גרירה בודדת עם כל הפרטים
@@ -131,7 +220,7 @@ export async function getCustomerTowDetail(
       show_vehicles_override,
       show_notes_override,
       final_price,
-      driver:drivers (
+      driver:drivers!tows_driver_id_fkey (
         user:users (
           full_name,
           phone
@@ -176,13 +265,20 @@ export async function getCustomerTowDetail(
   const tow = data as any
 
   return {
-    ...tow,
-    driver: tow.driver?.user
-      ? { full_name: tow.driver.user.full_name, phone: tow.driver.user.phone }
-      : null,
-    points: (tow.points || []).sort((a: any, b: any) => a.point_order - b.point_order),
+    ...mapCustomerPortalTow(tow),
+    notes: tow.notes,
+    visibility_overrides: tow.visibility_overrides,
+    show_photos_override: tow.show_photos_override,
+    show_price_override: tow.show_price_override,
+    show_driver_info_override: tow.show_driver_info_override,
+    show_driver_phone_override: tow.show_driver_phone_override,
+    show_status_history_override: tow.show_status_history_override,
+    show_vehicles_override: tow.show_vehicles_override,
+    show_notes_override: tow.show_notes_override,
+    final_price: tow.final_price,
+    points: (tow.points || []).sort((a: { point_order: number }, b: { point_order: number }) => a.point_order - b.point_order),
     images: tow.images || [],
-  }
+  } as CustomerPortalTowDetail
 }
 
 // שליפת משתמשי הלקוח (לניהול)
