@@ -22,6 +22,7 @@ import type { PersistedVehicleType } from '../utils/tow-save-handler'
 import { isClosedTowStatus } from '../utils/can-edit-closed-tow'
 import { persistableUuid } from '../utils/persistable-uuid'
 import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-sync'
+import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 
 // ==================== טיפוסים ====================
 
@@ -137,6 +138,13 @@ export interface TowWithDetails {
   start_from_base: boolean | null
   dropoff_to_storage: boolean | null
   visibility_overrides: Record<string, boolean> | null
+  show_photos_override: boolean | null
+  show_price_override: boolean | null
+  show_driver_info_override: boolean | null
+  show_driver_phone_override: boolean | null
+  show_status_history_override: boolean | null
+  show_vehicles_override: boolean | null
+  show_notes_override: boolean | null
   manually_closed_at?: string | null
   manually_closed_by?: string | null
   manually_closed_by_user?: {
@@ -151,6 +159,7 @@ export interface TowWithDetails {
     email: string | null
     address: string | null
     customer_type: 'private' | 'business'
+    portal_settings?: Record<string, boolean> | null
   } | null
   department: string | null
   ordered_by: string | null
@@ -754,7 +763,8 @@ const TOW_WITH_RELATIONS_SELECT = `
     phone,
     email,
     address,
-    customer_type
+    customer_type,
+    portal_settings
   ),
   driver:drivers!tows_driver_id_fkey (
     id,
@@ -1810,6 +1820,7 @@ interface UpdateTowInput {
   startFromBase?: boolean | null
   dropoffToStorage?: boolean | null
   visibilityOverrides?: Record<string, boolean> | null
+  portalVisibilityOverrides?: Partial<TowPortalVisibilityOverrides>
   secondDriverId?: string | null
   secondDriverScheduledAt?: string | null
   towType?: 'simple' | 'with_base' | 'transfer' | 'multi_vehicle' | 'exchange'
@@ -2092,6 +2103,11 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase
   if (input.dropoffToStorage !== undefined) towUpdates.dropoff_to_storage = input.dropoffToStorage
   if (input.visibilityOverrides !== undefined) towUpdates.visibility_overrides = input.visibilityOverrides
+  if (input.portalVisibilityOverrides) {
+    for (const [column, value] of Object.entries(input.portalVisibilityOverrides)) {
+      towUpdates[column] = value
+    }
+  }
   if (input.secondDriverId !== undefined) towUpdates.second_driver_id = input.secondDriverId
   if (input.secondDriverScheduledAt !== undefined) towUpdates.second_driver_scheduled_at = input.secondDriverScheduledAt
   if (input.towType !== undefined) towUpdates.tow_type = input.towType

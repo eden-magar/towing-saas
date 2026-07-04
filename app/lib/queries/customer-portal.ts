@@ -121,6 +121,13 @@ export async function getCustomerTowDetail(
       completed_at,
       notes,
       visibility_overrides,
+      show_photos_override,
+      show_price_override,
+      show_driver_info_override,
+      show_driver_phone_override,
+      show_status_history_override,
+      show_vehicles_override,
+      show_notes_override,
       final_price,
       driver:drivers (
         user:users (

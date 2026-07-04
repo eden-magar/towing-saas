@@ -60,6 +60,16 @@ import {
 import { useAuth } from '../../../lib/AuthContext'
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback'
 import { canApproveQuote, canEditClosedTow, isClosedTowStatus } from '../../../lib/utils/can-edit-closed-tow'
+import {
+  resolvePortalVisibilityFlag,
+  getPortalVisibilityOverrideState,
+  PORTAL_VISIBILITY_FLAGS,
+  PORTAL_VISIBILITY_LABELS,
+  applyPortalVisibilityOverrideToTow,
+  buildPortalVisibilityServerUpdate,
+  type PortalVisibilityFlag,
+  type PortalVisibilityOverrideState,
+} from '../../../lib/utils/portal-visibility'
 import { approveTowQuote, getTowWithPoints, getTowDetailLight, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
@@ -495,6 +505,31 @@ export default function TowDetailsPage() {
     setActiveTab(tab)
     if (tab === 'history') void loadChangeLogs()
   }, [loadChangeLogs])
+
+  const handlePortalVisibilityOverrideChange = useCallback(
+    async (flag: PortalVisibilityFlag, state: PortalVisibilityOverrideState) => {
+      if (!tow) return
+      const snapshot = tow
+      setTow((prev) => (prev ? applyPortalVisibilityOverrideToTow(prev, flag, state) : prev))
+      try {
+        const serverUpdate = buildPortalVisibilityServerUpdate(
+          flag,
+          state,
+          snapshot.visibility_overrides,
+        )
+        await updateTow({
+          towId: tow.id,
+          ...serverUpdate,
+        })
+        void refreshTow()
+      } catch (err) {
+        setTow(snapshot)
+        console.error('Error updating portal visibility override:', err)
+        alert('שגיאה בעדכון הרשאות התצוגה')
+      }
+    },
+    [tow, refreshTow],
+  )
 
   const handleBackToCalendar = useCallback(() => {
     if (tow?.scheduled_at) {
@@ -3089,78 +3124,78 @@ export default function TowDetailsPage() {
             <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
               <h2 className="font-bold text-gray-800 flex items-center gap-2">
                 <Eye size={18} />
-                הגדרות תצוגה בפורטל לקוח
+                הרשאות תצוגה ללקוח (לגרירה זו)
               </h2>
-              <p className="text-sm text-gray-500 mt-1">הגדרות אלו דורסות את ברירת המחדל של הלקוח עבור גרירה זו בלבד</p>
+              <p className="text-sm text-gray-500 mt-1">
+                דריסה לגרירה זו בלבד — ברירת מחדל נלקחת מהגדרות הפורטל של הלקוח
+              </p>
             </div>
             <div className="p-4 sm:p-5 space-y-3">
-              {[
-                { key: 'show_photos', label: 'תמונות', description: 'תמונות שצולמו במהלך הגרירה' },
-                { key: 'show_price', label: 'מחיר', description: 'מחיר הגרירה ופירוט עלויות' },
-                { key: 'show_driver_info', label: 'שם נהג', description: 'שם הנהג שמבצע את הגרירה' },
-                { key: 'show_driver_phone', label: 'טלפון נהג', description: 'מספר הטלפון של הנהג' },
-                { key: 'show_status_history', label: 'היסטוריית סטטוסים', description: 'ציר זמן של שלבי הגרירה' },
-                { key: 'show_vehicles', label: 'פרטי רכבים', description: 'פרטי הרכבים שנגררו' },
-                { key: 'show_notes', label: 'הערות', description: 'הערות פנימיות על הגרירה' },
-              ].map(({ key, label, description }) => {
-                const overrideValue = tow.visibility_overrides?.[key]
-                const isOverridden = overrideValue !== undefined
+              {PORTAL_VISIBILITY_FLAGS.map((flag) => {
+                const { label, description } = PORTAL_VISIBILITY_LABELS[flag]
+                const customerPortalSettings =
+                  (tow.customer?.portal_settings as Record<string, boolean> | null | undefined) ?? {}
+                const overrideState = getPortalVisibilityOverrideState(flag, tow)
+                const effectiveVisible = resolvePortalVisibilityFlag(
+                  flag,
+                  customerPortalSettings,
+                  tow,
+                )
 
-                const handleToggle = async (value: boolean | null) => {
-                  const current = tow.visibility_overrides || {}
-                  let updated: Record<string, boolean> | null
-
-                  if (value === null) {
-                    const { [key]: _, ...rest } = current
-                    updated = Object.keys(rest).length > 0 ? rest : null
-                  } else {
-                    updated = { ...current, [key]: value }
+                const stateButtonClass = (state: PortalVisibilityOverrideState) => {
+                  const active = overrideState === state
+                  if (state === 'default') {
+                    return active
+                      ? 'bg-gray-700 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }
-
-                  await updateTow({ towId: tow.id, visibilityOverrides: updated })
-                  await refreshTow()
+                  if (state === 'show') {
+                    return active
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }
+                  return active
+                    ? 'bg-red-500 text-white'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }
 
                 return (
-                  <div key={key} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
+                  <div
+                    key={flag}
+                    className="flex flex-col gap-3 rounded-xl border border-gray-100 p-3 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50"
+                  >
                     <div>
                       <p className="font-medium text-gray-800 text-sm">{label}</p>
                       <p className="text-xs text-gray-400">{description}</p>
+                      <p className="text-xs mt-1 text-gray-500">
+                        מוצג ללקוח כעת:{' '}
+                        <span className={effectiveVisible ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}>
+                          {effectiveVisible ? 'כן' : 'לא'}
+                        </span>
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {isOverridden && (
-                        <button
-                          onClick={() => handleToggle(null)}
-                          className="text-xs text-gray-400 hover:text-gray-600 underline"
-                        >
-                          איפוס
-                        </button>
-                      )}
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleToggle(true)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            overrideValue === true
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
-                        >
-                          כן
-                        </button>
-                        <button
-                          onClick={() => handleToggle(false)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                            overrideValue === false
-                              ? 'bg-red-500 text-white'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
-                        >
-                          לא
-                        </button>
-                      </div>
-                      {!isOverridden && (
-                        <span className="text-xs text-gray-400 mr-1">ברירת מחדל</span>
-                      )}
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handlePortalVisibilityOverrideChange(flag, 'default')}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${stateButtonClass('default')}`}
+                      >
+                        ברירת מחדל
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePortalVisibilityOverrideChange(flag, 'show')}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${stateButtonClass('show')}`}
+                      >
+                        הצג לגרירה זו
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handlePortalVisibilityOverrideChange(flag, 'hide')}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${stateButtonClass('hide')}`}
+                      >
+                        הסתר לגרירה זו
+                      </button>
                     </div>
                   </div>
                 )

@@ -7,6 +7,10 @@ import { useAuth } from '@/app/lib/AuthContext'
 import { getCustomerForUser, getCustomerTowDetail } from '@/app/lib/queries/customer-portal'
 import type { CustomerPortalTowDetail } from '@/app/lib/types'
 import {
+  resolvePortalVisibilityFlag,
+  type PortalVisibilityFlag,
+} from '@/app/lib/utils/portal-visibility'
+import {
   ArrowRight,
   Truck,
   Clock,
@@ -52,13 +56,10 @@ export default function CustomerTowDetail() {
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
   const [userRole, setUserRole] = useState<string>('viewer')
 
-  const canShow = (key: string): boolean => {
-  if (tow?.visibility_overrides && tow.visibility_overrides[key] !== undefined) {
-    return tow.visibility_overrides[key]
+  const canShow = (flag: PortalVisibilityFlag): boolean => {
+    if (!tow) return portalSettings[flag] !== false
+    return resolvePortalVisibilityFlag(flag, portalSettings, tow)
   }
-  return portalSettings[key] !== false
-}
-
 
   useEffect(() => {
     if (authLoading || !user) return

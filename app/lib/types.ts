@@ -620,6 +620,13 @@ export interface CustomerPortalTow {
 export interface CustomerPortalTowDetail extends CustomerPortalTow {
   notes: string | null
   visibility_overrides: Record<string, boolean> | null
+  show_photos_override: boolean | null
+  show_price_override: boolean | null
+  show_driver_info_override: boolean | null
+  show_driver_phone_override: boolean | null
+  show_status_history_override: boolean | null
+  show_vehicles_override: boolean | null
+  show_notes_override: boolean | null
   final_price: number | null
   points: (CustomerPortalTow['points'][0] & {
     contact_name: string | null
