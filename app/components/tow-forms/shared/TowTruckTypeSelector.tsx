@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import { SelectorModalShell } from './SelectorModalShell'
+
 interface TowTruckTypeSelectorProps {
   selectedTypes: string[]
   onChange: (types: string[]) => void
@@ -17,10 +20,8 @@ const TRUCK_TYPES = [
   { id: 'carrier', label: 'מובילית', icon: '🚚' },
 ]
 
-import { useState } from 'react'
-
-export function TowTruckTypeSelector({ 
-  selectedTypes, 
+export function TowTruckTypeSelector({
+  selectedTypes,
   onChange,
   label = 'סוגי גרר מתאימים',
   variant = 'default',
@@ -43,10 +44,10 @@ export function TowTruckTypeSelector({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`relative flex w-full min-h-[40px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+          className={`relative flex w-full min-h-[36px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
             selectedTypes.length > 0
               ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-              : 'border-gt-border text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
+              : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
           }`}
         >
           <span>{triggerLabel}</span>
@@ -56,45 +57,30 @@ export function TowTruckTypeSelector({
             </span>
           )}
         </button>
-        {showModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setShowModal(false)}
-          >
-            <div
-              className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-white shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
-                <h3 className="font-bold text-gray-800">{label}</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="font-medium text-gt-brand"
-                >
-                  סיום
-                </button>
-              </div>
-              <div className="space-y-2 p-4">
-                {TRUCK_TYPES.map((type) => (
-                  <button
-                    key={`modal-${type.id}`}
-                    type="button"
-                    onClick={() => toggleType(type.id)}
-                    className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all ${
-                      selectedTypes.includes(type.id)
-                        ? 'border-gt-brand bg-gt-brand text-white'
-                        : 'border-gray-200 bg-white text-gray-600'
-                    }`}
-                  >
-                    <span className="text-xl">{type.icon}</span>
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <SelectorModalShell
+          open={showModal}
+          onClose={() => setShowModal(false)}
+          title={label}
+          panelClassName="max-w-md sm:max-w-lg"
+        >
+          <div className="space-y-2 p-4">
+            {TRUCK_TYPES.map((type) => (
+              <button
+                key={`modal-${type.id}`}
+                type="button"
+                onClick={() => toggleType(type.id)}
+                className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all ${
+                  selectedTypes.includes(type.id)
+                    ? 'border-gt-brand bg-gt-brand text-white'
+                    : 'border-gray-200 bg-white text-gray-600'
+                }`}
+              >
+                <span className="text-xl">{type.icon}</span>
+                {type.label}
+              </button>
+            ))}
           </div>
-        )}
+        </SelectorModalShell>
       </div>
     )
   }
@@ -139,39 +125,30 @@ export function TowTruckTypeSelector({
       )}
 
       {/* מודל מובייל */}
-      {showModal && (
-        <div
-          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800">{label}</h3>
-              <button type="button" onClick={() => setShowModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
-            </div>
-            <div className="p-4 space-y-2">
-              {TRUCK_TYPES.map((type) => (
-                <button
-                  key={`modal-${type.id}`}
-                  type="button"
-                  onClick={() => toggleType(type.id)}
-                  className={`w-full min-h-[48px] p-4 rounded-xl text-sm font-medium transition-all border flex items-center gap-3 ${
-                    selectedTypes.includes(type.id)
-                      ? 'bg-[#33d4ff] text-white border-[#33d4ff]'
-                      : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  <span className="text-xl">{type.icon}</span>
-                  {type.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      <SelectorModalShell
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={label}
+        overlayClassName="sm:hidden"
+      >
+        <div className="space-y-2 p-4">
+          {TRUCK_TYPES.map((type) => (
+            <button
+              key={`modal-${type.id}`}
+              type="button"
+              onClick={() => toggleType(type.id)}
+              className={`w-full min-h-[48px] p-4 rounded-xl text-sm font-medium transition-all border flex items-center gap-3 ${
+                selectedTypes.includes(type.id)
+                  ? 'bg-[#33d4ff] text-white border-[#33d4ff]'
+                  : 'bg-white text-gray-600 border-gray-200'
+              }`}
+            >
+              <span className="text-xl">{type.icon}</span>
+              {type.label}
+            </button>
+          ))}
         </div>
-      )}
+      </SelectorModalShell>
 
       {/* דסקטופ */}
       <div className="hidden sm:flex flex-wrap gap-2">

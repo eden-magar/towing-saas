@@ -1790,6 +1790,7 @@ function CreateTowForm({
       <ColumnLayout
         form={form}
         onExitColumnLayout={() => setUseColumnLayout(false)}
+        persistContactsRef={persistCustomerContactsRef}
       />
     )
   }

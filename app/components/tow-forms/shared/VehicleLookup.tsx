@@ -69,7 +69,9 @@ export function VehicleLookup({
   manualChassis = '',
   onManualChassisChange,
 }: VehicleLookupProps) {
-  const stackLayout = isMobile || narrowColumn
+  const isNarrow = narrowColumn ?? false
+  const isMobileSized = isMobile ?? false
+  const stackLayout = isMobileSized || isNarrow
   const [loading, setLoading] = useState(false)
   const [localNotFound, setLocalNotFound] = useState(false)
   const [showManualModal, setShowManualModal] = useState(false)
@@ -123,13 +125,17 @@ export function VehicleLookup({
     if (isMobile) setShowManualModal(true)
   }
 
-  const manualInputClass = isMobile
-    ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm'
-    : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm'
+  const manualInputClass = isNarrow
+    ? 'w-full px-3 h-9 border border-gray-200 rounded-lg text-sm'
+    : isMobileSized
+      ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm'
+      : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm'
 
-  const manualSelectClass = isMobile
-    ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm bg-white'
-    : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white'
+  const manualSelectClass = isNarrow
+    ? 'w-full px-3 h-9 border border-gray-200 rounded-lg text-sm bg-white'
+    : isMobileSized
+      ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm bg-white'
+      : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white'
 
   const renderManualEntryTrigger = () => {
     if (!manualEnabled || notFound || vehicleData?.found) return null
@@ -140,7 +146,9 @@ export function VehicleLookup({
         disabled={disabled}
         className={
           manualEntryStyle === 'button'
-            ? 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors disabled:opacity-50'
+            ? isNarrow
+              ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gray-200 text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors disabled:opacity-50'
+              : 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors disabled:opacity-50'
             : 'inline-flex items-center gap-1 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:underline underline-offset-2 transition-colors disabled:opacity-50'
         }
       >
@@ -150,10 +158,94 @@ export function VehicleLookup({
     )
   }
 
-  const renderManualFields = () => (
+  const manualFieldLabelClass = (narrowManual = false) =>
+    `block mb-1 ${
+      isNarrow || narrowManual
+        ? 'text-xs text-gray-500 font-medium'
+        : 'text-xs text-gray-600'
+    }`
+
+  const renderManualFields = (options?: { narrowManualLayout?: boolean }) => {
+    const narrowManual = options?.narrowManualLayout ?? false
+
+    if (narrowManual) {
+      return (
+        <div className="space-y-2">
+          <div>
+            <label className={manualFieldLabelClass(true)}>סוג רכב *</label>
+            <select
+              value={vehicleType}
+              onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
+              className={manualSelectClass}
+            >
+              <option value="">בחר סוג רכב</option>
+              <option value="private">פרטי</option>
+              <option value="suv">ג&apos;יפ / SUV</option>
+              <option value="truck">משאית</option>
+              <option value="heavy">צמ&quot;ה</option>
+              <option value="motorcycle">אופנוע</option>
+              <option value="bus">אוטובוס / מיניבוס</option>
+              <option value="van">רכב מסחרי</option>
+              <option value="other">אחר</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <label className={manualFieldLabelClass(true)}>יצרן</label>
+              <input
+                type="text"
+                value={manualManufacturer}
+                onChange={(e) => onManualManufacturerChange?.(e.target.value)}
+                placeholder="למשל: טויוטה"
+                className={manualInputClass}
+              />
+            </div>
+            <div className="min-w-0">
+              <label className={manualFieldLabelClass(true)}>צבע</label>
+              <input
+                type="text"
+                value={manualColor}
+                onChange={(e) => onManualColorChange?.(e.target.value)}
+                placeholder="למשל: לבן"
+                className={manualInputClass}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <label className={manualFieldLabelClass(true)}>מספר שלדה</label>
+              <input
+                type="text"
+                value={manualChassis}
+                onChange={(e) => onManualChassisChange?.(e.target.value)}
+                placeholder="אופציונלי"
+                className={`${manualInputClass} font-mono`}
+              />
+            </div>
+            <div className="min-w-0">
+              <label className={manualFieldLabelClass(true)}>
+                {(vehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
+              </label>
+              <input
+                type="number"
+                value={manualWeight}
+                onChange={(e) => onManualWeightChange?.(e.target.value)}
+                placeholder={(vehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'}
+                className={manualInputClass}
+              />
+              {(vehicleType as string) === 'van' && (!manualWeight || Number(manualWeight) === 0) && (
+                <p className="text-xs text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return (
     <div className={stackLayout ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
       <div>
-        <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
+        <label className={manualFieldLabelClass()}>סוג רכב *</label>
         <select
           value={vehicleType}
           onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
@@ -171,7 +263,7 @@ export function VehicleLookup({
         </select>
       </div>
       <div>
-        <label className="block text-xs text-gray-600 mb-1">יצרן</label>
+        <label className={manualFieldLabelClass()}>יצרן</label>
         <input
           type="text"
           value={manualManufacturer}
@@ -181,7 +273,7 @@ export function VehicleLookup({
         />
       </div>
       <div>
-        <label className="block text-xs text-gray-600 mb-1">צבע</label>
+        <label className={manualFieldLabelClass()}>צבע</label>
         <input
           type="text"
           value={manualColor}
@@ -191,7 +283,7 @@ export function VehicleLookup({
         />
       </div>
       <div>
-        <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
+        <label className={manualFieldLabelClass()}>מספר שלדה</label>
         <input
           type="text"
           value={manualChassis}
@@ -201,7 +293,7 @@ export function VehicleLookup({
         />
       </div>
       <div>
-        <label className="block text-xs text-gray-600 mb-1">
+        <label className={manualFieldLabelClass()}>
           {(vehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
         </label>
         <input
@@ -216,7 +308,8 @@ export function VehicleLookup({
         )}
       </div>
     </div>
-  )
+    )
+  }
 
   return (
     <div className="space-y-2">
@@ -224,11 +317,11 @@ export function VehicleLookup({
         <>
           {/* שורה 1: מספר רכב — השדה הראשי (בולט), עם תווית ואייקון חיפוש שקט בקצה */}
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">מספר רכב</label>
+            <label className={`block mb-1 ${isNarrow ? 'text-xs text-gray-500 font-medium' : 'text-sm font-semibold text-gray-700'}`}>מספר רכב</label>
             {/* narrow-column: plate + code on one row; type is hidden when found
                 and provided by the manual panel when not found. */}
-            <div className={narrowColumn ? 'flex gap-2' : 'relative'}>
-              <div className={narrowColumn ? 'relative flex-1 min-w-0' : 'relative'}>
+            <div className={isNarrow ? 'flex gap-2' : 'relative'}>
+              <div className={isNarrow ? 'relative flex-1 min-w-0' : 'relative'}>
                 <input
                   type="text"
                   value={plateNumber}
@@ -243,7 +336,11 @@ export function VehicleLookup({
                   }}
                   placeholder="מספר רכב *"
                   disabled={disabled}
-                  className="w-full pl-14 pr-3 h-12 bg-white border border-gray-300 rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+                  className={
+                    isNarrow
+                      ? 'w-full pl-12 pr-3 h-9 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-gt-brand/15 disabled:bg-gray-100'
+                      : 'w-full pl-14 pr-3 h-12 bg-white border border-gray-300 rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100'
+                  }
                   onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
                   onBlur={() => {
                     if (
@@ -259,30 +356,39 @@ export function VehicleLookup({
 
                 {/* כפתור חיפוש - אייקון שקט (ghost) בתוך השדה */}
                 <button
+                  type="button"
                   onClick={handleLookup}
                   disabled={loading || plateNumber.length < 5 || disabled}
                   aria-label="חפש רכב"
-                  className="absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40"
+                  className={
+                    isNarrow
+                      ? 'absolute left-0 top-0 h-9 w-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40'
+                      : 'absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40'
+                  }
                 >
-                  {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+                  {loading ? (
+                    <Loader2 size={isNarrow ? 16 : 18} className="animate-spin" />
+                  ) : (
+                    <Search size={isNarrow ? 16 : 18} />
+                  )}
                 </button>
               </div>
 
-              {narrowColumn && showVehicleCode && onVehicleCodeChange && (
+              {isNarrow && showVehicleCode && onVehicleCodeChange && (
                 <input
                   type="text"
                   value={vehicleCode}
                   onChange={(e) => onVehicleCodeChange(e.target.value)}
                   placeholder="קוד"
                   disabled={disabled}
-                  className="w-20 shrink-0 px-2 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+                  className="w-20 shrink-0 px-2 h-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand/15 disabled:bg-gray-100"
                 />
               )}
             </div>
           </div>
 
           {/* שורה 2: סוג + קוד — שדות משניים (מובייל בלבד; ב-narrow column קוד עלה לשורת הרכב והסוג מוסתר עד מצב ידני) */}
-          {!narrowColumn && (
+          {!isNarrow && (
             <div className="flex gap-2">
               <select
                 value={vehicleType}
@@ -481,6 +587,11 @@ export function VehicleLookup({
             <PenLine size={14} className="text-amber-600 shrink-0" />
             <span className="text-xs text-amber-700 flex-1">פרטי רכב ידניים — הקש לעריכה</span>
           </button>
+        ) : isNarrow ? (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+            <p className="text-xs text-amber-600">הרכב לא נמצא במאגר — יש למלא ידנית</p>
+            {renderManualFields({ narrowManualLayout: true })}
+          </div>
         ) : (
           /* דסקטופ: פאנל אמבר inline עם השדות */
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">

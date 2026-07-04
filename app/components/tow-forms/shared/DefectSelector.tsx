@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { SelectorModalShell } from './SelectorModalShell'
 
 interface DefectSelectorProps {
   selectedDefects: string[]
@@ -118,10 +119,10 @@ export function DefectSelector({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`relative flex w-full min-h-[40px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+          className={`relative flex w-full min-h-[36px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
             selectedDefects.length > 0
               ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-              : 'border-gt-border text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
+              : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
           }`}
         >
           <span>{triggerLabel}</span>
@@ -131,55 +132,39 @@ export function DefectSelector({
             </span>
           )}
         </button>
-        {showModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={() => setShowModal(false)}
-          >
-            <div
-              className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-white shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white p-4">
-                <h3 className="font-bold text-gray-800">{label}</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="font-medium text-gt-brand"
-                >
-                  סיום
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 p-4">
-                {DEFAULT_DEFECTS.map((defect) => (
-                  <button
-                    key={`modal-${defect}`}
-                    type="button"
-                    onClick={() => toggleDefect(defect)}
-                    className={`min-h-[44px] rounded-xl px-4 py-2.5 text-sm transition-colors ${
-                      isSelected(defect)
-                        ? 'bg-gt-brand text-white'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {defect}
-                  </button>
-                ))}
-              </div>
-              {isSelected('אחר') && (
-                <div className="px-4 pb-4">
-                  <input
-                    type="text"
-                    value={otherText}
-                    onChange={(e) => updateOtherText(e.target.value)}
-                    placeholder="פרט את התקלה..."
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand"
-                  />
-                </div>
-              )}
-            </div>
+        <SelectorModalShell
+          open={showModal}
+          onClose={() => setShowModal(false)}
+          title={label}
+        >
+          <div className="flex flex-wrap gap-2 p-4">
+            {DEFAULT_DEFECTS.map((defect) => (
+              <button
+                key={`modal-${defect}`}
+                type="button"
+                onClick={() => toggleDefect(defect)}
+                className={`min-h-[44px] rounded-xl px-4 py-2.5 text-sm transition-colors ${
+                  isSelected(defect)
+                    ? 'bg-gt-brand text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {defect}
+              </button>
+            ))}
           </div>
-        )}
+          {isSelected('אחר') && (
+            <div className="px-4 pb-4">
+              <input
+                type="text"
+                value={otherText}
+                onChange={(e) => updateOtherText(e.target.value)}
+                placeholder="פרט את התקלה..."
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand"
+              />
+            </div>
+          )}
+        </SelectorModalShell>
       </div>
     )
   }
@@ -221,51 +206,42 @@ export function DefectSelector({
       )}
 
       {/* מודל מובייל */}
-      {showModal && (
-        <div
-          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800">{label}</h3>
-              <button type="button" onClick={() => setShowModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
-            </div>
-            <div className="p-4 flex flex-wrap gap-2">
-              {DEFAULT_DEFECTS.map((defect) => (
-                <button
-                  key={`modal-${defect}`}
-                  type="button"
-                  onClick={() => toggleDefect(defect)}
-                  className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm transition-colors ${
-                    isSelected(defect) ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  {defect}
-                </button>
-              ))}
-            </div>
-            {isSelected('אחר') && (
-              <div className="px-4 pb-4">
-                <input
-                  type="text"
-                  value={otherText}
-                  onChange={(e) => updateOtherText(e.target.value)}
-                  placeholder="פרט את התקלה..."
-                  className={
-                    isMobile
-                      ? 'w-full px-4 h-12 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
-                      : 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
-                  }
-                />
-              </div>
-            )}
-          </div>
+      <SelectorModalShell
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={label}
+        overlayClassName="sm:hidden"
+      >
+        <div className="flex flex-wrap gap-2 p-4">
+          {DEFAULT_DEFECTS.map((defect) => (
+            <button
+              key={`modal-${defect}`}
+              type="button"
+              onClick={() => toggleDefect(defect)}
+              className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm transition-colors ${
+                isSelected(defect) ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {defect}
+            </button>
+          ))}
         </div>
-      )}
+        {isSelected('אחר') && (
+          <div className="px-4 pb-4">
+            <input
+              type="text"
+              value={otherText}
+              onChange={(e) => updateOtherText(e.target.value)}
+              placeholder="פרט את התקלה..."
+              className={
+                isMobile
+                  ? 'w-full px-4 h-12 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
+                  : 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
+              }
+            />
+          </div>
+        )}
+      </SelectorModalShell>
 
       {/* דסקטופ - כפתורים inline */}
       <div className="hidden sm:flex flex-wrap gap-2">

@@ -113,8 +113,10 @@ export function CreateCustomerSection({
   isMobile = false,
   narrowColumn = false,
 }: CreateCustomerSectionProps) {
+  const isNarrow = narrowColumn ?? false
+  const isMobileSized = isMobile ?? false
   // narrow-column reuses the mobile compact/stacked visual treatment
-  const compact = isMobile || narrowColumn
+  const compact = isMobileSized || isNarrow
   const [isFocused, setIsFocused] = useState(false)
   // Mobile-only: collapse the optional end-time behind a button. Start expanded
   // if either end field already has a value so existing data is never hidden.
@@ -147,6 +149,15 @@ export function CreateCustomerSection({
       ? 'מחירון אישי'
       : null
 
+  const scheduleMinH = isNarrow ? 'min-h-[36px]' : 'min-h-[48px]'
+  const scheduleText = isNarrow ? 'text-xs' : 'text-sm'
+  const scheduleBtn = (active: boolean) =>
+    active
+      ? `${scheduleMinH} rounded-lg border ${scheduleText} font-medium transition-colors bg-gt-brand text-white border-gt-brand`
+      : `${scheduleMinH} rounded-lg border ${scheduleText} font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50`
+  const formCardClass = isNarrow ? 'mb-0' : undefined
+  const narrowInputClass = 'h-9 py-0 leading-9'
+
   const schedulingFooter = (
     <>
       {editTowId && orderNumber && (
@@ -159,7 +170,7 @@ export function CreateCustomerSection({
       )}
       {compact ? (
         <div
-          className="px-3 py-2 border-t border-gray-100 flex flex-col items-stretch gap-2"
+          className={`px-3 border-t border-gray-100 flex flex-col items-stretch gap-2 ${isNarrow ? 'py-1.5' : 'py-2'}`}
           dir="rtl"
         >
           <Input
@@ -167,7 +178,7 @@ export function CreateCustomerSection({
             value={customerOrderNumber}
             onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
             placeholder="מס׳ הזמנת לקוח"
-            className="w-full h-12"
+            className={isNarrow ? `w-full ${narrowInputClass}` : 'w-full h-12'}
           />
           <div className="grid grid-cols-3 gap-2">
             <button
@@ -176,33 +187,21 @@ export function CreateCustomerSection({
                 onNowClick()
                 setUseCustomTime(false)
               }}
-              className={
-                !useCustomTime
-                  ? 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
-                  : 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-              }
+              className={scheduleBtn(!useCustomTime)}
             >
               עכשיו
             </button>
             <button
               type="button"
               onClick={() => setUseCustomTime(true)}
-              className={
-                useCustomTime
-                  ? 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
-                  : 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-              }
+              className={scheduleBtn(useCustomTime)}
             >
               מועד אחר
             </button>
             <button
               type="button"
               onClick={() => setShowEndTime((v) => !v)}
-              className={
-                showEndTime
-                  ? 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
-                  : 'min-h-[48px] rounded-lg border text-sm font-medium transition-colors bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-              }
+              className={scheduleBtn(showEndTime)}
             >
               מועד סיום
             </button>
@@ -212,20 +211,22 @@ export function CreateCustomerSection({
               <TimeInput
                 value={towTime}
                 onChange={onTowTimeChange}
-                isMobile
+                narrowColumn={isNarrow}
+                isMobile={isMobileSized && !isNarrow}
                 className="flex-1"
               />
               <DateInput
                 value={towDate}
                 onChange={onTowDateChange}
-                isMobile
+                narrowColumn={isNarrow}
+                isMobile={isMobileSized && !isNarrow}
                 className="flex-1"
               />
             </div>
           )}
           {showEndTime && (
             <div className="pt-2 mt-1 border-t border-gray-200 flex flex-col items-stretch gap-2">
-              <span className="text-sm text-gray-600">שעת סיום (אופציונלי)</span>
+              <span className={isNarrow ? 'text-xs font-medium text-gray-500' : 'text-sm text-gray-600'}>שעת סיום (אופציונלי)</span>
               <div className="flex items-center gap-2">
                 <TimeInput
                   value={towEndTime}
@@ -235,13 +236,15 @@ export function CreateCustomerSection({
                       onTowEndDateChange(towDate)
                     }
                   }}
-                  isMobile
+                  narrowColumn={isNarrow}
+                  isMobile={isMobileSized && !isNarrow}
                   className="flex-1"
                 />
                 <DateInput
                   value={towEndDate}
                   onChange={onTowEndDateChange}
-                  isMobile
+                  narrowColumn={isNarrow}
+                  isMobile={isMobileSized && !isNarrow}
                   className="flex-1"
                 />
               </div>
@@ -303,12 +306,13 @@ export function CreateCustomerSection({
         icon={User}
         title="פרטי לקוח"
         description="לקוח מזדמן - הזן פרטים חדשים"
+        className={formCardClass}
         actions={
           <Button
             type="button"
             variant="secondary"
             size={compact ? 'md' : 'sm'}
-            className={compact ? 'min-h-[48px]' : undefined}
+            className={isNarrow ? 'min-h-[36px]' : compact ? 'min-h-[48px]' : undefined}
             onClick={switchToExisting}
           >
             חזור ללקוח קיים
@@ -324,13 +328,13 @@ export function CreateCustomerSection({
             value={customerName}
             onChange={(e) => onCustomerNameChange(e.target.value)}
             placeholder="שם הלקוח *"
-            className={compact ? 'h-12' : undefined}
+            className={isNarrow ? narrowInputClass : compact ? 'h-12' : undefined}
           />
           <PhoneInput
             value={customerPhone}
             onChange={onCustomerPhoneChange}
             placeholder="טלפון"
-            className={compact ? 'h-12' : undefined}
+            className={isNarrow ? narrowInputClass : compact ? 'h-12' : undefined}
           />
         </div>
         {schedulingFooter}
@@ -344,12 +348,13 @@ export function CreateCustomerSection({
         icon={User}
         title="פרטי לקוח"
         description="בחר לקוח קיים או צור לקוח מזדמן"
+        className={formCardClass}
         actions={
           <Button
             type="button"
             variant="secondary"
             size={compact ? 'md' : 'sm'}
-            className={compact ? 'min-h-[48px]' : undefined}
+            className={isNarrow ? 'min-h-[36px]' : compact ? 'min-h-[48px]' : undefined}
             onClick={switchToWalkIn}
           >
             לקוח מזדמן
@@ -367,7 +372,7 @@ export function CreateCustomerSection({
               onBlur={() => setTimeout(() => setIsFocused(false), 150)}
               placeholder="חפש לפי שם, טלפון, ת.ז..."
               disabled={customersLoading}
-              className={compact ? 'pl-9 pr-3 text-right h-12' : 'pl-9 pr-3 text-right'}
+              className={isNarrow ? `pl-9 pr-3 text-right ${narrowInputClass}` : compact ? 'pl-9 pr-3 text-right h-12' : 'pl-9 pr-3 text-right'}
             />
           </div>
           {customersLoading && (
@@ -420,12 +425,13 @@ export function CreateCustomerSection({
       icon={User}
       title="פרטי לקוח"
       description="לקוח נבחר"
+      className={formCardClass}
       actions={
         <Button
           type="button"
           variant="secondary"
           size={compact ? 'md' : 'sm'}
-          className={compact ? 'min-h-[48px]' : undefined}
+          className={isNarrow ? 'min-h-[36px]' : compact ? 'min-h-[48px]' : undefined}
           onClick={clearCustomer}
         >
           <ArrowLeftRight size={12} />
@@ -470,16 +476,16 @@ export function CreateCustomerSection({
 
       {isBusinessCustomer && onDepartmentChange && onOrderedByChange && (
         <div className="px-4 pb-3 border-t border-gray-100 space-y-2" dir="rtl">
-          <div className={narrowColumn ? 'grid grid-cols-1 gap-2' : isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-2'}>
+          <div className={isNarrow ? 'grid grid-cols-1 gap-2' : isMobileSized ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-2'}>
             {compact ? (
               <div>
-                <label className="block text-xs text-gray-500 mb-1 text-right">מחלקה</label>
+                <label className="block text-xs text-gray-500 font-medium mb-1 text-right">מחלקה</label>
                 <Input
                   type="text"
                   value={department}
                   onChange={(e) => onDepartmentChange(e.target.value)}
                   placeholder="מחלקה (אופציונלי)"
-                  className="text-right"
+                  className={isNarrow ? `text-right ${narrowInputClass}` : 'text-right'}
                 />
               </div>
             ) : (
@@ -493,7 +499,7 @@ export function CreateCustomerSection({
             )}
             {compact ? (
               <div>
-                <label className="block text-xs text-gray-500 mb-1 text-right">מזמין</label>
+                <label className="block text-xs text-gray-500 font-medium mb-1 text-right">מזמין</label>
                 <OrdererNameAutocomplete
                   value={orderedBy}
                   onChange={onOrderedByChange}
@@ -505,8 +511,8 @@ export function CreateCustomerSection({
                   orderers={savedOrderers}
                   loading={orderersLoading}
                   placeholder="מזמין (אופציונלי)"
-                  className="text-right"
-                  isMobile
+                  className={isNarrow ? `text-right ${narrowInputClass}` : 'text-right'}
+                  isMobile={isMobileSized && !isNarrow}
                 />
               </div>
             ) : (

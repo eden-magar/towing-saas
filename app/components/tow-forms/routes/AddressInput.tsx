@@ -63,6 +63,8 @@ interface AddressInputProps {
   // External ref for focus control
   inputRef?: React.RefObject<HTMLInputElement>
   isMobile?: boolean
+  /** Compact desktop column layout — h-9 inputs, rounded-lg, border-gray-200. Does not affect isMobile. */
+  narrowColumn?: boolean
 }
 
 const LINK_RESOLVE_ERROR = 'לא הצלחנו לזהות מיקום מהקישור'
@@ -83,10 +85,14 @@ export function AddressInput({
   onPinDropClick,
   inputRef: externalRef,
   isMobile = false,
+  narrowColumn = false,
 }: AddressInputProps) {
   const internalRef = useRef<HTMLInputElement>(null)
   const inputRef = externalRef || internalRef
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+
+  const isNarrow = narrowColumn ?? false
+  const isMobileSized = isMobile ?? false
   
   // Handle both string and AddressData value types
   const addressString = typeof value === 'string' ? value : (value?.address || '')
@@ -253,13 +259,19 @@ export function AddressInput({
     }
   }
 
-  const inputClassName = isMobile
-    ? 'flex-1 min-w-0 px-4 h-12 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
-    : 'flex-1 min-w-0 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
+  const inputClassName = isNarrow
+    ? 'flex-1 min-w-0 px-3 h-9 border border-gray-200 rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
+    : isMobileSized
+      ? 'flex-1 min-w-0 px-4 h-12 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
+      : 'flex-1 min-w-0 px-4 py-2.5 border border-gt-border rounded-xl text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15'
 
-  const actionButtonClassName = isMobile
-    ? 'shrink-0 px-3 min-h-[48px] min-w-[48px] flex items-center justify-center border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'shrink-0 px-3 py-2.5 border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+  const actionButtonClassName = isNarrow
+    ? 'shrink-0 h-9 w-9 flex items-center justify-center border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : isMobileSized
+      ? 'shrink-0 px-3 min-h-[48px] min-w-[48px] flex items-center justify-center border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+      : 'shrink-0 px-3 py-2.5 border border-gt-border rounded-xl text-gray-500 hover:bg-gray-50 hover:border-gt-border-strong transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+
+  const actionIconSize = isNarrow ? 16 : 18
 
   const renderLinkButton = () => {
     if (readOnly) return null
@@ -275,7 +287,7 @@ export function AddressInput({
         title="הדבק קישור מ-Google Maps או Waze"
         aria-expanded={linkPanelOpen}
       >
-        {linkLoading ? <Loader2 size={18} className="animate-spin" /> : <Link2 size={18} />}
+        {linkLoading ? <Loader2 size={actionIconSize} className="animate-spin" /> : <Link2 size={actionIconSize} />}
       </button>
     )
   }
@@ -283,7 +295,13 @@ export function AddressInput({
   const renderLinkPanel = () => {
     if (!linkPanelOpen || readOnly) return null
     return (
-      <div className="mt-2 p-3 border border-gt-border rounded-xl bg-gray-50 space-y-2">
+      <div
+        className={
+          isNarrow
+            ? 'mt-2 p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-2'
+            : 'mt-2 p-3 border border-gt-border rounded-xl bg-gray-50 space-y-2'
+        }
+      >
         <label className="block text-xs font-medium text-gray-600">
           הדבק קישור מ-Google Maps או Waze
         </label>
@@ -303,7 +321,11 @@ export function AddressInput({
           placeholder="https://maps.app.goo.gl/... או https://waze.com/ul/..."
           dir="ltr"
           disabled={linkLoading}
-          className="w-full px-3 py-2 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 disabled:bg-gray-100"
+          className={
+            isNarrow
+              ? 'w-full px-3 h-9 border border-gray-200 rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 disabled:bg-gray-100'
+              : 'w-full px-3 py-2 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 disabled:bg-gray-100'
+          }
         />
         {linkError && (
           <p className="text-xs text-red-600" role="alert">
@@ -339,7 +361,7 @@ export function AddressInput({
 
   const renderInputRow = (inputClasses: string) => (
     <>
-      <div className="flex gap-2 items-stretch min-w-0">
+          <div className="flex gap-2 items-center min-w-0">
         <input
           ref={inputRef}
           type="text"
@@ -357,7 +379,7 @@ export function AddressInput({
             className={`${actionButtonClassName} hover:text-red-500`}
             title="הנח סיכה על המפה"
           >
-            <MapPin size={18} />
+            <MapPin size={actionIconSize} />
           </button>
         )}
       </div>
@@ -370,13 +392,17 @@ export function AddressInput({
     return (
       <div className={`flex-1 min-w-0 ${className}`}>
         {renderInputRow(
-          isMobile
-            ? `flex-1 min-w-0 px-3 h-12 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
+          isNarrow
+            ? `flex-1 min-w-0 px-3 h-9 border border-gray-200 rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
                 readOnly ? 'bg-gray-50' : ''
               }`
-            : `flex-1 min-w-0 px-3 py-2.5 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
-                readOnly ? 'bg-gray-50' : ''
-              }`
+            : isMobileSized
+              ? `flex-1 min-w-0 px-3 h-12 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
+                  readOnly ? 'bg-gray-50' : ''
+                }`
+              : `flex-1 min-w-0 px-3 py-2.5 border border-gt-border rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 ${
+                  readOnly ? 'bg-gray-50' : ''
+                }`
         )}
       </div>
     )

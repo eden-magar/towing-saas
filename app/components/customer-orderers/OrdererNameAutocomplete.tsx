@@ -42,6 +42,7 @@ export function OrdererNameAutocomplete({
   className = 'w-full',
   isMobile = false,
 }: OrdererNameAutocompleteProps) {
+  const isMobileLayout = isMobile ?? false
   const anchorRef = useRef<HTMLDivElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -72,12 +73,12 @@ export function OrdererNameAutocomplete({
     if (!el) return
     const rect = el.getBoundingClientRect()
 
-    const width = isMobile
+    const width = isMobileLayout
       ? Math.min(MOBILE_DROPDOWN_MAX_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
       : rect.width
 
     let left = rect.left
-    if (isMobile) {
+    if (isMobileLayout) {
       if (left + width > window.innerWidth - VIEWPORT_MARGIN) {
         left = Math.max(VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN)
       }
@@ -97,7 +98,7 @@ export function OrdererNameAutocomplete({
       : rect.bottom + DROPDOWN_GAP
 
     setDropdownPos({ top, left, width })
-  }, [filteredOrderers.length, isMobile])
+  }, [filteredOrderers.length, isMobileLayout])
 
   useLayoutEffect(() => {
     if (!showList || loading) {

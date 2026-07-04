@@ -27,6 +27,8 @@ export interface TimeInputProps
   nowLabel?: string
   /** When true, renders a taller touch-friendly input. Default false = unchanged. */
   isMobile?: boolean
+  /** Compact desktop column layout — h-9 input. Does not affect isMobile. */
+  narrowColumn?: boolean
 }
 
 export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
@@ -38,6 +40,7 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
       showNow = false,
       nowLabel = 'עכשיו',
       isMobile = false,
+      narrowColumn = false,
       className = '',
       disabled,
       id: idProp,
@@ -156,6 +159,25 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
       setCaretToEnd()
     }
 
+    const isNarrow = narrowColumn ?? false
+    const isMobileSized = isMobile ?? false
+
+    const inputBorderClass = hasError
+      ? 'border-gt-danger ring-1 ring-gt-danger/30'
+      : isNarrow
+        ? 'border-gray-200'
+        : 'border-gt-border'
+
+    const inputSizeClass = isNarrow
+      ? 'h-9 py-0 leading-9'
+      : isMobileSized
+        ? 'h-12'
+        : 'py-2'
+
+    const nowBtnClass = isNarrow
+      ? 'shrink-0 h-9 px-2.5 inline-flex items-center justify-center rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+      : 'shrink-0 px-2.5 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+
     const field = (
       <input
         ref={setRefs}
@@ -178,15 +200,15 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         className={`
-          w-full px-3 py-2 rounded-lg text-sm tabular-nums
+          w-full px-3 rounded-lg text-sm tabular-nums
           bg-white text-gt-text-primary text-left
-          border ${hasError ? 'border-gt-danger ring-1 ring-gt-danger/30' : 'border-gt-border'}
+          border ${inputBorderClass}
           placeholder:text-gt-text-tertiary
           hover:border-gt-border-strong
           focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
           disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
           transition-colors duration-150
-          ${isMobile ? 'h-12 ' : ''}${className}
+          ${inputSizeClass} ${className}
         `.replace(/\s+/g, ' ').trim()}
         aria-invalid={hasError || undefined}
         {...props}
@@ -196,12 +218,12 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
     if (!showNow) return field
 
     return (
-      <div className="flex items-center gap-2 min-w-0" dir="rtl">
+      <div className={`flex items-center gap-2 min-w-0${isNarrow ? ' h-9' : ''}`} dir="rtl">
         <button
           type="button"
           disabled={disabled}
           onClick={handleNow}
-          className="shrink-0 px-2.5 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className={nowBtnClass}
         >
           {nowLabel}
         </button>

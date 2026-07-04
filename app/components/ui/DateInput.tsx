@@ -39,6 +39,8 @@ export interface DateInputProps
   max?: string
   /** When true, renders a taller touch-friendly input + calendar button. Default false = unchanged. */
   isMobile?: boolean
+  /** Compact desktop column layout — h-9 input + calendar button. Does not affect isMobile. */
+  narrowColumn?: boolean
 }
 
 export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
@@ -52,6 +54,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       min,
       max,
       isMobile = false,
+      narrowColumn = false,
       className = '',
       disabled,
       id: idProp,
@@ -281,10 +284,35 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
     const minDate = min ? yyyyMmDdToDate(min) : undefined
     const maxDate = max ? yyyyMmDdToDate(max) : undefined
 
+    const isNarrow = narrowColumn ?? false
+    const isMobileSized = isMobile ?? false
+
+    const inputBorderClass = hasError
+      ? 'border-gt-danger ring-1 ring-gt-danger/30'
+      : isNarrow
+        ? 'border-gray-200'
+        : 'border-gt-border'
+
+    const inputSizeClass = isNarrow
+      ? 'h-9 py-0 leading-9'
+      : isMobileSized
+        ? 'h-12'
+        : 'py-2'
+
+    const calendarBtnClass = isNarrow
+      ? 'h-9 w-9 p-0 flex items-center justify-center border-gray-200'
+      : isMobileSized
+        ? 'h-12 w-12 p-0 flex items-center justify-center border-gt-border'
+        : 'p-2 border-gt-border'
+
+    const todayBtnClass = isNarrow
+      ? 'shrink-0 h-9 px-2.5 inline-flex items-center justify-center rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+      : 'shrink-0 px-2.5 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+
     const fieldRow = (
       <div
         ref={wrapperRef}
-        className={`flex items-center gap-1 min-w-0 ${showToday ? 'flex-1' : className}`.trim()}
+        className={`flex items-center gap-1 min-w-0${isNarrow ? ' h-9' : ''} ${showToday ? 'flex-1' : className}`.trim()}
       >
         <input
           ref={setRefs}
@@ -312,15 +340,15 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           className={`
-            w-full min-w-0 px-3 py-2 rounded-lg text-sm tabular-nums
+            w-full min-w-0 px-3 rounded-lg text-sm tabular-nums
             bg-white text-gt-text-primary text-left
-            border ${hasError ? 'border-gt-danger ring-1 ring-gt-danger/30' : 'border-gt-border'}
+            border ${inputBorderClass}
             placeholder:text-gt-text-tertiary
             hover:border-gt-border-strong
             focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
             disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
             transition-colors duration-150
-            ${isMobile ? 'h-12 ' : ''}
+            ${inputSizeClass}
           `.replace(/\s+/g, ' ').trim()}
           aria-invalid={hasError || undefined}
           {...props}
@@ -335,9 +363,9 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             if (disabled) return
             setCalendarOpenState(!calendarOpenRef.current)
           }}
-          className={`shrink-0 p-2 rounded-lg border border-gt-border text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors${isMobile ? ' h-12 flex items-center justify-center' : ''}`}
+          className={`shrink-0 rounded-lg border text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${calendarBtnClass}`}
         >
-          <Calendar size={16} aria-hidden />
+          <Calendar size={isNarrow ? 15 : 16} aria-hidden />
         </button>
       </div>
     )
@@ -399,7 +427,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             type="button"
             disabled={disabled}
             onClick={handleToday}
-            className="shrink-0 px-2.5 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className={todayBtnClass}
           >
             {todayLabel}
           </button>

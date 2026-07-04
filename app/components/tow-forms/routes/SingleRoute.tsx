@@ -186,6 +186,8 @@ export function SingleRoute({
   narrowColumn = false,
   renderSection = 'both',
 }: SingleRouteProps) {
+  const isNarrow = narrowColumn ?? false
+  const isMobileSized = isMobile ?? false
   const toggleLocationSurcharge = (id: string) => {
     if (selectedLocationSurcharges.includes(id)) {
       onLocationSurchargesChange(selectedLocationSurcharges.filter(i => i !== id))
@@ -294,8 +296,8 @@ export function SingleRoute({
         onManualWeightChange={onManualWeightChange}
         manualChassis={manualChassis}
         onManualChassisChange={onManualChassisChange}
-        isMobile={isMobile}
-        narrowColumn={narrowColumn}
+        isMobile={isMobileSized}
+        narrowColumn={isNarrow}
       />
 
       {isMobile ? (
@@ -509,7 +511,7 @@ export function SingleRoute({
           </div>
         </div>
       ) : (
-        <div className={narrowColumn ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+        <div className={isNarrow ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
           <div className="flex items-start gap-2">
             <div className="w-3 h-3 bg-emerald-500 rounded-full flex-shrink-0 mt-9"></div>
             <div className="flex-1">
@@ -520,7 +522,8 @@ export function SingleRoute({
                 placeholder="הזן כתובת איסוף..."
                 required
                 onPinDropClick={() => onPinDropClick('pickup')}
-                isMobile={isMobile}
+                isMobile={isMobileSized}
+                narrowColumn={isNarrow && !isMobileSized}
               />
             </div>
           </div>
@@ -534,7 +537,8 @@ export function SingleRoute({
                 placeholder="הזן כתובת יעד..."
                 required
                 onPinDropClick={() => onPinDropClick('dropoff')}
-                isMobile={isMobile}
+                isMobile={isMobileSized}
+                narrowColumn={isNarrow && !isMobileSized}
               />
             </div>
           </div>
@@ -543,7 +547,7 @@ export function SingleRoute({
 
       {/* צ'קבוקסים - אחסנה + יציאה מהבסיס (דסקטופ בלבד; במובייל הומרו לכפתורים ליד הכתובות) */}
       {!isMobile && (
-        <div className={narrowColumn ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-2 gap-2'}>
+        <div className={isNarrow ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-2 gap-2'}>
           {/* יעד לאחסנה */}
           {onDropoffToStorageChange && (
             <label className="flex items-center gap-2 cursor-pointer bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors p-2">
