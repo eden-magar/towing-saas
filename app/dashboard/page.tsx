@@ -8,6 +8,7 @@
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
   import { TowWithDetails, searchTows } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
+  import { getPendingCustomerTowRequests } from '../lib/queries/customer-tow-requests'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTowsWithPrevDay } from '../lib/queries/calendar'
@@ -83,6 +84,17 @@
       return 'היום'
     }
     return date.toLocaleDateString('he-IL', { weekday: 'short', day: 'numeric', month: 'numeric' })
+  }
+
+  function formatIncomingScheduledAt(iso: string | null | undefined): string {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('he-IL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
   function getDriverColor(driverId: string, drivers: { id: string }[]): string {
@@ -165,6 +177,7 @@
     const [openTowsByDriver, setOpenTowsByDriver] = useState<Record<string, number>>({})
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
+    const [incomingRequests, setIncomingRequests] = useState<any[]>([])
     const [denyConfirmRequest, setDenyConfirmRequest] = useState<typeof rejectionRequests[0] | null>(null)
     const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
     const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
@@ -280,6 +293,7 @@
         const [
           alertsData,
           rejectionsData,
+          incomingData,
           driversData,
           overtimeData,
           activeDriversData,
@@ -287,6 +301,7 @@
         ] = await Promise.all([
           getExpiryAlerts(companyId),
           getPendingRejectionRequests(companyId),
+          getPendingCustomerTowRequests(companyId),
           getAvailableDrivers(companyId),
           getDriversOvertime(companyId),
           getActiveDriversWithLocation(companyId),
@@ -295,6 +310,7 @@
 
         setAlerts(alertsData)
         setRejectionRequests(rejectionsData)
+        setIncomingRequests(incomingData)
         setAvailableDrivers(driversData)
         setOvertimeDrivers(overtimeData)
 
@@ -333,6 +349,16 @@
         setRejectionRequests(rejectionsData)
       } catch (err) {
         console.error('Dashboard rejections refresh error:', err)
+      }
+    }, [companyId])
+
+    const refreshIncoming = useCallback(async () => {
+      if (!companyId) return
+      try {
+        const incomingData = await getPendingCustomerTowRequests(companyId)
+        setIncomingRequests(incomingData)
+      } catch (err) {
+        console.error('Dashboard incoming requests refresh error:', err)
       }
     }, [companyId])
 
@@ -400,6 +426,7 @@
     const dashboardRealtimeHandlersRef = useRef({
       debouncedRefreshEssential,
       refreshRejections,
+      refreshIncoming,
       refreshDriversAndMap,
       refreshShiftsAndOvertime,
       loadListTows,
@@ -407,6 +434,7 @@
     dashboardRealtimeHandlersRef.current = {
       debouncedRefreshEssential,
       refreshRejections,
+      refreshIncoming,
       refreshDriversAndMap,
       refreshShiftsAndOvertime,
       loadListTows,
@@ -516,6 +544,9 @@
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => {
             void dashboardRealtimeHandlersRef.current.refreshRejections()
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_tow_requests', filter: `company_id=eq.${companyId}` }, () => {
+            void dashboardRealtimeHandlersRef.current.refreshIncoming()
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_shifts', filter: `company_id=eq.${companyId}` }, () => {
             void dashboardRealtimeHandlersRef.current.refreshShiftsAndOvertime()
@@ -837,10 +868,11 @@
       </div>
 
         {/* תוכן ראשי */}
-        <div className="grid grid-cols-2 gap-3 flex-1 min-h-0 min-w-0">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.85fr)] gap-3 flex-1 min-h-0 min-w-0">
 
-          {/* ימין: מפה לגובה מלא */}
-          <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-h-0 min-w-0">
+          {/* עמודה ימין (צרה): מפה + רשימות משניות */}
+          <div className="flex flex-col gap-3 min-h-0 min-w-0 overflow-hidden flex-1">
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -867,11 +899,144 @@
             </div>
           </div>
 
-          {/* שמאל: גרירות היום + רשימות */}
+          <div className="flex flex-col gap-3 shrink-0 min-w-0">
+            {rejectionRequests.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
+                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="leading-snug">בקשות דחייה</span>
+                  </div>
+                  <span className="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full shrink-0">
+                    {rejectionRequests.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
+                  {rejectionRequests.map(req => {
+                    return (
+                      <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
+                          <div className="text-xs text-gray-400 truncate">
+                            {req.reason === 'other'
+                              ? (req.reason_note || 'אחר')
+                              : (REJECTION_REASONS.find(r => r.key === req.reason)?.label || req.reason_note || req.reason)}
+                          </div>
+                          <Link
+                            href={`/dashboard/tows/${req.tow_id}`}
+                            className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600"
+                          >
+                            {(req as any).tow?.customer?.name || 'פרטי גרירה'} ←
+                          </Link>
+                          <span className="text-xs text-gray-300 mt-0.5 block">לחץ לטופס הגרירה</span>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
+                          <button onClick={() => setDenyConfirmRequest(req)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {alerts.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
+                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                    <span className="leading-snug">התראות תוקף</span>
+                  </div>
+                  <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full shrink-0">
+                    {alerts.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
+                  {alerts.map(alert => {
+                    const config = alertTypeConfig[alert.type]
+                    const Icon = config?.icon || AlertTriangle
+                    return (
+                      <Link key={alert.id} href={`${config?.link || '/dashboard/trucks'}?edit=${alert.entityId}`} className="px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50 min-w-0">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${alert.severity === 'expired' ? 'bg-red-100' : 'bg-amber-100'}`}>
+                          <Icon size={10} className={alert.severity === 'expired' ? 'text-red-600' : 'text-amber-600'} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700 truncate">{alert.entityName}</div>
+                          <div className="text-xs text-gray-500 truncate">{config?.label || ''}</div>
+                          <div className="text-xs text-gray-400">{getDaysText(alert.daysLeft)}</div>
+                        </div>
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${alert.severity === 'expired' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {alert.severity === 'expired' ? 'פג' : 'בקרוב'}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {overtimeDrivers.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
+                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
+                    <span className="leading-snug">לא סיימו משמרת</span>
+                  </div>
+                  <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full shrink-0">
+                    {overtimeDrivers.length}
+                  </span>
+                </div>
+                <div className="min-h-0 max-h-52 overflow-y-auto overscroll-y-contain divide-y divide-gray-50">
+                  {overtimeDrivers.map((shift: any) => {
+                    const driver = shift.driver as any
+                    const openTowsCount = driver?.id ? (openTowsByDriver[driver.id] ?? 0) : 0
+                    const metaParts = [
+                      formatShiftStartJerusalem(shift.started_at),
+                      formatOpenShiftDuration(shift.started_at),
+                      openTowsCount > 0 ? `${openTowsCount} גרירות פתוחות` : null,
+                    ].filter(Boolean)
+                    return (
+                      <div key={shift.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 min-w-0">
+                            <div className="text-xs font-medium text-gray-700 truncate min-w-0">
+                              {driver?.user?.full_name}
+                            </div>
+                            <button
+                              onClick={() => {
+                                setEndShiftTarget({
+                                  shiftId: shift.id,
+                                  driverName: driver?.user?.full_name || 'נהג',
+                                  driverId: driver?.id,
+                                  startedAt: shift.started_at,
+                                  workHoursEnd: driver?.work_hours_end ?? null,
+                                })
+                                setShowEndShiftModal(true)
+                              }}
+                              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 shrink-0"
+                            >
+                              סיים
+                            </button>
+                          </div>
+                          <div className="mt-0.5 text-[11px] leading-snug text-gray-400">
+                            {metaParts.join(' · ')}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          </div>
+
+          {/* עמודה שמאל (רחבה): יומן + רשימות עדיפות */}
           <div className="flex flex-col gap-3 min-h-0 min-w-0 overflow-hidden">
 
             {/* גרירות היום */}
-            <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-[380px] min-w-0">
+            <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-0 min-w-0">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 flex-shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-sm font-medium text-gray-700 shrink-0">גרירות היום</span>
@@ -988,7 +1153,7 @@
                                   size="sm"
                                 />
                                 <CompactTowBlockStatusBadge status={tow.status} />
-                                <span className="block truncate pr-3">
+                                <span className="block line-clamp-2 pr-3">
                                   {tow.customer?.name || 'ללא לקוח'}
                                 </span>
                               </button>
@@ -1032,7 +1197,7 @@
                                   <Sparkles size={7} />
                                   אירוע
                                 </span>
-                                <span className="block truncate pr-3 pt-2.5">
+                                <span className="block line-clamp-2 pr-3 pt-2.5">
                                   {event.label}
                                 </span>
                               </button>
@@ -1078,11 +1243,54 @@
               </div>
             </div>
 
-            {/* רשימות תחתונות */}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-              <div className="grid gap-3 min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,260px),1fr))]">
+            {/* הצעות מחיר ממתינות */}
+            {quoteTows.length + quoteEvents.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 min-w-0 flex-shrink-0">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <span className="text-sm font-medium text-amber-800 leading-snug min-w-0">
+                    הצעות מחיר ממתינות
+                  </span>
+                  <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
+                    {quoteTows.length + quoteEvents.length}
+                  </span>
+                </div>
+                <div className="space-y-1 max-h-20 overflow-y-auto min-h-0">
+                  {quoteTows.map(t => (
+                    <div
+                      key={`tow-${t.id}`}
+                      onClick={() => router.push(`/dashboard/tows/${t.id}`)}
+                      className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs gap-2"
+                    >
+                      <span className="font-medium shrink-0">{t.order_number || t.id.slice(0, 8)}</span>
+                      <span className="text-gray-500 flex-1 min-w-0 truncate">{t.customer?.name || 'לקוח'}</span>
+                      <span className="text-amber-600 shrink-0">{formatWaitTime(t.created_at)}</span>
+                    </div>
+                  ))}
+                  {quoteEvents.map(e => (
+                    <div
+                      key={`event-${e.id}`}
+                      onClick={() => router.push(`/dashboard/events/${e.id}`)}
+                      className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-cyan-50 text-xs gap-2 ring-1 ring-cyan-200"
+                    >
+                      <span className="flex items-center gap-1 font-medium shrink-0">
+                        <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[9px] px-1 py-px rounded font-bold leading-none">
+                          <Sparkles size={8} />
+                          אירוע
+                        </span>
+                        {e.order_number || e.id.slice(0, 8)}
+                      </span>
+                      <span className="text-gray-500 flex-1 min-w-0 truncate">{e.customer?.name || 'לקוח'}</span>
+                      <span className="text-amber-600 shrink-0">{formatWaitTime(e.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* רשימות עדיפות — ממתינות + בקשות נכנסות */}
+            <div className="grid grid-cols-2 gap-3 flex-shrink-0 min-h-[11rem] max-h-[14rem]">
               {/* ממתינות לשיבוץ */}
-              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0">
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 min-h-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
                   <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
@@ -1094,7 +1302,7 @@
                     </span>
                   )}
                 </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-28 min-h-0">
+                <div className="divide-y divide-gray-50 overflow-y-auto flex-1 min-h-0">
                     {pendingTows.length === 0 && pendingEvents.length === 0 ? (
                       <div className="px-3 py-3 text-xs text-gray-300 text-center">אין ממתינות</div>
                     ) : (
@@ -1130,188 +1338,36 @@
                 </div>
               </div>
 
-              {/* הצעות מחיר ממתינות */}
-              {quoteTows.length + quoteEvents.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 min-w-0">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="text-sm font-medium text-amber-800 leading-snug min-w-0">
-                      הצעות מחיר ממתינות
-                    </span>
-                    <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
-                      {quoteTows.length + quoteEvents.length}
-                    </span>
-                  </div>
-                  <div className="space-y-1 max-h-20 overflow-y-auto min-h-0">
-                    {quoteTows.map(t => (
-                      <div
-                        key={`tow-${t.id}`}
-                        onClick={() => router.push(`/dashboard/tows/${t.id}`)}
-                        className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs gap-2"
-                      >
-                        <span className="font-medium shrink-0">{t.order_number || t.id.slice(0, 8)}</span>
-                        <span className="text-gray-500 flex-1 min-w-0 truncate">{t.customer?.name || 'לקוח'}</span>
-                        <span className="text-amber-600 shrink-0">{formatWaitTime(t.created_at)}</span>
-                      </div>
-                    ))}
-                    {quoteEvents.map(e => (
-                      <div
-                        key={`event-${e.id}`}
-                        onClick={() => router.push(`/dashboard/events/${e.id}`)}
-                        className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-cyan-50 text-xs gap-2 ring-1 ring-cyan-200"
-                      >
-                        <span className="flex items-center gap-1 font-medium shrink-0">
-                          <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[9px] px-1 py-px rounded font-bold leading-none">
-                            <Sparkles size={8} />
-                            אירוע
-                          </span>
-                          {e.order_number || e.id.slice(0, 8)}
-                        </span>
-                        <span className="text-gray-500 flex-1 min-w-0 truncate">{e.customer?.name || 'לקוח'}</span>
-                        <span className="text-amber-600 shrink-0">{formatWaitTime(e.created_at)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* בקשות דחייה */}
-              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0">
+              {/* בקשות נכנסות */}
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 min-h-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
                   <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                    <span className="leading-snug">בקשות דחייה</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#33d4ff] shrink-0" />
+                    <span className="leading-snug">בקשות נכנסות</span>
                   </div>
-                  {rejectionRequests.length > 0 && (
-                    <span className="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full shrink-0">
-                      {rejectionRequests.length}
+                  {incomingRequests.length > 0 && (
+                    <span className="text-sm font-bold px-2 py-0.5 bg-cyan-500 text-white rounded-full shrink-0 min-w-[1.5rem] text-center">
+                      {incomingRequests.length}
                     </span>
                   )}
                 </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
-                  {rejectionRequests.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות דחייה</div>
-                  ) : rejectionRequests.map(req => {
-                    return (
-                      <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
-                          <div className="text-xs text-gray-400 truncate">
-                            {req.reason === 'other'
-                              ? (req.reason_note || 'אחר')
-                              : (REJECTION_REASONS.find(r => r.key === req.reason)?.label || req.reason_note || req.reason)}
-                          </div>
-                          <Link
-                            href={`/dashboard/tows/${req.tow_id}`}
-                            className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600"
-                          >
-                            {(req as any).tow?.customer?.name || 'פרטי גרירה'} ←
-                          </Link>
-                          <span className="text-xs text-gray-300 mt-0.5 block">לחץ לטופס הגרירה</span>
+                <div className="divide-y divide-gray-50 overflow-y-auto flex-1 min-h-0">
+                  {incomingRequests.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות נכנסות</div>
+                  ) : incomingRequests.map((req) => (
+                    <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-700 truncate">
+                          {req.customer?.name || '—'}
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
-                          <button onClick={() => setDenyConfirmRequest(req)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
+                        <div className="text-xs text-gray-400 truncate">
+                          {formatIncomingScheduledAt(req.scheduled_at)}
+                          {req.customer_order_number ? ` · ${req.customer_order_number}` : ''}
                         </div>
                       </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              {/* לא סיימו משמרת */}
-              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0">
-                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
-                    <span className="leading-snug">לא סיימו משמרת</span>
-                  </div>
-                  {overtimeDrivers.length > 0 && (
-                    <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded-full shrink-0">
-                      {overtimeDrivers.length}
-                    </span>
-                  )}
-                </div>
-                <div className="min-h-0 max-h-52 overflow-y-auto overscroll-y-contain divide-y divide-gray-50">
-                  {overtimeDrivers.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-gray-300 text-center">כל הנהגים סיימו</div>
-                  ) : overtimeDrivers.map((shift: any) => {
-                    const driver = shift.driver as any
-                    const openTowsCount = driver?.id ? (openTowsByDriver[driver.id] ?? 0) : 0
-                    const metaParts = [
-                      formatShiftStartJerusalem(shift.started_at),
-                      formatOpenShiftDuration(shift.started_at),
-                      openTowsCount > 0 ? `${openTowsCount} גרירות פתוחות` : null,
-                    ].filter(Boolean)
-                    return (
-                      <div key={shift.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 min-w-0">
-                            <div className="text-xs font-medium text-gray-700 truncate min-w-0">
-                              {driver?.user?.full_name}
-                            </div>
-                            <button
-                              onClick={() => {
-                                setEndShiftTarget({
-                                  shiftId: shift.id,
-                                  driverName: driver?.user?.full_name || 'נהג',
-                                  driverId: driver?.id,
-                                  startedAt: shift.started_at,
-                                  workHoursEnd: driver?.work_hours_end ?? null,
-                                })
-                                setShowEndShiftModal(true)
-                              }}
-                              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-200 shrink-0"
-                            >
-                              סיים
-                            </button>
-                          </div>
-                          <div className="mt-0.5 text-[11px] leading-snug text-gray-400">
-                            {metaParts.join(' · ')}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* התראות תוקף */}
-              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0">
-                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                    <span className="leading-snug">התראות תוקף</span>
-                  </div>
-                  {alerts.length > 0 && (
-                    <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full shrink-0">
-                      {alerts.length}
-                    </span>
-                  )}
-                </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
-                  {alerts.length === 0 ? (
-                    <div className="px-3 py-3 text-xs text-gray-300 text-center">אין התראות</div>
-                  ) : alerts.map(alert => {
-                    const config = alertTypeConfig[alert.type]
-                    const Icon = config?.icon || AlertTriangle
-                    return (
-                      <Link key={alert.id} href={`${config?.link || '/dashboard/trucks'}?edit=${alert.entityId}`} className="px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50 min-w-0">
-                        <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${alert.severity === 'expired' ? 'bg-red-100' : 'bg-amber-100'}`}>
-                          <Icon size={10} className={alert.severity === 'expired' ? 'text-red-600' : 'text-amber-600'} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700 truncate">{alert.entityName}</div>
-                          <div className="text-xs text-gray-500 truncate">{config?.label || ''}</div>
-                          <div className="text-xs text-gray-400">{getDaysText(alert.daysLeft)}</div>
-                        </div>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 ${alert.severity === 'expired' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                          {alert.severity === 'expired' ? 'פג' : 'בקרוב'}
-                        </span>
-                      </Link>
-                    )
-                  })}
-                </div>
-              </div>
               </div>
             </div>
           </div>
