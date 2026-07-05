@@ -1355,7 +1355,19 @@
                   {incomingRequests.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות נכנסות</div>
                   ) : incomingRequests.map((req) => (
-                    <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                    <div
+                      key={req.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(`/dashboard/tows/create?fromRequest=${req.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          router.push(`/dashboard/tows/create?fromRequest=${req.id}`)
+                        }
+                      }}
+                      className="px-3 py-2 flex items-start gap-2 min-w-0 cursor-pointer hover:bg-[#33d4ff]/5 transition-colors"
+                    >
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-medium text-gray-700 truncate">
                           {req.customer?.name || '—'}

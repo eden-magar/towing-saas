@@ -27,6 +27,7 @@ import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { RoutePoint } from '../components/tow-forms/routes'
 import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib/queries/driver-truck-assignments'
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
+import { markCustomerTowRequestConverted } from '../lib/queries/customer-tow-requests'
 
 interface UseTowSaveParams {
   companyId: string | null
@@ -164,6 +165,9 @@ interface UseTowSaveParams {
   setShowAssignNowModal: (v: boolean) => void
   /** Runs after validation passes, before persisting the tow. */
   beforeSaveTow?: () => Promise<void>
+  /** When set, mark the portal request converted after a successful create. */
+  fromRequestId?: string
+  setSaveWarning?: (msg: string) => void
 }
 
 export function useTowSave(params: UseTowSaveParams) {
@@ -289,6 +293,8 @@ export function useTowSave(params: UseTowSaveParams) {
     setSavedTowId,
     setShowAssignNowModal,
     beforeSaveTow,
+    fromRequestId,
+    setSaveWarning,
   } = params
 
   const handleSave = async () => {
@@ -688,6 +694,15 @@ export function useTowSave(params: UseTowSaveParams) {
         (towData.driverId ? 'assigned' : 'pending')
       if (createdStatus !== 'quote') {
         void syncTowToLegacyCalendar(result.id)
+      }
+
+      if (fromRequestId && companyId) {
+        try {
+          await markCustomerTowRequestConverted(companyId, fromRequestId, result.id)
+        } catch (convertErr) {
+          console.error('Failed to mark customer tow request as converted:', convertErr)
+          setSaveWarning?.('הגרירה נוצרה, אך סימון הבקשה כטופלה נכשל — רענן ובדוק')
+        }
       }
 
       setSavedTowId(result.id)

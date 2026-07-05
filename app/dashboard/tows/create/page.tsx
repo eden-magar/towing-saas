@@ -148,6 +148,7 @@ function CreateTowForm({
   editTowId,
   duplicateFromId,
   duplicateFromEventId,
+  fromRequestId,
   dateParam,
   timeParam,
   driverParam,
@@ -155,6 +156,7 @@ function CreateTowForm({
   editTowId?: string
   duplicateFromId?: string
   duplicateFromEventId?: string
+  fromRequestId?: string
   dateParam: string | null
   timeParam: string | null
   driverParam: string | null
@@ -171,6 +173,7 @@ function CreateTowForm({
       await persistCustomerOrderersRef.current()
     },
     duplicateFromTowId: duplicateFromId,
+    fromRequestId,
   })
 
   const {
@@ -182,6 +185,7 @@ function CreateTowForm({
     setSaving,
     error,
     setError,
+    saveWarning,
     customers,
     customersLoading,
     drivers,
@@ -383,6 +387,8 @@ function CreateTowForm({
     setOrderedBy,
     orderNumber,
     isDuplicateLoad,
+    isFromRequestLoad,
+    fromRequestOtherDefectText,
     loadedTowStatus,
     setLoadedTowStatus,
     editExistingVehicles,
@@ -806,6 +812,10 @@ function CreateTowForm({
   const [showStorageModal, setShowStorageModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
+  useEffect(() => {
+    if (!fromRequestOtherDefectText) return
+    setOtherDefectText(fromRequestOtherDefectText)
+  }, [fromRequestOtherDefectText])
   const [stopContactModalId, setStopContactModalId] = useState<string | null>(null)
   const [stopContactDraft, setStopContactDraft] = useState({ name: '', phone: '' })
   const [expandedStopNotesIds, setExpandedStopNotesIds] = useState<Set<string>>(
@@ -1783,7 +1793,11 @@ function CreateTowForm({
   // Alternative 4-column layout is opt-in and only for fresh single-tow create.
   // Edit / duplicate / storage deep-links always use the existing linear form.
   const isFreshCreate =
-    !editTowId && !duplicateFromId && !duplicateFromEventId && !storedVehicleParam
+    !editTowId &&
+    !duplicateFromId &&
+    !duplicateFromEventId &&
+    !storedVehicleParam &&
+    !fromRequestId
 
   if (useColumnLayout && isFreshCreate) {
     return (
@@ -1800,6 +1814,11 @@ function CreateTowForm({
       {error && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
           {error}
+        </div>
+      )}
+      {saveWarning && (
+        <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl">
+          {saveWarning}
         </div>
       )}
 
@@ -1829,7 +1848,9 @@ function CreateTowForm({
                       ? 'שכפול אירוע'
                       : isDuplicateLoad
                         ? 'שכפול גרירה'
-                        : 'גרירה חדשה'}
+                        : isFromRequestLoad
+                          ? 'בקשת לקוח'
+                          : 'גרירה חדשה'}
                 </h1>
                 <p className="text-xs text-gray-500 hidden sm:block">
                   {editTowId
@@ -1838,7 +1859,9 @@ function CreateTowForm({
                       ? 'אירוע חדש על בסיס אירוע קיים — בדוק ועדכן לפני שמירה'
                       : isDuplicateLoad
                         ? 'גרירה חדשה על בסיס גרירה קיימת — בדוק ועדכן לפני שמירה'
-                        : 'מילוי פרטי הגרירה'}
+                        : isFromRequestLoad
+                          ? 'גרירה חדשה מבקשת לקוח — השלם פרטים חסרים לפני שמירה'
+                          : 'מילוי פרטי הגרירה'}
                 </p>
               </div>
             </div>
@@ -4561,6 +4584,7 @@ export default function CreateTowPage() {
   const editTowId = searchParams.get('edit') || undefined
   const duplicateFromId = searchParams.get('duplicate') || undefined
   const duplicateFromEventId = searchParams.get('duplicateEvent') || undefined
+  const fromRequestId = searchParams.get('fromRequest') || undefined
   const dateParam = searchParams.get('date')
   const timeParam = searchParams.get('time')
   const driverParam = searchParams.get('driver')
@@ -4580,7 +4604,11 @@ export default function CreateTowPage() {
   // The wizard (Part 1) only handles a pure fresh create. Edit / duplicate /
   // stored-vehicle prefill flows keep the existing desktop form, even on mobile.
   const isFreshCreate =
-    !editTowId && !duplicateFromId && !duplicateFromEventId && !storedVehicleParam
+    !editTowId &&
+    !duplicateFromId &&
+    !duplicateFromEventId &&
+    !storedVehicleParam &&
+    !fromRequestId
 
   if (isMobile === null) {
     return (
@@ -4616,6 +4644,7 @@ export default function CreateTowPage() {
         editTowId={editTowId}
         duplicateFromId={duplicateFromId}
         duplicateFromEventId={duplicateFromEventId}
+        fromRequestId={fromRequestId}
         dateParam={dateParam}
         timeParam={timeParam}
         driverParam={driverParam}

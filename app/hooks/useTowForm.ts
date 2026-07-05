@@ -22,7 +22,17 @@ import {
   ServiceSurcharge,
   WeightBracket,
 } from '../lib/queries/price-lists'
-import { DriverWithDetails, TruckWithDetails, VehicleType, VehicleLookupResult } from '../lib/types'
+import {
+  DriverWithDetails,
+  TruckWithDetails,
+  VehicleType,
+  VehicleLookupResult,
+  type CustomerTowRequestPoint,
+  type CustomerTowRequestVehicle,
+} from '../lib/types'
+import { getFullCustomerTowRequest } from '../lib/queries/customer-tow-requests'
+import { lookupVehicle } from '../lib/vehicle-lookup'
+import { parseTowReasonToDefects } from '../lib/constants/defects'
 import {
   getCustomerStoredVehiclesForDisplay,
   getStoredVehicleById,
@@ -466,14 +476,206 @@ type CustomRouteData = {
   services: SelectedService[]
 }
 
+function requestVehicleToTowRow(v: CustomerTowRequestVehicle): TowVehicleEditRow {
+  return {
+    plate_number: v.plate_number,
+    vehicle_type: v.vehicle_type,
+    manufacturer: v.manufacturer,
+    model: v.model,
+    year: v.year,
+    color: v.color,
+    is_working: v.is_working,
+    tow_reason: v.tow_reason,
+  }
+}
+
+function hydrateSingleTowVehicleFromRow(
+  firstVehicle: TowVehicleEditRow,
+  setters: {
+    setVehiclePlate: (v: string) => void
+    setVehicleCode: (v: string) => void
+    setSelectedDefects: (v: string[]) => void
+    setVehicleType: (v: VehicleType | '') => void
+    setVehicleData: (v: VehicleLookupResult | null) => void
+    setVehicleLookupNotFound: (v: boolean) => void
+    setManualManufacturer: (v: string) => void
+    setManualColor: (v: string) => void
+    setManualWeight: (v: string) => void
+    setManualChassis: (v: string) => void
+  }
+) {
+  if (!firstVehicle.plate_number) return
+
+  setters.setVehiclePlate(firstVehicle.plate_number || '')
+  setters.setVehicleCode(firstVehicle.vehicle_code || '')
+  setters.setSelectedDefects(
+    (firstVehicle.tow_reason || '')
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean)
+  )
+
+  if (isManualCommercialVehicle(firstVehicle)) {
+    setters.setVehicleType('van' as VehicleType)
+    setters.setVehicleData(null)
+    setters.setVehicleLookupNotFound(true)
+    setters.setManualManufacturer(firstVehicle.manufacturer || '')
+    setters.setManualColor(firstVehicle.color || '')
+    setters.setManualWeight(
+      firstVehicle.total_weight != null ? String(firstVehicle.total_weight) : ''
+    )
+    setters.setManualChassis(firstVehicle.chassis || '')
+    return
+  }
+
+  const savedType = (firstVehicle.vehicle_type || '') as VehicleType | ''
+  setters.setVehicleType(savedType)
+
+  const lookupResult = buildVehicleLookupResultFromTowVehicle(firstVehicle)
+  if (lookupResult) {
+    setters.setVehicleData(lookupResult)
+    setters.setVehicleLookupNotFound(false)
+    if (!savedType && lookupResult.source) {
+      setters.setVehicleType(lookupResult.source)
+    }
+    setters.setManualManufacturer('')
+    setters.setManualColor('')
+    setters.setManualWeight('')
+    setters.setManualChassis('')
+    return
+  }
+
+  setters.setVehicleData(null)
+  setters.setVehicleLookupNotFound(true)
+  setters.setManualManufacturer(firstVehicle.manufacturer || '')
+  setters.setManualColor(firstVehicle.color || '')
+  setters.setManualWeight(
+    firstVehicle.total_weight != null ? String(firstVehicle.total_weight) : ''
+  )
+  setters.setManualChassis(firstVehicle.chassis || '')
+}
+
+function hydrateRouteStopsFromRequestPoints(
+  points: CustomerTowRequestPoint[],
+  legacy?: {
+    pickupAddress?: string | null
+    pickupLat?: number | null
+    pickupLng?: number | null
+    pickupContactName?: string | null
+    pickupContactPhone?: string | null
+    dropoffAddress?: string | null
+    dropoffLat?: number | null
+    dropoffLng?: number | null
+    dropoffContactName?: string | null
+    dropoffContactPhone?: string | null
+  }
+): RouteStop[] {
+  const validSubtypes = ['key', 'customer_pickup', 'customer_dropoff', 'other'] as const
+  const normalizeStopSubtype = (subtype: unknown): (typeof validSubtypes)[number] => {
+    if (subtype === 'customer') return 'customer_pickup'
+    if (subtype === 'general') return 'other'
+    if (typeof subtype === 'string' && validSubtypes.includes(subtype as (typeof validSubtypes)[number])) {
+      return subtype as (typeof validSubtypes)[number]
+    }
+    return 'other'
+  }
+  const roleFromPointType = (t: string): RouteRole => {
+    if (t === 'pickup') return 'pickup'
+    if (t === 'dropoff') return 'dropoff'
+    return 'stop'
+  }
+
+  let sortedPoints = [...points].sort((a, b) => a.point_order - b.point_order)
+
+  if (sortedPoints.length === 0 && legacy) {
+    sortedPoints = [
+      {
+        id: '',
+        request_id: '',
+        point_order: 0,
+        point_type: 'pickup',
+        address: legacy.pickupAddress ?? null,
+        lat: legacy.pickupLat ?? null,
+        lng: legacy.pickupLng ?? null,
+        contact_name: legacy.pickupContactName ?? null,
+        contact_phone: legacy.pickupContactPhone ?? null,
+        recipient_name: null,
+        recipient_phone: null,
+        notes: null,
+        order_notes: null,
+        is_storage: false,
+        stop_subtype: null,
+        created_at: '',
+      },
+      {
+        id: '',
+        request_id: '',
+        point_order: 1,
+        point_type: 'dropoff',
+        address: legacy.dropoffAddress ?? null,
+        lat: legacy.dropoffLat ?? null,
+        lng: legacy.dropoffLng ?? null,
+        contact_name: legacy.dropoffContactName ?? null,
+        contact_phone: legacy.dropoffContactPhone ?? null,
+        recipient_name: null,
+        recipient_phone: null,
+        notes: null,
+        order_notes: null,
+        is_storage: false,
+        stop_subtype: null,
+        created_at: '',
+      },
+    ]
+  }
+
+  const hydratedStops: RouteStop[] = sortedPoints.map((p) => ({
+    id: crypto.randomUUID(),
+    role: roleFromPointType(p.point_type),
+    stopSubtype: p.point_type === 'stop' ? normalizeStopSubtype(p.stop_subtype) : undefined,
+    address: {
+      address: p.address || '',
+      lat: p.lat != null ? Number(p.lat) : undefined,
+      lng: p.lng != null ? Number(p.lng) : undefined,
+    },
+    contactName: p.contact_name || '',
+    contactPhone: p.contact_phone || '',
+    notes: p.notes || '',
+    orderNotes: p.order_notes || '',
+  }))
+
+  if (!hydratedStops.some((s) => s.role === 'dropoff') && legacy?.dropoffAddress?.trim()) {
+    hydratedStops.push({
+      id: crypto.randomUUID(),
+      role: 'dropoff',
+      address: {
+        address: legacy.dropoffAddress.trim(),
+        lat: legacy.dropoffLat != null ? Number(legacy.dropoffLat) : undefined,
+        lng: legacy.dropoffLng != null ? Number(legacy.dropoffLng) : undefined,
+      },
+      contactName: legacy.dropoffContactName || '',
+      contactPhone: legacy.dropoffContactPhone || '',
+    })
+  }
+
+  return hydratedStops
+}
+
 export function useTowForm(
   editTowId?: string,
-  options?: { beforeSaveTow?: () => Promise<void>; duplicateFromTowId?: string }
+  options?: {
+    beforeSaveTow?: () => Promise<void>
+    duplicateFromTowId?: string
+    fromRequestId?: string
+  }
 ) {
   const beforeSaveTowRef = useRef(options?.beforeSaveTow)
   beforeSaveTowRef.current = options?.beforeSaveTow
   const duplicateFromTowId = options?.duplicateFromTowId
+  const fromRequestId = options?.fromRequestId
   const isDuplicateLoad = !!duplicateFromTowId && !editTowId
+  const isFromRequestLoad = !!fromRequestId && !editTowId && !duplicateFromTowId
+  const fromRequestHydratedRef = useRef(false)
+  const [fromRequestOtherDefectText, setFromRequestOtherDefectText] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, companyId, loading: authLoading } = useAuth()
@@ -483,6 +685,7 @@ export function useTowForm(
   const [savedTowId, setSavedTowId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [saveWarning, setSaveWarning] = useState('')
   const [dataLoading, setDataLoading] = useState(true)
   const [customersLoading, setCustomersLoading] = useState(true)
   
@@ -2086,6 +2289,153 @@ export function useTowForm(
     loadTowForEdit()
   }, [editTowId, duplicateFromTowId, companyId, isDuplicateLoad])
 
+  // Load customer tow request for prefill (simple tow type; exchange/custom TODO)
+  useEffect(() => {
+    if (!fromRequestId || !companyId || editTowId || duplicateFromTowId) return
+    if (fromRequestHydratedRef.current) return
+
+    const loadRequestForPrefill = async () => {
+      try {
+        const full = await getFullCustomerTowRequest(fromRequestId)
+        if (!full) {
+          setError('בקשת הגרירה לא נמצאה')
+          return
+        }
+
+        const { request, vehicles, points } = full
+
+        if (request.status !== 'pending') {
+          setError('בקשה זו כבר טופלה')
+          return
+        }
+
+        fromRequestHydratedRef.current = true
+
+        setSelectedCustomerId(request.customer_id)
+        setCustomerOrderNumber(request.customer_order_number || '')
+        setOrderNumber(null)
+        setDepartment(request.department || '')
+        setOrderedBy(request.orderer || '')
+        setNotes(request.notes || '')
+        setStartFromBase(request.start_from_base || false)
+        setDropoffToStorage(request.dropoff_to_storage || false)
+
+        if (request.scheduled_at) {
+          const d = new Date(request.scheduled_at)
+          setTowDate(d.toISOString().split('T')[0])
+          setTowTime(d.toTimeString().slice(0, 5))
+        }
+        if (request.scheduled_end_at) {
+          const end = new Date(request.scheduled_end_at)
+          setTowEndDate(end.toISOString().split('T')[0])
+          setTowEndTime(end.toTimeString().slice(0, 5))
+        } else {
+          setTowEndDate('')
+          setTowEndTime('')
+        }
+
+        if (request.tow_type === 'simple') {
+          setTowType('single')
+
+          const sortedVehicles = [...vehicles].sort((a, b) => a.order_index - b.order_index)
+          const requestVehicle = sortedVehicles[0]
+          const plate = (requestVehicle?.plate_number || request.plate_number || '').trim()
+          const requestVehicleType = (requestVehicle?.vehicle_type || '') as VehicleType | ''
+
+          if (plate) {
+            setVehiclePlate(plate)
+            setVehicleCode('')
+
+            const towReason =
+              requestVehicle?.tow_reason || request.defect_description || ''
+            const { defects: parsedDefects, otherText: parsedOtherDefectText } =
+              parseTowReasonToDefects(towReason)
+            // Dashboard post-modal convention (create/page openDefectsModal): predefined
+            // labels plus raw custom text — NOT "אחר:" prefix, NOT bare "אחר".
+            // Edit/duplicate still use naive split on tow_reason — pre-existing; not fixed here.
+            setSelectedDefects([
+              ...parsedDefects,
+              ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
+            ])
+            setFromRequestOtherDefectText(parsedOtherDefectText)
+
+            const applyManualFallbackFromRequest = () => {
+              setVehicleData(null)
+              setVehicleLookupNotFound(true)
+              setManualManufacturer(requestVehicle?.manufacturer || '')
+              setManualColor(requestVehicle?.color || '')
+              setManualWeight('')
+              setManualChassis('')
+              setVehicleType(requestVehicleType)
+            }
+
+            try {
+              const result = await lookupVehicle(plate)
+              if (result.found && result.data) {
+                setVehicleData(result)
+                setVehicleType(result.source || requestVehicleType || 'private')
+                setVehicleLookupNotFound(false)
+                setManualManufacturer('')
+                setManualColor('')
+                setManualWeight('')
+                setManualChassis('')
+              } else {
+                applyManualFallbackFromRequest()
+              }
+            } catch (lookupErr) {
+              console.error('Registry lookup failed during request prefill:', lookupErr)
+              applyManualFallbackFromRequest()
+            }
+          }
+
+          const hydratedStops = hydrateRouteStopsFromRequestPoints(points, {
+            pickupAddress: request.pickup_address,
+            pickupLat: request.pickup_lat,
+            pickupLng: request.pickup_lng,
+            pickupContactName: request.pickup_contact_name,
+            pickupContactPhone: request.pickup_contact_phone,
+            dropoffAddress: request.dropoff_address,
+            dropoffLat: request.dropoff_lat,
+            dropoffLng: request.dropoff_lng,
+            dropoffContactName: request.dropoff_contact_name,
+            dropoffContactPhone: request.dropoff_contact_phone,
+          })
+          setRouteStops(hydratedStops)
+
+          const dropoffPoint = points.find((p) => p.point_type === 'dropoff')
+          if (dropoffPoint?.is_storage) {
+            setDropoffToStorage(true)
+          }
+        } else {
+          // TODO: exchange/custom prefill — mirror duplicate exchange/custom blocks once
+          // request child tables are adapted to tow form shape (pointVehicles junction differs).
+          setError('סוג בקשה זה (החלפה/מותאם) עדיין לא נתמך — מלא ידנית')
+          if (request.tow_type === 'exchange') {
+            setTowType('exchange')
+          } else if (request.tow_type === 'custom') {
+            setTowType('custom')
+          }
+        }
+      } catch (err) {
+        console.error('Error loading customer tow request for prefill:', err)
+        setError('שגיאה בטעינת בקשת הגרירה')
+      }
+    }
+
+    loadRequestForPrefill()
+  }, [fromRequestId, companyId, editTowId, duplicateFromTowId])
+
+  // Fill customer display fields once customers list is available
+  useEffect(() => {
+    if (!isFromRequestLoad || !selectedCustomerId || customers.length === 0) return
+    const customer = customers.find((c) => c.id === selectedCustomerId)
+    if (!customer) return
+    setCustomerName(customer.name)
+    setCustomerPhone(customer.phone || '')
+    setCustomerEmail(customer.email || '')
+    setCustomerAddress(customer.address || '')
+  }, [isFromRequestLoad, selectedCustomerId, customers])
+
   const loadData = async () => {
     if (!companyId) return
     setCustomersLoading(true)
@@ -3215,6 +3565,8 @@ export function useTowForm(
     setSavedTowId,
     setShowAssignNowModal,
     beforeSaveTow: () => beforeSaveTowRef.current?.() ?? Promise.resolve(),
+    fromRequestId: isFromRequestLoad ? fromRequestId : undefined,
+    setSaveWarning,
   })
 
   return {
@@ -3228,6 +3580,7 @@ export function useTowForm(
     savedTowId, setSavedTowId,
     saving, setSaving,
     error, setError,
+    saveWarning, setSaveWarning,
     dataLoading,
     customersLoading,
     // Data
@@ -3265,7 +3618,10 @@ export function useTowForm(
     customerOrderNumber, setCustomerOrderNumber,
     orderNumber,
     isDuplicateLoad,
+    isFromRequestLoad,
+    fromRequestOtherDefectText,
     duplicateFromTowId,
+    fromRequestId,
     loadedTowStatus,
     setLoadedTowStatus,
     editExistingVehicles,
