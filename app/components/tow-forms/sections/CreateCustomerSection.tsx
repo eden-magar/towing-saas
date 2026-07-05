@@ -246,7 +246,7 @@ export function CreateCustomerSection({
     <>
       {identityAvatar()}
       <div className="text-right flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap justify-start">
           <span className="text-base sm:text-lg font-semibold text-gray-900 leading-tight truncate">
             {customerName}
           </span>
