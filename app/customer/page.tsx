@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getCustomerForUser, getCustomerTows, getCustomerStats, CUSTOMER_PORTAL_TOW_PAGE_SIZE } from '@/app/lib/queries/customer-portal'
-import type { CustomerPortalTow } from '@/app/lib/types'
+import { getCustomerTowRequests } from '@/app/lib/queries/customer-tow-requests'
+import type { CustomerPortalTow, CustomerTowRequest } from '@/app/lib/types'
 import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 import {
   Truck,
@@ -29,12 +30,20 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   cancelled_charged: { label: 'בוטל בחיוב', color: 'text-amber-900', bg: 'bg-amber-50 border-amber-300', icon: AlertCircle },
 }
 
+const pendingRequestBadge = {
+  label: 'ממתין לאישור החברה',
+  color: 'text-amber-800',
+  bg: 'bg-amber-50 border-amber-300',
+  icon: Clock,
+}
+
 export default function CustomerDashboard() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
   const [tows, setTows] = useState<CustomerPortalTow[]>([])
+  const [pendingRequests, setPendingRequests] = useState<CustomerTowRequest[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -51,18 +60,20 @@ export default function CustomerDashboard() {
       setCustomerId(info.customerId)
       setPortalSettings(info.portalSettings || {})
 
-      const [towsPage, statsData] = await Promise.all([
+      const [towsPage, statsData, requestsData] = await Promise.all([
         getCustomerTows(info.customerId, {
           status: statusFilter,
           limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
           offset: 0,
         }),
         getCustomerStats(info.customerId),
+        getCustomerTowRequests(info.customerId),
       ])
 
       setTows(towsPage.tows)
       setHasMore(towsPage.hasMore)
       setStats(statsData)
+      setPendingRequests(requestsData.filter((r) => r.status === 'pending'))
       setLoading(false)
     }
 
@@ -72,6 +83,12 @@ export default function CustomerDashboard() {
   // Realtime — עדכון חי כשגרירות משתנות
   useEffect(() => {
     if (!customerId) return
+
+    const refreshPendingRequests = () => {
+      getCustomerTowRequests(customerId).then((requests) => {
+        setPendingRequests(requests.filter((r) => r.status === 'pending'))
+      })
+    }
 
     const channel = supabase
       .channel('customer-tows-realtime')
@@ -85,6 +102,9 @@ export default function CustomerDashboard() {
           setHasMore(nextHasMore)
         })
         getCustomerStats(customerId).then(setStats)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_tow_requests' }, () => {
+        refreshPendingRequests()
       })
       .subscribe()
 
@@ -248,6 +268,71 @@ export default function CustomerDashboard() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        {/* עמודה ימין: בקשות ממתינות לאישור החברה */}
+        <div className="space-y-3 min-w-0">
+          <h2 className="text-base font-bold text-gray-900 px-1">
+            ממתין לאישור החברה
+            <span className="text-sm font-semibold text-amber-700 mr-2">({pendingRequests.length})</span>
+          </h2>
+          {pendingRequests.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border border-gray-300 shadow-sm">
+              <Clock size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500">אין בקשות ממתינות</p>
+            </div>
+          ) : (
+            pendingRequests.map((req) => {
+              const PendingIcon = pendingRequestBadge.icon
+              const from = req.pickup_address?.trim() || null
+              const to = req.dropoff_address?.trim() || null
+
+              return (
+                <div
+                  key={req.id}
+                  className="w-full bg-white rounded-xl border border-gray-300 shadow-sm p-5 text-right"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {req.customer_order_number && (
+                        <span className="text-sm font-bold text-gray-900">
+                          {req.customer_order_number}
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 ${pendingRequestBadge.bg} ${pendingRequestBadge.color}`}>
+                        <PendingIcon size={14} />
+                        {pendingRequestBadge.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(from || to) && (
+                    <div className="space-y-1.5 mb-3">
+                      {from && (
+                        <div className="flex items-start gap-2">
+                          <div className="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
+                          <p className="text-sm text-gray-700 truncate">{from}</p>
+                        </div>
+                      )}
+                      {to && (
+                        <div className="flex items-start gap-2">
+                          <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
+                          <p className="text-sm text-gray-700 truncate">{to}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center text-xs text-gray-500">
+                    <span>{formatDate(req.scheduled_at)}</span>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* עמודה שמאל: גרירות */}
+        <div className="space-y-3 min-w-0">
       {/* Tows List */}
       {tows.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-xl border border-gray-300 shadow-sm">
@@ -353,6 +438,8 @@ export default function CustomerDashboard() {
           )}
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }
