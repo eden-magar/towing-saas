@@ -40,13 +40,10 @@ async function assertCustomerCanSubmitOrders(customerId: string): Promise<void> 
 }
 
 async function assertCustomerInCompany(companyId: string, customerId: string): Promise<void> {
-  const { data, error } = await supabase
-    .from('customer_company')
-    .select('id')
-    .eq('company_id', companyId)
-    .eq('customer_id', customerId)
-    .eq('is_active', true)
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('assert_customer_in_company', {
+    p_company_id: companyId,
+    p_customer_id: customerId,
+  })
 
   if (error) {
     console.error('Error verifying customer company link:', error)
