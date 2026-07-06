@@ -1,6 +1,11 @@
 import { supabase } from '../supabase'
 import { TowWithDetails, TowVehicle, TowLeg } from './tows'
 import { insertDriverTruckAssignments, driverHasCurrentAssignment } from './driver-truck-assignments'
+import {
+  getEffectiveTowStartIso,
+  getTowTimeBounds,
+  type TowTimeBoundsInput,
+} from '../utils/tow-time-bounds'
 
 type CalendarTowVehicleSummary = Pick<TowVehicle, 'id' | 'tow_id' | 'plate_number' | 'order_index'>
 type CalendarTowLegSummary = Pick<TowLeg, 'id' | 'tow_id' | 'leg_order' | 'from_address' | 'to_address'>
@@ -133,6 +138,108 @@ export async function getDayTowsWithPrevDay(companyId: string, date: Date): Prom
   endOfDay.setHours(23, 59, 59, 999)
 
   return getCalendarTows(companyId, rangeStart, endOfDay)
+}
+
+// ==================== חיפוש גרירות (כל התאריכים) ====================
+
+export interface CalendarTowSearchHit {
+  id: string
+  customer_name: string | null
+  scheduled_at: string | null
+  plate: string | null
+  driver_name: string | null
+  status: string
+  order_number: string | null
+  customer_order_number: string | null
+  pickup_address: string | null
+  dropoff_address: string | null
+  time_range_label: string
+  /** Local calendar day for navigation (midnight). */
+  scheduled_date: Date
+}
+
+function formatSearchTimeRange(tow: TowTimeBoundsInput, now: number): string {
+  const { startMs, endMs } = getTowTimeBounds(tow, now)
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
+  const start = new Date(startMs).toLocaleTimeString('he-IL', timeOpts)
+  const end = new Date(endMs).toLocaleTimeString('he-IL', timeOpts)
+  return `${start}–${end}`
+}
+
+function startOfLocalDay(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+type SearchCalendarTowsRow = {
+  id: string
+  customer_name: string | null
+  scheduled_at: string | null
+  scheduled_end_at: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  status: string
+  plate: string | null
+  driver_name: string | null
+  order_number: string | null
+  customer_order_number: string | null
+  pickup_address: string | null
+  dropoff_address: string | null
+}
+
+/** Company-scoped global calendar search via search_calendar_tows RPC (single round-trip). */
+export async function searchTows(
+  companyId: string,
+  query: string,
+  limit = 50
+): Promise<CalendarTowSearchHit[]> {
+  const trimmed = query.trim()
+  if (trimmed.length < 2) return []
+
+  const { data, error } = await supabase.rpc('search_calendar_tows', {
+    p_company_id: companyId,
+    p_query: trimmed,
+    p_limit: limit,
+  })
+
+  if (error) {
+    console.error('Error searching calendar tows:', error)
+    throw error
+  }
+
+  const rows = (data ?? []) as SearchCalendarTowsRow[]
+  if (rows.length === 0) return []
+
+  const now = Date.now()
+
+  return rows.map((row) => {
+    const towInput: TowTimeBoundsInput = {
+      status: row.status,
+      scheduled_at: row.scheduled_at,
+      scheduled_end_at: row.scheduled_end_at,
+      started_at: row.started_at,
+      completed_at: row.completed_at,
+      created_at: row.created_at,
+    }
+    const startIso = getEffectiveTowStartIso(towInput)
+
+    return {
+      id: row.id,
+      customer_name: row.customer_name ?? null,
+      scheduled_at: row.scheduled_at,
+      plate: row.plate ?? null,
+      driver_name: row.driver_name ?? null,
+      status: row.status,
+      order_number: row.order_number ?? null,
+      customer_order_number: row.customer_order_number ?? null,
+      pickup_address: row.pickup_address ?? null,
+      dropoff_address: row.dropoff_address ?? null,
+      time_range_label: formatSearchTimeRange(towInput, now),
+      scheduled_date: startOfLocalDay(new Date(startIso)),
+    }
+  })
 }
 
 // ==================== עדכון זמן מתוזמן ====================

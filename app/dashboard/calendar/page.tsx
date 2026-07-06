@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type CSSProperties, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/AuthContext'
-import { getWeekTows, updateTowSchedule } from '../../lib/queries/calendar'
+import { getWeekTows, updateTowSchedule, searchTows, type CalendarTowSearchHit } from '../../lib/queries/calendar'
 import { getWeekEvents } from '../../lib/queries/events'
 import { getEventTimeBounds } from '../../lib/utils/event-time-bounds'
 import { getDrivers } from '../../lib/queries/drivers'
@@ -560,11 +560,75 @@ export default function CalendarPage() {
   const [manualPrice, setManualPrice] = useState<string>('')
   const [now, setNow] = useState(Date.now())
 
+  const [globalSearchInput, setGlobalSearchInput] = useState('')
+  const [debouncedGlobalSearch, setDebouncedGlobalSearch] = useState('')
+  const [globalSearchResults, setGlobalSearchResults] = useState<CalendarTowSearchHit[]>([])
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false)
+  const [globalSearchError, setGlobalSearchError] = useState('')
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
+  const [searchHitPopover, setSearchHitPopover] = useState<CalendarTowSearchHit | null>(null)
+
   const dayLayoutRef = useRef<HTMLDivElement>(null)
+  const globalSearchWrapRef = useRef<HTMLDivElement>(null)
+  const globalSearchRequestIdRef = useRef(0)
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedGlobalSearch(globalSearchInput.trim())
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [globalSearchInput])
+
+  useEffect(() => {
+    if (!companyId || debouncedGlobalSearch.length < 2) {
+      setGlobalSearchResults([])
+      setGlobalSearchLoading(false)
+      setGlobalSearchError('')
+      return
+    }
+
+    let cancelled = false
+    const requestId = ++globalSearchRequestIdRef.current
+    setGlobalSearchLoading(true)
+    setGlobalSearchError('')
+
+    searchTows(companyId, debouncedGlobalSearch)
+      .then((results) => {
+        if (!cancelled && requestId === globalSearchRequestIdRef.current) {
+          setGlobalSearchResults(results)
+        }
+      })
+      .catch((err) => {
+        console.error('Calendar global search failed:', err)
+        if (!cancelled && requestId === globalSearchRequestIdRef.current) {
+          setGlobalSearchResults([])
+          setGlobalSearchError('שגיאה בחיפוש')
+        }
+      })
+      .finally(() => {
+        if (!cancelled && requestId === globalSearchRequestIdRef.current) {
+          setGlobalSearchLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, debouncedGlobalSearch])
+
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!globalSearchWrapRef.current?.contains(e.target as Node)) {
+        setGlobalSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
   }, [])
 
   const hours = Array.from({ length: 24 }, (_, i) => i)
@@ -798,6 +862,19 @@ export default function CalendarPage() {
       setCurrentWeekStart(sundayOfWeek(picked))
       setMobileDayIndex(picked.getDay())
     }
+  }
+
+  const handleGlobalSearchResultClick = (hit: CalendarTowSearchHit) => {
+    setSearchHitPopover(hit)
+    setGlobalSearchOpen(false)
+  }
+
+  const clearGlobalSearch = () => {
+    setGlobalSearchInput('')
+    setDebouncedGlobalSearch('')
+    setGlobalSearchResults([])
+    setGlobalSearchError('')
+    setGlobalSearchOpen(false)
   }
 
   const driverFilterPanelProps: DriverFilterPanelProps = {
@@ -1220,6 +1297,85 @@ const handleSkipPriceUpdate = () => {
               גרירה חדשה
             </Link>
           </div>
+        </div>
+
+        {/* Global tow search */}
+        <div ref={globalSearchWrapRef} className="relative w-full max-w-xl">
+          <Search
+            size={18}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+          {globalSearchInput && (
+            <button
+              type="button"
+              onClick={clearGlobalSearch}
+              className="absolute left-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+              aria-label="נקה חיפוש"
+            >
+              <X size={16} />
+            </button>
+          )}
+          <input
+            type="search"
+            value={globalSearchInput}
+            onChange={(e) => {
+              setGlobalSearchInput(e.target.value)
+              setGlobalSearchOpen(true)
+            }}
+            onFocus={() => setGlobalSearchOpen(true)}
+            placeholder="חיפוש גרירה..."
+            className={`w-full py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40 focus:border-[#33d4ff] pr-10 ${
+              globalSearchInput ? 'pl-10' : 'pl-4'
+            }`}
+            autoComplete="off"
+          />
+          {globalSearchOpen && globalSearchInput.trim().length >= 2 && (
+            <div className="absolute z-50 right-0 left-0 top-full mt-1 max-h-80 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+              {globalSearchLoading && (
+                <p className="px-4 py-3 text-sm text-gray-500 text-center">מחפש...</p>
+              )}
+              {!globalSearchLoading && globalSearchError && (
+                <p className="px-4 py-3 text-sm text-red-600 text-center">{globalSearchError}</p>
+              )}
+              {!globalSearchLoading && !globalSearchError && globalSearchResults.length === 0 && debouncedGlobalSearch.length >= 2 && (
+                <p className="px-4 py-3 text-sm text-gray-500 text-center">לא נמצאו גרירות</p>
+              )}
+              {!globalSearchLoading &&
+                !globalSearchError &&
+                globalSearchResults.map((hit) => (
+                  <button
+                    key={hit.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleGlobalSearchResultClick(hit)}
+                    className="w-full px-4 py-3 text-right hover:bg-gray-50 border-b border-gray-100 last:border-0 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-800 truncate">
+                          {hit.customer_name || 'ללא לקוח'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {hit.scheduled_date.toLocaleDateString('he-IL', {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'numeric',
+                            year: 'numeric',
+                          })}
+                          {' · '}
+                          {hit.time_range_label}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                          {hit.plate ? `לוחית ${hit.plate}` : 'ללא לוחית'}
+                          {' · '}
+                          {hit.driver_name || 'לא משויך'}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
 
         {/* Navigation Row */}
@@ -1807,6 +1963,104 @@ const handleSkipPriceUpdate = () => {
           <p className="text-gray-700"><strong>יום:</strong> לחץ על תאריך</p>
         </div>
       </div>
+
+      {/* Search result details popover */}
+      {searchHitPopover && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setSearchHitPopover(null)}
+        >
+          <div
+            className="bg-white w-full max-w-sm mx-4 rounded-2xl overflow-hidden shadow-xl"
+            dir="rtl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-[#33d4ff] text-white flex items-center justify-between">
+              <div className="min-w-0">
+                <h2 className="font-bold text-lg truncate">
+                  {searchHitPopover.customer_name || 'ללא לקוח'}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSearchHitPopover(null)}
+                className="p-2 hover:bg-white/20 rounded-lg shrink-0"
+                aria-label="סגור"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="px-5 py-3">
+              <TowDetailRow label="לקוח">
+                <span className="font-medium">{searchHitPopover.customer_name || 'ללא לקוח'}</span>
+              </TowDetailRow>
+              <TowDetailRow label="תאריך ושעה">
+                <span className="font-medium">
+                  {searchHitPopover.scheduled_date.toLocaleDateString('he-IL', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                  {' · '}
+                  <span dir="ltr">{searchHitPopover.time_range_label}</span>
+                </span>
+              </TowDetailRow>
+              {(searchHitPopover.customer_order_number || searchHitPopover.order_number) && (
+                <TowDetailRow label="מס' הזמנה">
+                  <span className="font-medium" dir="ltr">
+                    {searchHitPopover.customer_order_number || searchHitPopover.order_number}
+                  </span>
+                </TowDetailRow>
+              )}
+              {searchHitPopover.pickup_address && (
+                <TowDetailRow label="מוצא">
+                  <span className="font-medium">{searchHitPopover.pickup_address}</span>
+                </TowDetailRow>
+              )}
+              {searchHitPopover.dropoff_address && (
+                <TowDetailRow label="יעד">
+                  <span className="font-medium">{searchHitPopover.dropoff_address}</span>
+                </TowDetailRow>
+              )}
+              <TowDetailRow label="לוחית">
+                <span className="font-mono font-medium">{searchHitPopover.plate || '—'}</span>
+              </TowDetailRow>
+              <TowDetailRow label="נהג">
+                <span className="font-medium">{searchHitPopover.driver_name || 'לא משויך'}</span>
+              </TowDetailRow>
+              <TowDetailRow label="סטטוס">
+                <div className="flex items-center gap-2">
+                  <TowModalStatusIcon status={searchHitPopover.status} />
+                  <span className="font-medium">
+                    {statusLabels[searchHitPopover.status] || searchHitPopover.status}
+                  </span>
+                </div>
+              </TowDetailRow>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setSearchHitPopover(null)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
+              >
+                סגור
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const hit = searchHitPopover
+                  setSearchHitPopover(null)
+                  router.push(`/dashboard/tows/${hit.id}`)
+                }}
+                className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6]"
+              >
+                כניסה לגרירה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tow action menu */}
       {towActionMenu && (
