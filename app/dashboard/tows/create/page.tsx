@@ -53,6 +53,7 @@ import {
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
+import { StorageFollowUpSection } from '../../../components/tow-forms/StorageFollowUpSection'
 import { StorageTakeOutConfirmModal } from '../../../components/tow-forms/StorageTakeOutConfirmModal'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
 import {
@@ -292,6 +293,8 @@ function CreateTowForm({
     setFollowUpContactName,
     followUpContactPhone,
     setFollowUpContactPhone,
+    followUpChildTowId,
+    followUpChildStatus,
     storageVehicleCondition,
     setStorageVehicleCondition,
     workingVehicleSource,
@@ -1063,85 +1066,24 @@ function CreateTowForm({
                 </button>
               </div>
             )}
-            {dropoffToStorage && (
-              <div className="pt-2 border-t border-gray-100 space-y-2">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={hasStorageFollowUp}
-                  onClick={() => {
-                    const next = !hasStorageFollowUp
-                    setHasStorageFollowUp(next)
-                    if (!next) {
-                      setFollowUpAddress({ address: '' })
-                      setFollowUpContactName('')
-                      setFollowUpContactPhone('')
-                      setInheritCustomerOrderNumber(false)
-                    }
-                  }}
-                  className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
-                >
-                  <span
-                    aria-hidden
-                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
-                      hasStorageFollowUp ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
-                    }`}
-                  >
-                    <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-gray-800">יש המשך לגרירה?</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      צרי גרירה נוספת מהחניון אל יעד חדש
-                    </div>
-                  </div>
-                </button>
-                {hasStorageFollowUp && (
-                  <div className="space-y-2 bg-cyan-50/30 rounded-lg p-3 border border-cyan-100">
-                    <AddressInput
-                      value={followUpAddress}
-                      onChange={(d: AddressData) => setFollowUpAddress(d)}
-                      placeholder="כתובת היעד של הגרירה הבאה"
-                      onPinDropClick={() => handlePinDropOpen('followUp')}
-                    />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={followUpContactName}
-                        onChange={(e) => setFollowUpContactName(e.target.value)}
-                        placeholder="שם איש קשר"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      />
-                      <PhoneInput
-                        value={followUpContactPhone}
-                        onChange={(phone) => setFollowUpContactPhone(phone)}
-                        placeholder="050-1234567"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={inheritCustomerOrderNumber}
-                      onClick={() => setInheritCustomerOrderNumber((prev) => !prev)}
-                      className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
-                    >
-                      <span
-                        aria-hidden
-                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
-                          inheritCustomerOrderNumber ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
-                        }`}
-                      >
-                        <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-gray-800">שמור מס׳ הזמנת לקוח לגרירת ההמשך</div>
-                      </div>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            <StorageFollowUpSection
+              editTowId={editTowId}
+              storageEligible={dropoffToStorage}
+              hasStorageFollowUp={hasStorageFollowUp}
+              setHasStorageFollowUp={setHasStorageFollowUp}
+              followUpAddress={followUpAddress}
+              setFollowUpAddress={setFollowUpAddress}
+              followUpContactName={followUpContactName}
+              setFollowUpContactName={setFollowUpContactName}
+              followUpContactPhone={followUpContactPhone}
+              setFollowUpContactPhone={setFollowUpContactPhone}
+              inheritCustomerOrderNumber={inheritCustomerOrderNumber}
+              setInheritCustomerOrderNumber={setInheritCustomerOrderNumber}
+              followUpChildTowId={followUpChildTowId}
+              followUpChildStatus={followUpChildStatus}
+              onPinDropOpen={() => handlePinDropOpen('followUp')}
+              variant="compact"
+            />
           </div>
         )}
 
@@ -3286,102 +3228,24 @@ function CreateTowForm({
                                 )}
                                 {renderDeadheadToggle('compact')}
                                 </div>
-                                {defectiveDestination === 'storage' && (
-                                  <div className="mt-3 pt-3 border-t border-gray-200">
-                                    <button
-                                      type="button"
-                                      role="switch"
-                                      aria-checked={hasStorageFollowUp}
-                                      onClick={() => {
-                                        const next = !hasStorageFollowUp
-                                        setHasStorageFollowUp(next)
-                                        if (!next) {
-                                          setFollowUpAddress({ address: '' })
-                                          setFollowUpContactName('')
-                                          setFollowUpContactPhone('')
-                                          setInheritCustomerOrderNumber(false)
-                                        }
-                                      }}
-                                      className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
-                                    >
-                                      <span
-                                        aria-hidden
-                                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
-                                          hasStorageFollowUp ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
-                                        }`}
-                                      >
-                                        <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-semibold text-gray-800">יש המשך לגרירה?</div>
-                                        <div className="text-xs text-gray-500 mt-0.5">
-                                          צרי גרירה נוספת מהחניון אל יעד חדש
-                                        </div>
-                                      </div>
-                                    </button>
-
-                                    {hasStorageFollowUp && (
-                                      <div className="mt-3 space-y-2 bg-cyan-50/30 rounded-lg p-3 border border-cyan-100">
-                                        <div>
-                                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                                            יעד ההמשך
-                                          </label>
-                                          <AddressInput
-                                            value={followUpAddress}
-                                            onChange={(d: AddressData) => setFollowUpAddress(d)}
-                                            placeholder="כתובת היעד של הגרירה הבאה"
-                                            onPinDropClick={() => handlePinDropOpen('followUp')}
-                                          />
-                                        </div>
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                          <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                              שם איש קשר ביעד
-                                            </label>
-                                            <input
-                                              type="text"
-                                              value={followUpContactName}
-                                              onChange={(e) => setFollowUpContactName(e.target.value)}
-                                              placeholder="שם"
-                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                                            />
-                                          </div>
-                                          <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                                              טלפון איש קשר
-                                            </label>
-                                            <PhoneInput
-                                              value={followUpContactPhone}
-                                              onChange={(phone) => setFollowUpContactPhone(phone)}
-                                              placeholder="050-1234567"
-                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                                            />
-                                          </div>
-                                        </div>
-                                        <button
-                                          type="button"
-                                          role="switch"
-                                          aria-checked={inheritCustomerOrderNumber}
-                                          onClick={() => setInheritCustomerOrderNumber((prev) => !prev)}
-                                          className="flex w-full items-start justify-between gap-3 py-2 text-right cursor-pointer"
-                                        >
-                                          <span
-                                            aria-hidden
-                                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-all duration-200 ${
-                                              inheritCustomerOrderNumber ? 'bg-[#33d4ff] justify-end' : 'bg-gray-200 justify-start'
-                                            }`}
-                                          >
-                                            <span className="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200" />
-                                          </span>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-semibold text-gray-800">שמור מס׳ הזמנת לקוח לגרירת ההמשך</div>
-                                          </div>
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
+                                <StorageFollowUpSection
+                                  editTowId={editTowId}
+                                  storageEligible={defectiveDestination === 'storage'}
+                                  hasStorageFollowUp={hasStorageFollowUp}
+                                  setHasStorageFollowUp={setHasStorageFollowUp}
+                                  followUpAddress={followUpAddress}
+                                  setFollowUpAddress={setFollowUpAddress}
+                                  followUpContactName={followUpContactName}
+                                  setFollowUpContactName={setFollowUpContactName}
+                                  followUpContactPhone={followUpContactPhone}
+                                  setFollowUpContactPhone={setFollowUpContactPhone}
+                                  inheritCustomerOrderNumber={inheritCustomerOrderNumber}
+                                  setInheritCustomerOrderNumber={setInheritCustomerOrderNumber}
+                                  followUpChildTowId={followUpChildTowId}
+                                  followUpChildStatus={followUpChildStatus}
+                                  onPinDropOpen={() => handlePinDropOpen('followUp')}
+                                  variant="labeled"
+                                />
                               </div>
                             </div>
                           </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../lib/AuthContext'
-import { getTowWithPoints, type EditTowSnapshot, type PriceBreakdown } from '../lib/queries/tows'
+import { getTowWithPoints, findStorageFollowUpChild, type EditTowSnapshot, type PriceBreakdown } from '../lib/queries/tows'
 import { getCustomersLite, CustomerListItem } from '../lib/queries/customers'
 import { getDrivers } from '../lib/queries/drivers'
 import { getCompanySettings } from '../lib/queries/settings'
@@ -977,6 +977,16 @@ export function useTowForm(
   const [followUpContactName, setFollowUpContactName] = useState('')
   const [followUpContactPhone, setFollowUpContactPhone] = useState('')
   const [storageVehicleCondition, setStorageVehicleCondition] = useState<'operational' | 'faulty'>('operational')
+  const [followUpChildTowId, setFollowUpChildTowId] = useState<string | null>(null)
+  const [followUpChildStatus, setFollowUpChildStatus] = useState<string | null>(null)
+  const [followUpChildIsWorking, setFollowUpChildIsWorking] = useState<boolean | null>(null)
+  const [followUpChildTowReason, setFollowUpChildTowReason] = useState<string | null>(null)
+  const [editFollowUpExistingPoints, setEditFollowUpExistingPoints] = useState<
+    { id: string; pointOrder: number; pointType: string }[]
+  >([])
+  const [editFollowUpExistingVehicles, setEditFollowUpExistingVehicles] = useState<
+    { id: string; plateNumber: string; orderIndex: number }[]
+  >([])
   const [storageLoading, setStorageLoading] = useState(false)
   const storageTakeOutResolverRef = useRef<((confirmed: boolean) => void) | null>(null)
   const [storageTakeOutPrompt, setStorageTakeOutPrompt] = useState<{
@@ -1812,6 +1822,17 @@ export function useTowForm(
         setEditManualAdjustmentHydrationSettled(false)
         setEditCustomerPricingHydrationSettled(false)
         editCustomerPricingHydratedRef.current = false
+        setFollowUpChildTowId(null)
+        setFollowUpChildStatus(null)
+        setFollowUpChildIsWorking(null)
+        setFollowUpChildTowReason(null)
+        setEditFollowUpExistingPoints([])
+        setEditFollowUpExistingVehicles([])
+        setHasStorageFollowUp(false)
+        setFollowUpAddress({ address: '' })
+        setFollowUpContactName('')
+        setFollowUpContactPhone('')
+        setInheritCustomerOrderNumber(false)
       }
       try {
         const tow = await getTowWithPoints(sourceTowId)
@@ -1964,6 +1985,27 @@ export function useTowForm(
           setDefectiveVehicleCode((defective as any)?.vehicle_code ?? '')
           setSelectedDefects((defective?.tow_reason ?? '').split(', ').filter(Boolean))
           setDefectiveFaultDescription(defective?.tow_reason ?? '')
+
+          if (defective) {
+            const defectList = (defective.tow_reason ?? '')
+              .split(', ')
+              .map((s: string) => s.trim())
+              .filter(Boolean)
+            const isFaulty = defective.is_working === false || defectList.length > 0
+            const defectiveDropoffToStorage = (tow.points ?? []).some(
+              (p: {
+                point_type?: string | null
+                is_storage?: boolean | null
+                vehicles?: { vehicle?: { is_working?: boolean | null } | null }[] | null
+              }) =>
+                p.point_type === 'dropoff' &&
+                p.is_storage === true &&
+                (p.vehicles ?? []).some((pv) => pv.vehicle?.is_working === false)
+            )
+            if (defectiveDropoffToStorage) {
+              setStorageVehicleCondition(isFaulty ? 'faulty' : 'operational')
+            }
+          }
 
           if (editTowId || isDuplicateLoad) {
             hydrateExchangeVehicleFromTowRow(working as TowVehicleEditRow | undefined, {
@@ -2204,6 +2246,16 @@ export function useTowForm(
                 setManualChassis(firstVehicle.chassis || '')
               }
             }
+
+            if (tow.dropoff_to_storage && firstVehicle) {
+              const defectList = (firstVehicle.tow_reason || '')
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+              const isFaulty =
+                firstVehicle.is_working === false || defectList.length > 0
+              setStorageVehicleCondition(isFaulty ? 'faulty' : 'operational')
+            }
           }
           // Points / addresses → unified route list
           if (tow.points && tow.points.length > 0) {
@@ -2362,6 +2414,63 @@ export function useTowForm(
             setChargeDeadheadReturn(true)
             editSeededDeadheadRef.current = savedDeadheadKm
             setDropoffToBaseDistance({ distanceKm: savedDeadheadKm, durationMinutes: 0 })
+          }
+
+          try {
+            const followUpChild = await findStorageFollowUpChild(editTowId, companyId)
+            if (followUpChild) {
+              setFollowUpChildTowId(followUpChild.id)
+              setFollowUpChildStatus(followUpChild.status)
+              setHasStorageFollowUp(true)
+              const dropoffPoint = (followUpChild.points ?? []).find(
+                (p) => p.point_type === 'dropoff'
+              )
+              if (dropoffPoint) {
+                setFollowUpAddress({
+                  address: dropoffPoint.address || '',
+                  lat: dropoffPoint.lat != null ? Number(dropoffPoint.lat) : undefined,
+                  lng: dropoffPoint.lng != null ? Number(dropoffPoint.lng) : undefined,
+                })
+                setFollowUpContactName(dropoffPoint.contact_name || '')
+                setFollowUpContactPhone(dropoffPoint.contact_phone || '')
+              }
+              const parentOrder = tow.customer_order_number?.trim() || ''
+              const childOrder = followUpChild.customer_order_number?.trim() || ''
+              setInheritCustomerOrderNumber(!!(childOrder && childOrder === parentOrder))
+              setEditFollowUpExistingPoints(
+                (followUpChild.points ?? []).map((p) => ({
+                  id: p.id,
+                  pointOrder: p.point_order,
+                  pointType: p.point_type,
+                }))
+              )
+              setEditFollowUpExistingVehicles(
+                (followUpChild.vehicles ?? []).map((v, i) => ({
+                  id: v.id,
+                  plateNumber: v.plate_number,
+                  orderIndex: v.order_index ?? i,
+                }))
+              )
+              const childVehicle = [...(followUpChild.vehicles ?? [])].sort(
+                (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+              )[0]
+              if (childVehicle) {
+                setFollowUpChildIsWorking(childVehicle.is_working !== false)
+                setFollowUpChildTowReason(childVehicle.tow_reason ?? null)
+              } else {
+                setFollowUpChildIsWorking(null)
+                setFollowUpChildTowReason(null)
+              }
+            } else {
+              setFollowUpChildTowId(null)
+              setFollowUpChildStatus(null)
+              setFollowUpChildIsWorking(null)
+              setFollowUpChildTowReason(null)
+              setEditFollowUpExistingPoints([])
+              setEditFollowUpExistingVehicles([])
+            }
+          } catch (followUpLoadErr) {
+            console.error('Error loading storage follow-up child:', followUpLoadErr)
           }
 
           setEditHydrationSettled(true)
@@ -3615,6 +3724,10 @@ export function useTowForm(
     followUpContactName,
     followUpContactPhone,
     storageVehicleCondition,
+    followUpChildTowId,
+    followUpChildStatus,
+    editFollowUpExistingPoints,
+    editFollowUpExistingVehicles,
     vehiclePlate,
     setSaving,
     setError,
@@ -3823,6 +3936,12 @@ export function useTowForm(
     followUpContactName, setFollowUpContactName,
     followUpContactPhone, setFollowUpContactPhone,
     storageVehicleCondition, setStorageVehicleCondition,
+    followUpChildTowId,
+    followUpChildStatus,
+    followUpChildIsWorking,
+    followUpChildTowReason,
+    editFollowUpExistingPoints,
+    editFollowUpExistingVehicles,
     storageLoading,
     // Exchange
     workingVehicleSource, setWorkingVehicleSource,

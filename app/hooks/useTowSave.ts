@@ -9,6 +9,8 @@ import {
   createTow,
   createStorageFollowUpTow,
   updateTow,
+  updateTowStatus,
+  updateStorageFollowUpTow,
   saveTowChangeLogs,
   type EditTowSnapshot,
 } from '../lib/queries/tows'
@@ -29,6 +31,27 @@ import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
 import { markCustomerTowRequestConverted } from '../lib/queries/customer-tow-requests'
 
+const STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE =
+  'גרירת ההמשך כבר שובצה — כדי לבטלה, פתח אותה ישירות'
+
+const STORAGE_FOLLOW_UP_CANCELLED_ON_EDIT = 'בוטל מעריכת גרירת אב'
+
+function deriveStorageFollowUpCondition(
+  storageVehicleCondition: 'operational' | 'faulty' | undefined,
+  selectedDefects: string[] | undefined
+): { isWorking: boolean; towReason: string | null } {
+  const isFaulty =
+    storageVehicleCondition === 'faulty' || (selectedDefects?.length ?? 0) > 0
+  return {
+    isWorking: !isFaulty,
+    towReason: selectedDefects?.length
+      ? selectedDefects.join(', ')
+      : isFaulty
+        ? 'תקול'
+        : null,
+  }
+}
+
 interface UseTowSaveParams {
   companyId: string | null
   user: { id: string } | null
@@ -48,6 +71,10 @@ interface UseTowSaveParams {
   followUpAddress?: AddressData
   followUpContactName?: string
   followUpContactPhone?: string
+  followUpChildTowId?: string | null
+  followUpChildStatus?: string | null
+  editFollowUpExistingPoints?: { id: string; pointOrder: number; pointType: string }[]
+  editFollowUpExistingVehicles?: { id: string; plateNumber: string; orderIndex: number }[]
   storageVehicleCondition?: 'operational' | 'faulty'
   vehiclePlate: string
   // Save state
@@ -189,6 +216,10 @@ export function useTowSave(params: UseTowSaveParams) {
     followUpAddress,
     followUpContactName,
     followUpContactPhone,
+    followUpChildTowId,
+    followUpChildStatus,
+    editFollowUpExistingPoints,
+    editFollowUpExistingVehicles,
     storageVehicleCondition,
     vehiclePlate,
     setSaving,
@@ -532,7 +563,89 @@ export function useTowSave(params: UseTowSaveParams) {
           : undefined,
     })
 
+    const isStorageEligible =
+      (towType === 'single' && dropoffToStorage) ||
+      (towType === 'exchange' && defectiveDestination === 'storage')
+
+    const { isWorking: followUpIsWorking, towReason: followUpTowReason } =
+      deriveStorageFollowUpCondition(storageVehicleCondition, selectedDefects)
+
+    const followUpVehicleData =
+      towType === 'single' ? vehicleData : (defectiveVehicleData ?? null)
+
+    const runCreateStorageFollowUp = async (parentTowId: string) => {
+      if (
+        !hasStorageFollowUp ||
+        !followUpAddress?.address?.trim() ||
+        !basePriceList?.base_address ||
+        !isStorageEligible
+      ) {
+        return
+      }
+      const followUpPlate =
+        towType === 'single' ? vehiclePlate : (defectiveVehiclePlate ?? '')
+      const followUpVehicleType =
+        towType === 'single' ? vehicleType : (defectiveVehicleType ?? '')
+      const followUpVehicleCode =
+        towType === 'single' ? vehicleCode : defectiveVehicleCode
+      const followUpManufacturer =
+        towType === 'single'
+          ? vehicleData?.data?.manufacturer || manualManufacturer || null
+          : defectiveVehicleData?.data?.manufacturer ||
+            defectiveManualManufacturer ||
+            null
+      const followUpModel =
+        towType === 'single'
+          ? vehicleData?.data?.model || null
+          : defectiveVehicleData?.data?.model || null
+      const followUpYear =
+        towType === 'single'
+          ? vehicleData?.data?.year ?? null
+          : defectiveVehicleData?.data?.year ?? null
+      const followUpColor =
+        towType === 'single'
+          ? vehicleData?.data?.color || manualColor || null
+          : defectiveVehicleData?.data?.color || defectiveManualColor || null
+
+      await createStorageFollowUpTow({
+        parentTowId,
+        companyId,
+        createdBy: user.id,
+        customerId: finalCustomerId ?? null,
+        vehiclePlate: followUpPlate,
+        vehicleData: followUpVehicleData,
+        vehicleType: followUpVehicleType,
+        vehicleCode: followUpVehicleCode || null,
+        vehicleManufacturer: followUpManufacturer,
+        vehicleModel: followUpModel,
+        vehicleYear: followUpYear,
+        vehicleColor: followUpColor,
+        pickupAddress: basePriceList.base_address,
+        pickupLat: basePriceList.base_lat ?? null,
+        pickupLng: basePriceList.base_lng ?? null,
+        dropoffAddress: followUpAddress.address.trim(),
+        dropoffLat: followUpAddress.lat ?? null,
+        dropoffLng: followUpAddress.lng ?? null,
+        dropoffContactName: followUpContactName?.trim() || '',
+        dropoffContactPhone: followUpContactPhone?.trim() || '',
+        requiredTruckTypes,
+        customerOrderNumber: inheritCustomerOrderNumber ? (customerOrderNumber || null) : null,
+        isWorking: followUpIsWorking,
+        towReason: followUpTowReason,
+        registrySource: followUpVehicleData?.source ?? null,
+      })
+    }
+
     if (editTowId) {
+    const childExists = !!followUpChildTowId
+    const childPending = followUpChildStatus === 'pending'
+
+    if (childExists && !hasStorageFollowUp && !childPending) {
+      setError(STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE)
+      setSaving(false)
+      return
+    }
+
     try {
       const currentReservations = await getVehiclesReservedForTow(editTowId)
       const desiredIds = new Set<string>()
@@ -584,40 +697,25 @@ export function useTowSave(params: UseTowSaveParams) {
     }
     
     await updateTow({ ...towData, towId: editTowId, priceMode })
-    router.push(`/dashboard/tows/${editTowId}`)
-    } else {
-      const result = await createTow(towData)
 
-      if (preSelectedDriverId && preSelectedTruckId) {
-        try {
-          // Only seed a permanent assignment if the driver has none yet.
-          // insertDriverTruckAssignments is idempotent against the unique index,
-          // so a concurrent seed is a benign no-op rather than a thrown error.
-          if (!(await driverHasCurrentAssignment(preSelectedDriverId))) {
-            await insertDriverTruckAssignments(preSelectedDriverId, [preSelectedTruckId])
-          }
-        } catch (err) {
-          console.error('Failed to create permanent driver-truck assignment:', err)
-        }
-      }
-
-      const shouldCreateFollowUp =
+    try {
+      if (childExists && !hasStorageFollowUp && childPending) {
+        await updateTowStatus(
+          followUpChildTowId!,
+          'cancelled',
+          STORAGE_FOLLOW_UP_CANCELLED_ON_EDIT
+        )
+      } else if (
+        childExists &&
         hasStorageFollowUp &&
-        !editTowId &&
+        childPending &&
         followUpAddress?.address?.trim() &&
         basePriceList?.base_address &&
-        ((towType === 'single' && dropoffToStorage) ||
-          (towType === 'exchange' && defectiveDestination === 'storage'))
-
-      if (shouldCreateFollowUp && followUpAddress) {
+        editFollowUpExistingVehicles?.length
+      ) {
+        const childVehicle = editFollowUpExistingVehicles[0]
         const followUpPlate =
           towType === 'single' ? vehiclePlate : (defectiveVehiclePlate ?? '')
-        const followUpVehicleData =
-          towType === 'single' ? vehicleData : (defectiveVehicleData ?? null)
-        const followUpVehicleType =
-          towType === 'single' ? vehicleType : (defectiveVehicleType ?? '')
-        const followUpVehicleCode =
-          towType === 'single' ? vehicleCode : defectiveVehicleCode
         const followUpManufacturer =
           towType === 'single'
             ? vehicleData?.data?.manufacturer || manualManufacturer || null
@@ -637,33 +735,78 @@ export function useTowSave(params: UseTowSaveParams) {
             ? vehicleData?.data?.color || manualColor || null
             : defectiveVehicleData?.data?.color || defectiveManualColor || null
 
+        await updateStorageFollowUpTow({
+          childTowId: followUpChildTowId!,
+          pickupAddress: basePriceList.base_address,
+          pickupLat: basePriceList.base_lat ?? null,
+          pickupLng: basePriceList.base_lng ?? null,
+          dropoffAddress: followUpAddress.address.trim(),
+          dropoffLat: followUpAddress.lat ?? null,
+          dropoffLng: followUpAddress.lng ?? null,
+          dropoffContactName: followUpContactName?.trim() || '',
+          dropoffContactPhone: followUpContactPhone?.trim() || '',
+          customerOrderNumber: inheritCustomerOrderNumber
+            ? customerOrderNumber || null
+            : null,
+          requiredTruckTypes,
+          isWorking: followUpIsWorking,
+          towReason: followUpTowReason,
+          vehicle: {
+            id: childVehicle.id,
+            plateNumber: followUpPlate || childVehicle.plateNumber,
+            vehicleCode:
+              (towType === 'single' ? vehicleCode : defectiveVehicleCode) || null,
+            vehicleType:
+              (towType === 'single' ? vehicleType : defectiveVehicleType) || undefined,
+            manufacturer: followUpManufacturer,
+            model: followUpModel,
+            year:
+              followUpYear != null && followUpYear !== ''
+                ? Number(followUpYear)
+                : undefined,
+            color: followUpColor,
+            registrySource: followUpVehicleData?.source ?? null,
+          },
+          existingPointIds: editFollowUpExistingPoints ?? [],
+        })
+      } else if (!childExists && hasStorageFollowUp) {
+        await runCreateStorageFollowUp(editTowId)
+      }
+    } catch (followUpError) {
+      console.error('[useTowSave] storage follow-up sync failed:', followUpError)
+      const detail =
+        followUpError instanceof Error
+          ? followUpError.message
+          : 'סנכרון גרירת ההמשך נכשל'
+      setSaveWarning?.(`הגרירה נשמרה, אך ${detail}`)
+    }
+
+    router.push(`/dashboard/tows/${editTowId}`)
+    } else {
+      const result = await createTow(towData)
+
+      if (preSelectedDriverId && preSelectedTruckId) {
         try {
-          await createStorageFollowUpTow({
-            parentTowId: result.id,
-            companyId,
-            createdBy: user.id,
-            customerId: finalCustomerId ?? null,
-            vehiclePlate: followUpPlate,
-            vehicleData: followUpVehicleData,
-            vehicleType: followUpVehicleType,
-            vehicleCode: followUpVehicleCode || null,
-            vehicleManufacturer: followUpManufacturer,
-            vehicleModel: followUpModel,
-            vehicleYear: followUpYear,
-            vehicleColor: followUpColor,
-            pickupAddress: basePriceList.base_address,
-            pickupLat: basePriceList.base_lat ?? null,
-            pickupLng: basePriceList.base_lng ?? null,
-            dropoffAddress: followUpAddress.address.trim(),
-            dropoffLat: followUpAddress.lat ?? null,
-            dropoffLng: followUpAddress.lng ?? null,
-            dropoffContactName: followUpContactName?.trim() || '',
-            dropoffContactPhone: followUpContactPhone?.trim() || '',
-            requiredTruckTypes,
-            customerOrderNumber: inheritCustomerOrderNumber ? (customerOrderNumber || null) : null,
-            isWorking: !(selectedDefects?.length),
-            towReason: selectedDefects?.length ? selectedDefects.join(', ') : null,
-          })
+          // Only seed a permanent assignment if the driver has none yet.
+          // insertDriverTruckAssignments is idempotent against the unique index,
+          // so a concurrent seed is a benign no-op rather than a thrown error.
+          if (!(await driverHasCurrentAssignment(preSelectedDriverId))) {
+            await insertDriverTruckAssignments(preSelectedDriverId, [preSelectedTruckId])
+          }
+        } catch (err) {
+          console.error('Failed to create permanent driver-truck assignment:', err)
+        }
+      }
+
+      const shouldCreateFollowUp =
+        hasStorageFollowUp &&
+        followUpAddress?.address?.trim() &&
+        basePriceList?.base_address &&
+        isStorageEligible
+
+      if (shouldCreateFollowUp && followUpAddress) {
+        try {
+          await runCreateStorageFollowUp(result.id)
           console.log('[useTowSave] follow-up storage tow created')
         } catch (followUpError) {
           console.error('[useTowSave] failed to create follow-up tow:', followUpError)

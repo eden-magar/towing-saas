@@ -1579,6 +1579,7 @@ export interface CreateStorageFollowUpInput {
   customerOrderNumber?: string | null
   isWorking?: boolean
   towReason?: string | null
+  registrySource?: string | null
 }
 
 /** Second tow: yard pickup → admin follow-up destination; unassigned, no schedule. */
@@ -1621,6 +1622,7 @@ export async function createStorageFollowUpTow(
         color: input.vehicleData?.data?.color || input.vehicleColor || undefined,
         isWorking: input.isWorking ?? true,
         towReason: input.towReason ?? undefined,
+        registrySource: input.registrySource ?? input.vehicleData?.source ?? null,
         driveType: input.vehicleData?.data?.driveType ?? undefined,
         fuelType: input.vehicleData?.data?.fuelType ?? undefined,
         totalWeight: input.vehicleData?.data?.totalWeight ?? undefined,
@@ -1662,6 +1664,164 @@ export async function createStorageFollowUpTow(
         isStorage: false,
       },
     ],
+  })
+}
+
+export const STORAGE_FOLLOW_UP_NOTES = 'גרירת המשך מאחסנה'
+
+export function isStorageFollowUpTow(
+  tow: Pick<TowWithDetails, 'notes'> & {
+    points?: { point_type?: string | null; is_storage?: boolean | null }[] | null
+  }
+): boolean {
+  if (tow.notes === STORAGE_FOLLOW_UP_NOTES) return true
+  const pickup = (tow.points ?? []).find((p) => p.point_type === 'pickup')
+  return pickup?.is_storage === true
+}
+
+/** Oldest storage follow-up child for a parent (simple tow linked via linked_tow_id). */
+export async function findStorageFollowUpChild(
+  parentTowId: string,
+  companyId: string
+): Promise<TowWithDetails | null> {
+  const { data: candidates, error } = await supabase
+    .from('tows')
+    .select(
+      `
+      id,
+      status,
+      notes,
+      customer_order_number,
+      created_at,
+      tow_points (
+        point_type,
+        is_storage
+      )
+    `
+    )
+    .eq('linked_tow_id', parentTowId)
+    .eq('company_id', companyId)
+    .eq('tow_type', 'simple')
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching storage follow-up children:', error)
+    throw error
+  }
+
+  const matches = (candidates ?? []).filter((row) => {
+    if (row.notes === STORAGE_FOLLOW_UP_NOTES) return true
+    const pickup = (row.tow_points ?? []).find(
+      (p: { point_type?: string | null }) => p.point_type === 'pickup'
+    )
+    return pickup?.is_storage === true
+  })
+
+  if (matches.length > 1) {
+    console.warn(
+      '[findStorageFollowUpChild] Multiple storage follow-up children for parent',
+      parentTowId,
+      matches.map((m) => m.id)
+    )
+  }
+
+  const childId = matches[0]?.id
+  if (!childId) return null
+
+  return getTowWithPoints(childId)
+}
+
+export interface UpdateStorageFollowUpInput {
+  childTowId: string
+  pickupAddress: string
+  pickupLat: number | null
+  pickupLng: number | null
+  dropoffAddress: string
+  dropoffLat: number | null
+  dropoffLng: number | null
+  dropoffContactName: string
+  dropoffContactPhone: string
+  customerOrderNumber?: string | null
+  requiredTruckTypes: string[]
+  isWorking: boolean
+  towReason?: string | null
+  vehicle: {
+    id: string
+    plateNumber: string
+    vehicleCode?: string | null
+    vehicleType?: string
+    manufacturer?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+    registrySource?: string | null
+  }
+  existingPointIds: { id: string; pointOrder: number; pointType: string }[]
+}
+
+/** Update an existing storage follow-up child tow (separate from parent updateTow). */
+export async function updateStorageFollowUpTow(input: UpdateStorageFollowUpInput) {
+  const pickup = input.pickupAddress.trim()
+  const dropoff = input.dropoffAddress.trim()
+  const pickupPointId = input.existingPointIds.find((p) => p.pointType === 'pickup')?.id
+  const dropoffPointId = input.existingPointIds.find((p) => p.pointType === 'dropoff')?.id
+
+  const points: PreparedTowPoint[] = [
+    {
+      id: pickupPointId,
+      point_order: 0,
+      point_type: 'pickup',
+      address: pickup,
+      lat: input.pickupLat,
+      lng: input.pickupLng,
+      contact_name: null,
+      contact_phone: null,
+      notes: null,
+      vehicleIndices: [0],
+      isStorage: true,
+    },
+    {
+      id: dropoffPointId,
+      point_order: 1,
+      point_type: 'dropoff',
+      address: dropoff,
+      lat: input.dropoffLat,
+      lng: input.dropoffLng,
+      contact_name: input.dropoffContactName.trim() || null,
+      contact_phone: input.dropoffContactPhone.trim() || null,
+      notes: null,
+      vehicleIndices: [0],
+      isStorage: false,
+    },
+  ]
+
+  return updateTow({
+    towId: input.childTowId,
+    customerOrderNumber: input.customerOrderNumber,
+    requiredTruckTypes: input.requiredTruckTypes,
+    vehicles: [
+      {
+        id: input.vehicle.id,
+        plateNumber: normalizePlate(input.vehicle.plateNumber),
+        vehicleCode: input.vehicle.vehicleCode || undefined,
+        vehicleType: mapVehicleTypeForTow(input.vehicle.vehicleType) ?? 'private',
+        manufacturer: input.vehicle.manufacturer || undefined,
+        model: input.vehicle.model || undefined,
+        year: input.vehicle.year ?? undefined,
+        color: input.vehicle.color || undefined,
+        isWorking: input.isWorking,
+        towReason: input.towReason ?? undefined,
+        registrySource: input.vehicle.registrySource ?? null,
+      },
+    ],
+    legs: [
+      {
+        legType: 'pickup',
+        fromAddress: pickup,
+        toAddress: dropoff,
+      },
+    ],
+    points,
   })
 }
 
