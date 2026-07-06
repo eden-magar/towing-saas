@@ -1577,6 +1577,8 @@ export interface CreateStorageFollowUpInput {
   dropoffContactPhone: string
   requiredTruckTypes: string[]
   customerOrderNumber?: string | null
+  isWorking?: boolean
+  towReason?: string | null
 }
 
 /** Second tow: yard pickup → admin follow-up destination; unassigned, no schedule. */
@@ -1617,7 +1619,8 @@ export async function createStorageFollowUpTow(
         model: input.vehicleData?.data?.model || input.vehicleModel || undefined,
         year: Number.isFinite(year) ? year : undefined,
         color: input.vehicleData?.data?.color || input.vehicleColor || undefined,
-        isWorking: true,
+        isWorking: input.isWorking ?? true,
+        towReason: input.towReason ?? undefined,
         driveType: input.vehicleData?.data?.driveType ?? undefined,
         fuelType: input.vehicleData?.data?.fuelType ?? undefined,
         totalWeight: input.vehicleData?.data?.totalWeight ?? undefined,

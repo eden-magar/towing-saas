@@ -661,6 +661,8 @@ export function useTowSave(params: UseTowSaveParams) {
             dropoffContactPhone: followUpContactPhone?.trim() || '',
             requiredTruckTypes,
             customerOrderNumber: inheritCustomerOrderNumber ? (customerOrderNumber || null) : null,
+            isWorking: !(selectedDefects?.length),
+            towReason: selectedDefects?.length ? selectedDefects.join(', ') : null,
           })
           console.log('[useTowSave] follow-up storage tow created')
         } catch (followUpError) {
