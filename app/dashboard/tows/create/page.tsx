@@ -55,6 +55,12 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { StorageTakeOutConfirmModal } from '../../../components/tow-forms/StorageTakeOutConfirmModal'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
+import {
+  FromRequestFieldLegend,
+  addressInputStatusClass,
+  inputWrapperStatusClass,
+  withRequestFieldClass,
+} from '../../../components/tow-forms/shared/RequestFieldTag'
 import { TowCreateWizard } from '../../../components/tow-wizard/TowCreateWizard'
 import { ColumnLayout } from './ColumnLayout'
 import { FormCard, FormSubcard, Input } from '../../../components/ui'
@@ -389,6 +395,7 @@ function CreateTowForm({
     isDuplicateLoad,
     isFromRequestLoad,
     fromRequestOtherDefectText,
+    getRequestFieldStatus,
     loadedTowStatus,
     setLoadedTowStatus,
     editExistingVehicles,
@@ -550,6 +557,17 @@ function CreateTowForm({
   const pickupContactPhone = pickupStop?.contactPhone ?? ''
   const dropoffContactName = dropoffStop?.contactName ?? ''
   const dropoffContactPhone = dropoffStop?.contactPhone ?? ''
+
+  const vehiclePlateStatus = getRequestFieldStatus('vehiclePlate', vehiclePlate)
+  const manualManufacturerStatus = getRequestFieldStatus('manualManufacturer', manualManufacturer)
+  const manualColorStatus = getRequestFieldStatus('manualColor', manualColor)
+  const vehicleTypeStatus = getRequestFieldStatus('vehicleType', vehicleType)
+  const defectsStatus = getRequestFieldStatus('selectedDefects', selectedDefects)
+  const notesStatus = getRequestFieldStatus('notes', notes)
+  const pickupContactNameStatus = getRequestFieldStatus('pickupContactName', pickupContactName)
+  const pickupContactPhoneStatus = getRequestFieldStatus('pickupContactPhone', pickupContactPhone)
+  const dropoffContactNameStatus = getRequestFieldStatus('dropoffContactName', dropoffContactName)
+  const dropoffContactPhoneStatus = getRequestFieldStatus('dropoffContactPhone', dropoffContactPhone)
 
   const showSavePickupContactOption = Boolean(
     selectedCustomerId &&
@@ -874,6 +892,12 @@ function CreateTowForm({
   const renderRouteStopFields = (stop: RouteStop) => {
     const dropoffRow = findDropoffRouteStop(routeStops)
     const isLastDropoff = stop.role === 'dropoff' && stop.id === dropoffRow?.id
+    const routeAddressStatus =
+      stop.role === 'pickup'
+        ? getRequestFieldStatus('pickupAddress', stop.address?.address ?? '')
+        : stop.role === 'dropoff'
+          ? getRequestFieldStatus('dropoffAddress', stop.address?.address ?? '')
+          : null
 
     return (
       <div className="space-y-3 w-full">
@@ -903,7 +927,10 @@ function CreateTowForm({
           label={routeRoleLabel(stop.role)}
           hideLabel
           onPinDropClick={() => handlePinDropOpen(`routestop:${stop.id}`)}
-          className="[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3"
+          className={addressInputStatusClass(
+            '[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3',
+            routeAddressStatus,
+          )}
         />
 
         {stop.role === 'stop' && (
@@ -1879,6 +1906,12 @@ function CreateTowForm({
         </div>
       </header>
 
+      {isFromRequestLoad && (
+        <div className="max-w-5xl mx-auto px-4 pt-3">
+          <FromRequestFieldLegend />
+        </div>
+      )}
+
       <div className="px-4 py-4 sm:py-6 flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
         <div className="w-[680px] max-w-full">
           {/* Section 1 — לקוח */}
@@ -1922,6 +1955,7 @@ function CreateTowForm({
             onOrdererSelected={() => setSaveOrdererToCustomer(false)}
             editTowId={editTowId}
             orderNumber={orderNumber}
+            getRequestFieldStatus={getRequestFieldStatus}
           />
 
           {/* Section 2 — סוג גרירה */}
@@ -2005,7 +2039,14 @@ function CreateTowForm({
                 {towType === 'single' && (
                   <>
                     {/* Block 1 — פרטי רכב */}
-                    <FormSubcard title="פרטי רכב">
+                    <FormSubcard
+                      title="פרטי רכב"
+                      className={
+                        vehicleData?.found && vehicleData.data
+                          ? withRequestFieldClass('', vehiclePlateStatus)
+                          : undefined
+                      }
+                    >
                       <div className="space-y-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
@@ -2029,7 +2070,10 @@ function CreateTowForm({
                                   }
                                 }}
                                 placeholder="1234567"
-                                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-mono tracking-widest"
+                                className={withRequestFieldClass(
+                                  'flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-mono tracking-widest',
+                                  vehiclePlateStatus,
+                                )}
                               />
                               <button
                                 type="button"
@@ -2144,8 +2188,14 @@ function CreateTowForm({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
-                                <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value as any)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm">
+                                <select
+                                  value={vehicleType}
+                                  onChange={(e) => setVehicleType(e.target.value as any)}
+                                  className={withRequestFieldClass(
+                                    'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm',
+                                    vehicleTypeStatus,
+                                  )}
+                                >
                                   <option value="">בחר סוג רכב</option>
                                   <option value="private">פרטי</option>
                                   <option value="suv">ג&apos;יפ / SUV</option>
@@ -2159,17 +2209,29 @@ function CreateTowForm({
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">יצרן</label>
-                                <input type="text" value={manualManufacturer}
+                                <input
+                                  type="text"
+                                  value={manualManufacturer}
                                   onChange={(e) => setManualManufacturer(e.target.value)}
                                   placeholder="למשל: טויוטה"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  className={withRequestFieldClass(
+                                    'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm',
+                                    manualManufacturerStatus,
+                                  )}
+                                />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">צבע</label>
-                                <input type="text" value={manualColor}
+                                <input
+                                  type="text"
+                                  value={manualColor}
                                   onChange={(e) => setManualColor(e.target.value)}
                                   placeholder="למשל: לבן"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
+                                  className={withRequestFieldClass(
+                                    'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm',
+                                    manualColorStatus,
+                                  )}
+                                />
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
@@ -2206,11 +2268,18 @@ function CreateTowForm({
                           <button
                             type="button"
                             onClick={openDefectsModal}
-                            className={`w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                              selectedDefects.length > 0
-                                ? 'border-red-400 bg-red-50 text-red-700'
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                            }`}
+                            className={
+                              defectsStatus
+                                ? withRequestFieldClass(
+                                    'w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors text-gray-700',
+                                    defectsStatus,
+                                  )
+                                : `w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                                    selectedDefects.length > 0
+                                      ? 'border-red-400 bg-red-50 text-red-700'
+                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                                  }`
+                            }
                           >
                             🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
                           </button>
@@ -3911,34 +3980,38 @@ function CreateTowForm({
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <ContactNameAutocomplete
-                            value={pickupContactName}
-                            onChange={(name) => {
-                              if (pickupStop) updateStop(pickupStop.id, { contactName: name })
-                            }}
-                            onSelectContact={(contact) => {
-                              if (pickupStop) {
-                                updateStop(pickupStop.id, {
-                                  contactName: contact.name,
-                                  contactPhone: contact.phone ?? '',
-                                })
-                              }
-                              setSavePickupContactToCustomer(false)
-                            }}
-                            contacts={savedContacts}
-                            loading={contactsLoading}
-                            disabled={saving}
-                            placeholder="שם"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                          />
-                          <PhoneInput
-                            value={pickupContactPhone}
-                            onChange={(phone) => {
-                              if (pickupStop) updateStop(pickupStop.id, { contactPhone: phone })
-                            }}
-                            placeholder="טלפון"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                          />
+                          <div className={inputWrapperStatusClass('', pickupContactNameStatus)}>
+                            <ContactNameAutocomplete
+                              value={pickupContactName}
+                              onChange={(name) => {
+                                if (pickupStop) updateStop(pickupStop.id, { contactName: name })
+                              }}
+                              onSelectContact={(contact) => {
+                                if (pickupStop) {
+                                  updateStop(pickupStop.id, {
+                                    contactName: contact.name,
+                                    contactPhone: contact.phone ?? '',
+                                  })
+                                }
+                                setSavePickupContactToCustomer(false)
+                              }}
+                              contacts={savedContacts}
+                              loading={contactsLoading}
+                              disabled={saving}
+                              placeholder="שם"
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                            />
+                          </div>
+                          <div className={inputWrapperStatusClass('', pickupContactPhoneStatus)}>
+                            <PhoneInput
+                              value={pickupContactPhone}
+                              onChange={(phone) => {
+                                if (pickupStop) updateStop(pickupStop.id, { contactPhone: phone })
+                              }}
+                              placeholder="טלפון"
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                            />
+                          </div>
                         </div>
                         <SaveCustomerContactPill
                           className="mt-2"
@@ -3964,34 +4037,38 @@ function CreateTowForm({
                           )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <ContactNameAutocomplete
-                            value={dropoffContactName}
-                            onChange={(name) => {
-                              if (dropoffStop) updateStop(dropoffStop.id, { contactName: name })
-                            }}
-                            onSelectContact={(contact) => {
-                              if (dropoffStop) {
-                                updateStop(dropoffStop.id, {
-                                  contactName: contact.name,
-                                  contactPhone: contact.phone ?? '',
-                                })
-                              }
-                              setSaveDropoffContactToCustomer(false)
-                            }}
-                            contacts={savedContacts}
-                            loading={contactsLoading}
-                            disabled={saving}
-                            placeholder="שם"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                          />
-                          <PhoneInput
-                            value={dropoffContactPhone}
-                            onChange={(phone) => {
-                              if (dropoffStop) updateStop(dropoffStop.id, { contactPhone: phone })
-                            }}
-                            placeholder="טלפון"
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
-                          />
+                          <div className={inputWrapperStatusClass('', dropoffContactNameStatus)}>
+                            <ContactNameAutocomplete
+                              value={dropoffContactName}
+                              onChange={(name) => {
+                                if (dropoffStop) updateStop(dropoffStop.id, { contactName: name })
+                              }}
+                              onSelectContact={(contact) => {
+                                if (dropoffStop) {
+                                  updateStop(dropoffStop.id, {
+                                    contactName: contact.name,
+                                    contactPhone: contact.phone ?? '',
+                                  })
+                                }
+                                setSaveDropoffContactToCustomer(false)
+                              }}
+                              contacts={savedContacts}
+                              loading={contactsLoading}
+                              disabled={saving}
+                              placeholder="שם"
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                            />
+                          </div>
+                          <div className={inputWrapperStatusClass('', dropoffContactPhoneStatus)}>
+                            <PhoneInput
+                              value={dropoffContactPhone}
+                              onChange={(phone) => {
+                                if (dropoffStop) updateStop(dropoffStop.id, { contactPhone: phone })
+                              }}
+                              placeholder="טלפון"
+                              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                            />
+                          </div>
                         </div>
                         <SaveCustomerContactPill
                           className="mt-2"
@@ -4005,12 +4082,16 @@ function CreateTowForm({
                       </div>
                     </div>
                   ) : null}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">הערות</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
                     placeholder="הערות"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm"
+                    className={withRequestFieldClass(
+                      'w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm',
+                      notesStatus,
+                    )}
                   />
                 </div>
               </section>

@@ -13,6 +13,11 @@ import { PhoneInput } from '../../ui/PhoneInput'
 import { OrdererNameAutocomplete } from '../../customer-orderers/OrdererNameAutocomplete'
 import { SaveCustomerOrdererPill } from '../../customer-orderers/SaveCustomerOrdererPill'
 import type { CustomerOrderer } from '../../../lib/types'
+import {
+  dateInputStatusClass,
+  inputWrapperStatusClass,
+  type GetRequestFieldStatus,
+} from '../shared/RequestFieldTag'
 
 export type CreateCustomerTab = 'existing' | 'casual'
 
@@ -64,6 +69,8 @@ export interface CreateCustomerSectionProps {
    * Additive — existing desktop/mobile callers are unaffected.
    */
   narrowColumn?: boolean
+  /** When provided (fromRequest flow), drives amber/blue field highlighting. */
+  getRequestFieldStatus?: GetRequestFieldStatus
 }
 
 function hasPersonalPricing(customerIdsWithPersonalPricing: string[], customerId: string) {
@@ -125,6 +132,7 @@ export function CreateCustomerSection({
   orderNumber,
   isMobile = false,
   narrowColumn = false,
+  getRequestFieldStatus,
 }: CreateCustomerSectionProps) {
   const isNarrow = narrowColumn ?? false
   const isMobileSized = isMobile ?? false
@@ -170,6 +178,17 @@ export function CreateCustomerSection({
       ? 'מחירון אישי'
       : null
 
+  const customerOrderNumberStatus = getRequestFieldStatus?.(
+    'customerOrderNumber',
+    customerOrderNumber,
+  )
+  const departmentStatus = getRequestFieldStatus?.('department', department)
+  const orderedByStatus = getRequestFieldStatus?.('orderedBy', orderedBy)
+  const towDateStatus = getRequestFieldStatus?.('towDate', towDate)
+  const towTimeStatus = getRequestFieldStatus?.('towTime', towTime)
+  const towEndDateStatus = getRequestFieldStatus?.('towEndDate', towEndDate)
+  const towEndTimeStatus = getRequestFieldStatus?.('towEndTime', towEndTime)
+
   const scheduleMinH = isNarrow ? 'min-h-[36px]' : compact ? 'min-h-[48px]' : 'min-h-[40px]'
   const scheduleText = isNarrow ? 'text-xs' : 'text-sm'
   const scheduleBtn = (active: boolean) =>
@@ -196,15 +215,17 @@ export function CreateCustomerSection({
       <label className="block text-[10px] sm:text-xs font-semibold text-gray-800 mb-0.5 text-right">
         מס׳ הזמנת לקוח
       </label>
-      <Input
-        type="text"
-        value={customerOrderNumber}
-        onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
-        placeholder="מס׳ הזמנת לקוח"
-        className={`w-full text-right font-semibold border-2 border-gt-brand/35 focus:border-gt-brand ${
-          compact ? 'h-10 text-sm' : 'h-9 text-sm'
-        }`}
-      />
+      <div className={inputWrapperStatusClass('', customerOrderNumberStatus)}>
+        <Input
+          type="text"
+          value={customerOrderNumber}
+          onChange={(e) => onCustomerOrderNumberChange(e.target.value)}
+          placeholder="מס׳ הזמנת לקוח"
+          className={`w-full text-right font-semibold border-2 focus:border-gt-brand ${
+            customerOrderNumberStatus ? '' : 'border-gt-brand/35'
+          } ${compact ? 'h-10 text-sm' : 'h-9 text-sm'}`}
+        />
+      </div>
     </div>
   )
 
@@ -274,42 +295,48 @@ export function CreateCustomerSection({
             <label className="block text-xs text-gray-500 font-medium mb-1 text-right">
               שם מחלקה
             </label>
-            <Input
-              type="text"
-              value={department}
-              onChange={(e) => onDepartmentChange!(e.target.value)}
-              placeholder="מחלקה (אופציונלי)"
-              className={fieldInputClass}
-            />
+            <div className={inputWrapperStatusClass('', departmentStatus)}>
+              <Input
+                type="text"
+                value={department}
+                onChange={(e) => onDepartmentChange!(e.target.value)}
+                placeholder="מחלקה (אופציונלי)"
+                className={fieldInputClass}
+              />
+            </div>
           </div>
           <div>
             <label className="block text-xs text-gray-500 font-medium mb-1 text-right">
               מזמין
             </label>
-            <OrdererNameAutocomplete
-              value={orderedBy}
-              onChange={onOrderedByChange!}
-              onSelectOrderer={(orderer) => {
-                onDepartmentChange!(orderer.department ?? '')
-                onOrderedByChange!(orderer.name)
-                onOrdererSelected?.()
-              }}
-              orderers={savedOrderers}
-              loading={orderersLoading}
-              placeholder="מזמין (אופציונלי)"
-              className={fieldInputClass}
-              isMobile={isMobileSized && !isNarrow}
-            />
+            <div className={inputWrapperStatusClass('', orderedByStatus)}>
+              <OrdererNameAutocomplete
+                value={orderedBy}
+                onChange={onOrderedByChange!}
+                onSelectOrderer={(orderer) => {
+                  onDepartmentChange!(orderer.department ?? '')
+                  onOrderedByChange!(orderer.name)
+                  onOrdererSelected?.()
+                }}
+                orderers={savedOrderers}
+                loading={orderersLoading}
+                placeholder="מזמין (אופציונלי)"
+                className={fieldInputClass}
+                isMobile={isMobileSized && !isNarrow}
+              />
+            </div>
+            {showSaveOrdererPill && onSaveOrdererToggle && (
+              <div className="mt-1 flex justify-end">
+                <SaveCustomerOrdererPill
+                  visible
+                  active={saveOrdererToCustomer}
+                  onToggle={onSaveOrdererToggle}
+                  className="!text-xs !px-2 !py-0.5"
+                />
+              </div>
+            )}
           </div>
         </div>
-      )}
-
-      {showSaveOrdererPill && onSaveOrdererToggle && (
-        <SaveCustomerOrdererPill
-          visible
-          active={saveOrdererToCustomer}
-          onToggle={onSaveOrdererToggle}
-        />
       )}
 
       <div className="space-y-2">
@@ -342,19 +369,21 @@ export function CreateCustomerSection({
         </div>
         {useCustomTime && (
           <div className="flex items-center gap-2">
-            <TimeInput
-              value={towTime}
-              onChange={onTowTimeChange}
-              narrowColumn={isNarrow}
-              isMobile={isMobileSized && !isNarrow}
-              className="flex-1"
-            />
+            <div className={inputWrapperStatusClass('flex-1 min-w-0', towTimeStatus)}>
+              <TimeInput
+                value={towTime}
+                onChange={onTowTimeChange}
+                narrowColumn={isNarrow}
+                isMobile={isMobileSized && !isNarrow}
+                className="w-full"
+              />
+            </div>
             <DateInput
               value={towDate}
               onChange={onTowDateChange}
               narrowColumn={isNarrow}
               isMobile={isMobileSized && !isNarrow}
-              className="flex-1"
+              className={dateInputStatusClass('flex-1', towDateStatus)}
             />
           </div>
         )}
@@ -368,24 +397,26 @@ export function CreateCustomerSection({
               שעת סיום (אופציונלי)
             </span>
             <div className="flex items-center gap-2">
-              <TimeInput
-                value={towEndTime}
-                onChange={(v) => {
-                  onTowEndTimeChange(v)
-                  if (v && !towEndDate && towDate) {
-                    onTowEndDateChange(towDate)
-                  }
-                }}
-                narrowColumn={isNarrow}
-                isMobile={isMobileSized && !isNarrow}
-                className="flex-1"
-              />
+              <div className={inputWrapperStatusClass('flex-1 min-w-0', towEndTimeStatus)}>
+                <TimeInput
+                  value={towEndTime}
+                  onChange={(v) => {
+                    onTowEndTimeChange(v)
+                    if (v && !towEndDate && towDate) {
+                      onTowEndDateChange(towDate)
+                    }
+                  }}
+                  narrowColumn={isNarrow}
+                  isMobile={isMobileSized && !isNarrow}
+                  className="w-full"
+                />
+              </div>
               <DateInput
                 value={towEndDate}
                 onChange={onTowEndDateChange}
                 narrowColumn={isNarrow}
                 isMobile={isMobileSized && !isNarrow}
-                className="flex-1"
+                className={dateInputStatusClass('flex-1', towEndDateStatus)}
               />
             </div>
           </div>

@@ -27,6 +27,7 @@ import {
   TruckWithDetails,
   VehicleType,
   VehicleLookupResult,
+  type CustomerTowRequest,
   type CustomerTowRequestPoint,
   type CustomerTowRequestVehicle,
 } from '../lib/types'
@@ -68,6 +69,12 @@ import {
 } from '../lib/utils/exchange-to-route-points'
 import { useTowPricing } from './useTowPricing'
 import { useTowSave } from './useTowSave'
+import {
+  normalizeDefectsForCompare,
+  type RequestFieldStatus,
+  type RequestOriginalValues,
+  type RequestOriginalValuesKey,
+} from '../components/tow-forms/shared/RequestFieldTag'
 
 interface ExchangeRouteStop {
   id: string
@@ -660,6 +667,99 @@ function hydrateRouteStopsFromRequestPoints(
   return hydratedStops
 }
 
+function buildRequestOriginalValuesFromRequest(
+  request: CustomerTowRequest,
+  vehicles: CustomerTowRequestVehicle[],
+  points: CustomerTowRequestPoint[],
+  vehicleOutcome: {
+    plate: string | null
+    manualFallback: boolean
+    requestVehicle: CustomerTowRequestVehicle | undefined
+  } | null,
+): RequestOriginalValues {
+  const original: RequestOriginalValues = {}
+
+  const orderNum = request.customer_order_number?.trim()
+  if (orderNum) original.customerOrderNumber = orderNum
+
+  const dept = request.department?.trim()
+  if (dept) original.department = dept
+
+  const orderer = request.orderer?.trim()
+  if (orderer) original.orderedBy = orderer
+
+  if (request.scheduled_at) {
+    const d = new Date(request.scheduled_at)
+    original.towDate = d.toISOString().split('T')[0]
+    original.towTime = d.toTimeString().slice(0, 5)
+  }
+
+  if (request.scheduled_end_at) {
+    const end = new Date(request.scheduled_end_at)
+    original.towEndDate = end.toISOString().split('T')[0]
+    original.towEndTime = end.toTimeString().slice(0, 5)
+  }
+
+  const notesVal = request.notes?.trim()
+  if (notesVal) original.notes = notesVal
+
+  const pickupPoint = points.find((p) => p.point_type === 'pickup')
+  const dropoffPoint = points.find((p) => p.point_type === 'dropoff')
+
+  const pickupAddr = (pickupPoint?.address ?? request.pickup_address)?.trim()
+  if (pickupAddr) original.pickupAddress = pickupAddr
+
+  const dropoffAddr = (dropoffPoint?.address ?? request.dropoff_address)?.trim()
+  if (dropoffAddr) original.dropoffAddress = dropoffAddr
+
+  const pickupName = (pickupPoint?.contact_name ?? request.pickup_contact_name)?.trim()
+  if (pickupName) original.pickupContactName = pickupName
+
+  const pickupPhone = (pickupPoint?.contact_phone ?? request.pickup_contact_phone)?.trim()
+  if (pickupPhone) original.pickupContactPhone = pickupPhone
+
+  const dropoffName = (dropoffPoint?.contact_name ?? request.dropoff_contact_name)?.trim()
+  if (dropoffName) original.dropoffContactName = dropoffName
+
+  const dropoffPhone = (dropoffPoint?.contact_phone ?? request.dropoff_contact_phone)?.trim()
+  if (dropoffPhone) original.dropoffContactPhone = dropoffPhone
+
+  const sortedVehicles = [...vehicles].sort((a, b) => a.order_index - b.order_index)
+  const requestVehicle =
+    vehicleOutcome?.requestVehicle ?? sortedVehicles[0]
+
+  if (vehicleOutcome?.plate) {
+    original.vehiclePlate = vehicleOutcome.plate
+  }
+
+  const towReason =
+    requestVehicle?.tow_reason || request.defect_description || ''
+  if (towReason.trim()) {
+    const { defects: parsedDefects, otherText: parsedOtherDefectText } =
+      parseTowReasonToDefects(towReason)
+    original.selectedDefects = [
+      ...parsedDefects,
+      ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
+    ]
+    if (parsedOtherDefectText) {
+      original.fromRequestOtherDefectText = parsedOtherDefectText
+    }
+  }
+
+  if (vehicleOutcome?.manualFallback && requestVehicle) {
+    const mfr = requestVehicle.manufacturer?.trim()
+    if (mfr) original.manualManufacturer = mfr
+
+    const color = requestVehicle.color?.trim()
+    if (color) original.manualColor = color
+
+    const vtype = requestVehicle.vehicle_type?.trim()
+    if (vtype) original.vehicleType = vtype
+  }
+
+  return original
+}
+
 export function useTowForm(
   editTowId?: string,
   options?: {
@@ -676,6 +776,8 @@ export function useTowForm(
   const isFromRequestLoad = !!fromRequestId && !editTowId && !duplicateFromTowId
   const fromRequestHydratedRef = useRef(false)
   const [fromRequestOtherDefectText, setFromRequestOtherDefectText] = useState('')
+  const [requestOriginalValues, setRequestOriginalValues] =
+    useState<RequestOriginalValues>({})
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user, companyId, loading: authLoading } = useAuth()
@@ -2341,8 +2443,18 @@ export function useTowForm(
           const requestVehicle = sortedVehicles[0]
           const plate = (requestVehicle?.plate_number || request.plate_number || '').trim()
           const requestVehicleType = (requestVehicle?.vehicle_type || '') as VehicleType | ''
+          let vehicleOutcome: {
+            plate: string | null
+            manualFallback: boolean
+            requestVehicle: CustomerTowRequestVehicle | undefined
+          } | null = null
 
           if (plate) {
+            vehicleOutcome = {
+              plate,
+              manualFallback: false,
+              requestVehicle,
+            }
             setVehiclePlate(plate)
             setVehicleCode('')
 
@@ -2367,6 +2479,7 @@ export function useTowForm(
               setManualWeight('')
               setManualChassis('')
               setVehicleType(requestVehicleType)
+              if (vehicleOutcome) vehicleOutcome.manualFallback = true
             }
 
             try {
@@ -2406,6 +2519,15 @@ export function useTowForm(
           if (dropoffPoint?.is_storage) {
             setDropoffToStorage(true)
           }
+
+          setRequestOriginalValues(
+            buildRequestOriginalValuesFromRequest(
+              request,
+              vehicles,
+              points,
+              vehicleOutcome,
+            ),
+          )
         } else {
           // TODO: exchange/custom prefill — mirror duplicate exchange/custom blocks once
           // request child tables are adapted to tow form shape (pointVehicles junction differs).
@@ -2415,6 +2537,10 @@ export function useTowForm(
           } else if (request.tow_type === 'custom') {
             setTowType('custom')
           }
+
+          setRequestOriginalValues(
+            buildRequestOriginalValuesFromRequest(request, vehicles, points, null),
+          )
         }
       } catch (err) {
         console.error('Error loading customer tow request for prefill:', err)
@@ -3445,6 +3571,32 @@ export function useTowForm(
     }
   }
 
+  const getRequestFieldStatus = useCallback(
+    (key: RequestOriginalValuesKey, currentValue: string | string[]): RequestFieldStatus => {
+      if (!isFromRequestLoad) return null
+
+      if (key === 'selectedDefects') {
+        const original = requestOriginalValues.selectedDefects
+        if (!original) return null
+        const current = Array.isArray(currentValue) ? currentValue : []
+        return normalizeDefectsForCompare(original) === normalizeDefectsForCompare(current)
+          ? 'from-request'
+          : 'edited'
+      }
+
+      if (key === 'fromRequestOtherDefectText') {
+        return null
+      }
+
+      const original = requestOriginalValues[key]
+      if (typeof original !== 'string') return null
+      const current =
+        typeof currentValue === 'string' ? (currentValue ?? '').trim() : ''
+      return current === original.trim() ? 'from-request' : 'edited'
+    },
+    [isFromRequestLoad, requestOriginalValues],
+  )
+
   const { handleSave } = useTowSave({
     companyId,
     user,
@@ -3620,6 +3772,8 @@ export function useTowForm(
     isDuplicateLoad,
     isFromRequestLoad,
     fromRequestOtherDefectText,
+    requestOriginalValues,
+    getRequestFieldStatus,
     duplicateFromTowId,
     fromRequestId,
     loadedTowStatus,
