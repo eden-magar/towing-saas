@@ -35,15 +35,10 @@ import {
   StoredVehicleWithCustomer,
   StorageHistoryItem
 } from '../../lib/queries/storage'
-import { supabase } from '../../lib/supabase'
+import { getCustomersLite, type CustomerListItem } from '../../lib/queries/customers'
 import { lookupVehicle } from '../../lib/vehicle-lookup'
 import { DEFECT_OPTIONS } from '../../lib/constants/defects'
 import { CustomerSearchSelect } from '@/app/components/shared/CustomerSearchSelect'
-
-interface Customer {
-  id: string
-  name: string
-}
 
 export default function StoragePage() {
   const router = useRouter()
@@ -51,7 +46,7 @@ export default function StoragePage() {
   
   // Data states
   const [vehicles, setVehicles] = useState<StoredVehicleWithCustomer[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [stats, setStats] = useState({
     total: 0,
     stored: 0,
@@ -115,25 +110,14 @@ export default function StoragePage() {
       const statsData = await getStorageStats(companyId)
       setStats(statsData)
 
-      // טעינת לקוחות דרך טבלת הקשר
-      const { data: customersData } = await supabase
-        .from('customer_company')
-        .select(`
-          customer_id,
-          customer:customers!customer_id (
-            id,
-            name
-          )
-        `)
-        .eq('company_id', companyId)
-        .eq('is_active', true)
-
-      const customers = (customersData || [])
-        .map(cc => cc.customer as unknown as Customer)
-        .filter(c => c !== null)
-        .sort((a, b) => a.name.localeCompare(b.name, 'he'))
-
-      setCustomers(customers)
+      try {
+        const customersData = await getCustomersLite(companyId)
+        setCustomers(customersData)
+      } catch (customersErr) {
+        console.error('Error loading customers for storage:', customersErr)
+        setCustomers([])
+        setError('שגיאה בטעינת רשימת הלקוחות')
+      }
     } catch (err) {
       console.error('Error loading data:', err)
       setError('שגיאה בטעינת הנתונים')
@@ -769,7 +753,12 @@ export default function StoragePage() {
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">לקוח</label>
                     <CustomerSearchSelect
-                      customers={customers.map((c) => ({ id: c.id, name: c.name, phone: '' }))}
+                      customers={customers.map((c) => ({
+                        id: c.id,
+                        name: c.name,
+                        phone: c.phone || '',
+                        id_number: c.id_number ?? undefined,
+                      }))}
                       value={formData.customerId || null}
                       onSelect={(id) => setFormData({ ...formData, customerId: id || '' })}
                       placeholder="חפש לקוח..."
