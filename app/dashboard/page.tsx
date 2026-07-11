@@ -1372,7 +1372,7 @@
                           </span>
                           {req.tow_type === 'exchange' && (
                             <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-800 border border-violet-200">
-                              החלפה
+                              תקין תקול
                             </span>
                           )}
                           {req.tow_type === 'custom' && (

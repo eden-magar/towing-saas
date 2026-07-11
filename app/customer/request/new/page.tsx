@@ -2,16 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@/app/lib/AuthContext'
 import {
-  getCustomerForUser,
-  getCompanyBaseAddressForCustomer,
-  getMyStoredVehicles,
   type CustomerPortalStoredVehicle,
 } from '@/app/lib/queries/customer-portal'
-import { PortalRequestTypeSwitcher } from '@/app/components/customer-portal/PortalRequestTypeSwitcher'
+import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
-import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
 import { storedVehicleToCondition } from '@/app/lib/utils/storage-vehicle'
 import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
 import {
@@ -149,11 +144,15 @@ const textareaClassName =
   'w-full px-3 py-2 rounded-lg text-sm bg-white text-gt-text-primary border border-gt-border placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 transition-colors duration-150 resize-none'
 
 export default function NewCustomerTowRequestPage() {
-  const { user, loading: authLoading } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [canSubmit, setCanSubmit] = useState(false)
-  const [customerId, setCustomerId] = useState<string | null>(null)
-  const [companyId, setCompanyId] = useState<string | null>(null)
+  const {
+    canSubmit,
+    customerId,
+    companyId,
+    baseAddress,
+    storedVehicles,
+    storageLoading,
+    userId,
+  } = usePortalRequestBootstrap()
   const [form, setForm] = useState<FormState>(emptyForm)
   const [towDate, setTowDate] = useState(defaultTowDate)
   const [towTime, setTowTime] = useState(defaultTowTime)
@@ -171,13 +170,6 @@ export default function NewCustomerTowRequestPage() {
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>(emptyAddress)
   const [pickupFromStorage, setPickupFromStorage] = useState(false)
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
-  const [baseAddress, setBaseAddress] = useState<{
-    address: string
-    lat: number | null
-    lng: number | null
-  } | null>(null)
-  const [storedVehicles, setStoredVehicles] = useState<CustomerPortalStoredVehicle[]>([])
-  const [storageLoading, setStorageLoading] = useState(false)
   const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
   const [storageModalOpen, setStorageModalOpen] = useState(false)
   const [storageSearch, setStorageSearch] = useState('')
@@ -189,38 +181,6 @@ export default function NewCustomerTowRequestPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    if (authLoading || !user) return
-
-    const load = async () => {
-      const info = await getCustomerForUser(user.id)
-      if (!info) {
-        setLoading(false)
-        return
-      }
-      setCustomerId(info.customerId)
-      setCompanyId(info.companyId)
-      setCanSubmit(canSubmitOrdersViaPortal(info.portalSettings))
-      if (info.companyId) {
-        const yard = await getCompanyBaseAddressForCustomer()
-        setBaseAddress(yard)
-      }
-      setStorageLoading(true)
-      try {
-        const vehicles = await getMyStoredVehicles()
-        setStoredVehicles(vehicles)
-      } catch (err) {
-        console.error('Error loading stored vehicles for portal:', err)
-        setStoredVehicles([])
-      } finally {
-        setStorageLoading(false)
-      }
-      setLoading(false)
-    }
-
-    load()
-  }, [user, authLoading])
 
   useEffect(() => {
     if (!storageModalOpen) return
@@ -434,7 +394,7 @@ export default function NewCustomerTowRequestPage() {
     e.preventDefault()
     setSubmitError('')
 
-    if (!user || !customerId || !companyId) {
+    if (!userId || !customerId || !companyId) {
       setSubmitError('לא ניתן לשלוח בקשה — חסרים פרטי לקוח או חברה')
       return
     }
@@ -446,7 +406,7 @@ export default function NewCustomerTowRequestPage() {
       await createFullCustomerTowRequest({
         companyId,
         customerId,
-        submittedByUserId: user.id,
+        submittedByUserId: userId,
         towType: 'simple',
         customerOrderNumber: form.customerOrderNumber.trim(),
         scheduledAt: new Date(`${towDate}T${towTime}:00`).toISOString(),
@@ -497,14 +457,6 @@ export default function NewCustomerTowRequestPage() {
     }
   }
 
-  if (loading || authLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-gt-brand" />
-      </div>
-    )
-  }
-
   if (!canSubmit) {
     return (
       <div className="max-w-lg mx-auto bg-white rounded-xl border border-gt-border shadow-sm p-8 text-center">
@@ -541,14 +493,11 @@ export default function NewCustomerTowRequestPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-3" dir="rtl">
-      <div className="mb-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gt-text-primary">הזמנת גרירה</h1>
-          <p className="text-sm text-gt-text-tertiary mt-1">
-            מילוי פרטי בקשת גרירה פשוטה (רכב אחד, מוצא ליעד)
-          </p>
-        </div>
-        <PortalRequestTypeSwitcher active="simple" />
+      <div className="mb-1">
+        <h1 className="text-xl font-bold text-gt-text-primary">הזמנת גרירה</h1>
+        <p className="text-sm text-gt-text-tertiary mt-1">
+          מילוי פרטי בקשת גרירה פשוטה (רכב אחד, מוצא ליעד)
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">

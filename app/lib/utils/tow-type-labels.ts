@@ -15,7 +15,7 @@ export function getTowTypeLabel(towType: string | null | undefined): string {
     with_base: 'יציאה מבסיס',
     transfer: 'העברה',
     multi_vehicle: 'מרובת רכבים',
-    exchange: 'תקין ↔ תקול',
+    exchange: 'תקין תקול',
     single: 'גרירה פשוטה',
     custom: 'מסלול מותאם',
   }

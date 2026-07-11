@@ -1,17 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@/app/lib/AuthContext'
-import {
-  getCustomerForUser,
-  getCompanyBaseAddressForCustomer,
-  getMyStoredVehicles,
-  type CustomerPortalStoredVehicle,
-} from '@/app/lib/queries/customer-portal'
+import { type CustomerPortalStoredVehicle } from '@/app/lib/queries/customer-portal'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
-import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
-import { PortalRequestTypeSwitcher } from '@/app/components/customer-portal/PortalRequestTypeSwitcher'
+import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
 import { StorageVehiclePickerModal } from '@/app/components/storage/StorageVehiclePickerModal'
 import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
 import {
@@ -213,11 +206,15 @@ function buildVehiclePayload(
 }
 
 export default function NewCustomerExchangeRequestPage() {
-  const { user, loading: authLoading } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [canSubmit, setCanSubmit] = useState(false)
-  const [customerId, setCustomerId] = useState<string | null>(null)
-  const [companyId, setCompanyId] = useState<string | null>(null)
+  const {
+    canSubmit,
+    customerId,
+    companyId,
+    baseAddress,
+    storedVehicles,
+    storageLoading,
+    userId,
+  } = usePortalRequestBootstrap()
 
   const [header, setHeader] = useState<HeaderForm>({
     customerOrderNumber: '',
@@ -238,13 +235,6 @@ export default function NewCustomerExchangeRequestPage() {
   const [selectedWorkingStoredId, setSelectedWorkingStoredId] = useState<string | null>(null)
   const [faultyToStorage, setFaultyToStorage] = useState(false)
 
-  const [baseAddress, setBaseAddress] = useState<{
-    address: string
-    lat: number | null
-    lng: number | null
-  } | null>(null)
-  const [storedVehicles, setStoredVehicles] = useState<CustomerPortalStoredVehicle[]>([])
-  const [storageLoading, setStorageLoading] = useState(false)
   const [storageModalOpen, setStorageModalOpen] = useState(false)
 
   const [pinDropModal, setPinDropModal] = useState<{
@@ -256,38 +246,6 @@ export default function NewCustomerExchangeRequestPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    if (authLoading || !user) return
-
-    const load = async () => {
-      const info = await getCustomerForUser(user.id)
-      if (!info) {
-        setLoading(false)
-        return
-      }
-      setCustomerId(info.customerId)
-      setCompanyId(info.companyId)
-      setCanSubmit(canSubmitOrdersViaPortal(info.portalSettings))
-      if (info.companyId) {
-        const yard = await getCompanyBaseAddressForCustomer()
-        setBaseAddress(yard)
-      }
-      setStorageLoading(true)
-      try {
-        const vehicles = await getMyStoredVehicles()
-        setStoredVehicles(vehicles)
-      } catch (err) {
-        console.error('Error loading stored vehicles for exchange portal:', err)
-        setStoredVehicles([])
-      } finally {
-        setStorageLoading(false)
-      }
-      setLoading(false)
-    }
-
-    load()
-  }, [user, authLoading])
 
   const operationalStoredVehicles = storedVehicles.filter(
     (v) => v.vehicle_condition === 'operational'
@@ -467,7 +425,7 @@ export default function NewCustomerExchangeRequestPage() {
     e.preventDefault()
     setSubmitError('')
 
-    if (!user || !customerId || !companyId) {
+    if (!userId || !customerId || !companyId) {
       setSubmitError('לא ניתן לשלוח בקשה — חסרים פרטי לקוח או חברה')
       return
     }
@@ -479,7 +437,7 @@ export default function NewCustomerExchangeRequestPage() {
       await createFullCustomerTowRequest({
         companyId,
         customerId,
-        submittedByUserId: user.id,
+        submittedByUserId: userId,
         towType: 'exchange',
         customerOrderNumber: header.customerOrderNumber.trim(),
         scheduledAt: new Date(`${towDate}T${towTime}:00`).toISOString(),
@@ -560,19 +518,11 @@ export default function NewCustomerExchangeRequestPage() {
     }
   }
 
-  if (loading || authLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-gt-brand" />
-      </div>
-    )
-  }
-
   if (!canSubmit) {
     return (
       <div className="max-w-lg mx-auto bg-white rounded-xl border border-gt-border shadow-sm p-8 text-center">
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h1 className="text-lg font-bold text-gt-text-primary mb-2">גרירת חליפין</h1>
+        <h1 className="text-lg font-bold text-gt-text-primary mb-2">תקין תקול</h1>
         <p className="text-gt-text-secondary">
           הרשאת הזמנת גרירות אינה פעילה — פנה לחברת הגרירה
         </p>
@@ -592,7 +542,7 @@ export default function NewCustomerExchangeRequestPage() {
         <CheckCircle2 className="w-12 h-12 text-gt-success mx-auto mb-4" />
         <h1 className="text-lg font-bold text-gt-text-primary mb-2">הבקשה נשלחה</h1>
         <p className="text-gt-text-secondary mb-6">
-          בקשת גרירת החליפין נקלטה וממתינה לטיפול.
+          בקשת תקין תקול נקלטה וממתינה לטיפול.
         </p>
         <Link
           href="/customer"
@@ -745,14 +695,11 @@ export default function NewCustomerExchangeRequestPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-3" dir="rtl">
-      <div className="mb-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-gt-text-primary">גרירת חליפין</h1>
-          <p className="text-sm text-gt-text-tertiary mt-1">
-            רכב תקין נכנס + רכב תקול יוצא — הבקשה תמתין לטיפול החברה
-          </p>
-        </div>
-        <PortalRequestTypeSwitcher active="exchange" />
+      <div className="mb-1">
+        <h1 className="text-xl font-bold text-gt-text-primary">תקין תקול</h1>
+        <p className="text-sm text-gt-text-tertiary mt-1">
+          רכב תקין נכנס + רכב תקול יוצא — הבקשה תמתין לטיפול החברה
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -1065,7 +1012,7 @@ export default function NewCustomerExchangeRequestPage() {
           </Link>
           <Button type="submit" variant="primary" size="lg" disabled={submitting}>
             {submitting && <Loader2 size={16} className="animate-spin" />}
-            שליחת בקשת חליפין
+            שליחת בקשת תקין תקול
           </Button>
         </div>
       </form>

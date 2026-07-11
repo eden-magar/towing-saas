@@ -1,36 +1,35 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { ArrowLeftRight, Truck } from 'lucide-react'
 
-type PortalRequestType = 'simple' | 'exchange'
-
-const OPTIONS: {
-  type: PortalRequestType
-  href: string
-  label: string
-  icon: typeof Truck
-}[] = [
-  { type: 'simple', href: '/customer/request/new', label: 'גרירה פשוטה', icon: Truck },
+const OPTIONS = [
+  { href: '/customer/request/new', label: 'גרירה פשוטה', icon: Truck, match: '/customer/request/new' },
   {
-    type: 'exchange',
     href: '/customer/request/exchange',
-    label: 'גרירת חליפין',
+    label: 'תקין תקול',
     icon: ArrowLeftRight,
+    match: '/customer/request/exchange',
   },
-]
+] as const
 
-/** Compact type switcher between simple and exchange portal intake forms. */
-export function PortalRequestTypeSwitcher({ active }: { active: PortalRequestType }) {
+/** Compact type switcher — client-side navigation between simple and exchange intake. */
+export function PortalRequestTypeSwitcher() {
+  const pathname = usePathname()
+
   return (
     <div className="inline-flex rounded-xl border border-gt-border bg-white p-1 gap-1" dir="rtl">
       {OPTIONS.map((opt) => {
         const Icon = opt.icon
-        const isActive = opt.type === active
+        const isActive = pathname === opt.match || pathname.startsWith(`${opt.match}/`)
         return (
           <Link
-            key={opt.type}
+            key={opt.href}
             href={opt.href}
+            prefetch
+            scroll={false}
+            aria-current={isActive ? 'page' : undefined}
             className={
               isActive
                 ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gt-brand text-white'

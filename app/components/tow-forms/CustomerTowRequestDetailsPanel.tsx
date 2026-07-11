@@ -44,7 +44,7 @@ function portalTowTypeBadge(towType: CustomerTowRequestPortalType): {
 } | null {
   if (towType === 'exchange') {
     return {
-      label: 'החלפה',
+      label: 'תקין תקול',
       className: 'bg-violet-50 text-violet-800 border-violet-200',
     }
   }

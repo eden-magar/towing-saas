@@ -11,7 +11,7 @@ const OPTIONS: {
   icon: LucideIcon
 }[] = [
   { value: 'single', label: 'פשוטה', icon: Truck },
-  { value: 'exchange', label: 'החלפה', icon: ArrowLeftRight },
+  { value: 'exchange', label: 'תקין תקול', icon: ArrowLeftRight },
   { value: 'custom', label: 'מותאם', icon: Route },
 ]
 

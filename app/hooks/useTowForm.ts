@@ -2640,7 +2640,7 @@ export function useTowForm(
         } else {
           // TODO: exchange/custom prefill — mirror duplicate exchange/custom blocks once
           // request child tables are adapted to tow form shape (pointVehicles junction differs).
-          setError('סוג בקשה זה (החלפה/מותאם) עדיין לא נתמך — מלא ידנית')
+          setError('סוג בקשה זה (תקין תקול/מותאם) עדיין לא נתמך — מלא ידנית')
           if (request.tow_type === 'exchange') {
             setTowType('exchange')
           } else if (request.tow_type === 'custom') {
