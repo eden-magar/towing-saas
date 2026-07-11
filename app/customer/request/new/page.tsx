@@ -131,6 +131,7 @@ type FieldErrorKey =
   | 'scheduledAt'
   | 'defects'
   | 'plateNumber'
+  | 'vehicleCode'
   | 'pickupAddress'
   | 'dropoffAddress'
 
@@ -141,6 +142,7 @@ const fieldLabels: Record<FieldErrorKey, string> = {
   orderer: 'מזמין',
   ordererPhone: 'טלפון מזמין',
   plateNumber: 'מספר רישוי',
+  vehicleCode: 'קוד רכב',
   defects: 'תקלות',
   pickupAddress: 'כתובת מוצא',
   pickupContactName: 'שם איש קשר מוצא',
@@ -179,6 +181,8 @@ export default function NewCustomerTowRequestPage() {
   const [vehicleLookupNotFound, setVehicleLookupNotFound] = useState(false)
   const [manualManufacturer, setManualManufacturer] = useState('')
   const [manualColor, setManualColor] = useState('')
+  const [manualChassis, setManualChassis] = useState('')
+  const [manualWeight, setManualWeight] = useState('')
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
   const [isWorking, setIsWorking] = useState(false)
   const [pickupAddress, setPickupAddress] = useState<AddressData>(emptyAddress)
@@ -350,9 +354,12 @@ export default function NewCustomerTowRequestPage() {
     setVehicleLookupNotFound(false)
     setManualManufacturer('')
     setManualColor('')
+    setManualChassis('')
+    setManualWeight('')
     setSelectedDefects([])
     setIsWorking(false)
     clearFieldError('plateNumber')
+    clearFieldError('vehicleCode')
     clearFieldError('defects')
     if (pickupFromStorage) {
       handlePickupFromStorageChange(false)
@@ -367,6 +374,7 @@ export default function NewCustomerTowRequestPage() {
 
     setSelectedStoredVehicleId(vehicle.id)
     setPlateNumber(vehicle.plate_number)
+    setVehicleCode(vehicle.vehicle_code || '')
     setVehicleLookupNotFound(false)
     setManualManufacturer('')
     setManualColor('')
@@ -380,6 +388,7 @@ export default function NewCustomerTowRequestPage() {
     setIsWorking(!isFaulty)
     setSelectedDefects(isFaulty ? defects : [])
     clearFieldError('plateNumber')
+    clearFieldError('vehicleCode')
     clearFieldError('defects')
     handlePickupFromStorageChange(true)
   }
@@ -407,6 +416,9 @@ export default function NewCustomerTowRequestPage() {
       errors.plateNumber = `${fieldLabels.plateNumber} הוא שדה חובה`
     } else if (vehicleLookupNotFound && !vehicleType) {
       errors.plateNumber = 'יש לבחור סוג רכב בהזנה ידנית'
+    }
+    if (!vehicleCode.trim()) {
+      errors.vehicleCode = 'קוד רכב הוא שדה חובה'
     }
     if (!pickupAddress.address.trim()) {
       errors.pickupAddress = `${fieldLabels.pickupAddress} הוא שדה חובה`
@@ -436,8 +448,13 @@ export default function NewCustomerTowRequestPage() {
 
   const buildVehiclePayload = () => {
     const plate = plateNumber.trim()
+    const parsedWeight = Number(manualWeight)
+    const weightValue =
+      manualWeight.trim() && Number.isFinite(parsedWeight) ? parsedWeight : null
+    const chassisValue = manualChassis.trim() || null
     const base = {
       plateNumber: plate,
+      vehicleCode: vehicleCode.trim() || null,
       towReason: selectedDefects.join(', ') || undefined,
       isWorking,
       orderIndex: 0,
@@ -453,6 +470,8 @@ export default function NewCustomerTowRequestPage() {
         year: d.year,
         color: d.color,
         vehicleType: resolvedType || null,
+        chassis: d.chassis?.trim() || chassisValue,
+        totalWeight: d.totalWeight ?? weightValue,
       }
     }
 
@@ -462,6 +481,8 @@ export default function NewCustomerTowRequestPage() {
         manufacturer: manualManufacturer.trim() || null,
         color: manualColor.trim() || null,
         vehicleType: vehicleType ? (vehicleType as VehicleType) : null,
+        chassis: chassisValue,
+        totalWeight: weightValue,
       }
     }
 
@@ -835,15 +856,22 @@ export default function NewCustomerTowRequestPage() {
                   </div>
                 </SelectorModalShell>
 
-                <FormField required error={fieldErrors.plateNumber}>
+                <FormField
+                  label="מספר רישוי"
+                  required
+                  error={fieldErrors.plateNumber}
+                >
                   <VehicleLookup
                     narrowColumn
                     hideLabel
                     showVehicleCode
                     vehicleCode={vehicleCode}
-                    onVehicleCodeChange={setVehicleCode}
+                    onVehicleCodeChange={(code) => {
+                      setVehicleCode(code)
+                      clearFieldError('vehicleCode')
+                    }}
                     manualEntryStyle="button"
-                    manualEntryPlacement="withPlate"
+                    manualEntryPlacement="inline"
                     manualEntryTrailing={
                       !storageLoading && storedVehicles.length > 0 ? (
                         <button
@@ -905,8 +933,15 @@ export default function NewCustomerTowRequestPage() {
                     onManualManufacturerChange={setManualManufacturer}
                     manualColor={manualColor}
                     onManualColorChange={setManualColor}
+                    manualChassis={manualChassis}
+                    onManualChassisChange={setManualChassis}
+                    manualWeight={manualWeight}
+                    onManualWeightChange={setManualWeight}
                   />
                 </FormField>
+                {fieldErrors.vehicleCode && (
+                  <p className="text-[11px] text-gt-danger">{fieldErrors.vehicleCode}</p>
+                )}
                 {fieldErrors.defects && (
                   <p className="text-[11px] text-gt-danger">{fieldErrors.defects}</p>
                 )}
@@ -922,7 +957,7 @@ export default function NewCustomerTowRequestPage() {
               density="compact"
               className="mb-0"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-3">
                 <div className="space-y-1.5 min-w-0">
                   <h4 className={PORTAL_SECTION_LABEL_CLASS}>מוצא</h4>
                   <FormField
@@ -986,7 +1021,18 @@ export default function NewCustomerTowRequestPage() {
                 </div>
 
                 <div className="space-y-1.5 min-w-0">
-                  <h4 className={PORTAL_SECTION_LABEL_CLASS}>יעד</h4>
+                  <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
+                    <h4 className={PORTAL_SECTION_LABEL_CLASS}>יעד</h4>
+                    <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-secondary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dropoffToStorage}
+                        onChange={(e) => handleDropoffToStorageChange(e.target.checked)}
+                        className="rounded border-gt-border text-gt-brand focus:ring-gt-brand"
+                      />
+                      לאחסנה
+                    </label>
+                  </div>
                   <FormField
                     required
                     error={fieldErrors.dropoffAddress}

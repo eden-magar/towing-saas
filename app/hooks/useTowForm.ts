@@ -2575,7 +2575,7 @@ export function useTowForm(
               requestVehicle,
             }
             setVehiclePlate(plate)
-            setVehicleCode('')
+            setVehicleCode(requestVehicle?.vehicle_code || '')
 
             const towReason =
               requestVehicle?.tow_reason || request.defect_description || ''
@@ -2595,8 +2595,12 @@ export function useTowForm(
               setVehicleLookupNotFound(true)
               setManualManufacturer(requestVehicle?.manufacturer || '')
               setManualColor(requestVehicle?.color || '')
-              setManualWeight('')
-              setManualChassis('')
+              setManualWeight(
+                requestVehicle?.total_weight != null
+                  ? String(requestVehicle.total_weight)
+                  : ''
+              )
+              setManualChassis(requestVehicle?.chassis || '')
               setVehicleType(requestVehicleType)
               if (vehicleOutcome) vehicleOutcome.manualFallback = true
             }

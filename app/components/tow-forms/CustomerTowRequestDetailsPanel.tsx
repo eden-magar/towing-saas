@@ -136,6 +136,36 @@ function VehicleRow({
           {vehicle.tow_reason}
         </p>
       ) : null}
+      {(vehicle.chassis ||
+        vehicle.total_weight != null ||
+        vehicle.vehicle_code) && (
+        <p className="mt-1 text-xs text-gray-500">
+          {vehicle.vehicle_code ? (
+            <span>
+              <span className="font-medium text-gray-500">קוד: </span>
+              {vehicle.vehicle_code}
+            </span>
+          ) : null}
+          {vehicle.vehicle_code && (vehicle.chassis || vehicle.total_weight != null) ? (
+            <span className="mx-1.5 text-gray-300">·</span>
+          ) : null}
+          {vehicle.chassis ? (
+            <span>
+              <span className="font-medium text-gray-500">שלדה: </span>
+              {vehicle.chassis}
+            </span>
+          ) : null}
+          {vehicle.chassis && vehicle.total_weight != null ? (
+            <span className="mx-1.5 text-gray-300">·</span>
+          ) : null}
+          {vehicle.total_weight != null ? (
+            <span>
+              <span className="font-medium text-gray-500">משקל: </span>
+              {Number(vehicle.total_weight).toLocaleString('he-IL')} ק״ג
+            </span>
+          ) : null}
+        </p>
+      )}
       {vehicle.notes ? (
         <p className="mt-1 text-xs text-gray-500">{vehicle.notes}</p>
       ) : null}

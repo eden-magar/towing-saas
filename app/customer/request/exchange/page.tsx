@@ -104,6 +104,8 @@ type VehicleSide = {
   vehicleLookupNotFound: boolean
   manualManufacturer: string
   manualColor: string
+  manualChassis: string
+  manualWeight: string
   origin: AddressData
   originContactName: string
   originContactPhone: string
@@ -122,6 +124,8 @@ const emptyVehicleSide = (): VehicleSide => ({
   vehicleLookupNotFound: false,
   manualManufacturer: '',
   manualColor: '',
+  manualChassis: '',
+  manualWeight: '',
   origin: emptyAddress(),
   originContactName: '',
   originContactPhone: '',
@@ -142,6 +146,7 @@ type FieldErrorKey =
   | keyof HeaderForm
   | 'scheduledAt'
   | 'workingPlate'
+  | 'workingVehicleCode'
   | 'workingOrigin'
   | 'workingOriginContactName'
   | 'workingOriginContactPhone'
@@ -149,6 +154,7 @@ type FieldErrorKey =
   | 'workingDestinationContactName'
   | 'workingDestinationContactPhone'
   | 'faultyPlate'
+  | 'faultyVehicleCode'
   | 'faultyDefects'
   | 'faultyOrigin'
   | 'faultyOriginContactName'
@@ -165,6 +171,7 @@ const fieldLabels: Record<FieldErrorKey, string> = {
   ordererPhone: 'טלפון מזמין',
   notes: 'הערות',
   workingPlate: 'מספר רישוי',
+  workingVehicleCode: 'קוד רכב',
   workingOrigin: 'כתובת',
   workingOriginContactName: 'איש קשר',
   workingOriginContactPhone: 'טלפון',
@@ -172,6 +179,7 @@ const fieldLabels: Record<FieldErrorKey, string> = {
   workingDestinationContactName: 'איש קשר',
   workingDestinationContactPhone: 'טלפון',
   faultyPlate: 'מספר רישוי',
+  faultyVehicleCode: 'קוד רכב',
   faultyDefects: 'תקלות',
   faultyOrigin: 'כתובת',
   faultyOriginContactName: 'איש קשר',
@@ -192,8 +200,13 @@ function buildVehiclePayload(
   opts: { isWorking: boolean; towReason?: string; orderIndex: number }
 ) {
   const plate = side.plateNumber.trim()
+  const parsedWeight = Number(side.manualWeight)
+  const weightValue =
+    side.manualWeight.trim() && Number.isFinite(parsedWeight) ? parsedWeight : null
+  const chassisValue = side.manualChassis.trim() || null
   const base = {
     plateNumber: plate,
+    vehicleCode: side.vehicleCode.trim() || null,
     isWorking: opts.isWorking,
     towReason: opts.towReason,
     orderIndex: opts.orderIndex,
@@ -209,6 +222,8 @@ function buildVehiclePayload(
       year: d.year,
       color: d.color,
       vehicleType: resolvedType || null,
+      chassis: d.chassis?.trim() || chassisValue,
+      totalWeight: d.totalWeight ?? weightValue,
     }
   }
 
@@ -218,6 +233,8 @@ function buildVehiclePayload(
       manufacturer: side.manualManufacturer.trim() || null,
       color: side.manualColor.trim() || null,
       vehicleType: side.vehicleType ? (side.vehicleType as VehicleType) : null,
+      chassis: chassisValue,
+      totalWeight: weightValue,
     }
   }
 
@@ -399,6 +416,8 @@ export default function NewCustomerExchangeRequestPage() {
       vehicleLookupNotFound: false,
       manualManufacturer: '',
       manualColor: '',
+      manualChassis: '',
+      manualWeight: '',
     })
     clearWorkingOriginYard()
     clearFieldError('workingPlate')
@@ -412,13 +431,17 @@ export default function NewCustomerExchangeRequestPage() {
     setSelectedWorkingStoredId(vehicle.id)
     patchWorking({
       plateNumber: vehicle.plate_number,
+      vehicleCode: vehicle.vehicle_code || '',
       vehicleLookupNotFound: false,
       manualManufacturer: '',
       manualColor: '',
+      manualChassis: '',
+      manualWeight: '',
       vehicleData: lookup,
       vehicleType: lookup ? ((lookup.source as VehicleType) || 'private') : '',
     })
     clearFieldError('workingPlate')
+    clearFieldError('workingVehicleCode')
     applyWorkingOriginFromYard()
   }
 
@@ -473,6 +496,9 @@ export default function NewCustomerExchangeRequestPage() {
     if (working.vehicleLookupNotFound && !working.vehicleType) {
       errors.workingPlate = 'יש לבחור סוג רכב בהזנה ידנית'
     }
+    if (!working.vehicleCode.trim()) {
+      errors.workingVehicleCode = 'קוד רכב הוא שדה חובה'
+    }
     require('workingOrigin', working.origin.address)
     if (showWorkingOriginContacts) {
       require('workingOriginContactName', working.originContactName)
@@ -485,6 +511,9 @@ export default function NewCustomerExchangeRequestPage() {
     require('faultyPlate', faulty.plateNumber)
     if (faulty.vehicleLookupNotFound && !faulty.vehicleType) {
       errors.faultyPlate = 'יש לבחור סוג רכב בהזנה ידנית'
+    }
+    if (!faulty.vehicleCode.trim()) {
+      errors.faultyVehicleCode = 'קוד רכב הוא שדה חובה'
     }
     if (faultyDefects.length === 0) {
       errors.faultyDefects = 'יש לבחור לפחות תקלה אחת'
@@ -934,15 +963,22 @@ export default function NewCustomerExchangeRequestPage() {
                   </div>
                 )}
 
-                <FormField required error={fieldErrors.workingPlate}>
+                <FormField
+                  label="מספר רישוי"
+                  required
+                  error={fieldErrors.workingPlate}
+                >
                   <VehicleLookup
                     narrowColumn
                     hideLabel
                     showVehicleCode
                     vehicleCode={working.vehicleCode}
-                    onVehicleCodeChange={(code) => patchWorking({ vehicleCode: code })}
+                    onVehicleCodeChange={(code) => {
+                      patchWorking({ vehicleCode: code })
+                      clearFieldError('workingVehicleCode')
+                    }}
                     manualEntryStyle="button"
-                    manualEntryPlacement="withPlate"
+                    manualEntryPlacement="inline"
                     manualEntryTrailing={
                       !storageLoading && operationalStoredVehicles.length > 0 ? (
                         <button
@@ -982,8 +1018,17 @@ export default function NewCustomerExchangeRequestPage() {
                     onManualManufacturerChange={(v) => patchWorking({ manualManufacturer: v })}
                     manualColor={working.manualColor}
                     onManualColorChange={(v) => patchWorking({ manualColor: v })}
+                    manualChassis={working.manualChassis}
+                    onManualChassisChange={(v) => patchWorking({ manualChassis: v })}
+                    manualWeight={working.manualWeight}
+                    onManualWeightChange={(v) => patchWorking({ manualWeight: v })}
                   />
                 </FormField>
+                {fieldErrors.workingVehicleCode && (
+                  <p className="text-[11px] text-gt-danger">
+                    {fieldErrors.workingVehicleCode}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
@@ -1029,15 +1074,22 @@ export default function NewCustomerExchangeRequestPage() {
                   </span>
                 </div>
 
-                <FormField required error={fieldErrors.faultyPlate}>
+                <FormField
+                  label="מספר רישוי"
+                  required
+                  error={fieldErrors.faultyPlate}
+                >
                   <VehicleLookup
                     narrowColumn
                     hideLabel
                     showVehicleCode
                     vehicleCode={faulty.vehicleCode}
-                    onVehicleCodeChange={(code) => patchFaulty({ vehicleCode: code })}
+                    onVehicleCodeChange={(code) => {
+                      patchFaulty({ vehicleCode: code })
+                      clearFieldError('faultyVehicleCode')
+                    }}
                     manualEntryStyle="button"
-                    manualEntryPlacement="withPlate"
+                    manualEntryPlacement="inline"
                     manualEntryEnd={
                       <PortalDefectSelector
                         triggerLabel="בחר תקלות"
@@ -1067,8 +1119,17 @@ export default function NewCustomerExchangeRequestPage() {
                     onManualManufacturerChange={(v) => patchFaulty({ manualManufacturer: v })}
                     manualColor={faulty.manualColor}
                     onManualColorChange={(v) => patchFaulty({ manualColor: v })}
+                    manualChassis={faulty.manualChassis}
+                    onManualChassisChange={(v) => patchFaulty({ manualChassis: v })}
+                    manualWeight={faulty.manualWeight}
+                    onManualWeightChange={(v) => patchFaulty({ manualWeight: v })}
                   />
                 </FormField>
+                {fieldErrors.faultyVehicleCode && (
+                  <p className="text-[11px] text-gt-danger">
+                    {fieldErrors.faultyVehicleCode}
+                  </p>
+                )}
                 {fieldErrors.faultyDefects && (
                   <p className="text-[11px] text-gt-danger">{fieldErrors.faultyDefects}</p>
                 )}

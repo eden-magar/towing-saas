@@ -17,6 +17,7 @@ export type CustomerPortalStoredVehicle = Pick<
   | 'defects'
   | 'location'
   | 'last_stored_at'
+  | 'vehicle_code'
 > & {
   current_status: 'stored' | 'reserved_for_tow'
 }

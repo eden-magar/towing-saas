@@ -216,6 +216,9 @@ export interface CustomerTowRequestVehicle {
   model: string | null
   year: number | null
   color: string | null
+  chassis: string | null
+  total_weight: number | null
+  vehicle_code: string | null
   is_working: boolean
   tow_reason: string | null
   notes: string | null
@@ -288,6 +291,11 @@ export interface CreateCustomerTowRequestVehicleInput {
   model?: string | null
   year?: number | null
   color?: string | null
+  chassis?: string | null
+  /** Gross weight in kg (matches tow_vehicles.total_weight). */
+  totalWeight?: number | null
+  /** Company-internal vehicle code (קוד רכב). */
+  vehicleCode?: string | null
   isWorking?: boolean
   towReason?: string | null
   notes?: string | null

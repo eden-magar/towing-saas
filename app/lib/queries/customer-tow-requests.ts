@@ -288,6 +288,12 @@ export async function createFullCustomerTowRequest(
       model: optionalTrim(v.model ?? null),
       year: v.year ?? null,
       color: optionalTrim(v.color ?? null),
+      chassis: optionalTrim(v.chassis ?? null),
+      total_weight:
+        v.totalWeight != null && Number.isFinite(Number(v.totalWeight))
+          ? Number(v.totalWeight)
+          : null,
+      vehicle_code: optionalTrim(v.vehicleCode ?? null),
       is_working: v.isWorking ?? true,
       tow_reason: optionalTrim(v.towReason ?? null),
       notes: optionalTrim(v.notes ?? null),
