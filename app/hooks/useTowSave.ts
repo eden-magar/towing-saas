@@ -108,9 +108,11 @@ interface UseTowSaveParams {
   workingManualManufacturer?: string
   workingManualColor?: string
   workingManualWeight?: string
+  workingManualChassis?: string
   defectiveManualManufacturer?: string
   defectiveManualColor?: string
   defectiveManualWeight?: string
+  defectiveManualChassis?: string
   weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   // Route - single
   routeStops: RouteStop[]
@@ -249,9 +251,11 @@ export function useTowSave(params: UseTowSaveParams) {
     workingManualManufacturer,
     workingManualColor,
     workingManualWeight,
+    workingManualChassis,
     defectiveManualManufacturer,
     defectiveManualColor,
     defectiveManualWeight,
+    defectiveManualChassis,
     weightBrackets,
     routeStops,
     distance,
@@ -448,9 +452,11 @@ export function useTowSave(params: UseTowSaveParams) {
       workingManualManufacturer,
       workingManualColor,
       workingManualWeight,
+      workingManualChassis,
       defectiveManualManufacturer,
       defectiveManualColor,
       defectiveManualWeight,
+      defectiveManualChassis,
       weightBrackets,
       routeStops:
         towType === 'single'

@@ -187,6 +187,8 @@ function CreateExchangeTowForm({
     setWorkingManualColor,
     workingManualWeight,
     setWorkingManualWeight,
+    workingManualChassis,
+    setWorkingManualChassis,
     workingVehicleDestinationIsStorage,
     setWorkingVehicleDestinationIsStorage,
     workingSelectedServices,
@@ -230,6 +232,8 @@ function CreateExchangeTowForm({
     setDefectiveManualColor,
     defectiveManualWeight,
     setDefectiveManualWeight,
+    defectiveManualChassis,
+    setDefectiveManualChassis,
     hasSecondTruck,
     setHasSecondTruck,
     defectiveTruckTypes,
@@ -821,9 +825,11 @@ function CreateExchangeTowForm({
         workingManualManufacturer,
         workingManualColor,
         workingManualWeight,
+        workingManualChassis,
         defectiveManualManufacturer,
         defectiveManualColor,
         defectiveManualWeight,
+        defectiveManualChassis,
         existingTowVehicles: editTowId ? editExistingVehicles : undefined,
         existingTowPoints: editTowId ? editExistingPoints : undefined,
       })
@@ -1398,6 +1404,13 @@ function CreateExchangeTowForm({
                                       placeholder="למשל: לבן" />
                                   </div>
                                   <div>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">מספר שלדה</label>
+                                    <Input type="text" value={workingManualChassis}
+                                      onChange={(e) => setWorkingManualChassis(e.target.value)}
+                                      placeholder="אופציונלי"
+                                      className="font-mono" />
+                                  </div>
+                                  <div>
                                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">משקל (ק"ג)</label>
                                     <Input type="number" value={workingManualWeight}
                                       onChange={(e) => setWorkingManualWeight(e.target.value)}
@@ -1609,6 +1622,13 @@ function CreateExchangeTowForm({
                                         <Input type="text" value={defectiveManualColor}
                                           onChange={(e) => setDefectiveManualColor(e.target.value)}
                                           placeholder="למשל: לבן" />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
+                                        <Input type="text" value={defectiveManualChassis}
+                                          onChange={(e) => setDefectiveManualChassis(e.target.value)}
+                                          placeholder="אופציונלי"
+                                          className="font-mono" />
                                       </div>
                                       <div>
                                         <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>

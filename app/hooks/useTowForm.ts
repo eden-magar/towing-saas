@@ -1045,10 +1045,12 @@ export function useTowForm(
   const [workingManualManufacturer, setWorkingManualManufacturer] = useState('')
   const [workingManualColor, setWorkingManualColor] = useState('')
   const [workingManualWeight, setWorkingManualWeight] = useState('')
+  const [workingManualChassis, setWorkingManualChassis] = useState('')
   const [defectiveVehicleNotFound, setDefectiveVehicleNotFound] = useState(false)
   const [defectiveManualManufacturer, setDefectiveManualManufacturer] = useState('')
   const [defectiveManualColor, setDefectiveManualColor] = useState('')
   const [defectiveManualWeight, setDefectiveManualWeight] = useState('')
+  const [defectiveManualChassis, setDefectiveManualChassis] = useState('')
   const [defectiveFaultDescription, setDefectiveFaultDescription] = useState('')
   const [workingSelectedServices, setWorkingSelectedServices] = useState<SelectedService[]>([])
   const [defectiveSelectedServices, setDefectiveSelectedServices] = useState<SelectedService[]>([])
@@ -2025,6 +2027,7 @@ export function useTowForm(
               setManualManufacturer: setWorkingManualManufacturer,
               setManualColor: setWorkingManualColor,
               setManualWeight: setWorkingManualWeight,
+              setManualChassis: setWorkingManualChassis,
             })
             hydrateExchangeVehicleFromTowRow(defective as TowVehicleEditRow | undefined, {
               setVehicleType: setDefectiveVehicleType,
@@ -2033,6 +2036,7 @@ export function useTowForm(
               setManualManufacturer: setDefectiveManualManufacturer,
               setManualColor: setDefectiveManualColor,
               setManualWeight: setDefectiveManualWeight,
+              setManualChassis: setDefectiveManualChassis,
             })
           } else {
             setWorkingVehicleType((working?.vehicle_type as VehicleType) ?? '')
@@ -2510,7 +2514,7 @@ export function useTowForm(
     loadTowForEdit()
   }, [editTowId, duplicateFromTowId, companyId, isDuplicateLoad])
 
-  // Load customer tow request for prefill (simple tow type; exchange/custom TODO)
+  // Load customer tow request for prefill (simple + exchange; custom still unsupported)
   useEffect(() => {
     if (!fromRequestId || !companyId || editTowId || duplicateFromTowId) return
     if (fromRequestHydratedRef.current) return
@@ -2523,7 +2527,7 @@ export function useTowForm(
           return
         }
 
-        const { request, vehicles, points } = full
+        const { request, vehicles, points, pointVehicles } = full
 
         if (request.status !== 'pending') {
           setError('בקשה זו כבר טופלה')
@@ -2655,13 +2659,195 @@ export function useTowForm(
               vehicleOutcome,
             ),
           )
+        } else if (request.tow_type === 'exchange') {
+          setTowType('exchange')
+
+          const workingRequestVehicle =
+            vehicles.find((v) => v.is_working === true) ??
+            [...vehicles].sort((a, b) => a.order_index - b.order_index)[0]
+          const defectiveRequestVehicle =
+            vehicles.find((v) => v.is_working === false) ??
+            [...vehicles].sort((a, b) => a.order_index - b.order_index)[1]
+
+          const hydrateExchangeSideFromRequest = async (
+            rv: CustomerTowRequestVehicle | undefined,
+            targets: {
+              setPlate: (s: string) => void
+              setCode: (s: string) => void
+              setType: (t: VehicleType | '') => void
+              setData: (d: VehicleLookupResult | null) => void
+              setNotFound: (v: boolean) => void
+              setManualManufacturer: (s: string) => void
+              setManualColor: (s: string) => void
+              setManualWeight: (s: string) => void
+              setManualChassis: (s: string) => void
+            }
+          ) => {
+            if (!rv?.plate_number?.trim()) return
+            const plate = rv.plate_number.trim()
+            const requestVehicleType = (rv.vehicle_type || '') as VehicleType | ''
+            targets.setPlate(plate)
+            targets.setCode(rv.vehicle_code || '')
+
+            const applyManualFallbackFromRequest = () => {
+              targets.setData(null)
+              targets.setNotFound(true)
+              targets.setManualManufacturer(rv.manufacturer || '')
+              targets.setManualColor(rv.color || '')
+              targets.setManualWeight(
+                rv.total_weight != null ? String(rv.total_weight) : ''
+              )
+              targets.setManualChassis(rv.chassis || '')
+              targets.setType(requestVehicleType)
+            }
+
+            try {
+              const result = await lookupVehicle(plate)
+              if (result.found && result.data) {
+                targets.setData(result)
+                targets.setType(result.source || requestVehicleType || 'private')
+                targets.setNotFound(false)
+                targets.setManualManufacturer('')
+                targets.setManualColor('')
+                targets.setManualWeight('')
+                targets.setManualChassis('')
+                const cachedCode = result.vehicleCode?.trim()
+                if (cachedCode && !(rv.vehicle_code || '').trim()) {
+                  targets.setCode(cachedCode)
+                }
+              } else {
+                applyManualFallbackFromRequest()
+              }
+            } catch (lookupErr) {
+              console.error(
+                'Registry lookup failed during exchange request prefill:',
+                lookupErr
+              )
+              applyManualFallbackFromRequest()
+            }
+          }
+
+          await hydrateExchangeSideFromRequest(workingRequestVehicle, {
+            setPlate: setWorkingVehiclePlate,
+            setCode: setWorkingVehicleCode,
+            setType: setWorkingVehicleType,
+            setData: setWorkingVehicleData,
+            setNotFound: setWorkingVehicleNotFound,
+            setManualManufacturer: setWorkingManualManufacturer,
+            setManualColor: setWorkingManualColor,
+            setManualWeight: setWorkingManualWeight,
+            setManualChassis: setWorkingManualChassis,
+          })
+          await hydrateExchangeSideFromRequest(defectiveRequestVehicle, {
+            setPlate: setDefectiveVehiclePlate,
+            setCode: setDefectiveVehicleCode,
+            setType: setDefectiveVehicleType,
+            setData: setDefectiveVehicleData,
+            setNotFound: setDefectiveVehicleNotFound,
+            setManualManufacturer: setDefectiveManualManufacturer,
+            setManualColor: setDefectiveManualColor,
+            setManualWeight: setDefectiveManualWeight,
+            setManualChassis: setDefectiveManualChassis,
+          })
+
+          const towReason = defectiveRequestVehicle?.tow_reason || ''
+          const { defects: parsedDefects, otherText: parsedOtherDefectText } =
+            parseTowReasonToDefects(towReason)
+          setSelectedDefects([
+            ...parsedDefects,
+            ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
+          ])
+          setFromRequestOtherDefectText(parsedOtherDefectText)
+          setDefectiveFaultDescription(towReason)
+
+          const sortedPoints = [...points].sort(
+            (a, b) => a.point_order - b.point_order
+          )
+          const findPointForVehicleAction = (
+            vehicleId: string | undefined,
+            action: 'pickup' | 'dropoff'
+          ): CustomerTowRequestPoint | undefined => {
+            if (!vehicleId) return undefined
+            const link = pointVehicles.find(
+              (pv) => pv.vehicle_id === vehicleId && pv.action === action
+            )
+            if (!link) return undefined
+            return points.find((p) => p.id === link.point_id)
+          }
+
+          let p0 =
+            findPointForVehicleAction(workingRequestVehicle?.id, 'pickup') ??
+            sortedPoints[0]
+          let p1 =
+            findPointForVehicleAction(workingRequestVehicle?.id, 'dropoff') ??
+            sortedPoints[1]
+          let p2 =
+            findPointForVehicleAction(defectiveRequestVehicle?.id, 'pickup') ??
+            sortedPoints[2]
+          let p3 =
+            findPointForVehicleAction(defectiveRequestVehicle?.id, 'dropoff') ??
+            sortedPoints[3]
+
+          // If junction missed a side, fall back to order 0–3 (portal layout).
+          if (!p0) p0 = sortedPoints[0]
+          if (!p1) p1 = sortedPoints[1]
+          if (!p2) p2 = sortedPoints[2]
+          if (!p3) p3 = sortedPoints[3]
+
+          const pointToAddressData = (
+            p: CustomerTowRequestPoint | undefined
+          ): AddressData => ({
+            address: p?.address || '',
+            lat: p?.lat != null ? Number(p.lat) : undefined,
+            lng: p?.lng != null ? Number(p.lng) : undefined,
+          })
+
+          if (p0) {
+            setWorkingVehicleAddress(pointToAddressData(p0))
+            setWorkingVehicleContact(p0.contact_name || '')
+            setWorkingVehicleContactPhone(p0.contact_phone || '')
+            if (p0.is_storage) {
+              setWorkingVehicleSource('storage')
+            }
+          }
+          if (p1) {
+            setWorkingVehicleDestinationAddress(pointToAddressData(p1))
+            setWorkingDestinationContact(p1.contact_name || '')
+            setWorkingDestinationContactPhone(p1.contact_phone || '')
+            if (p1.is_storage) {
+              setWorkingVehicleDestinationIsStorage(true)
+            }
+          }
+          // Faulty origin → exchangeAddress (UI: מוצא הרכב התקול); keep distinct from p1.
+          if (p2) {
+            setExchangeAddress(pointToAddressData(p2))
+            setExchangeContactName(p2.contact_name || '')
+            setExchangeContactPhone(p2.contact_phone || '')
+          }
+          if (p3) {
+            setDefectiveDestinationAddress(pointToAddressData(p3))
+            setDefectiveDestinationContact(p3.contact_name || '')
+            setDefectiveDestinationContactPhone(p3.contact_phone || '')
+            if (p3.is_storage) {
+              setDefectiveDestination('storage')
+              const defectList = [
+                ...parsedDefects,
+                ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
+              ]
+              setStorageVehicleCondition(
+                defectList.length > 0 || defectiveRequestVehicle?.is_working === false
+                  ? 'faulty'
+                  : 'operational'
+              )
+            }
+          }
+
+          setRequestOriginalValues(
+            buildRequestOriginalValuesFromRequest(request, vehicles, points, null),
+          )
         } else {
-          // TODO: exchange/custom prefill — mirror duplicate exchange/custom blocks once
-          // request child tables are adapted to tow form shape (pointVehicles junction differs).
-          setError('סוג בקשה זה (תקין תקול/מותאם) עדיין לא נתמך — מלא ידנית')
-          if (request.tow_type === 'exchange') {
-            setTowType('exchange')
-          } else if (request.tow_type === 'custom') {
+          setError('סוג בקשה זה (מותאם) עדיין לא נתמך — מלא ידנית')
+          if (request.tow_type === 'custom') {
             setTowType('custom')
           }
 
@@ -4013,10 +4199,12 @@ export function useTowForm(
     workingManualManufacturer, setWorkingManualManufacturer,
     workingManualColor, setWorkingManualColor,
     workingManualWeight, setWorkingManualWeight,
+    workingManualChassis, setWorkingManualChassis,
     defectiveVehicleNotFound, setDefectiveVehicleNotFound,
     defectiveManualManufacturer, setDefectiveManualManufacturer,
     defectiveManualColor, setDefectiveManualColor,
     defectiveManualWeight, setDefectiveManualWeight,
+    defectiveManualChassis, setDefectiveManualChassis,
     defectiveFaultDescription, setDefectiveFaultDescription,
     workingSelectedServices, setWorkingSelectedServices,
     defectiveSelectedServices, setDefectiveSelectedServices,

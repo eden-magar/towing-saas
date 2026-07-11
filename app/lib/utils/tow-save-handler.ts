@@ -83,9 +83,11 @@ export interface SaveTowInput {
   workingManualManufacturer?: string
   workingManualColor?: string
   workingManualWeight?: string
+  workingManualChassis?: string
   defectiveManualManufacturer?: string
   defectiveManualColor?: string
   defectiveManualWeight?: string
+  defectiveManualChassis?: string
   weightBrackets?: { min_kg: number; max_kg: number | null; base_price: number; sort_order: number }[]
   /** Regular tow: ordered route list (pickup / stop / dropoff in list order) */
   routeStops?: {
@@ -1666,7 +1668,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.workingVehicleData?.data?.gearType,
       driveTechnology: input.workingVehicleData?.data?.driveTechnology,
       registrySource: input.workingVehicleData?.source ?? null,
-      chassis: input.workingVehicleData?.data?.chassis || undefined,
+      chassis:
+        input.workingVehicleData?.data?.chassis ||
+        input.workingManualChassis ||
+        undefined,
       importType: input.workingVehicleData?.data?.importType || undefined,
       ...machineryFromLookupResult(
         input.workingVehicleData?.source,
@@ -1701,7 +1706,10 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       gearType: input.defectiveVehicleData?.data?.gearType,
       driveTechnology: input.defectiveVehicleData?.data?.driveTechnology,
       registrySource: input.defectiveVehicleData?.source ?? null,
-      chassis: input.defectiveVehicleData?.data?.chassis || undefined,
+      chassis:
+        input.defectiveVehicleData?.data?.chassis ||
+        input.defectiveManualChassis ||
+        undefined,
       importType: input.defectiveVehicleData?.data?.importType || undefined,
       ...machineryFromLookupResult(
         input.defectiveVehicleData?.source,

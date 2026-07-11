@@ -323,6 +323,8 @@ function CreateTowForm({
     setWorkingManualColor,
     workingManualWeight,
     setWorkingManualWeight,
+    workingManualChassis,
+    setWorkingManualChassis,
     workingVehicleDestinationIsStorage,
     setWorkingVehicleDestinationIsStorage,
     workingSelectedServices,
@@ -366,6 +368,8 @@ function CreateTowForm({
     setDefectiveManualColor,
     defectiveManualWeight,
     setDefectiveManualWeight,
+    defectiveManualChassis,
+    setDefectiveManualChassis,
     defectiveFaultDescription,
     setDefectiveFaultDescription,
     hasSecondTruck,
@@ -1518,9 +1522,11 @@ function CreateTowForm({
         workingManualManufacturer: towType === 'exchange' ? workingManualManufacturer : undefined,
         workingManualColor: towType === 'exchange' ? workingManualColor : undefined,
         workingManualWeight: towType === 'exchange' ? workingManualWeight : undefined,
+        workingManualChassis: towType === 'exchange' ? workingManualChassis : undefined,
         defectiveManualManufacturer: towType === 'exchange' ? defectiveManualManufacturer : undefined,
         defectiveManualColor: towType === 'exchange' ? defectiveManualColor : undefined,
         defectiveManualWeight: towType === 'exchange' ? defectiveManualWeight : undefined,
+        defectiveManualChassis: towType === 'exchange' ? defectiveManualChassis : undefined,
         ...(editTowId && towType === 'exchange'
           ? {
               existingPriceBreakdown: editTowSnapshot?.price_breakdown ?? null,
@@ -2924,6 +2930,13 @@ function CreateTowForm({
                                       placeholder="למשל: לבן" />
                                   </div>
                                   <div>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">מספר שלדה</label>
+                                    <Input type="text" value={workingManualChassis}
+                                      onChange={(e) => setWorkingManualChassis(e.target.value)}
+                                      placeholder="אופציונלי"
+                                      className="font-mono" />
+                                  </div>
+                                  <div>
                                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                                       {(workingVehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
                                     </label>
@@ -3155,6 +3168,13 @@ function CreateTowForm({
                                         <Input type="text" value={defectiveManualColor}
                                           onChange={(e) => setDefectiveManualColor(e.target.value)}
                                           placeholder="למשל: לבן" />
+                                      </div>
+                                      <div>
+                                        <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
+                                        <Input type="text" value={defectiveManualChassis}
+                                          onChange={(e) => setDefectiveManualChassis(e.target.value)}
+                                          placeholder="אופציונלי"
+                                          className="font-mono" />
                                       </div>
                                       <div>
                                         <label className="block text-xs text-gray-600 mb-1">

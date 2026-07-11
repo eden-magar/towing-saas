@@ -248,11 +248,14 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
           towType === 'exchange' ? form.workingManualManufacturer : undefined,
         workingManualColor: towType === 'exchange' ? form.workingManualColor : undefined,
         workingManualWeight: towType === 'exchange' ? form.workingManualWeight : undefined,
+        workingManualChassis: towType === 'exchange' ? form.workingManualChassis : undefined,
         defectiveManualManufacturer:
           towType === 'exchange' ? form.defectiveManualManufacturer : undefined,
         defectiveManualColor: towType === 'exchange' ? form.defectiveManualColor : undefined,
         defectiveManualWeight:
           towType === 'exchange' ? form.defectiveManualWeight : undefined,
+        defectiveManualChassis:
+          towType === 'exchange' ? form.defectiveManualChassis : undefined,
         ...(editTowId && towType === 'exchange'
           ? {
               existingPriceBreakdown: form.editTowSnapshot?.price_breakdown ?? null,
