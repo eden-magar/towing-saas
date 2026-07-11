@@ -1228,6 +1228,8 @@ function CreateTowForm({
         setVehicleData(result)
         setVehicleType(result.source || 'private')
         setVehicleLookupNotFound(false)
+        const cachedCode = result.vehicleCode?.trim()
+        if (cachedCode && !vehicleCode.trim()) setVehicleCode(cachedCode)
       } else {
         setVehicleData(null)
         setVehicleType('')
@@ -1242,7 +1244,7 @@ function CreateTowForm({
     } finally {
       setDefectiveLookupLoading(false)
     }
-  }, [vehiclePlate, tryResolveStoredPlateForSlot])
+  }, [vehiclePlate, vehicleCode, tryResolveStoredPlateForSlot, setVehicleCode])
 
   const handleWorkingVehicleLookup = useCallback(async (plate?: string) => {
     const resolvedPlate = plate ?? workingVehiclePlate
@@ -1269,6 +1271,10 @@ function CreateTowForm({
         setWorkingVehicleData(result)
         setWorkingVehicleType(result.source || 'private')
         setWorkingVehicleNotFound(false)
+        const cachedCode = result.vehicleCode?.trim()
+        if (cachedCode && !workingVehicleCode.trim()) {
+          setWorkingVehicleCode(cachedCode)
+        }
       } else {
         setWorkingVehicleData(null)
         setWorkingVehicleType('')
@@ -1279,7 +1285,12 @@ function CreateTowForm({
     } finally {
       setWorkingLookupLoading(false)
     }
-  }, [workingVehiclePlate, tryResolveStoredPlateForSlot])
+  }, [
+    workingVehiclePlate,
+    workingVehicleCode,
+    tryResolveStoredPlateForSlot,
+    setWorkingVehicleCode,
+  ])
 
   // Vehicle lookup for defective (exchange)
   const handleDefectiveLookup = useCallback(async () => {
@@ -1306,6 +1317,10 @@ function CreateTowForm({
         setDefectiveVehicleData(result)
         setDefectiveVehicleType(result.source || 'private')
         setDefectiveVehicleNotFound(false)
+        const cachedCode = result.vehicleCode?.trim()
+        if (cachedCode && !defectiveVehicleCode.trim()) {
+          setDefectiveVehicleCode(cachedCode)
+        }
       } else {
         setDefectiveVehicleData(null)
         setDefectiveVehicleType('')
@@ -1316,7 +1331,12 @@ function CreateTowForm({
     } finally {
       setDefectiveLookupLoading(false)
     }
-  }, [defectiveVehiclePlate, tryResolveStoredPlateForSlot])
+  }, [
+    defectiveVehiclePlate,
+    defectiveVehicleCode,
+    tryResolveStoredPlateForSlot,
+    setDefectiveVehicleCode,
+  ])
 
   // Vehicle lookup for working (exchange)
   const handleWorkingLookup = useCallback(async () => {
@@ -1327,6 +1347,10 @@ function CreateTowForm({
       if (result.found && result.data) {
         setWorkingVehicleData(result)
         setWorkingVehicleType(result.source || 'private')
+        const cachedCode = result.vehicleCode?.trim()
+        if (cachedCode && !workingVehicleCode.trim()) {
+          setWorkingVehicleCode(cachedCode)
+        }
       } else {
         setWorkingVehicleData(null)
       }
@@ -1335,7 +1359,7 @@ function CreateTowForm({
     } finally {
       setWorkingLookupLoading(false)
     }
-  }, [workingVehiclePlate])
+  }, [workingVehiclePlate, workingVehicleCode, setWorkingVehicleCode])
 
   // Custom save for quote declined
   const handleSaveAsQuote = useCallback(async () => {

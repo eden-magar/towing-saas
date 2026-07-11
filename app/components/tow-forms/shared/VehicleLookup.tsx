@@ -109,6 +109,14 @@ export function VehicleLookup({
         onVehicleDataChange(result)
         onVehicleTypeChange(result.source || 'private')
         setNotFound(false)
+        const cachedCode = result.vehicleCode?.trim()
+        if (
+          cachedCode &&
+          onVehicleCodeChange &&
+          !(vehicleCode ?? '').trim()
+        ) {
+          onVehicleCodeChange(cachedCode)
+        }
       } else {
         setNotFound(true)
         onVehicleDataChange(null)

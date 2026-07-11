@@ -13,6 +13,11 @@ type CacheVehicleBody = {
   sourceType?: string
   mappedData?: VehicleLookupResult['data']
   rawData?: unknown
+  /**
+   * Company-internal קוד רכב. Written only when non-empty after trim —
+   * never clears an existing code with empty/undefined.
+   */
+  vehicleCode?: string | null
   /** When true, record a negative lookup miss (plate not in registry). */
   isMiss?: boolean
   /** Optional TTL override in milliseconds (default 24h). */
@@ -32,7 +37,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { licenseNumber, sourceType, mappedData, rawData, isMiss, missTtlMs, missTtlDays } = body
+  const {
+    licenseNumber,
+    sourceType,
+    mappedData,
+    rawData,
+    vehicleCode,
+    isMiss,
+    missTtlMs,
+    missTtlDays,
+  } = body
   if (!licenseNumber?.trim()) {
     return NextResponse.json(
       { ok: false, error: 'licenseNumber is required' },
@@ -41,6 +55,8 @@ export async function POST(request: NextRequest) {
   }
 
   const cleanLicense = licenseNumber.replace(/\D/g, '')
+  const trimmedVehicleCode =
+    typeof vehicleCode === 'string' ? vehicleCode.trim() : ''
 
   if (isMiss) {
     const DEFAULT_MISS_TTL_MS = 24 * 60 * 60 * 1000
@@ -71,32 +87,56 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // Code-only write: update vehicle_code on an existing cache row (no Mot payload).
   if (!sourceType?.trim()) {
-    return NextResponse.json(
-      { ok: false, error: 'sourceType is required for positive cache writes' },
-      { status: 400 }
-    )
+    if (!trimmedVehicleCode) {
+      return NextResponse.json(
+        { ok: false, error: 'sourceType is required for positive cache writes' },
+        { status: 400 }
+      )
+    }
+
+    const { error } = await supabaseAdmin
+      .from('vehicles')
+      .update({
+        vehicle_code: trimmedVehicleCode,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('license_number', cleanLicense)
+
+    if (error) {
+      console.error('[vehicles/cache] vehicle_code update failed', error)
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  const upsertRow: Record<string, unknown> = {
+    license_number: cleanLicense,
+    source_type: sourceType,
+    manufacturer: mappedData?.manufacturer,
+    model: mappedData?.model,
+    year: mappedData?.year,
+    color: mappedData?.color,
+    fuel_type: mappedData?.fuelType,
+    total_weight: mappedData?.totalWeight,
+    vehicle_type: mappedData?.vehicleType,
+    drive_type: mappedData?.driveType,
+    drive_technology: mappedData?.driveTechnology,
+    gear_type: mappedData?.gearType,
+    chassis: mappedData?.chassis,
+    import_type: mappedData?.importType,
+    raw_data: rawData,
+    updated_at: new Date().toISOString(),
+  }
+  // Only write when non-empty — never clobber an existing code with empty/undefined.
+  if (trimmedVehicleCode) {
+    upsertRow.vehicle_code = trimmedVehicleCode
   }
 
   const { error } = await supabaseAdmin.from('vehicles').upsert(
-    {
-      license_number: cleanLicense,
-      source_type: sourceType,
-      manufacturer: mappedData?.manufacturer,
-      model: mappedData?.model,
-      year: mappedData?.year,
-      color: mappedData?.color,
-      fuel_type: mappedData?.fuelType,
-      total_weight: mappedData?.totalWeight,
-      vehicle_type: mappedData?.vehicleType,
-      drive_type: mappedData?.driveType,
-      drive_technology: mappedData?.driveTechnology,
-      gear_type: mappedData?.gearType,
-      chassis: mappedData?.chassis,
-      import_type: mappedData?.importType,
-      raw_data: rawData,
-      updated_at: new Date().toISOString(),
-    },
+    upsertRow,
     { onConflict: 'license_number' }
   )
 

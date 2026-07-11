@@ -2601,6 +2601,10 @@ export function useTowForm(
                 setManualColor('')
                 setManualWeight('')
                 setManualChassis('')
+                const cachedCode = result.vehicleCode?.trim()
+                if (cachedCode) {
+                  setVehicleCode((prev) => (prev.trim() ? prev : cachedCode))
+                }
               } else {
                 applyManualFallbackFromRequest()
               }

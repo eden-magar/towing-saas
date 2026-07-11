@@ -270,6 +270,10 @@ async function searchInSupabase(licenseNumber: string): Promise<VehicleLookupRes
       found: true,
       source: data.source_type as VehicleType,
       sourceLabel: SOURCE_LABELS[data.source_type] || 'רכב',
+      vehicleCode:
+        typeof data.vehicle_code === 'string' && data.vehicle_code.trim()
+          ? data.vehicle_code.trim()
+          : undefined,
       data: {
         plateNumber: data.license_number,
         manufacturer: data.manufacturer,
@@ -399,6 +403,59 @@ async function saveToSupabase(
       })
   } catch (error) {
     console.error('Error initiating vehicle cache write:', error)
+  }
+}
+
+/**
+ * Persist a non-empty company-internal קוד רכב onto `vehicles.vehicle_code`
+ * for a plate that already has a Mot cache row. Fire-and-forget; never throws.
+ */
+export function persistVehicleCodeToCache(
+  licenseNumber: string,
+  vehicleCode: string | null | undefined,
+): void {
+  const code = typeof vehicleCode === 'string' ? vehicleCode.trim() : ''
+  if (!code || !licenseNumber?.trim()) return
+
+  void (async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) {
+        console.error('Vehicle code cache write skipped: no session')
+        return
+      }
+
+      const res = await fetch('/api/vehicles/cache', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          licenseNumber,
+          vehicleCode: code,
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        console.error('Error saving vehicle code to cache:', body)
+      }
+    } catch (error) {
+      console.error('Error initiating vehicle code cache write:', error)
+    }
+  })()
+}
+
+/** Persist non-empty codes for each vehicle that has a plate + code. */
+export function persistVehicleCodesToCache(
+  vehicles: Array<{ plateNumber?: string | null; vehicleCode?: string | null }>,
+): void {
+  for (const v of vehicles) {
+    if (!v.plateNumber) continue
+    persistVehicleCodeToCache(v.plateNumber, v.vehicleCode)
   }
 }
 

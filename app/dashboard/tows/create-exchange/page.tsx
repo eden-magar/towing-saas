@@ -624,6 +624,10 @@ function CreateExchangeTowForm({
           setWorkingVehicleData(result)
           setWorkingVehicleType(result.source || 'private')
           setWorkingVehicleNotFound(false)
+          const cachedCode = result.vehicleCode?.trim()
+          if (cachedCode && !workingVehicleCode.trim()) {
+            setWorkingVehicleCode(cachedCode)
+          }
         } else {
           setWorkingVehicleData(null)
           setWorkingVehicleType('')
@@ -635,7 +639,12 @@ function CreateExchangeTowForm({
         setWorkingLookupLoading(false)
       }
     },
-    [workingVehiclePlate, tryResolveStoredPlateForSlot]
+    [
+      workingVehiclePlate,
+      workingVehicleCode,
+      tryResolveStoredPlateForSlot,
+      setWorkingVehicleCode,
+    ]
   )
 
   const handleDefectiveLookup = useCallback(async () => {
@@ -662,6 +671,10 @@ function CreateExchangeTowForm({
         setDefectiveVehicleData(result)
         setDefectiveVehicleType(result.source || 'private')
         setDefectiveVehicleNotFound(false)
+        const cachedCode = result.vehicleCode?.trim()
+        if (cachedCode && !defectiveVehicleCode.trim()) {
+          setDefectiveVehicleCode(cachedCode)
+        }
       } else {
         setDefectiveVehicleData(null)
         setDefectiveVehicleNotFound(true)
@@ -671,7 +684,12 @@ function CreateExchangeTowForm({
     } finally {
       setDefectiveLookupLoading(false)
     }
-  }, [defectiveVehiclePlate, tryResolveStoredPlateForSlot])
+  }, [
+    defectiveVehiclePlate,
+    defectiveVehicleCode,
+    tryResolveStoredPlateForSlot,
+    setDefectiveVehicleCode,
+  ])
 
   const handleSaveAsQuote = useCallback(async () => {
     if (editTowId && isClosedTowStatus(loadedTowStatus)) return

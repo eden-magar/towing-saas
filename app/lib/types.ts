@@ -537,6 +537,11 @@ export interface VehicleLookupResult {
   sourceLabel: string
   /** Omitted or 'active' for normal registry hits; set for cancelled/inactive fallback lookups */
   registryStatus?: 'active' | 'cancelled' | 'inactive'
+  /**
+   * Company-internal vehicle code (קוד רכב) from `vehicles.vehicle_code`.
+   * Present only for local-cache hits — never from data.gov.il / degem_cd.
+   */
+  vehicleCode?: string | null
   data: {
     plateNumber: string
     manufacturer: string | null    // tozeret_nm

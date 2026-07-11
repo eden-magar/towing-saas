@@ -23,6 +23,7 @@ import { isClosedTowStatus } from '../utils/can-edit-closed-tow'
 import { persistableUuid } from '../utils/persistable-uuid'
 import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-sync'
 import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
+import { persistVehicleCodesToCache } from '../vehicle-lookup'
 
 // ==================== טיפוסים ====================
 
@@ -1184,6 +1185,7 @@ export async function createTow(input: CreateTowInput) {
       await supabase.from('tows').delete().eq('id', towId)
       throw vehiclesError
     }
+    persistVehicleCodesToCache(input.vehicles)
   }
 
   const [legsResult, pointsResult] = await Promise.all([
@@ -2307,6 +2309,7 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.vehicles) {
     try {
       vehicleIdsByIndex = await reconcileTowVehicles(input.towId, input.vehicles)
+      persistVehicleCodesToCache(input.vehicles)
     } catch (vehicleError) {
       console.error('Error updating tow vehicle:', vehicleError)
       throw vehicleError

@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { persistVehicleCodeToCache } from '../vehicle-lookup'
 
 // ==================== Types ====================
 
@@ -325,6 +326,8 @@ export async function addVehicleToStorage(input: AddToStorageInput): Promise<str
     throw error
   }
 
+  persistVehicleCodeToCache(input.plateNumber, input.vehicleCode)
+
   return data
 }
 
@@ -382,6 +385,17 @@ export async function updateStoredVehicle(input: UpdateStoredVehicleInput): Prom
   if (error) {
     console.error('Error updating stored vehicle:', error)
     throw error
+  }
+
+  if (input.vehicleCode?.trim()) {
+    const { data: row } = await supabase
+      .from('stored_vehicles')
+      .select('plate_number')
+      .eq('id', input.id)
+      .maybeSingle()
+    if (row?.plate_number) {
+      persistVehicleCodeToCache(row.plate_number, input.vehicleCode)
+    }
   }
 
   return true

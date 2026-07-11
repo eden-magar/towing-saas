@@ -104,6 +104,7 @@ export function VehicleCard({
         // Default search behavior
         const result: VehicleLookupResult = await lookupVehicle(vehicle.plateNumber)
         if (result.found && result.data) {
+          const cachedCode = result.vehicleCode?.trim()
           onChange({
             ...vehicle,
             isLoading: false,
@@ -114,6 +115,9 @@ export function VehicleCard({
             manualWeight: undefined,
             vehicleType: result.source ?? 'private',
             registrySource: result.source ?? null,
+            ...(cachedCode && !(vehicle.vehicleCode ?? '').trim()
+              ? { vehicleCode: cachedCode }
+              : {}),
             vehicleData: {
               manufacturer: result.data.manufacturer || undefined,
               model: result.data.model || undefined,
