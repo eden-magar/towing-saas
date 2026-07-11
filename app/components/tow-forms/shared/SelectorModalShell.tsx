@@ -6,6 +6,8 @@ interface SelectorModalShellProps {
   open: boolean
   onClose: () => void
   title: string
+  /** Optional subtle line under the title (e.g. multi-select hint). */
+  subtitle?: ReactNode
   children: ReactNode
   /** Extra classes on the centered panel (e.g. max-w-md sm:max-w-lg). */
   panelClassName?: string
@@ -24,6 +26,7 @@ export function SelectorModalShell({
   open,
   onClose,
   title,
+  subtitle,
   children,
   panelClassName = 'max-w-md',
   overlayClassName = '',
@@ -42,6 +45,9 @@ export function SelectorModalShell({
       >
         <div className="shrink-0 border-b border-gray-200 p-4">
           <h3 className="font-bold text-gray-800">{title}</h3>
+          {subtitle ? (
+            <p className="mt-1 text-xs text-gt-text-tertiary leading-snug">{subtitle}</p>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         <div className="shrink-0 border-t border-gray-200 p-4">

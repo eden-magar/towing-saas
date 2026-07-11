@@ -38,7 +38,7 @@ import {
   TimeInput,
 } from '@/app/components/ui'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
-import { DefectSelector } from '@/app/components/tow-forms/shared/DefectSelector'
+import { PortalDefectSelector } from '@/app/components/customer-portal/PortalDefectSelector'
 import { VehicleLookup } from '@/app/components/tow-forms/shared/VehicleLookup'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
 import {
@@ -1005,8 +1005,7 @@ export default function NewCustomerExchangeRequestPage() {
                     manualEntryStyle="button"
                     manualEntryPlacement="withPlate"
                     manualEntryEnd={
-                      <DefectSelector
-                        variant="triggerOnly"
+                      <PortalDefectSelector
                         triggerLabel="בחר תקלות"
                         label="תקלות"
                         triggerClassName={PORTAL_DEFECTS_TRIGGER_CLASS}
