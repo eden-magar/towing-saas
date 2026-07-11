@@ -751,7 +751,7 @@ export default function NewCustomerExchangeRequestPage() {
           density="compact"
           className="mb-0"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-x-3 gap-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-x-3 gap-y-2 items-start">
             <FormField
               required
               error={fieldErrors.customerOrderNumber}
@@ -765,9 +765,9 @@ export default function NewCustomerExchangeRequestPage() {
               />
             </FormField>
 
-            <FormField label={fieldLabels.scheduledAt} required error={fieldErrors.scheduledAt}>
-              <div className="flex flex-col gap-1.5">
-                <div className={PORTAL_SEGMENT_WRAP_CLASS}>
+            <FormField required error={fieldErrors.scheduledAt}>
+              <div className="flex flex-col gap-1.5" aria-label={fieldLabels.scheduledAt}>
+                <div className={`${PORTAL_SEGMENT_WRAP_CLASS} h-9`}>
                   <button
                     type="button"
                     aria-pressed={!useCustomTime}
@@ -775,11 +775,11 @@ export default function NewCustomerExchangeRequestPage() {
                       handleNowClick()
                       setUseCustomTime(false)
                     }}
-                    className={
+                    className={`${
                       !useCustomTime
                         ? PORTAL_SEGMENT_ACTIVE_CLASS
                         : PORTAL_SEGMENT_INACTIVE_CLASS
-                    }
+                    } flex h-full items-center justify-center`}
                   >
                     עכשיו
                   </button>
@@ -787,11 +787,11 @@ export default function NewCustomerExchangeRequestPage() {
                     type="button"
                     aria-pressed={useCustomTime}
                     onClick={() => setUseCustomTime(true)}
-                    className={
+                    className={`${
                       useCustomTime
                         ? PORTAL_SEGMENT_ACTIVE_CLASS
                         : PORTAL_SEGMENT_INACTIVE_CLASS
-                    }
+                    } flex h-full items-center justify-center`}
                   >
                     מועד אחר
                   </button>
@@ -853,16 +853,14 @@ export default function NewCustomerExchangeRequestPage() {
                 placeholder={fieldLabels.ordererPhone}
               />
             </FormField>
-          </div>
 
-          <div className="mt-2">
             <FormField optional>
               <textarea
                 value={header.notes}
                 onChange={(e) => updateHeader('notes', e.target.value)}
-                rows={2}
+                rows={1}
                 placeholder="הערות / פרטים נוספים"
-                className={PORTAL_TEXTAREA_CLASS}
+                className={`${PORTAL_TEXTAREA_CLASS} min-h-9 py-2 resize-y`}
                 aria-label={fieldLabels.notes}
               />
             </FormField>
@@ -880,7 +878,7 @@ export default function NewCustomerExchangeRequestPage() {
             className={columnCardClass}
           >
             <div className={columnBodyClass}>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className={sectionLabelClass}>פרטי רכב</h4>
                   <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
@@ -989,7 +987,7 @@ export default function NewCustomerExchangeRequestPage() {
             className={columnCardClass}
           >
             <div className={columnBodyClass}>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className={sectionLabelClass}>פרטי רכב</h4>
                   <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">

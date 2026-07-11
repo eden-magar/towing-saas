@@ -204,11 +204,11 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         )}
       </header>
 
-      {/* Content — request intake uses a wider canvas for multi-column forms */}
+      {/* Content — request intake shares the same centered max width as other portal pages */}
       <main
         className={`mx-auto w-full ${
           pathname.startsWith('/customer/request')
-            ? 'max-w-[1480px] px-3 py-2 sm:px-4 sm:py-2.5'
+            ? 'max-w-6xl px-3 py-2 sm:px-4 sm:py-2.5'
             : 'max-w-6xl p-4 sm:p-6'
         }`}
       >

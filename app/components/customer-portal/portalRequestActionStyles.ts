@@ -3,9 +3,9 @@
 /** Soft cool-grey canvas — white cards sit clearly on top without glare. */
 export const PORTAL_CANVAS_BG_CLASS = 'bg-gt-portal-canvas'
 
-/** Page shell: compact for one-viewport desktop intake. */
+/** Page shell: centered comfortable reading width (not ultra-wide). */
 export const PORTAL_PAGE_SHELL_CLASS =
-  'w-full max-w-[1480px] mx-auto px-1 sm:px-2 space-y-2.5'
+  'w-full max-w-6xl mx-auto px-1 sm:px-2 space-y-2.5'
 
 export const PORTAL_PAGE_TITLE_CLASS =
   'text-xl font-semibold tracking-tight text-gt-text-primary leading-tight'
