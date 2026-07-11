@@ -329,17 +329,35 @@ export async function PATCH(req: NextRequest) {
         return forbiddenResponse('אין הרשאה לעדכן משתמש מלקוח אחר')
       }
     }
-if (!customerUserId || (role === undefined && is_active === undefined)) {
-  return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
-}
-const updateData: any = { updated_at: new Date().toISOString() }
-if (role !== undefined) updateData.role = role
-if (is_active !== undefined) updateData.is_active = is_active
 
-const { error } = await supabaseAdmin
-  .from('customer_users')
-  .update(updateData)
-  .eq('id', customerUserId)
+    if (!customerUserId || (role === undefined && is_active === undefined)) {
+      return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
+    }
+
+    const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() }
+
+    if (role !== undefined) {
+      // Same allowlists as POST: portal admins cannot elevate to admin.
+      if (isDashboardAdmin) {
+        const dashboardAllowed = ['viewer', 'manager', 'admin']
+        if (!dashboardAllowed.includes(role)) {
+          return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
+        }
+      } else {
+        const portalAllowed = ['viewer', 'manager']
+        if (!portalAllowed.includes(role)) {
+          return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
+        }
+      }
+      updateData.role = role
+    }
+
+    if (is_active !== undefined) updateData.is_active = is_active
+
+    const { error } = await supabaseAdmin
+      .from('customer_users')
+      .update(updateData)
+      .eq('id', customerUserId)
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (err: any) {

@@ -6,6 +6,8 @@ import type {
   CustomerPortalTowDetail,
 } from '../types'
 import type { StoredVehicle } from './storage'
+import { resolvePortalVisibilityFlag } from '../utils/portal-visibility'
+import { withSignedTowImageUrls } from './tow-images-storage'
 
 /** Narrow portal-facing shape from get_my_stored_vehicles (no notes / internal fields). */
 export type CustomerPortalStoredVehicle = Pick<
@@ -134,7 +136,13 @@ const CUSTOMER_TOW_LIST_SELECT = `
   started_at,
   completed_at,
   visibility_overrides,
+  show_photos_override,
+  show_price_override,
   show_driver_info_override,
+  show_driver_phone_override,
+  show_status_history_override,
+  show_vehicles_override,
+  show_notes_override,
   vehicles:tow_vehicles (
     plate_number,
     manufacturer,
@@ -155,7 +163,20 @@ const CUSTOMER_TOW_LIST_SELECT = `
 
 type PortalDriverContact = { full_name: string; phone: string | null }
 
-/** SECURITY DEFINER RPC: driver name+phone for caller's own tows only. */
+async function fetchPortalSettingsForCustomer(
+  customerId: string
+): Promise<Record<string, boolean>> {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('portal_settings')
+    .eq('id', customerId)
+    .single()
+
+  if (error || !data) return {}
+  return (data.portal_settings as Record<string, boolean>) || {}
+}
+
+/** SECURITY DEFINER RPC: driver name+phone for caller's own tows only (flag-gated in SQL). */
 async function fetchMyTowDriverContacts(
   towIds: string[]
 ): Promise<Map<string, PortalDriverContact>> {
@@ -178,11 +199,14 @@ async function fetchMyTowDriverContacts(
 
   for (const row of data ?? []) {
     const towId = row?.tow_id as string | undefined
+    if (!towId) continue
     const fullName = typeof row?.full_name === 'string' ? row.full_name.trim() : ''
-    if (!towId || !fullName) continue
+    const phone =
+      typeof row?.phone === 'string' && row.phone.trim() ? row.phone.trim() : null
+    if (!fullName && !phone) continue
     byTowId.set(towId, {
       full_name: fullName,
-      phone: typeof row?.phone === 'string' && row.phone.trim() ? row.phone.trim() : null,
+      phone,
     })
   }
 
@@ -201,6 +225,99 @@ function mapCustomerPortalTow(
       (a: { point_order: number }, b: { point_order: number }) => a.point_order - b.point_order
     ),
   }
+}
+
+/** Strip fields the portal customer is not allowed to see (server-side). */
+function applyPortalVisibilityStripToListTow(
+  tow: CustomerPortalTow,
+  portalSettings: Record<string, boolean>
+): CustomerPortalTow {
+  let next: CustomerPortalTow = { ...tow }
+
+  if (!resolvePortalVisibilityFlag('show_vehicles', portalSettings, tow)) {
+    next = { ...next, vehicles: [] }
+  }
+
+  if (!resolvePortalVisibilityFlag('show_status_history', portalSettings, tow)) {
+    next = {
+      ...next,
+      started_at: null,
+      completed_at: null,
+      points: next.points.map((p) => ({
+        ...p,
+        arrived_at: null,
+        completed_at: null,
+      })),
+    }
+  }
+
+  // Defense in depth if RPC predates visibility migration.
+  const showDriverInfo = resolvePortalVisibilityFlag(
+    'show_driver_info',
+    portalSettings,
+    tow
+  )
+  const showDriverPhone = resolvePortalVisibilityFlag(
+    'show_driver_phone',
+    portalSettings,
+    tow
+  )
+  if (next.driver) {
+    if (!showDriverInfo && !showDriverPhone) {
+      next = { ...next, driver: null }
+    } else {
+      const driver = {
+        full_name: showDriverInfo ? next.driver.full_name : '',
+        phone: showDriverPhone ? next.driver.phone : null,
+      }
+      next = {
+        ...next,
+        driver: driver.full_name || driver.phone ? driver : null,
+      }
+    }
+  }
+
+  return next
+}
+
+async function applyPortalVisibilityStripToDetail(
+  detail: CustomerPortalTowDetail,
+  portalSettings: Record<string, boolean>
+): Promise<CustomerPortalTowDetail> {
+  const listStripped = applyPortalVisibilityStripToListTow(detail, portalSettings)
+
+  let next: CustomerPortalTowDetail = {
+    ...detail,
+    ...listStripped,
+    points: detail.points.map((p) => {
+      const strippedPoint = listStripped.points.find((sp) => sp.id === p.id)
+      return {
+        ...p,
+        arrived_at: strippedPoint ? strippedPoint.arrived_at : p.arrived_at,
+        completed_at: strippedPoint ? strippedPoint.completed_at : p.completed_at,
+      }
+    }),
+  }
+
+  if (!resolvePortalVisibilityFlag('show_price', portalSettings, detail)) {
+    next = { ...next, final_price: null }
+  }
+
+  if (!resolvePortalVisibilityFlag('show_notes', portalSettings, detail)) {
+    next = {
+      ...next,
+      notes: null,
+      points: next.points.map((p) => ({ ...p, notes: null })),
+    }
+  }
+
+  if (!resolvePortalVisibilityFlag('show_photos', portalSettings, detail)) {
+    next = { ...next, images: [] }
+  } else {
+    next = { ...next, images: await withSignedTowImageUrls(next.images) }
+  }
+
+  return next
 }
 
 export type CustomerTowsPage = {
@@ -246,8 +363,14 @@ export async function getCustomerTows(
   }
 
   const rows = data ?? []
+  const portalSettings = await fetchPortalSettingsForCustomer(customerId)
   const driverByTowId = await fetchMyTowDriverContacts(rows.map((t: { id: string }) => t.id))
-  const tows = rows.map((tow) => mapCustomerPortalTow(tow, driverByTowId))
+  const tows = rows.map((tow) =>
+    applyPortalVisibilityStripToListTow(
+      mapCustomerPortalTow(tow, driverByTowId),
+      portalSettings
+    )
+  )
   const hasMore =
     count != null ? offset + tows.length < count : tows.length === limit
 
@@ -317,9 +440,10 @@ export async function getCustomerTowDetail(
   if (error || !data) return null
 
   const tow = data as any
+  const portalSettings = await fetchPortalSettingsForCustomer(customerId)
   const driverByTowId = await fetchMyTowDriverContacts([towId])
 
-  return {
+  const detail: CustomerPortalTowDetail = {
     ...mapCustomerPortalTow(tow, driverByTowId),
     notes: tow.notes,
     visibility_overrides: tow.visibility_overrides,
@@ -333,7 +457,9 @@ export async function getCustomerTowDetail(
     final_price: tow.final_price,
     points: (tow.points || []).sort((a: { point_order: number }, b: { point_order: number }) => a.point_order - b.point_order),
     images: tow.images || [],
-  } as CustomerPortalTowDetail
+  }
+
+  return applyPortalVisibilityStripToDetail(detail, portalSettings)
 }
 
 // שליפת משתמשי הלקוח (לניהול)

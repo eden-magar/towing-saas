@@ -5,6 +5,12 @@ import {
   releaseVehicleFromStorage,
   findStoredVehicleForRelease,
 } from './storage'
+import {
+  TOW_IMAGES_BUCKET,
+  getTowImageSignedUrl,
+  normalizeTowImagePath,
+  withSignedTowImageUrls,
+} from './tow-images-storage'
 
 // ==================== טיפוסים ====================
 
@@ -563,7 +569,7 @@ export async function getTaskDetail(towId: string): Promise<TaskDetailFull | nul
     vehicles: vehicles || [],
     legs: legs || [],
     points: points || [],
-    images: images || []
+    images: await withSignedTowImageUrls(images || []),
   }
 }
 
@@ -1032,10 +1038,9 @@ export async function uploadTowImage(
   notes?: string
 ): Promise<TowImage | null> {
   const fileName = `${towId}/${imageType}_${Date.now()}.jpg`
-  
-  const { error: uploadError } = await supabase
-    .storage
-    .from('tow-images')
+
+  const { error: uploadError } = await supabase.storage
+    .from(TOW_IMAGES_BUCKET)
     .upload(fileName, imageFile)
 
   if (uploadError) {
@@ -1043,11 +1048,7 @@ export async function uploadTowImage(
     throw uploadError
   }
 
-  const { data: urlData } = supabase
-    .storage
-    .from('tow-images')
-    .getPublicUrl(fileName)
-
+  // Store storage path (not a public URL). Display uses signed URLs after auth.
   const { data: image, error: insertError } = await supabase
     .from('tow_images')
     .insert({
@@ -1055,9 +1056,9 @@ export async function uploadTowImage(
       tow_point_id: pointId || null,
       tow_vehicle_id: vehicleId || null,
       uploaded_by: userId,
-      image_url: urlData.publicUrl,
+      image_url: fileName,
       image_type: imageType,
-      notes: notes || null
+      notes: notes || null,
     })
     .select()
     .single()
@@ -1067,15 +1068,16 @@ export async function uploadTowImage(
     throw insertError
   }
 
-  return image
+  const signedUrl = await getTowImageSignedUrl(fileName)
+  return signedUrl ? { ...image, image_url: signedUrl } : image
 }
 
 // ==================== מחיקת תמונה ====================
 
 export async function deleteTowImage(imageId: string, imageUrl: string) {
-  const path = imageUrl.split('/tow-images/')[1]
+  const path = normalizeTowImagePath(imageUrl)
   if (path) {
-    await supabase.storage.from('tow-images').remove([path])
+    await supabase.storage.from(TOW_IMAGES_BUCKET).remove([path])
   }
 
   const { error } = await supabase
@@ -1105,7 +1107,7 @@ export async function getPointImages(pointId: string): Promise<TowImage[]> {
     return []
   }
 
-  return data || []
+  return withSignedTowImageUrls(data || [])
 }
 
 // ==================== שליפת היסטוריית סטטוסים ====================

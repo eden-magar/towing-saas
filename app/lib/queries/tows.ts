@@ -24,6 +24,7 @@ import { persistableUuid } from '../utils/persistable-uuid'
 import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-sync'
 import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 import { persistVehicleCodesToCache } from '../vehicle-lookup'
+import { withSignedTowImageUrls } from './tow-images-storage'
 
 // ==================== טיפוסים ====================
 
@@ -950,15 +951,16 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     created_at: string
   }
 
+  const rawImages = (!imagesRes.error ? imagesRes.data : null) ?? []
+  const signedImages = await withSignedTowImageUrls(rawImages)
+
   const imagesByPointId: Record<string, TowPointImageRow[]> = {}
-  if (!imagesRes.error) {
-    for (const img of imagesRes.data ?? []) {
-      if (!img.tow_point_id) continue
-      if (!imagesByPointId[img.tow_point_id]) {
-        imagesByPointId[img.tow_point_id] = []
-      }
-      imagesByPointId[img.tow_point_id].push(img)
+  for (const img of signedImages) {
+    if (!img.tow_point_id) continue
+    if (!imagesByPointId[img.tow_point_id]) {
+      imagesByPointId[img.tow_point_id] = []
     }
+    imagesByPointId[img.tow_point_id].push(img)
   }
 
   const points = (pointsRes.data ?? []).map((point) => ({
@@ -976,6 +978,7 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     vehicles: vehiclesRes.data || [],
     legs: legsRes.data || [],
     points,
+    images: signedImages,
   }
 }
 
