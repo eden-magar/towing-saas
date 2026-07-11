@@ -212,12 +212,28 @@ export function VehicleLookup({
         : 'text-xs text-gray-600'
     }`
 
+  const handleManualPlateChange = (raw: string) => {
+    // Stay in manual mode — do not clear notFound (outer plate onChange does that).
+    onPlateChange(normalizePlate(raw))
+  }
+
   const renderManualFields = (options?: { narrowManualLayout?: boolean }) => {
     const narrowManual = options?.narrowManualLayout ?? false
 
     if (narrowManual) {
       return (
         <div className="space-y-2">
+          <div>
+            <label className={manualFieldLabelClass(true)}>מספר רישוי *</label>
+            <input
+              type="text"
+              value={plateNumber}
+              onChange={(e) => handleManualPlateChange(e.target.value)}
+              placeholder="מספר רישוי"
+              disabled={disabled}
+              className={`${manualInputClass} font-semibold font-mono`}
+            />
+          </div>
           <div>
             <label className={manualFieldLabelClass(true)}>סוג רכב *</label>
             <select
@@ -291,6 +307,17 @@ export function VehicleLookup({
 
     return (
     <div className={stackLayout ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+      <div className={stackLayout ? undefined : 'sm:col-span-2'}>
+        <label className={manualFieldLabelClass()}>מספר רישוי *</label>
+        <input
+          type="text"
+          value={plateNumber}
+          onChange={(e) => handleManualPlateChange(e.target.value)}
+          placeholder="מספר רישוי"
+          disabled={disabled}
+          className={`${manualInputClass} font-semibold font-mono`}
+        />
+      </div>
       <div>
         <label className={manualFieldLabelClass()}>סוג רכב *</label>
         <select
