@@ -1,5 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
+import {
+  DEFECT_OPTIONS,
+  defectOptionClassName,
+} from '../../../lib/constants/defects'
 import { SelectorModalShell } from './SelectorModalShell'
 
 interface DefectSelectorProps {
@@ -10,55 +14,42 @@ interface DefectSelectorProps {
   variant?: 'default' | 'chipsOnly' | 'triggerOnly'
   /** Label on the compact trigger button (triggerOnly variant). */
   triggerLabel?: string
+  /** Optional class override for the triggerOnly button (e.g. compact red inline). */
+  triggerClassName?: string
   isMobile?: boolean
 }
 
-const DEFAULT_DEFECTS = [
-  'תקר',
-  'תאונה', 
-  'אין חשמל',
-  'לא נדלק/לא מניע',
-  'גלגל עקום או שבור',
-  'נזילת מים/שמן',
-  'גיר',
-  'מוגבל מהירות',
-  'אחר'
-]
-
-export function DefectSelector({ 
-  selectedDefects, 
-  onChange, 
+export function DefectSelector({
+  selectedDefects,
+  onChange,
   label = 'תקלה',
   variant = 'default',
   triggerLabel = 'תקלות',
+  triggerClassName,
   isMobile = false,
 }: DefectSelectorProps) {
-  
   const [otherText, setOtherText] = useState('')
   const [showModal, setShowModal] = useState(false)
-// סנכרון state עם הערכים הקיימים
-  useEffect(() => {
 
-      const otherDefect = selectedDefects.find(d => d.startsWith('אחר:'))
+  useEffect(() => {
+    const otherDefect = selectedDefects.find((d) => d.startsWith('אחר:'))
     if (otherDefect) {
       setOtherText(otherDefect.replace('אחר: ', ''))
     }
   }, [])
 
-
   const toggleDefect = (defect: string) => {
-    // הסרה
     if (defect === 'אחר') {
-      const hasOther = selectedDefects.some(d => d === 'אחר' || d.startsWith('אחר:'))
+      const hasOther = selectedDefects.some((d) => d === 'אחר' || d.startsWith('אחר:'))
       if (hasOther) {
-        onChange(selectedDefects.filter(d => d !== 'אחר' && !d.startsWith('אחר:')))
+        onChange(selectedDefects.filter((d) => d !== 'אחר' && !d.startsWith('אחר:')))
         setOtherText('')
         return
       }
     }
-    
+
     if (selectedDefects.includes(defect)) {
-      onChange(selectedDefects.filter(d => d !== defect))
+      onChange(selectedDefects.filter((d) => d !== defect))
     } else {
       onChange([...selectedDefects, defect])
     }
@@ -66,7 +57,7 @@ export function DefectSelector({
 
   const updateOtherText = (text: string) => {
     setOtherText(text)
-    const filtered = selectedDefects.filter(d => d !== 'אחר' && !d.startsWith('אחר:'))
+    const filtered = selectedDefects.filter((d) => d !== 'אחר' && !d.startsWith('אחר:'))
     if (text.trim()) {
       onChange([...filtered, `אחר: ${text}`])
     } else {
@@ -75,29 +66,50 @@ export function DefectSelector({
   }
 
   const isSelected = (defect: string) => {
-    if (defect === 'אחר') return selectedDefects.some(d => d === 'אחר' || d.startsWith('אחר:'))
+    if (defect === 'אחר') return selectedDefects.some((d) => d === 'אחר' || d.startsWith('אחר:'))
     return selectedDefects.includes(defect)
   }
+
+  const chipClass = (selected: boolean, highlight?: boolean, brand = false) => {
+    if (highlight) return defectOptionClassName(selected, true, 'chip')
+    if (brand) {
+      return selected
+        ? 'bg-gt-brand text-white'
+        : 'bg-gray-100 text-gray-600'
+    }
+    return defectOptionClassName(selected, false, 'chip')
+  }
+
+  const renderChips = (opts: {
+    keyPrefix?: string
+    minTouch?: boolean
+    brand?: boolean
+  }) => (
+    <div className={`flex flex-wrap gap-2${opts.minTouch ? ' p-4' : ''}`}>
+      {DEFECT_OPTIONS.map((defect) => {
+        const Icon = defect.icon
+        const selected = isSelected(defect.value)
+        return (
+          <button
+            key={`${opts.keyPrefix ?? ''}${defect.value}`}
+            type="button"
+            onClick={() => toggleDefect(defect.value)}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition-colors ${
+              opts.minTouch ? 'min-h-[44px] px-4 py-2.5' : ''
+            } ${chipClass(selected, defect.highlight, opts.brand)}`}
+          >
+            <Icon className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{defect.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
 
   if (variant === 'chipsOnly') {
     return (
       <div>
-        <div className="flex flex-wrap gap-2">
-          {DEFAULT_DEFECTS.map((defect) => (
-            <button
-              key={defect}
-              type="button"
-              onClick={() => toggleDefect(defect)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                isSelected(defect)
-                  ? 'bg-[#33d4ff] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {defect}
-            </button>
-          ))}
-        </div>
+        {renderChips({})}
         {isSelected('אחר') && (
           <div className="mt-3">
             <input
@@ -115,44 +127,34 @@ export function DefectSelector({
 
   if (variant === 'triggerOnly') {
     return (
-      <div>
+      <div className="shrink-0">
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`relative flex w-full min-h-[36px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
-            selectedDefects.length > 0
-              ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-              : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
-          }`}
+          className={
+            triggerClassName ??
+            `relative flex w-full min-h-[36px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+              selectedDefects.length > 0
+                ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+                : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
+            }`
+          }
         >
           <span>{triggerLabel}</span>
           {selectedDefects.length > 0 && (
-            <span className="absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white">
+            <span
+              className={
+                triggerClassName
+                  ? 'absolute -top-1.5 -left-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-danger px-1 text-[11px] font-bold text-white'
+                  : 'absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white'
+              }
+            >
               {selectedDefects.length}
             </span>
           )}
         </button>
-        <SelectorModalShell
-          open={showModal}
-          onClose={() => setShowModal(false)}
-          title={label}
-        >
-          <div className="flex flex-wrap gap-2 p-4">
-            {DEFAULT_DEFECTS.map((defect) => (
-              <button
-                key={`modal-${defect}`}
-                type="button"
-                onClick={() => toggleDefect(defect)}
-                className={`min-h-[44px] rounded-xl px-4 py-2.5 text-sm transition-colors ${
-                  isSelected(defect)
-                    ? 'bg-gt-brand text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                {defect}
-              </button>
-            ))}
-          </div>
+        <SelectorModalShell open={showModal} onClose={() => setShowModal(false)} title={label}>
+          {renderChips({ keyPrefix: 'modal-', minTouch: true, brand: true })}
           {isSelected('אחר') && (
             <div className="px-4 pb-4">
               <input
@@ -174,7 +176,6 @@ export function DefectSelector({
       {!isMobile && (
         <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       )}
-      {/* כפתור מובייל */}
       {isMobile ? (
         <button
           type="button"
@@ -205,27 +206,13 @@ export function DefectSelector({
         </button>
       )}
 
-      {/* מודל מובייל */}
       <SelectorModalShell
         open={showModal}
         onClose={() => setShowModal(false)}
         title={label}
         overlayClassName="sm:hidden"
       >
-        <div className="flex flex-wrap gap-2 p-4">
-          {DEFAULT_DEFECTS.map((defect) => (
-            <button
-              key={`modal-${defect}`}
-              type="button"
-              onClick={() => toggleDefect(defect)}
-              className={`min-h-[44px] px-4 py-2.5 rounded-xl text-sm transition-colors ${
-                isSelected(defect) ? 'bg-[#33d4ff] text-white' : 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {defect}
-            </button>
-          ))}
-        </div>
+        {renderChips({ keyPrefix: 'modal-', minTouch: true })}
         {isSelected('אחר') && (
           <div className="px-4 pb-4">
             <input
@@ -243,25 +230,27 @@ export function DefectSelector({
         )}
       </SelectorModalShell>
 
-      {/* דסקטופ - כפתורים inline */}
       <div className="hidden sm:flex flex-wrap gap-2">
-        {DEFAULT_DEFECTS.map((defect) => (
-          <button
-            key={defect}
-            type="button"
-            onClick={() => toggleDefect(defect)}
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              isSelected(defect)
-                ? 'bg-[#33d4ff] text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {defect}
-          </button>
-        ))}
+        {DEFECT_OPTIONS.map((defect) => {
+          const Icon = defect.icon
+          const selected = isSelected(defect.value)
+          return (
+            <button
+              key={defect.value}
+              type="button"
+              onClick={() => toggleDefect(defect.value)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${chipClass(
+                selected,
+                defect.highlight
+              )}`}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden />
+              <span>{defect.label}</span>
+            </button>
+          )
+        })}
       </div>
-      
-      {/* שדה טקסט לאחר */}
+
       {!isMobile && isSelected('אחר') && (
         <div className="mt-3">
           <input

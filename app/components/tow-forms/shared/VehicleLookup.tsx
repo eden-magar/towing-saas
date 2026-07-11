@@ -6,6 +6,7 @@ import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
+import { SelectorModalShell } from './SelectorModalShell'
 
 interface VehicleLookupProps {
   plateNumber: string
@@ -21,16 +22,20 @@ interface VehicleLookupProps {
   isMobile?: boolean
   /** Stacked plate/type layout for narrow desktop columns. */
   narrowColumn?: boolean
+  /** Hide the built-in "מספר רכב" label (use when an outer section already names the field). */
+  hideLabel?: boolean
   /** Manual-entry link style in stacked layout: subtle link vs bordered button. */
   manualEntryStyle?: 'link' | 'button'
   /** Where to render the manual-entry trigger in stacked layout. */
-  manualEntryPlacement?: 'inline' | 'afterSummary'
+  manualEntryPlacement?: 'inline' | 'afterSummary' | 'withPlate'
   /** Optional sibling action(s) rendered next to the manual-entry trigger (e.g. storage picker). */
   manualEntryTrailing?: ReactNode
+  /** Optional action(s) after the manual-entry control on the plate row (e.g. defects). */
+  manualEntryEnd?: ReactNode
   /**
    * Manual entry (shared state, controlled by parent form). When
    * `onVehicleLookupNotFoundChange` is provided the component switches to
-   * controlled "manual entry" mode (skip button + manual panel/modal).
+   * controlled "manual entry" mode (skip button + modal).
    * When omitted it falls back to legacy local not-found behavior.
    */
   vehicleLookupNotFound?: boolean
@@ -58,9 +63,11 @@ export function VehicleLookup({
   disabled = false,
   isMobile = false,
   narrowColumn = false,
+  hideLabel = false,
   manualEntryStyle = 'link',
   manualEntryPlacement = 'inline',
   manualEntryTrailing,
+  manualEntryEnd,
   vehicleLookupNotFound,
   onVehicleLookupNotFoundChange,
   manualManufacturer = '',
@@ -75,6 +82,7 @@ export function VehicleLookup({
   const isNarrow = narrowColumn ?? false
   const isMobileSized = isMobile ?? false
   const stackLayout = isMobileSized || isNarrow
+  const actionsWithPlate = isNarrow && manualEntryPlacement === 'withPlate'
   const [loading, setLoading] = useState(false)
   const [localNotFound, setLocalNotFound] = useState(false)
   const [showManualModal, setShowManualModal] = useState(false)
@@ -105,43 +113,59 @@ export function VehicleLookup({
         setNotFound(true)
         onVehicleDataChange(null)
         onVehicleTypeChange('')
-        if (manualEnabled && isMobile) setShowManualModal(true)
+        if (manualEnabled) setShowManualModal(true)
       }
     } catch (error) {
       console.error('Error looking up vehicle:', error)
       setNotFound(true)
-      if (manualEnabled && isMobile) setShowManualModal(true)
+      if (manualEnabled) setShowManualModal(true)
     } finally {
       setLoading(false)
     }
   }
 
-  // "Skip to manual" — proactively open manual entry without a lookup
+  // "Skip to manual" — open modal; only reset fields when entering manual mode fresh
   const openManualEntry = () => {
-    onVehicleDataChange(null)
-    setNotFound(true)
-    onVehicleTypeChange('')
-    onManualManufacturerChange?.('')
-    onManualColorChange?.('')
-    onManualWeightChange?.('')
-    onManualChassisChange?.('')
-    if (isMobile) setShowManualModal(true)
+    if (!notFound) {
+      onVehicleDataChange(null)
+      setNotFound(true)
+      onVehicleTypeChange('')
+      onManualManufacturerChange?.('')
+      onManualColorChange?.('')
+      onManualWeightChange?.('')
+      onManualChassisChange?.('')
+    }
+    setShowManualModal(true)
   }
 
   const manualInputClass = isNarrow
-    ? 'w-full px-3 h-9 border border-gray-200 rounded-lg text-sm'
+    ? 'w-full px-3 h-9 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
     : isMobileSized
-      ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm'
-      : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm'
+      ? 'w-full px-3 h-12 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
+      : 'w-full px-3 py-2 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
 
   const manualSelectClass = isNarrow
-    ? 'w-full px-3 h-9 border border-gray-200 rounded-lg text-sm bg-white'
+    ? 'w-full px-3 h-9 border border-gt-border-field rounded-lg text-sm bg-white hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
     : isMobileSized
-      ? 'w-full px-3 h-12 border border-gray-300 rounded-xl text-sm bg-white'
-      : 'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm bg-white'
+      ? 'w-full px-3 h-12 border border-gt-border-field rounded-lg text-sm bg-white hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
+      : 'w-full px-3 py-2 border border-gt-border-field rounded-lg text-sm bg-white hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
 
-  const renderManualEntryTrigger = () => {
-    if (!manualEnabled || notFound || vehicleData?.found) return null
+  const renderManualEntryTrigger = (opts?: { compact?: boolean }) => {
+    if (!manualEnabled || vehicleData?.found) return null
+    if (opts?.compact) {
+      return (
+        <button
+          type="button"
+          onClick={openManualEntry}
+          disabled={disabled}
+          title="הזן פרטי רכב ידנית"
+          aria-label="הזן פרטי רכב ידנית"
+          className="inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg border border-gt-border-field text-gt-text-secondary hover:bg-gt-surface-hover hover:border-gt-border hover:text-gt-text-primary transition-colors disabled:opacity-50"
+        >
+          <PenLine className="w-3.5 h-3.5 shrink-0" />
+        </button>
+      )
+    }
     return (
       <button
         type="button"
@@ -163,11 +187,12 @@ export function VehicleLookup({
 
   const renderManualEntryRow = () => {
     const trigger = renderManualEntryTrigger()
-    if (!trigger && !manualEntryTrailing) return null
+    if (!trigger && !manualEntryTrailing && !manualEntryEnd) return null
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        {trigger}
+      <div className="flex flex-wrap items-center gap-3">
         {manualEntryTrailing}
+        {trigger}
+        {manualEntryEnd}
       </div>
     )
   }
@@ -331,11 +356,30 @@ export function VehicleLookup({
         <>
           {/* שורה 1: מספר רכב — השדה הראשי (בולט), עם תווית ואייקון חיפוש שקט בקצה */}
           <div>
-            <label className={`block mb-1 ${isNarrow ? 'text-xs text-gray-500 font-medium' : 'text-sm font-semibold text-gray-700'}`}>מספר רכב</label>
+            {!hideLabel && (
+              <label className={`block mb-1 ${isNarrow ? 'text-xs font-medium text-gt-text-secondary' : 'text-sm font-semibold text-gray-700'}`}>מספר רכב</label>
+            )}
             {/* narrow-column: plate + code on one row; type is hidden when found
-                and provided by the manual panel when not found. */}
-            <div className={isNarrow ? 'flex gap-2' : 'relative'}>
-              <div className={isNarrow ? 'relative flex-1 min-w-0' : 'relative'}>
+                and provided by the manual panel when not found.
+                withPlate: storage/manual actions stay on the SAME row. */}
+            <div
+              className={
+                isNarrow
+                  ? actionsWithPlate
+                    ? 'flex flex-wrap items-center gap-3 min-w-0'
+                    : 'flex flex-wrap items-center gap-2'
+                  : 'relative'
+              }
+            >
+              <div
+                className={
+                  isNarrow
+                    ? actionsWithPlate
+                      ? 'relative w-[6.75rem] shrink-0'
+                      : 'relative flex-1 min-w-0'
+                    : 'relative'
+                }
+              >
                 <input
                   type="text"
                   value={plateNumber}
@@ -348,12 +392,13 @@ export function VehicleLookup({
                       onVehicleTypeChange('')
                     }
                   }}
-                  placeholder="מספר רכב *"
+                  placeholder="מספר רכב"
+                  aria-label={hideLabel ? 'מספר רכב' : undefined}
                   disabled={disabled}
                   className={
                     isNarrow
-                      ? 'w-full pl-12 pr-3 h-9 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-gt-brand/15 disabled:bg-gray-100'
-                      : 'w-full pl-14 pr-3 h-12 bg-white border border-gray-300 rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100'
+                      ? 'w-full pl-9 pr-2 h-9 bg-white border border-gt-border-field rounded-lg text-sm font-semibold text-gray-900 placeholder:font-normal hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
+                      : 'w-full pl-14 pr-3 h-12 bg-white border border-gt-border-field rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
                   }
                   onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
                   onBlur={() => {
@@ -376,14 +421,14 @@ export function VehicleLookup({
                   aria-label="חפש רכב"
                   className={
                     isNarrow
-                      ? 'absolute left-0 top-0 h-9 w-9 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40'
+                      ? 'absolute left-0 top-0 h-9 w-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40'
                       : 'absolute left-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-200/70 hover:text-gray-700 transition-colors disabled:opacity-40'
                   }
                 >
                   {loading ? (
-                    <Loader2 size={isNarrow ? 16 : 18} className="animate-spin" />
+                    <Loader2 size={isNarrow ? 14 : 18} className="animate-spin" />
                   ) : (
-                    <Search size={isNarrow ? 16 : 18} />
+                    <Search size={isNarrow ? 14 : 18} />
                   )}
                 </button>
               </div>
@@ -395,9 +440,17 @@ export function VehicleLookup({
                   onChange={(e) => onVehicleCodeChange(e.target.value)}
                   placeholder="קוד"
                   disabled={disabled}
-                  className="w-20 shrink-0 px-2 h-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand/15 disabled:bg-gray-100"
+                  className={
+                    actionsWithPlate
+                      ? 'w-14 shrink-0 px-1.5 h-9 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
+                      : 'w-20 shrink-0 px-2 h-9 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
+                  }
                 />
               )}
+
+              {actionsWithPlate && manualEntryTrailing}
+              {actionsWithPlate && renderManualEntryTrigger({ compact: true })}
+              {actionsWithPlate && manualEntryEnd}
             </div>
           </div>
 
@@ -408,8 +461,8 @@ export function VehicleLookup({
                 value={vehicleType}
                 onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
                 disabled={vehicleData?.found || disabled}
-                className={`flex-[2] min-w-0 px-2 h-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
-                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+                className={`flex-[2] min-w-0 px-2 h-12 border rounded-lg text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 bg-white ${
+                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gt-border-field hover:border-gt-border'
                 } disabled:bg-gray-100`}
               >
                 <option value="">סוג</option>
@@ -426,13 +479,13 @@ export function VehicleLookup({
                   onChange={(e) => onVehicleCodeChange(e.target.value)}
                   placeholder="קוד"
                   disabled={disabled}
-                  className="flex-1 min-w-0 px-2 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100"
+                  className="flex-1 min-w-0 px-2 h-12 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100"
                 />
               )}
             </div>
           )}
 
-          {manualEntryPlacement === 'inline' && renderManualEntryRow()}
+          {manualEntryPlacement === 'inline' && !actionsWithPlate && renderManualEntryRow()}
         </>
       ) : (
       <>
@@ -451,12 +504,13 @@ export function VehicleLookup({
               onVehicleTypeChange('')
             }
           }}
-          placeholder="מספר רכב *"
+          placeholder="מספר רכב"
+          aria-label={hideLabel ? 'מספר רכב' : undefined}
           disabled={disabled}
           className={
             isMobile
-              ? 'col-span-3 sm:flex-1 sm:min-w-0 px-3 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100'
-              : 'col-span-3 sm:flex-1 sm:min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono disabled:bg-gray-100'
+              ? 'col-span-3 sm:flex-1 sm:min-w-0 px-3 h-12 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 font-mono disabled:bg-gray-100'
+              : 'col-span-3 sm:flex-1 sm:min-w-0 px-3 py-2 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 font-mono disabled:bg-gray-100'
           }
           onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
           onBlur={() => {
@@ -491,11 +545,11 @@ export function VehicleLookup({
           disabled={vehicleData?.found || disabled}
           className={
             isMobile
-              ? `col-span-2 sm:col-span-1 sm:min-w-[80px] px-2 h-12 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
-                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+              ? `col-span-2 sm:col-span-1 sm:min-w-[80px] px-2 h-12 border rounded-lg text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 bg-white ${
+                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gt-border-field hover:border-gt-border'
                 } disabled:bg-gray-100`
-              : `col-span-2 sm:col-span-1 sm:min-w-[80px] px-2 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white ${
-                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200'
+              : `col-span-2 sm:col-span-1 sm:min-w-[80px] px-2 py-2 border rounded-lg text-sm focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 bg-white ${
+                  vehicleData?.found ? 'border-emerald-300 bg-emerald-50' : 'border-gt-border-field hover:border-gt-border'
                 } disabled:bg-gray-100`
           }
         >
@@ -516,8 +570,8 @@ export function VehicleLookup({
             disabled={disabled}
             className={
               isMobile
-                ? 'col-span-2 sm:col-span-1 sm:w-16 px-2 h-12 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100'
-                : 'col-span-2 sm:col-span-1 sm:w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] disabled:bg-gray-100'
+                ? 'col-span-2 sm:col-span-1 sm:w-16 px-2 h-12 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
+                : 'col-span-2 sm:col-span-1 sm:w-16 px-2 py-2 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
             }
             />
         )}
@@ -544,7 +598,7 @@ export function VehicleLookup({
 
       {/* פרטי רכב - קומפקטי */}
       {vehicleData?.found && vehicleData.data && (
-        <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+        <div className="px-3 py-2 bg-emerald-50/80 rounded-lg">
           <div className="flex items-center gap-2 text-sm">
             <span>{getVehicleTypeIcon(vehicleData.source || 'private')}</span>
             <span className="font-medium text-gray-800">
@@ -581,7 +635,8 @@ export function VehicleLookup({
         </div>
       )}
 
-      {manualEntryPlacement === 'afterSummary' && renderManualEntryRow()}
+      {manualEntryPlacement === 'afterSummary' && !actionsWithPlate && renderManualEntryRow()}
+      {manualEntryPlacement === 'withPlate' && !isNarrow && renderManualEntryRow()}
 
       {/* רכב לא נמצא / מצב הזנה ידנית */}
       {notFound && !vehicleData?.found && (
@@ -591,49 +646,30 @@ export function VehicleLookup({
             <AlertTriangle size={14} className="text-amber-600" />
             <span className="text-xs text-amber-700">הרכב לא נמצא - יש לבחור סוג רכב ידנית</span>
           </div>
-        ) : isMobile ? (
-          /* מובייל: אינדיקטור לחיץ שפותח מחדש את מודל ההזנה הידנית */
+        ) : (
+          /* Compact reopen — fields live in SelectorModalShell */
           <button
             type="button"
             onClick={() => setShowManualModal(true)}
-            className="w-full flex items-center gap-2 px-3 min-h-[48px] bg-amber-50 border border-amber-200 rounded-lg text-right"
+            className="w-full flex items-center gap-2 px-3 py-2 min-h-[36px] bg-amber-50 border border-amber-200 rounded-lg text-right"
           >
             <PenLine size={14} className="text-amber-600 shrink-0" />
-            <span className="text-xs text-amber-700 flex-1">פרטי רכב ידניים — הקש לעריכה</span>
+            <span className="text-xs text-amber-700 flex-1">פרטי רכב ידניים — לחץ לעריכה</span>
           </button>
-        ) : isNarrow ? (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-            <p className="text-xs text-amber-600">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-            {renderManualFields({ narrowManualLayout: true })}
-          </div>
-        ) : (
-          /* דסקטופ: פאנל אמבר inline עם השדות */
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-            <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-            {renderManualFields()}
-          </div>
         )
       )}
 
-      {/* מובייל: מודל הזנה ידנית ממורכז */}
-      {manualEnabled && isMobile && showManualModal && (
-        <div
-          className="sm:hidden fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setShowManualModal(false)}
+      {manualEnabled && (
+        <SelectorModalShell
+          open={showManualModal}
+          onClose={() => setShowManualModal(false)}
+          title="פרטי רכב ידניים"
+          panelClassName="max-w-md"
         >
-          <div
-            className="bg-white w-full max-w-md max-h-[80vh] overflow-auto rounded-2xl shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-              <h3 className="font-bold text-gray-800">פרטי רכב ידניים</h3>
-              <button type="button" onClick={() => setShowManualModal(false)} className="text-[#33d4ff] font-medium">סיום</button>
-            </div>
-            <div className="p-4">
-              {renderManualFields()}
-            </div>
+          <div className="p-4" dir="rtl">
+            {renderManualFields({ narrowManualLayout: isNarrow || isMobileSized })}
           </div>
-        </div>
+        </SelectorModalShell>
       )}
     </div>
   )

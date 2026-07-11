@@ -23,10 +23,10 @@ export interface PhoneInputProps
 const baseClassName = `
   w-full px-3 py-2 rounded-lg text-sm
   bg-white text-gt-text-primary
-  border border-gt-border
+  border border-gt-border-field
   placeholder:text-gt-text-tertiary
-  hover:border-gt-border-strong
-  focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
+  hover:border-gt-border
+  focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20
   disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
   transition-colors duration-150
 `.replace(/\s+/g, ' ').trim()

@@ -102,9 +102,9 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   })
 
   return (
-    <div dir="rtl" className="flex flex-1 flex-col min-h-0 bg-gray-50">
+    <div dir="rtl" className="flex flex-1 flex-col min-h-0 bg-gt-portal-canvas">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+      <header className="bg-gt-surface border-b border-gt-border-subtle/80 sticky top-0 z-30">
         <div className="flex items-center justify-between px-4 h-16">
           {/* Logo + Name */}
           <div className="flex items-center gap-3">
@@ -204,8 +204,14 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         )}
       </header>
 
-      {/* Content */}
-      <main className="p-4 sm:p-6 max-w-6xl mx-auto">
+      {/* Content — request intake uses a wider canvas for multi-column forms */}
+      <main
+        className={`mx-auto w-full ${
+          pathname.startsWith('/customer/request')
+            ? 'max-w-[1480px] px-3 py-2 sm:px-4 sm:py-2.5'
+            : 'max-w-6xl p-4 sm:p-6'
+        }`}
+      >
         {children}
       </main>
     </div>

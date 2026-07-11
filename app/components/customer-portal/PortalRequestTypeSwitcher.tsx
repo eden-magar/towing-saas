@@ -19,7 +19,7 @@ export function PortalRequestTypeSwitcher() {
   const pathname = usePathname()
 
   return (
-    <div className="inline-flex rounded-xl border border-gt-border bg-white p-1 gap-1" dir="rtl">
+    <div className="inline-flex rounded-xl bg-gt-surface shadow-[var(--gt-shadow-xs)] p-1 gap-0.5" dir="rtl">
       {OPTIONS.map((opt) => {
         const Icon = opt.icon
         const isActive = pathname === opt.match || pathname.startsWith(`${opt.match}/`)

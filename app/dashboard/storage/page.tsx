@@ -38,7 +38,10 @@ import {
 } from '../../lib/queries/storage'
 import { getCustomersLite, type CustomerListItem } from '../../lib/queries/customers'
 import { lookupVehicle } from '../../lib/vehicle-lookup'
-import { DEFECT_OPTIONS } from '../../lib/constants/defects'
+import {
+  DEFECT_OPTIONS,
+  defectOptionClassName,
+} from '../../lib/constants/defects'
 import { CustomerSearchSelect } from '@/app/components/shared/CustomerSearchSelect'
 
 export default function StoragePage() {
@@ -845,6 +848,7 @@ export default function StoragePage() {
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         {DEFECT_OPTIONS.map((option) => {
+                          const Icon = option.icon
                           const isSelected = formData.defects.includes(option.value)
                           return (
                             <button
@@ -858,14 +862,16 @@ export default function StoragePage() {
                                     : [...prev.defects, option.value],
                                 }))
                               }}
-                              className={`p-3 rounded-lg border-2 text-center transition ${
-                                isSelected
-                                  ? 'border-[#33d4ff] bg-cyan-50'
-                                  : 'border-gray-200 bg-white hover:border-gray-300'
+                              className={`flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 text-center transition ${
+                                option.highlight
+                                  ? defectOptionClassName(isSelected, true, 'grid')
+                                  : isSelected
+                                    ? 'border-[#33d4ff] bg-cyan-50 text-gray-700'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                               }`}
                             >
-                              <div className="text-2xl mb-1">{option.icon}</div>
-                              <div className="text-xs text-gray-700">{option.label}</div>
+                              <Icon className="h-6 w-6 shrink-0 mb-1" aria-hidden />
+                              <div className="text-xs">{option.label}</div>
                             </button>
                           )
                         })}

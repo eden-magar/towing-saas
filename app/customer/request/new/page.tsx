@@ -6,6 +6,28 @@ import {
   type CustomerPortalStoredVehicle,
 } from '@/app/lib/queries/customer-portal'
 import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
+import { PortalRequestPageHeader } from '@/app/components/customer-portal/PortalRequestPageHeader'
+import {
+  PORTAL_CANCEL_LINK_CLASS,
+  PORTAL_DEFECTS_TRIGGER_CLASS,
+  PORTAL_ERROR_BANNER_CLASS,
+  PORTAL_FORM_FOOTER_CLASS,
+  PORTAL_FORM_FOOTER_INNER_CLASS,
+  PORTAL_FORM_STACK_CLASS,
+  PORTAL_GRID_GAP_CLASS,
+  PORTAL_PAGE_SHELL_CLASS,
+  PORTAL_PAGE_SUBTITLE_CLASS,
+  PORTAL_PAGE_TITLE_CLASS,
+  PORTAL_SECTION_LABEL_CLASS,
+  PORTAL_SEGMENT_ACTIVE_CLASS,
+  PORTAL_SEGMENT_INACTIVE_CLASS,
+  PORTAL_SEGMENT_WRAP_CLASS,
+  PORTAL_STATUS_CARD_CLASS,
+  PORTAL_STORAGE_BANNER_CLASS,
+  PORTAL_STORAGE_BUTTON_CLASS,
+  PORTAL_SUBMIT_CLASS,
+  PORTAL_TEXTAREA_CLASS,
+} from '@/app/components/customer-portal/portalRequestActionStyles'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { storedVehicleToCondition } from '@/app/lib/utils/storage-vehicle'
 import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
@@ -33,7 +55,6 @@ import {
   ClipboardList,
   Loader2,
   MapPin,
-  MessageSquareText,
   Package,
   Truck,
 } from 'lucide-react'
@@ -134,14 +155,7 @@ const requiredFields: (keyof FormState)[] = [
   'department',
   'orderer',
   'ordererPhone',
-  'pickupContactName',
-  'pickupContactPhone',
-  'dropoffContactName',
-  'dropoffContactPhone',
 ]
-
-const textareaClassName =
-  'w-full px-3 py-2 rounded-lg text-sm bg-white text-gt-text-primary border border-gt-border placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 transition-colors duration-150 resize-none'
 
 export default function NewCustomerTowRequestPage() {
   const {
@@ -264,6 +278,13 @@ export default function NewCustomerTowRequestPage() {
         })
         clearFieldError('pickupAddress')
       }
+      setForm((prev) => ({
+        ...prev,
+        pickupContactName: '',
+        pickupContactPhone: '',
+      }))
+      clearFieldError('pickupContactName')
+      clearFieldError('pickupContactPhone')
     } else {
       setPickupAddress(emptyAddress())
     }
@@ -280,6 +301,13 @@ export default function NewCustomerTowRequestPage() {
         })
         clearFieldError('dropoffAddress')
       }
+      setForm((prev) => ({
+        ...prev,
+        dropoffContactName: '',
+        dropoffContactPhone: '',
+      }))
+      clearFieldError('dropoffContactName')
+      clearFieldError('dropoffContactPhone')
     } else {
       setDropoffAddress(emptyAddress())
     }
@@ -328,6 +356,12 @@ export default function NewCustomerTowRequestPage() {
     handlePickupFromStorageChange(true)
   }
 
+  /** Non-storage address present → show contacts; empty or yard → hide. */
+  const showPickupContacts =
+    !pickupFromStorage && pickupAddress.address.trim().length > 0
+  const showDropoffContacts =
+    !dropoffToStorage && dropoffAddress.address.trim().length > 0
+
   const validate = (): boolean => {
     const errors: Partial<Record<FieldErrorKey, string>> = {}
     for (const key of requiredFields) {
@@ -351,6 +385,22 @@ export default function NewCustomerTowRequestPage() {
     }
     if (!dropoffAddress.address.trim()) {
       errors.dropoffAddress = `${fieldLabels.dropoffAddress} הוא שדה חובה`
+    }
+    if (showPickupContacts) {
+      if (!form.pickupContactName.trim()) {
+        errors.pickupContactName = `${fieldLabels.pickupContactName} הוא שדה חובה`
+      }
+      if (!form.pickupContactPhone.trim()) {
+        errors.pickupContactPhone = `${fieldLabels.pickupContactPhone} הוא שדה חובה`
+      }
+    }
+    if (showDropoffContacts) {
+      if (!form.dropoffContactName.trim()) {
+        errors.dropoffContactName = `${fieldLabels.dropoffContactName} הוא שדה חובה`
+      }
+      if (!form.dropoffContactPhone.trim()) {
+        errors.dropoffContactPhone = `${fieldLabels.dropoffContactPhone} הוא שדה חובה`
+      }
     }
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
@@ -423,8 +473,8 @@ export default function NewCustomerTowRequestPage() {
             address: pickupAddress.address.trim(),
             lat: pickupAddress.lat ?? null,
             lng: pickupAddress.lng ?? null,
-            contactName: form.pickupContactName.trim(),
-            contactPhone: form.pickupContactPhone.trim(),
+            contactName: showPickupContacts ? form.pickupContactName.trim() : '',
+            contactPhone: showPickupContacts ? form.pickupContactPhone.trim() : '',
             isStorage: pickupFromStorage,
           },
           {
@@ -433,8 +483,8 @@ export default function NewCustomerTowRequestPage() {
             address: dropoffAddress.address.trim(),
             lat: dropoffAddress.lat ?? null,
             lng: dropoffAddress.lng ?? null,
-            contactName: form.dropoffContactName.trim(),
-            contactPhone: form.dropoffContactPhone.trim(),
+            contactName: showDropoffContacts ? form.dropoffContactName.trim() : '',
+            contactPhone: showDropoffContacts ? form.dropoffContactPhone.trim() : '',
             isStorage: dropoffToStorage,
           },
         ],
@@ -459,7 +509,7 @@ export default function NewCustomerTowRequestPage() {
 
   if (!canSubmit) {
     return (
-      <div className="max-w-lg mx-auto bg-white rounded-xl border border-gt-border shadow-sm p-8 text-center">
+      <div className={PORTAL_STATUS_CARD_CLASS}>
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
         <h1 className="text-lg font-bold text-gt-text-primary mb-2">הזמנת גרירה</h1>
         <p className="text-gt-text-secondary">
@@ -477,7 +527,7 @@ export default function NewCustomerTowRequestPage() {
 
   if (success) {
     return (
-      <div className="max-w-lg mx-auto bg-white rounded-xl border border-gt-border shadow-sm p-8 text-center">
+      <div className={PORTAL_STATUS_CARD_CLASS}>
         <CheckCircle2 className="w-12 h-12 text-gt-success mx-auto mb-4" />
         <h1 className="text-lg font-bold text-gt-text-primary mb-2">הבקשה נשלחה</h1>
         <p className="text-gt-text-secondary mb-6">בקשת הגרירה נקלטה וממתינה לטיפול.</p>
@@ -492,432 +542,509 @@ export default function NewCustomerTowRequestPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 space-y-3" dir="rtl">
-      <div className="mb-1">
-        <h1 className="text-xl font-bold text-gt-text-primary">הזמנת גרירה</h1>
-        <p className="text-sm text-gt-text-tertiary mt-1">
+    <div className={PORTAL_PAGE_SHELL_CLASS} dir="rtl">
+      <PortalRequestPageHeader>
+        <h1 className={PORTAL_PAGE_TITLE_CLASS}>הזמנת גרירה</h1>
+        <p className={PORTAL_PAGE_SUBTITLE_CLASS}>
           מילוי פרטי בקשת גרירה פשוטה (רכב אחד, מוצא ליעד)
         </p>
-      </div>
+      </PortalRequestPageHeader>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-3 items-stretch">
-          <div className="lg:col-span-3 min-w-0 flex flex-col">
-        <FormCard icon={ClipboardList} title="פרטי הזמנה" className="mb-0 h-full">
-          <div className="space-y-3">
-              <FormField
-                label={fieldLabels.customerOrderNumber}
-                required
-                error={fieldErrors.customerOrderNumber}
-              >
-                <Input
-                  type="text"
-                  value={form.customerOrderNumber}
-                  onChange={(e) => updateField('customerOrderNumber', e.target.value)}
-                  hasError={!!fieldErrors.customerOrderNumber}
-                />
-              </FormField>
+      <form onSubmit={handleSubmit} className={PORTAL_FORM_STACK_CLASS}>
+        {/*
+          RTL 3-column row (right → left):
+          1 פרטי הזמנה | 2 פרטי רכב | 3 מוצא ויעד
+        */}
+        <div
+          className={`grid grid-cols-1 lg:grid-cols-12 ${PORTAL_GRID_GAP_CLASS} items-start`}
+        >
+          <div className="lg:col-span-4 min-w-0">
+            <FormCard
+              icon={ClipboardList}
+              title="פרטי הזמנה"
+              step={1}
+              density="compact"
+              className="mb-0"
+            >
+              <div className="grid grid-cols-1 gap-y-2">
+                <FormField
+                  required
+                  error={fieldErrors.customerOrderNumber}
+                >
+                  <Input
+                    type="text"
+                    value={form.customerOrderNumber}
+                    onChange={(e) => updateField('customerOrderNumber', e.target.value)}
+                    placeholder={fieldLabels.customerOrderNumber}
+                    hasError={!!fieldErrors.customerOrderNumber}
+                  />
+                </FormField>
 
-              <FormField label={fieldLabels.scheduledAt} required error={fieldErrors.scheduledAt}>
-                <div className="flex flex-col gap-2">
-                  <div className="grid grid-cols-2 gap-2">
+                <FormField
+                  label={fieldLabels.scheduledAt}
+                  required
+                  error={fieldErrors.scheduledAt}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <div className={PORTAL_SEGMENT_WRAP_CLASS}>
+                      <button
+                        type="button"
+                        aria-pressed={!useCustomTime}
+                        onClick={() => {
+                          handleNowClick()
+                          setUseCustomTime(false)
+                        }}
+                        className={
+                          !useCustomTime
+                            ? PORTAL_SEGMENT_ACTIVE_CLASS
+                            : PORTAL_SEGMENT_INACTIVE_CLASS
+                        }
+                      >
+                        עכשיו
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={useCustomTime}
+                        onClick={() => setUseCustomTime(true)}
+                        className={
+                          useCustomTime
+                            ? PORTAL_SEGMENT_ACTIVE_CLASS
+                            : PORTAL_SEGMENT_INACTIVE_CLASS
+                        }
+                      >
+                        מועד אחר
+                      </button>
+                    </div>
+                    {useCustomTime && (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <DateInput
+                          value={towDate}
+                          onChange={(v) => {
+                            setTowDate(v)
+                            clearFieldError('scheduledAt')
+                          }}
+                          narrowColumn
+                          hasError={!!fieldErrors.scheduledAt}
+                          className="w-full"
+                        />
+                        <TimeInput
+                          value={towTime}
+                          onChange={(v) => {
+                            setTowTime(v)
+                            clearFieldError('scheduledAt')
+                          }}
+                          narrowColumn
+                          hasError={!!fieldErrors.scheduledAt}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </FormField>
+
+                <FormField required error={fieldErrors.department}>
+                  <Input
+                    type="text"
+                    value={form.department}
+                    onChange={(e) => updateField('department', e.target.value)}
+                    placeholder={fieldLabels.department}
+                    hasError={!!fieldErrors.department}
+                  />
+                </FormField>
+
+                <FormField required error={fieldErrors.orderer}>
+                  <Input
+                    type="text"
+                    value={form.orderer}
+                    onChange={(e) => updateField('orderer', e.target.value)}
+                    placeholder={fieldLabels.orderer}
+                    hasError={!!fieldErrors.orderer}
+                  />
+                </FormField>
+
+                <FormField required error={fieldErrors.ordererPhone}>
+                  <PhoneInput
+                    value={form.ordererPhone}
+                    onChange={(phone) => updateField('ordererPhone', phone)}
+                    placeholder={fieldLabels.ordererPhone}
+                  />
+                </FormField>
+
+                <FormField optional>
+                  <textarea
+                    value={form.notes}
+                    onChange={(e) => updateField('notes', e.target.value)}
+                    rows={3}
+                    placeholder="הערות — האם הרכב בחניון? חילוץ?"
+                    className={PORTAL_TEXTAREA_CLASS}
+                    aria-label={fieldLabels.notes}
+                  />
+                </FormField>
+              </div>
+            </FormCard>
+          </div>
+
+          <div className="lg:col-span-3 min-w-0">
+            <FormCard
+              icon={Truck}
+              title="פרטי רכב"
+              step={2}
+              density="compact"
+              className="mb-0"
+            >
+              <div className="space-y-2.5">
+                {selectedStoredVehicle && (
+                  <div className={PORTAL_STORAGE_BANNER_CLASS}>
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-xs font-medium text-gt-brand-text">נבחר מאחסנה</p>
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-medium text-gt-text-primary">
+                          {selectedStoredVehicle.plate_number}
+                        </span>
+                        {selectedStoredMakeModel && (
+                          <span className="text-xs text-gt-text-tertiary">
+                            {selectedStoredMakeModel}
+                          </span>
+                        )}
+                        <span
+                          className={
+                            selectedStoredVehicle.vehicle_condition === 'faulty'
+                              ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700'
+                              : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700'
+                          }
+                        >
+                          {selectedStoredVehicle.vehicle_condition === 'faulty'
+                            ? 'תקול'
+                            : 'תקין'}
+                        </span>
+                      </div>
+                      <TimeInStoragePill lastStoredAt={selectedStoredVehicle.last_stored_at} />
+                    </div>
                     <button
                       type="button"
-                      aria-pressed={!useCustomTime}
-                      onClick={() => {
-                        handleNowClick()
-                        setUseCustomTime(false)
-                      }}
-                      className={
-                        !useCustomTime
-                          ? 'min-h-[36px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
-                          : 'min-h-[36px] rounded-lg border text-sm font-medium transition-colors bg-white text-gt-text-secondary border-gt-border hover:bg-gt-surface-hover'
-                      }
+                      onClick={clearStoredVehicleSelection}
+                      className="mt-1.5 text-xs text-gt-brand-text hover:text-gt-brand underline"
                     >
-                      עכשיו
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={useCustomTime}
-                      onClick={() => setUseCustomTime(true)}
-                      className={
-                        useCustomTime
-                          ? 'min-h-[36px] rounded-lg border text-sm font-medium transition-colors bg-gt-brand text-white border-gt-brand'
-                          : 'min-h-[36px] rounded-lg border text-sm font-medium transition-colors bg-white text-gt-text-secondary border-gt-border hover:bg-gt-surface-hover'
-                      }
-                    >
-                      מועד אחר
+                      נקה בחירה והזן ידנית
                     </button>
                   </div>
-                  {useCustomTime && (
-                    <div className="flex flex-col gap-2">
-                      <DateInput
-                        value={towDate}
-                        onChange={(v) => {
-                          setTowDate(v)
-                          clearFieldError('scheduledAt')
+                )}
+
+                <SelectorModalShell
+                  open={storageModalOpen}
+                  onClose={closeStorageModal}
+                  title="בחר רכב מאחסנה"
+                  panelClassName="max-w-lg"
+                >
+                  <div className="space-y-3 p-4" dir="rtl">
+                    <input
+                      type="search"
+                      value={storageSearch}
+                      onChange={(e) => setStorageSearch(e.target.value)}
+                      placeholder="חיפוש לפי מספר רכב או דגם"
+                      className="w-full rounded-lg border border-gt-border-field bg-white px-3 py-2.5 text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20"
+                      autoFocus
+                    />
+                    <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                      {filteredStoredVehicles.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-gt-text-tertiary">
+                          לא נמצאו רכבים תואמים
+                        </p>
+                      ) : (
+                        filteredStoredVehicles.map((vehicle) => {
+                          const isReserved = vehicle.current_status === 'reserved_for_tow'
+                          const isFaulty = vehicle.vehicle_condition === 'faulty'
+                          const makeModel = [
+                            vehicle.vehicle_data?.manufacturer,
+                            vehicle.vehicle_data?.model,
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+
+                          return (
+                            <button
+                              key={vehicle.id}
+                              type="button"
+                              disabled={isReserved}
+                              onClick={() => {
+                                handleSelectStoredVehicle(vehicle)
+                                closeStorageModal()
+                              }}
+                              className={
+                                isReserved
+                                  ? 'flex w-full flex-col items-start gap-1 rounded-xl bg-gt-surface-subtle/80 px-3 py-2.5 text-right text-sm text-gt-text-tertiary cursor-not-allowed opacity-70'
+                                  : 'flex w-full flex-col items-start gap-1 rounded-xl bg-white px-3 py-2.5 text-right text-sm transition-colors hover:bg-gt-surface-hover shadow-[var(--gt-shadow-xs)]'
+                              }
+                            >
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="font-medium text-gt-text-primary">
+                                  {vehicle.plate_number}
+                                </span>
+                                {makeModel && (
+                                  <span className="text-xs text-gt-text-tertiary">
+                                    {makeModel}
+                                  </span>
+                                )}
+                                <span
+                                  className={
+                                    isFaulty
+                                      ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700'
+                                      : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700'
+                                  }
+                                >
+                                  {isFaulty ? 'תקול' : 'תקין'}
+                                </span>
+                              </span>
+                              <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
+                              {isReserved && (
+                                <span className="text-xs text-amber-700">ממתין לגרירה</span>
+                              )}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                </SelectorModalShell>
+
+                <FormField required error={fieldErrors.plateNumber}>
+                  <VehicleLookup
+                    narrowColumn
+                    hideLabel
+                    showVehicleCode
+                    vehicleCode={vehicleCode}
+                    onVehicleCodeChange={setVehicleCode}
+                    manualEntryStyle="button"
+                    manualEntryPlacement="withPlate"
+                    manualEntryTrailing={
+                      !storageLoading && storedVehicles.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setStorageModalOpen(true)}
+                          title="בחר רכב מאחסנה"
+                          className={PORTAL_STORAGE_BUTTON_CLASS}
+                        >
+                          <Package size={13} className="shrink-0" strokeWidth={1.75} />
+                          מאחסנה
+                        </button>
+                      ) : null
+                    }
+                    manualEntryEnd={
+                      <DefectSelector
+                        variant="triggerOnly"
+                        triggerLabel="בחר תקלות"
+                        label="תקלות"
+                        triggerClassName={PORTAL_DEFECTS_TRIGGER_CLASS}
+                        selectedDefects={selectedDefects}
+                        onChange={(d) => {
+                          setSelectedDefects(d)
+                          if (d.length > 0) {
+                            setIsWorking(false)
+                          } else if (
+                            selectedStoredVehicleId &&
+                            storedVehicles.find((v) => v.id === selectedStoredVehicleId)
+                              ?.vehicle_condition === 'operational'
+                          ) {
+                            setIsWorking(true)
+                          }
+                          clearFieldError('defects')
                         }}
-                        narrowColumn
-                        hasError={!!fieldErrors.scheduledAt}
-                        className="w-full"
                       />
-                      <TimeInput
-                        value={towTime}
-                        onChange={(v) => {
-                          setTowTime(v)
-                          clearFieldError('scheduledAt')
-                        }}
-                        narrowColumn
-                        hasError={!!fieldErrors.scheduledAt}
-                        className="w-full"
-                      />
+                    }
+                    plateNumber={plateNumber}
+                    onPlateChange={(plate) => {
+                      setPlateNumber(plate)
+                      clearFieldError('plateNumber')
+                      if (selectedStoredVehicleId) {
+                        const selected = storedVehicles.find(
+                          (v) => v.id === selectedStoredVehicleId
+                        )
+                        if (!selected || selected.plate_number !== plate) {
+                          setSelectedStoredVehicleId(null)
+                          if (pickupFromStorage) {
+                            handlePickupFromStorageChange(false)
+                          }
+                          setIsWorking(false)
+                        }
+                      }
+                    }}
+                    vehicleData={vehicleData}
+                    onVehicleDataChange={setVehicleData}
+                    vehicleType={vehicleType}
+                    onVehicleTypeChange={setVehicleType}
+                    vehicleLookupNotFound={vehicleLookupNotFound}
+                    onVehicleLookupNotFoundChange={setVehicleLookupNotFound}
+                    manualManufacturer={manualManufacturer}
+                    onManualManufacturerChange={setManualManufacturer}
+                    manualColor={manualColor}
+                    onManualColorChange={setManualColor}
+                  />
+                </FormField>
+                {fieldErrors.defects && (
+                  <p className="text-[11px] text-gt-danger">{fieldErrors.defects}</p>
+                )}
+              </div>
+            </FormCard>
+          </div>
+
+          <div className="lg:col-span-5 min-w-0">
+            <FormCard
+              icon={MapPin}
+              title="מוצא ויעד"
+              step={3}
+              density="compact"
+              className="mb-0"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5 min-w-0">
+                  <h4 className={PORTAL_SECTION_LABEL_CLASS}>מוצא</h4>
+                  <FormField
+                    required
+                    error={fieldErrors.pickupAddress}
+                    className="w-full min-w-0"
+                  >
+                    <AddressInput
+                      hideLabel
+                      className="w-full"
+                      value={pickupAddress}
+                      onChange={(data: AddressData) => {
+                        setPickupAddress(data)
+                        clearFieldError('pickupAddress')
+                        if (!data.address.trim()) {
+                          setForm((prev) => ({
+                            ...prev,
+                            pickupContactName: '',
+                            pickupContactPhone: '',
+                          }))
+                          clearFieldError('pickupContactName')
+                          clearFieldError('pickupContactPhone')
+                          if (pickupFromStorage) {
+                            handlePickupFromStorageChange(false)
+                          }
+                        }
+                      }}
+                      placeholder="כתובת מוצא"
+                      required
+                      narrowColumn
+                      onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'pickup' })}
+                    />
+                  </FormField>
+                  {showPickupContacts && (
+                    <div className="space-y-1.5">
+                      <FormField
+                        required
+                        error={fieldErrors.pickupContactName}
+                      >
+                        <Input
+                          type="text"
+                          value={form.pickupContactName}
+                          onChange={(e) => updateField('pickupContactName', e.target.value)}
+                          placeholder="שם איש קשר"
+                          hasError={!!fieldErrors.pickupContactName}
+                        />
+                      </FormField>
+                      <FormField
+                        required
+                        error={fieldErrors.pickupContactPhone}
+                      >
+                        <PhoneInput
+                          value={form.pickupContactPhone}
+                          onChange={(phone) => updateField('pickupContactPhone', phone)}
+                          placeholder="טלפון"
+                        />
+                      </FormField>
                     </div>
                   )}
                 </div>
-              </FormField>
 
-              <FormField label={fieldLabels.department} required error={fieldErrors.department}>
-                <Input
-                  type="text"
-                  value={form.department}
-                  onChange={(e) => updateField('department', e.target.value)}
-                  hasError={!!fieldErrors.department}
-                />
-              </FormField>
-
-              <FormField label={fieldLabels.orderer} required error={fieldErrors.orderer}>
-                <Input
-                  type="text"
-                  value={form.orderer}
-                  onChange={(e) => updateField('orderer', e.target.value)}
-                  hasError={!!fieldErrors.orderer}
-                />
-              </FormField>
-
-              <FormField label={fieldLabels.ordererPhone} required error={fieldErrors.ordererPhone}>
-                <PhoneInput
-                  value={form.ordererPhone}
-                  onChange={(phone) => updateField('ordererPhone', phone)}
-                />
-              </FormField>
-          </div>
-        </FormCard>
-          </div>
-
-          <div className="lg:col-span-3 min-w-0 flex flex-col gap-3">
-        <FormCard icon={Truck} title="פרטי רכב" className="mb-0 h-full flex-1">
-          <div className="space-y-3">
-            {selectedStoredVehicle && (
-              <div className="rounded-lg border border-gt-brand bg-gt-brand-subtle px-3 py-2">
-                <div className="min-w-0 space-y-1">
-                  <p className="text-xs font-medium text-gt-brand-text">נבחר מאחסנה</p>
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-medium text-gt-text-primary">
-                      {selectedStoredVehicle.plate_number}
-                    </span>
-                    {selectedStoredMakeModel && (
-                      <span className="text-xs text-gt-text-tertiary">{selectedStoredMakeModel}</span>
-                    )}
-                    <span
-                      className={
-                        selectedStoredVehicle.vehicle_condition === 'faulty'
-                          ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700'
-                          : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700'
-                      }
-                    >
-                      {selectedStoredVehicle.vehicle_condition === 'faulty' ? 'תקול' : 'תקין'}
-                    </span>
-                  </div>
-                  <TimeInStoragePill lastStoredAt={selectedStoredVehicle.last_stored_at} />
-                </div>
-                <button
-                  type="button"
-                  onClick={clearStoredVehicleSelection}
-                  className="mt-1.5 text-sm text-gt-brand-text hover:text-gt-brand underline"
-                >
-                  נקה בחירה והזן ידנית
-                </button>
-              </div>
-            )}
-
-            <SelectorModalShell
-              open={storageModalOpen}
-              onClose={closeStorageModal}
-              title="בחר רכב מאחסנה"
-              panelClassName="max-w-lg"
-            >
-              <div className="space-y-3 p-4" dir="rtl">
-                <input
-                  type="search"
-                  value={storageSearch}
-                  onChange={(e) => setStorageSearch(e.target.value)}
-                  placeholder="חיפוש לפי מספר רכב או דגם"
-                  className="w-full rounded-xl border border-gt-border bg-white px-3 py-2.5 text-sm text-gt-text-primary placeholder:text-gt-text-tertiary focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15"
-                  autoFocus
-                />
-                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-                  {filteredStoredVehicles.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-gt-text-tertiary">
-                      לא נמצאו רכבים תואמים
-                    </p>
-                  ) : (
-                    filteredStoredVehicles.map((vehicle) => {
-                      const isReserved = vehicle.current_status === 'reserved_for_tow'
-                      const isFaulty = vehicle.vehicle_condition === 'faulty'
-                      const makeModel = [
-                        vehicle.vehicle_data?.manufacturer,
-                        vehicle.vehicle_data?.model,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
-
-                      return (
-                        <button
-                          key={vehicle.id}
-                          type="button"
-                          disabled={isReserved}
-                          onClick={() => {
-                            handleSelectStoredVehicle(vehicle)
-                            closeStorageModal()
-                          }}
-                          className={
-                            isReserved
-                              ? 'flex w-full flex-col items-start gap-1 rounded-xl border border-gt-border bg-gt-surface-subtle px-3 py-2.5 text-right text-sm text-gt-text-tertiary cursor-not-allowed opacity-70'
-                              : 'flex w-full flex-col items-start gap-1 rounded-xl border border-gt-border bg-white px-3 py-2.5 text-right text-sm transition-colors hover:border-gt-brand hover:bg-gt-surface-hover'
+                <div className="space-y-1.5 min-w-0">
+                  <h4 className={PORTAL_SECTION_LABEL_CLASS}>יעד</h4>
+                  <FormField
+                    required
+                    error={fieldErrors.dropoffAddress}
+                    className="w-full min-w-0"
+                  >
+                    <AddressInput
+                      hideLabel
+                      className="w-full"
+                      value={dropoffAddress}
+                      onChange={(data: AddressData) => {
+                        setDropoffAddress(data)
+                        clearFieldError('dropoffAddress')
+                        if (!data.address.trim()) {
+                          setForm((prev) => ({
+                            ...prev,
+                            dropoffContactName: '',
+                            dropoffContactPhone: '',
+                          }))
+                          clearFieldError('dropoffContactName')
+                          clearFieldError('dropoffContactPhone')
+                          if (dropoffToStorage) {
+                            handleDropoffToStorageChange(false)
                           }
-                        >
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-gt-text-primary">
-                              {vehicle.plate_number}
-                            </span>
-                            {makeModel && (
-                              <span className="text-xs text-gt-text-tertiary">{makeModel}</span>
-                            )}
-                            <span
-                              className={
-                                isFaulty
-                                  ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700'
-                                  : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700'
-                              }
-                            >
-                              {isFaulty ? 'תקול' : 'תקין'}
-                            </span>
-                          </span>
-                          <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
-                          {isReserved && (
-                            <span className="text-xs text-amber-700">ממתין לגרירה</span>
-                          )}
-                        </button>
-                      )
-                    })
+                        }
+                      }}
+                      placeholder="כתובת יעד"
+                      required
+                      narrowColumn
+                      onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'dropoff' })}
+                    />
+                  </FormField>
+                  {showDropoffContacts && (
+                    <div className="space-y-1.5">
+                      <FormField
+                        required
+                        error={fieldErrors.dropoffContactName}
+                      >
+                        <Input
+                          type="text"
+                          value={form.dropoffContactName}
+                          onChange={(e) => updateField('dropoffContactName', e.target.value)}
+                          placeholder="שם איש קשר"
+                          hasError={!!fieldErrors.dropoffContactName}
+                        />
+                      </FormField>
+                      <FormField
+                        required
+                        error={fieldErrors.dropoffContactPhone}
+                      >
+                        <PhoneInput
+                          value={form.dropoffContactPhone}
+                          onChange={(phone) => updateField('dropoffContactPhone', phone)}
+                          placeholder="טלפון"
+                        />
+                      </FormField>
+                    </div>
                   )}
                 </div>
               </div>
-            </SelectorModalShell>
-
-            <FormField label={fieldLabels.plateNumber} required error={fieldErrors.plateNumber}>
-              <VehicleLookup
-                narrowColumn
-                showVehicleCode
-                vehicleCode={vehicleCode}
-                onVehicleCodeChange={setVehicleCode}
-                manualEntryStyle="button"
-                manualEntryPlacement="afterSummary"
-                manualEntryTrailing={
-                  !storageLoading && storedVehicles.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => setStorageModalOpen(true)}
-                      title="בחר רכב מאחסנה"
-                      className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gray-200 text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
-                    >
-                      <Package size={14} className="shrink-0" />
-                      מאחסנה
-                    </button>
-                  ) : null
-                }
-                plateNumber={plateNumber}
-                onPlateChange={(plate) => {
-                  setPlateNumber(plate)
-                  clearFieldError('plateNumber')
-                  if (selectedStoredVehicleId) {
-                    const selected = storedVehicles.find((v) => v.id === selectedStoredVehicleId)
-                    if (!selected || selected.plate_number !== plate) {
-                      setSelectedStoredVehicleId(null)
-                      if (pickupFromStorage) {
-                        handlePickupFromStorageChange(false)
-                      }
-                      setIsWorking(false)
-                    }
-                  }
-                }}
-                vehicleData={vehicleData}
-                onVehicleDataChange={setVehicleData}
-                vehicleType={vehicleType}
-                onVehicleTypeChange={setVehicleType}
-                vehicleLookupNotFound={vehicleLookupNotFound}
-                onVehicleLookupNotFoundChange={setVehicleLookupNotFound}
-                manualManufacturer={manualManufacturer}
-                onManualManufacturerChange={setManualManufacturer}
-                manualColor={manualColor}
-                onManualColorChange={setManualColor}
-              />
-            </FormField>
-
-            <FormField required={!isWorking} error={fieldErrors.defects}>
-              <DefectSelector
-                variant="triggerOnly"
-                triggerLabel="בחר תקלות"
-                label="תקלות"
-                selectedDefects={selectedDefects}
-                onChange={(d) => {
-                  setSelectedDefects(d)
-                  if (d.length > 0) {
-                    setIsWorking(false)
-                  } else if (
-                    selectedStoredVehicleId &&
-                    storedVehicles.find((v) => v.id === selectedStoredVehicleId)
-                      ?.vehicle_condition === 'operational'
-                  ) {
-                    setIsWorking(true)
-                  }
-                  clearFieldError('defects')
-                }}
-              />
-            </FormField>
-          </div>
-        </FormCard>
-
-        <FormCard icon={MessageSquareText} title="הערות" className="mb-0 shrink-0">
-          <FormField label={`${fieldLabels.notes} (אופציונלי)`}>
-            <textarea
-              value={form.notes}
-              onChange={(e) => updateField('notes', e.target.value)}
-              rows={3}
-              placeholder="האם הרכב בחניון? האם יש צורך בחילוץ? פרטים נוספים שיעזרו לנו..."
-              className={textareaClassName}
-            />
-          </FormField>
-        </FormCard>
-          </div>
-
-          <div className="lg:col-span-6 min-w-0 flex flex-col">
-        <FormCard icon={MapPin} title="מוצא ויעד" className="mb-0 h-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="space-y-3 min-w-0">
-              <h4 className="text-xs font-semibold text-gt-text-secondary">מוצא</h4>
-              <FormField
-                label={fieldLabels.pickupAddress}
-                required
-                error={fieldErrors.pickupAddress}
-                className="w-full min-w-0"
-              >
-                <AddressInput
-                  hideLabel
-                  className="w-full"
-                  value={pickupAddress}
-                  onChange={(data: AddressData) => {
-                    setPickupAddress(data)
-                    clearFieldError('pickupAddress')
-                  }}
-                  placeholder="הזן כתובת מוצא..."
-                  required
-                  narrowColumn
-                  onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'pickup' })}
-                />
-              </FormField>
-              <FormField
-                label={fieldLabels.pickupContactName}
-                required
-                error={fieldErrors.pickupContactName}
-              >
-                <Input
-                  type="text"
-                  value={form.pickupContactName}
-                  onChange={(e) => updateField('pickupContactName', e.target.value)}
-                  hasError={!!fieldErrors.pickupContactName}
-                />
-              </FormField>
-              <FormField
-                label={fieldLabels.pickupContactPhone}
-                required
-                error={fieldErrors.pickupContactPhone}
-              >
-                <PhoneInput
-                  value={form.pickupContactPhone}
-                  onChange={(phone) => updateField('pickupContactPhone', phone)}
-                />
-              </FormField>
-            </div>
-
-            <div className="space-y-3 min-w-0 border-t border-gt-border-subtle pt-3 lg:border-t-0 lg:pt-0">
-              <h4 className="text-xs font-semibold text-gt-text-secondary">יעד</h4>
-              <FormField
-                label={fieldLabels.dropoffAddress}
-                required
-                error={fieldErrors.dropoffAddress}
-                className="w-full min-w-0"
-              >
-                <AddressInput
-                  hideLabel
-                  className="w-full"
-                  value={dropoffAddress}
-                  onChange={(data: AddressData) => {
-                    setDropoffAddress(data)
-                    clearFieldError('dropoffAddress')
-                  }}
-                  placeholder="הזן כתובת יעד..."
-                  required
-                  narrowColumn
-                  onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'dropoff' })}
-                />
-              </FormField>
-              <FormField
-                label={fieldLabels.dropoffContactName}
-                required
-                error={fieldErrors.dropoffContactName}
-              >
-                <Input
-                  type="text"
-                  value={form.dropoffContactName}
-                  onChange={(e) => updateField('dropoffContactName', e.target.value)}
-                  hasError={!!fieldErrors.dropoffContactName}
-                />
-              </FormField>
-              <FormField
-                label={fieldLabels.dropoffContactPhone}
-                required
-                error={fieldErrors.dropoffContactPhone}
-              >
-                <PhoneInput
-                  value={form.dropoffContactPhone}
-                  onChange={(phone) => updateField('dropoffContactPhone', phone)}
-                />
-              </FormField>
-            </div>
-          </div>
-        </FormCard>
+            </FormCard>
           </div>
         </div>
 
         {submitError && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-gt-danger-subtle border border-gt-danger/20 text-sm text-gt-danger">
-            <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <div className={PORTAL_ERROR_BANNER_CLASS}>
+            <AlertCircle size={18} className="flex-shrink-0 mt-0.5" strokeWidth={1.75} />
             <span>{submitError}</span>
           </div>
         )}
 
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3 pt-1">
-          <Link
-            href="/customer"
-            className="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg border bg-transparent text-gt-text-secondary border-transparent hover:bg-gt-surface-hover px-5 py-2.5 text-sm transition-all duration-150"
-          >
-            ביטול
-          </Link>
-          <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-            {submitting && <Loader2 size={16} className="animate-spin" />}
-            שליחת בקשה
-          </Button>
+        <div className={PORTAL_FORM_FOOTER_CLASS}>
+          <div className={PORTAL_FORM_FOOTER_INNER_CLASS}>
+            <Link href="/customer" className={PORTAL_CANCEL_LINK_CLASS}>
+              ביטול
+            </Link>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              disabled={submitting}
+              className={PORTAL_SUBMIT_CLASS}
+            >
+              {submitting && <Loader2 size={18} className="animate-spin" />}
+              שליחת בקשה
+            </Button>
+          </div>
         </div>
       </form>
 

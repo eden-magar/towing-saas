@@ -5,6 +5,28 @@ import Link from 'next/link'
 import { type CustomerPortalStoredVehicle } from '@/app/lib/queries/customer-portal'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
+import { PortalRequestPageHeader } from '@/app/components/customer-portal/PortalRequestPageHeader'
+import {
+  PORTAL_CANCEL_LINK_CLASS,
+  PORTAL_COLUMN_CARD_CLASS,
+  PORTAL_DEFECTS_TRIGGER_CLASS,
+  PORTAL_ERROR_BANNER_CLASS,
+  PORTAL_FORM_FOOTER_CLASS,
+  PORTAL_FORM_FOOTER_INNER_CLASS,
+  PORTAL_FORM_STACK_CLASS,
+  PORTAL_GRID_GAP_CLASS,
+  PORTAL_PAGE_SHELL_CLASS,
+  PORTAL_PAGE_SUBTITLE_CLASS,
+  PORTAL_PAGE_TITLE_CLASS,
+  PORTAL_SECTION_LABEL_CLASS,
+  PORTAL_SEGMENT_ACTIVE_CLASS,
+  PORTAL_SEGMENT_INACTIVE_CLASS,
+  PORTAL_SEGMENT_WRAP_CLASS,
+  PORTAL_STATUS_CARD_CLASS,
+  PORTAL_STORAGE_BUTTON_CLASS,
+  PORTAL_SUBMIT_CLASS,
+  PORTAL_TEXTAREA_CLASS,
+} from '@/app/components/customer-portal/portalRequestActionStyles'
 import { StorageVehiclePickerModal } from '@/app/components/storage/StorageVehiclePickerModal'
 import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
 import {
@@ -30,7 +52,6 @@ import {
   ClipboardList,
   Loader2,
   MapPin,
-  MessageSquareText,
   Package,
   Truck,
 } from 'lucide-react'
@@ -142,21 +163,21 @@ const fieldLabels: Record<FieldErrorKey, string> = {
   orderer: 'מזמין',
   ordererPhone: 'טלפון מזמין',
   notes: 'הערות',
-  workingPlate: 'מספר רישוי (תקין)',
-  workingOrigin: 'מוצא רכב תקין',
-  workingOriginContactName: 'איש קשר מוצא (תקין)',
-  workingOriginContactPhone: 'טלפון מוצא (תקין)',
-  workingDestination: 'יעד רכב תקין',
-  workingDestinationContactName: 'איש קשר יעד (תקין)',
-  workingDestinationContactPhone: 'טלפון יעד (תקין)',
-  faultyPlate: 'מספר רישוי (תקול)',
+  workingPlate: 'מספר רישוי',
+  workingOrigin: 'כתובת',
+  workingOriginContactName: 'איש קשר',
+  workingOriginContactPhone: 'טלפון',
+  workingDestination: 'כתובת',
+  workingDestinationContactName: 'איש קשר',
+  workingDestinationContactPhone: 'טלפון',
+  faultyPlate: 'מספר רישוי',
   faultyDefects: 'תקלות',
-  faultyOrigin: 'מוצא רכב תקול',
-  faultyOriginContactName: 'איש קשר מוצא (תקול)',
-  faultyOriginContactPhone: 'טלפון מוצא (תקול)',
-  faultyDestination: 'יעד רכב תקול',
-  faultyDestinationContactName: 'איש קשר יעד (תקול)',
-  faultyDestinationContactPhone: 'טלפון יעד (תקול)',
+  faultyOrigin: 'כתובת',
+  faultyOriginContactName: 'איש קשר',
+  faultyOriginContactPhone: 'טלפון',
+  faultyDestination: 'כתובת',
+  faultyDestinationContactName: 'איש קשר',
+  faultyDestinationContactPhone: 'טלפון',
 }
 
 type PinField =
@@ -164,9 +185,6 @@ type PinField =
   | 'workingDestination'
   | 'faultyOrigin'
   | 'faultyDestination'
-
-const textareaClassName =
-  'w-full px-3 py-2 rounded-lg text-sm bg-white text-gt-text-primary border border-gt-border placeholder:text-gt-text-tertiary hover:border-gt-border-strong focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15 transition-colors duration-150 resize-none'
 
 function buildVehiclePayload(
   side: VehicleSide,
@@ -231,7 +249,6 @@ export default function NewCustomerExchangeRequestPage() {
   const [faulty, setFaulty] = useState<VehicleSide>(emptyVehicleSide)
   const [faultyDefects, setFaultyDefects] = useState<string[]>([])
 
-  const [workingFromStorage, setWorkingFromStorage] = useState(false)
   const [selectedWorkingStoredId, setSelectedWorkingStoredId] = useState<string | null>(null)
   const [faultyToStorage, setFaultyToStorage] = useState(false)
 
@@ -252,6 +269,8 @@ export default function NewCustomerExchangeRequestPage() {
   )
   const selectedWorkingStored =
     operationalStoredVehicles.find((v) => v.id === selectedWorkingStoredId) ?? null
+  /** Working origin is storage iff a yard vehicle was picked via מאחסנה. */
+  const workingFromStorage = selectedWorkingStoredId !== null
 
   const clearFieldError = (key: FieldErrorKey) => {
     if (fieldErrors[key]) {
@@ -292,25 +311,54 @@ export default function NewCustomerExchangeRequestPage() {
     clearFieldError('scheduledAt')
   }
 
-  const setWorkingOriginFromYard = (enabled: boolean) => {
-    setWorkingFromStorage(enabled)
-    if (enabled) {
-      patchWorking({ origin: applyYardToAddress() })
-      clearFieldError('workingOrigin')
-    } else {
-      patchWorking({ origin: emptyAddress() })
-    }
+  const applyWorkingOriginFromYard = () => {
+    patchWorking({
+      origin: applyYardToAddress(),
+      originContactName: '',
+      originContactPhone: '',
+    })
+    clearFieldError('workingOrigin')
+    clearFieldError('workingOriginContactName')
+    clearFieldError('workingOriginContactPhone')
+  }
+
+  const clearWorkingOriginYard = () => {
+    patchWorking({
+      origin: emptyAddress(),
+      originContactName: '',
+      originContactPhone: '',
+    })
+    clearFieldError('workingOriginContactName')
+    clearFieldError('workingOriginContactPhone')
   }
 
   const setFaultyDestinationToYard = (enabled: boolean) => {
     setFaultyToStorage(enabled)
     if (enabled) {
-      patchFaulty({ destination: applyYardToAddress() })
+      patchFaulty({
+        destination: applyYardToAddress(),
+        destinationContactName: '',
+        destinationContactPhone: '',
+      })
       clearFieldError('faultyDestination')
+      clearFieldError('faultyDestinationContactName')
+      clearFieldError('faultyDestinationContactPhone')
     } else {
-      patchFaulty({ destination: emptyAddress() })
+      patchFaulty({
+        destination: emptyAddress(),
+        destinationContactName: '',
+        destinationContactPhone: '',
+      })
+      clearFieldError('faultyDestinationContactName')
+      clearFieldError('faultyDestinationContactPhone')
     }
   }
+
+  /** Non-storage address present → show contacts; empty or yard → hide. */
+  const showWorkingOriginContacts =
+    !workingFromStorage && working.origin.address.trim().length > 0
+  const showFaultyDestinationContacts =
+    !faultyToStorage && faulty.destination.address.trim().length > 0
 
   const clearWorkingStoredSelection = () => {
     setSelectedWorkingStoredId(null)
@@ -323,7 +371,7 @@ export default function NewCustomerExchangeRequestPage() {
       manualManufacturer: '',
       manualColor: '',
     })
-    if (workingFromStorage) setWorkingOriginFromYard(false)
+    clearWorkingOriginYard()
     clearFieldError('workingPlate')
   }
 
@@ -342,7 +390,7 @@ export default function NewCustomerExchangeRequestPage() {
       vehicleType: lookup ? ((lookup.source as VehicleType) || 'private') : '',
     })
     clearFieldError('workingPlate')
-    setWorkingOriginFromYard(true)
+    applyWorkingOriginFromYard()
   }
 
   const handlePinDropConfirm = (data: AddressData) => {
@@ -397,8 +445,10 @@ export default function NewCustomerExchangeRequestPage() {
       errors.workingPlate = 'יש לבחור סוג רכב בהזנה ידנית'
     }
     require('workingOrigin', working.origin.address)
-    require('workingOriginContactName', working.originContactName)
-    require('workingOriginContactPhone', working.originContactPhone)
+    if (showWorkingOriginContacts) {
+      require('workingOriginContactName', working.originContactName)
+      require('workingOriginContactPhone', working.originContactPhone)
+    }
     require('workingDestination', working.destination.address)
     require('workingDestinationContactName', working.destinationContactName)
     require('workingDestinationContactPhone', working.destinationContactPhone)
@@ -414,8 +464,10 @@ export default function NewCustomerExchangeRequestPage() {
     require('faultyOriginContactName', faulty.originContactName)
     require('faultyOriginContactPhone', faulty.originContactPhone)
     require('faultyDestination', faulty.destination.address)
-    require('faultyDestinationContactName', faulty.destinationContactName)
-    require('faultyDestinationContactPhone', faulty.destinationContactPhone)
+    if (showFaultyDestinationContacts) {
+      require('faultyDestinationContactName', faulty.destinationContactName)
+      require('faultyDestinationContactPhone', faulty.destinationContactPhone)
+    }
 
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
@@ -462,8 +514,8 @@ export default function NewCustomerExchangeRequestPage() {
             address: working.origin.address.trim(),
             lat: working.origin.lat ?? null,
             lng: working.origin.lng ?? null,
-            contactName: working.originContactName.trim(),
-            contactPhone: working.originContactPhone.trim(),
+            contactName: showWorkingOriginContacts ? working.originContactName.trim() : '',
+            contactPhone: showWorkingOriginContacts ? working.originContactPhone.trim() : '',
             isStorage: workingFromStorage,
           },
           {
@@ -492,8 +544,12 @@ export default function NewCustomerExchangeRequestPage() {
             address: faulty.destination.address.trim(),
             lat: faulty.destination.lat ?? null,
             lng: faulty.destination.lng ?? null,
-            contactName: faulty.destinationContactName.trim(),
-            contactPhone: faulty.destinationContactPhone.trim(),
+            contactName: showFaultyDestinationContacts
+              ? faulty.destinationContactName.trim()
+              : '',
+            contactPhone: showFaultyDestinationContacts
+              ? faulty.destinationContactPhone.trim()
+              : '',
             isStorage: faultyToStorage,
           },
         ],
@@ -520,7 +576,7 @@ export default function NewCustomerExchangeRequestPage() {
 
   if (!canSubmit) {
     return (
-      <div className="max-w-lg mx-auto bg-white rounded-xl border border-gt-border shadow-sm p-8 text-center">
+      <div className={PORTAL_STATUS_CARD_CLASS}>
         <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
         <h1 className="text-lg font-bold text-gt-text-primary mb-2">תקין תקול</h1>
         <p className="text-gt-text-secondary">
@@ -538,7 +594,7 @@ export default function NewCustomerExchangeRequestPage() {
 
   if (success) {
     return (
-      <div className="max-w-lg mx-auto bg-white rounded-xl border border-gt-border shadow-sm p-8 text-center">
+      <div className={PORTAL_STATUS_CARD_CLASS}>
         <CheckCircle2 className="w-12 h-12 text-gt-success mx-auto mb-4" />
         <h1 className="text-lg font-bold text-gt-text-primary mb-2">הבקשה נשלחה</h1>
         <p className="text-gt-text-secondary mb-6">
@@ -554,159 +610,149 @@ export default function NewCustomerExchangeRequestPage() {
     )
   }
 
-  const renderRoutePair = (
+  const columnCardClass = PORTAL_COLUMN_CARD_CLASS
+
+  const columnBodyClass = 'space-y-2.5'
+
+  const sectionLabelClass = PORTAL_SECTION_LABEL_CLASS
+
+  const renderRouteStack = (
     state: VehicleSide,
     patch: (p: Partial<VehicleSide>) => void,
     opts: {
-      originKey: FieldErrorKey
-      originNameKey: FieldErrorKey
-      originPhoneKey: FieldErrorKey
-      destKey: FieldErrorKey
-      destNameKey: FieldErrorKey
-      destPhoneKey: FieldErrorKey
-      originPin: PinField
-      destPin: PinField
-      showOriginStorage?: boolean
-      showDestStorage?: boolean
+      kind: 'origin' | 'destination'
+      routeTitle: string
+      addressKey: FieldErrorKey
+      nameKey: FieldErrorKey
+      phoneKey: FieldErrorKey
+      pin: PinField
+      showContacts?: boolean
+      /** When true, clearing the address also clears contact name/phone. */
+      clearContactsWhenAddressEmpty?: boolean
+      storageToggle?: { label: string; checked: boolean; onChange: (v: boolean) => void }
     }
-  ) => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <div className="space-y-3 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="text-xs font-semibold text-gt-text-secondary">מוצא</h4>
-          {opts.showOriginStorage && (
-            <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-secondary cursor-pointer">
-              <input
-                type="checkbox"
-                checked={workingFromStorage}
-                onChange={(e) => setWorkingOriginFromYard(e.target.checked)}
-                className="rounded border-gt-border text-gt-brand focus:ring-gt-brand"
-              />
-              מאחסנה
-            </label>
-          )}
-        </div>
-        <FormField label={fieldLabels[opts.originKey]} required error={fieldErrors[opts.originKey]}>
-          <AddressInput
-            hideLabel
-            className="w-full"
-            value={state.origin}
-            onChange={(data: AddressData) => {
-              patch({ origin: data })
-              clearFieldError(opts.originKey)
-            }}
-            placeholder="הזן כתובת מוצא..."
-            required
-            narrowColumn
-            onPinDropClick={() => setPinDropModal({ isOpen: true, field: opts.originPin })}
-          />
-        </FormField>
-        <FormField
-          label={fieldLabels[opts.originNameKey]}
-          required
-          error={fieldErrors[opts.originNameKey]}
-        >
-          <Input
-            type="text"
-            value={state.originContactName}
-            onChange={(e) => {
-              patch({ originContactName: e.target.value })
-              clearFieldError(opts.originNameKey)
-            }}
-            hasError={!!fieldErrors[opts.originNameKey]}
-          />
-        </FormField>
-        <FormField
-          label={fieldLabels[opts.originPhoneKey]}
-          required
-          error={fieldErrors[opts.originPhoneKey]}
-        >
-          <PhoneInput
-            value={state.originContactPhone}
-            onChange={(phone) => {
-              patch({ originContactPhone: phone })
-              clearFieldError(opts.originPhoneKey)
-            }}
-          />
-        </FormField>
-      </div>
+  ) => {
+    const address = opts.kind === 'origin' ? state.origin : state.destination
+    const contactName =
+      opts.kind === 'origin' ? state.originContactName : state.destinationContactName
+    const contactPhone =
+      opts.kind === 'origin' ? state.originContactPhone : state.destinationContactPhone
+    const showContacts = opts.showContacts !== false
 
-      <div className="space-y-3 min-w-0 border-t border-gt-border-subtle pt-3 lg:border-t-0 lg:pt-0">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="text-xs font-semibold text-gt-text-secondary">יעד</h4>
-          {opts.showDestStorage && (
+    return (
+      <div className="space-y-1.5 min-w-0">
+        <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
+          <h4 className={`${sectionLabelClass} flex items-center gap-1.5`}>
+            <MapPin size={12} className="text-gt-text-tertiary shrink-0" strokeWidth={1.75} />
+            {opts.routeTitle}
+          </h4>
+          {opts.storageToggle && (
             <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-secondary cursor-pointer">
               <input
                 type="checkbox"
-                checked={faultyToStorage}
-                onChange={(e) => setFaultyDestinationToYard(e.target.checked)}
+                checked={opts.storageToggle.checked}
+                onChange={(e) => opts.storageToggle!.onChange(e.target.checked)}
                 className="rounded border-gt-border text-gt-brand focus:ring-gt-brand"
               />
-              לאחסנה
+              {opts.storageToggle.label}
             </label>
           )}
         </div>
-        <FormField label={fieldLabels[opts.destKey]} required error={fieldErrors[opts.destKey]}>
+        <FormField
+          required
+          error={fieldErrors[opts.addressKey]}
+          className="w-full min-w-0"
+        >
           <AddressInput
             hideLabel
             className="w-full"
-            value={state.destination}
+            value={address}
             onChange={(data: AddressData) => {
-              patch({ destination: data })
-              clearFieldError(opts.destKey)
+              const next: Partial<VehicleSide> =
+                opts.kind === 'origin' ? { origin: data } : { destination: data }
+              if (opts.clearContactsWhenAddressEmpty && !data.address.trim()) {
+                if (opts.kind === 'origin') {
+                  next.originContactName = ''
+                  next.originContactPhone = ''
+                } else {
+                  next.destinationContactName = ''
+                  next.destinationContactPhone = ''
+                }
+                clearFieldError(opts.nameKey)
+                clearFieldError(opts.phoneKey)
+              }
+              patch(next)
+              clearFieldError(opts.addressKey)
             }}
-            placeholder="הזן כתובת יעד..."
+            placeholder={
+              opts.kind === 'origin' ? 'כתובת מוצא' : 'כתובת יעד'
+            }
             required
             narrowColumn
-            onPinDropClick={() => setPinDropModal({ isOpen: true, field: opts.destPin })}
+            onPinDropClick={() => setPinDropModal({ isOpen: true, field: opts.pin })}
           />
         </FormField>
-        <FormField
-          label={fieldLabels[opts.destNameKey]}
-          required
-          error={fieldErrors[opts.destNameKey]}
-        >
-          <Input
-            type="text"
-            value={state.destinationContactName}
-            onChange={(e) => {
-              patch({ destinationContactName: e.target.value })
-              clearFieldError(opts.destNameKey)
-            }}
-            hasError={!!fieldErrors[opts.destNameKey]}
-          />
-        </FormField>
-        <FormField
-          label={fieldLabels[opts.destPhoneKey]}
-          required
-          error={fieldErrors[opts.destPhoneKey]}
-        >
-          <PhoneInput
-            value={state.destinationContactPhone}
-            onChange={(phone) => {
-              patch({ destinationContactPhone: phone })
-              clearFieldError(opts.destPhoneKey)
-            }}
-          />
-        </FormField>
+
+        {showContacts && (
+          <div className="space-y-1.5">
+            <FormField
+              required
+              error={fieldErrors[opts.nameKey]}
+              className="min-w-0"
+            >
+              <Input
+                type="text"
+                value={contactName}
+                onChange={(e) => {
+                  if (opts.kind === 'origin') patch({ originContactName: e.target.value })
+                  else patch({ destinationContactName: e.target.value })
+                  clearFieldError(opts.nameKey)
+                }}
+                placeholder="שם איש קשר"
+                hasError={!!fieldErrors[opts.nameKey]}
+              />
+            </FormField>
+            <FormField
+              required
+              error={fieldErrors[opts.phoneKey]}
+              className="min-w-0"
+            >
+              <PhoneInput
+                value={contactPhone}
+                onChange={(phone) => {
+                  if (opts.kind === 'origin') patch({ originContactPhone: phone })
+                  else patch({ destinationContactPhone: phone })
+                  clearFieldError(opts.phoneKey)
+                }}
+                placeholder="טלפון"
+              />
+            </FormField>
+          </div>
+        )}
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 space-y-3" dir="rtl">
-      <div className="mb-1">
-        <h1 className="text-xl font-bold text-gt-text-primary">תקין תקול</h1>
-        <p className="text-sm text-gt-text-tertiary mt-1">
+    <div className={PORTAL_PAGE_SHELL_CLASS} dir="rtl">
+      <PortalRequestPageHeader>
+        <h1 className={PORTAL_PAGE_TITLE_CLASS}>תקין תקול</h1>
+        <p className={PORTAL_PAGE_SUBTITLE_CLASS}>
           רכב תקין נכנס + רכב תקול יוצא — הבקשה תמתין לטיפול החברה
         </p>
-      </div>
+      </PortalRequestPageHeader>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <FormCard icon={ClipboardList} title="פרטי הזמנה" className="mb-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <form onSubmit={handleSubmit} className={PORTAL_FORM_STACK_CLASS}>
+        {/* Full-width order band — matches simple form */}
+        <FormCard
+          icon={ClipboardList}
+          title="פרטי הזמנה"
+          step={1}
+          density="compact"
+          className="mb-0"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-x-3 gap-y-2">
             <FormField
-              label={fieldLabels.customerOrderNumber}
               required
               error={fieldErrors.customerOrderNumber}
             >
@@ -714,13 +760,14 @@ export default function NewCustomerExchangeRequestPage() {
                 type="text"
                 value={header.customerOrderNumber}
                 onChange={(e) => updateHeader('customerOrderNumber', e.target.value)}
+                placeholder={fieldLabels.customerOrderNumber}
                 hasError={!!fieldErrors.customerOrderNumber}
               />
             </FormField>
 
             <FormField label={fieldLabels.scheduledAt} required error={fieldErrors.scheduledAt}>
-              <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1.5">
+                <div className={PORTAL_SEGMENT_WRAP_CLASS}>
                   <button
                     type="button"
                     aria-pressed={!useCustomTime}
@@ -730,8 +777,8 @@ export default function NewCustomerExchangeRequestPage() {
                     }}
                     className={
                       !useCustomTime
-                        ? 'min-h-[36px] rounded-lg border text-sm font-medium bg-gt-brand text-white border-gt-brand'
-                        : 'min-h-[36px] rounded-lg border text-sm font-medium bg-white text-gt-text-secondary border-gt-border hover:bg-gt-surface-hover'
+                        ? PORTAL_SEGMENT_ACTIVE_CLASS
+                        : PORTAL_SEGMENT_INACTIVE_CLASS
                     }
                   >
                     עכשיו
@@ -742,15 +789,15 @@ export default function NewCustomerExchangeRequestPage() {
                     onClick={() => setUseCustomTime(true)}
                     className={
                       useCustomTime
-                        ? 'min-h-[36px] rounded-lg border text-sm font-medium bg-gt-brand text-white border-gt-brand'
-                        : 'min-h-[36px] rounded-lg border text-sm font-medium bg-white text-gt-text-secondary border-gt-border hover:bg-gt-surface-hover'
+                        ? PORTAL_SEGMENT_ACTIVE_CLASS
+                        : PORTAL_SEGMENT_INACTIVE_CLASS
                     }
                   >
                     מועד אחר
                   </button>
                 </div>
                 {useCustomTime && (
-                  <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="grid grid-cols-2 gap-1.5">
                     <DateInput
                       value={towDate}
                       onChange={(v) => {
@@ -776,244 +823,278 @@ export default function NewCustomerExchangeRequestPage() {
               </div>
             </FormField>
 
-            <FormField label={fieldLabels.department} required error={fieldErrors.department}>
+            <FormField required error={fieldErrors.department}>
               <Input
                 type="text"
                 value={header.department}
                 onChange={(e) => updateHeader('department', e.target.value)}
+                placeholder={fieldLabels.department}
                 hasError={!!fieldErrors.department}
               />
             </FormField>
 
-            <FormField label={fieldLabels.orderer} required error={fieldErrors.orderer}>
+            <FormField required error={fieldErrors.orderer}>
               <Input
                 type="text"
                 value={header.orderer}
                 onChange={(e) => updateHeader('orderer', e.target.value)}
+                placeholder={fieldLabels.orderer}
                 hasError={!!fieldErrors.orderer}
               />
             </FormField>
 
-            <FormField label={fieldLabels.ordererPhone} required error={fieldErrors.ordererPhone}>
+            <FormField
+              required
+              error={fieldErrors.ordererPhone}
+            >
               <PhoneInput
                 value={header.ordererPhone}
                 onChange={(phone) => updateHeader('ordererPhone', phone)}
+                placeholder={fieldLabels.ordererPhone}
+              />
+            </FormField>
+          </div>
+
+          <div className="mt-2">
+            <FormField optional>
+              <textarea
+                value={header.notes}
+                onChange={(e) => updateHeader('notes', e.target.value)}
+                rows={2}
+                placeholder="הערות / פרטים נוספים"
+                className={PORTAL_TEXTAREA_CLASS}
+                aria-label={fieldLabels.notes}
               />
             </FormField>
           </div>
         </FormCard>
 
-        {/* Working vehicle — תקין נכנס */}
-        <FormCard
-          icon={Truck}
-          title="רכב תקין נכנס"
-          description="רכב תקין שמגיע ללקוח (ניתן לבחור מאחסנה)"
-          className="mb-0"
-        >
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-                תקין
-              </span>
-            </div>
-
-            {selectedWorkingStored && (
-              <div className="rounded-lg border border-gt-brand bg-gt-brand-subtle px-3 py-2">
-                <p className="text-xs font-medium text-gt-brand-text">נבחר מאחסנה</p>
-                <div className="flex flex-wrap items-center gap-2 text-sm mt-1">
-                  <span className="font-medium text-gt-text-primary">
-                    {selectedWorkingStored.plate_number}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+        {/* Two vehicle columns */}
+        <div className={`grid grid-cols-1 lg:grid-cols-2 ${PORTAL_GRID_GAP_CLASS} items-start`}>
+          <FormCard
+            icon={Truck}
+            title="רכב תקין"
+            description="רכב תקין שמגיע ללקוח"
+            step={2}
+            density="compact"
+            className={columnCardClass}
+          >
+            <div className={columnBodyClass}>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className={sectionLabelClass}>פרטי רכב</h4>
+                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">
                     תקין
                   </span>
                 </div>
-                <TimeInStoragePill lastStoredAt={selectedWorkingStored.last_stored_at} />
-                <button
-                  type="button"
-                  onClick={clearWorkingStoredSelection}
-                  className="mt-1.5 text-sm text-gt-brand-text hover:text-gt-brand underline"
-                >
-                  נקה בחירה והזן ידנית
-                </button>
-              </div>
-            )}
 
-            <FormField label={fieldLabels.workingPlate} required error={fieldErrors.workingPlate}>
-              <VehicleLookup
-                narrowColumn
-                showVehicleCode
-                vehicleCode={working.vehicleCode}
-                onVehicleCodeChange={(code) => patchWorking({ vehicleCode: code })}
-                manualEntryStyle="button"
-                manualEntryPlacement="afterSummary"
-                manualEntryTrailing={
-                  !storageLoading && operationalStoredVehicles.length > 0 ? (
+                {selectedWorkingStored && (
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-gt-text-secondary">
+                    <span className="text-xs font-medium text-gt-brand-text">מאחסנה</span>
+                    <span className="font-medium text-gt-text-primary">
+                      {selectedWorkingStored.plate_number}
+                    </span>
+                    <TimeInStoragePill lastStoredAt={selectedWorkingStored.last_stored_at} />
                     <button
                       type="button"
-                      onClick={() => setStorageModalOpen(true)}
-                      title="בחר רכב תקין מאחסנה"
-                      className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gray-200 text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                      onClick={clearWorkingStoredSelection}
+                      className="text-xs text-gt-brand-text hover:text-gt-brand underline"
                     >
-                      <Package size={14} className="shrink-0" />
-                      מאחסנה
+                      נקה בחירה
                     </button>
-                  ) : null
-                }
-                plateNumber={working.plateNumber}
-                onPlateChange={(plate) => {
-                  patchWorking({ plateNumber: plate })
-                  clearFieldError('workingPlate')
-                  if (selectedWorkingStoredId) {
-                    const selected = operationalStoredVehicles.find(
-                      (v) => v.id === selectedWorkingStoredId
-                    )
-                    if (!selected || selected.plate_number !== plate) {
-                      setSelectedWorkingStoredId(null)
-                      if (workingFromStorage) setWorkingOriginFromYard(false)
+                  </div>
+                )}
+
+                <FormField required error={fieldErrors.workingPlate}>
+                  <VehicleLookup
+                    narrowColumn
+                    hideLabel
+                    showVehicleCode
+                    vehicleCode={working.vehicleCode}
+                    onVehicleCodeChange={(code) => patchWorking({ vehicleCode: code })}
+                    manualEntryStyle="button"
+                    manualEntryPlacement="withPlate"
+                    manualEntryTrailing={
+                      !storageLoading && operationalStoredVehicles.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setStorageModalOpen(true)}
+                          title="בחר רכב תקין מאחסנה"
+                          className={PORTAL_STORAGE_BUTTON_CLASS}
+                        >
+                          <Package size={13} className="shrink-0" strokeWidth={1.75} />
+                          מאחסנה
+                        </button>
+                      ) : null
                     }
-                  }
-                }}
-                vehicleData={working.vehicleData}
-                onVehicleDataChange={(data) => patchWorking({ vehicleData: data })}
-                vehicleType={working.vehicleType}
-                onVehicleTypeChange={(t) => patchWorking({ vehicleType: t })}
-                vehicleLookupNotFound={working.vehicleLookupNotFound}
-                onVehicleLookupNotFoundChange={(v) =>
-                  patchWorking({ vehicleLookupNotFound: v })
-                }
-                manualManufacturer={working.manualManufacturer}
-                onManualManufacturerChange={(v) => patchWorking({ manualManufacturer: v })}
-                manualColor={working.manualColor}
-                onManualColorChange={(v) => patchWorking({ manualColor: v })}
-              />
-            </FormField>
-
-            <div className="border-t border-gt-border-subtle pt-3">
-              <div className="flex items-center gap-1.5 mb-3">
-                <MapPin size={14} className="text-gt-text-tertiary" />
-                <h3 className="text-sm font-semibold text-gt-text-primary">מוצא ויעד — רכב תקין</h3>
+                    plateNumber={working.plateNumber}
+                    onPlateChange={(plate) => {
+                      patchWorking({ plateNumber: plate })
+                      clearFieldError('workingPlate')
+                      if (selectedWorkingStoredId) {
+                        const selected = operationalStoredVehicles.find(
+                          (v) => v.id === selectedWorkingStoredId
+                        )
+                        if (!selected || selected.plate_number !== plate) {
+                          setSelectedWorkingStoredId(null)
+                          clearWorkingOriginYard()
+                        }
+                      }
+                    }}
+                    vehicleData={working.vehicleData}
+                    onVehicleDataChange={(data) => patchWorking({ vehicleData: data })}
+                    vehicleType={working.vehicleType}
+                    onVehicleTypeChange={(t) => patchWorking({ vehicleType: t })}
+                    vehicleLookupNotFound={working.vehicleLookupNotFound}
+                    onVehicleLookupNotFoundChange={(v) =>
+                      patchWorking({ vehicleLookupNotFound: v })
+                    }
+                    manualManufacturer={working.manualManufacturer}
+                    onManualManufacturerChange={(v) => patchWorking({ manualManufacturer: v })}
+                    manualColor={working.manualColor}
+                    onManualColorChange={(v) => patchWorking({ manualColor: v })}
+                  />
+                </FormField>
               </div>
-              {renderRoutePair(working, patchWorking, {
-                originKey: 'workingOrigin',
-                originNameKey: 'workingOriginContactName',
-                originPhoneKey: 'workingOriginContactPhone',
-                destKey: 'workingDestination',
-                destNameKey: 'workingDestinationContactName',
-                destPhoneKey: 'workingDestinationContactPhone',
-                originPin: 'workingOrigin',
-                destPin: 'workingDestination',
-                showOriginStorage: true,
-              })}
-            </div>
-          </div>
-        </FormCard>
 
-        {/* Faulty vehicle — תקול יוצא */}
-        <FormCard
-          icon={Truck}
-          title="רכב תקול יוצא"
-          description="רכב תקול שנאסף מהלקוח (ניתן לשלוח לאחסנה)"
-          className="mb-0"
-        >
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                תקול
-              </span>
-            </div>
-
-            <FormField label={fieldLabels.faultyPlate} required error={fieldErrors.faultyPlate}>
-              <VehicleLookup
-                narrowColumn
-                showVehicleCode
-                vehicleCode={faulty.vehicleCode}
-                onVehicleCodeChange={(code) => patchFaulty({ vehicleCode: code })}
-                manualEntryStyle="button"
-                manualEntryPlacement="afterSummary"
-                plateNumber={faulty.plateNumber}
-                onPlateChange={(plate) => {
-                  patchFaulty({ plateNumber: plate })
-                  clearFieldError('faultyPlate')
-                }}
-                vehicleData={faulty.vehicleData}
-                onVehicleDataChange={(data) => patchFaulty({ vehicleData: data })}
-                vehicleType={faulty.vehicleType}
-                onVehicleTypeChange={(t) => patchFaulty({ vehicleType: t })}
-                vehicleLookupNotFound={faulty.vehicleLookupNotFound}
-                onVehicleLookupNotFoundChange={(v) =>
-                  patchFaulty({ vehicleLookupNotFound: v })
-                }
-                manualManufacturer={faulty.manualManufacturer}
-                onManualManufacturerChange={(v) => patchFaulty({ manualManufacturer: v })}
-                manualColor={faulty.manualColor}
-                onManualColorChange={(v) => patchFaulty({ manualColor: v })}
-              />
-            </FormField>
-
-            <FormField required error={fieldErrors.faultyDefects}>
-              <DefectSelector
-                variant="triggerOnly"
-                triggerLabel="בחר תקלות"
-                label="תקלות"
-                selectedDefects={faultyDefects}
-                onChange={(d) => {
-                  setFaultyDefects(d)
-                  clearFieldError('faultyDefects')
-                }}
-              />
-            </FormField>
-
-            <div className="border-t border-gt-border-subtle pt-3">
-              <div className="flex items-center gap-1.5 mb-3">
-                <MapPin size={14} className="text-gt-text-tertiary" />
-                <h3 className="text-sm font-semibold text-gt-text-primary">מוצא ויעד — רכב תקול</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                {renderRouteStack(working, patchWorking, {
+                  kind: 'origin',
+                  routeTitle: 'מוצא',
+                  addressKey: 'workingOrigin',
+                  nameKey: 'workingOriginContactName',
+                  phoneKey: 'workingOriginContactPhone',
+                  pin: 'workingOrigin',
+                  showContacts: showWorkingOriginContacts,
+                  clearContactsWhenAddressEmpty: true,
+                })}
+                {renderRouteStack(working, patchWorking, {
+                  kind: 'destination',
+                  routeTitle: 'יעד',
+                  addressKey: 'workingDestination',
+                  nameKey: 'workingDestinationContactName',
+                  phoneKey: 'workingDestinationContactPhone',
+                  pin: 'workingDestination',
+                })}
               </div>
-              {renderRoutePair(faulty, patchFaulty, {
-                originKey: 'faultyOrigin',
-                originNameKey: 'faultyOriginContactName',
-                originPhoneKey: 'faultyOriginContactPhone',
-                destKey: 'faultyDestination',
-                destNameKey: 'faultyDestinationContactName',
-                destPhoneKey: 'faultyDestinationContactPhone',
-                originPin: 'faultyOrigin',
-                destPin: 'faultyDestination',
-                showDestStorage: true,
-              })}
             </div>
-          </div>
-        </FormCard>
+          </FormCard>
 
-        <FormCard icon={MessageSquareText} title="הערות" className="mb-0">
-          <FormField label={`${fieldLabels.notes} (אופציונלי)`}>
-            <textarea
-              value={header.notes}
-              onChange={(e) => updateHeader('notes', e.target.value)}
-              rows={3}
-              placeholder="פרטים נוספים שיעזרו לחברה לטפל בבקשה..."
-              className={textareaClassName}
-            />
-          </FormField>
-        </FormCard>
+          <FormCard
+            icon={Truck}
+            title="רכב תקול"
+            description="רכב תקול שנאסף מהלקוח"
+            step={3}
+            density="compact"
+            className={columnCardClass}
+          >
+            <div className={columnBodyClass}>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className={sectionLabelClass}>פרטי רכב</h4>
+                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
+                    תקול
+                  </span>
+                </div>
+
+                <FormField required error={fieldErrors.faultyPlate}>
+                  <VehicleLookup
+                    narrowColumn
+                    hideLabel
+                    showVehicleCode
+                    vehicleCode={faulty.vehicleCode}
+                    onVehicleCodeChange={(code) => patchFaulty({ vehicleCode: code })}
+                    manualEntryStyle="button"
+                    manualEntryPlacement="withPlate"
+                    manualEntryEnd={
+                      <DefectSelector
+                        variant="triggerOnly"
+                        triggerLabel="בחר תקלות"
+                        label="תקלות"
+                        triggerClassName={PORTAL_DEFECTS_TRIGGER_CLASS}
+                        selectedDefects={faultyDefects}
+                        onChange={(d) => {
+                          setFaultyDefects(d)
+                          clearFieldError('faultyDefects')
+                        }}
+                      />
+                    }
+                    plateNumber={faulty.plateNumber}
+                    onPlateChange={(plate) => {
+                      patchFaulty({ plateNumber: plate })
+                      clearFieldError('faultyPlate')
+                    }}
+                    vehicleData={faulty.vehicleData}
+                    onVehicleDataChange={(data) => patchFaulty({ vehicleData: data })}
+                    vehicleType={faulty.vehicleType}
+                    onVehicleTypeChange={(t) => patchFaulty({ vehicleType: t })}
+                    vehicleLookupNotFound={faulty.vehicleLookupNotFound}
+                    onVehicleLookupNotFoundChange={(v) =>
+                      patchFaulty({ vehicleLookupNotFound: v })
+                    }
+                    manualManufacturer={faulty.manualManufacturer}
+                    onManualManufacturerChange={(v) => patchFaulty({ manualManufacturer: v })}
+                    manualColor={faulty.manualColor}
+                    onManualColorChange={(v) => patchFaulty({ manualColor: v })}
+                  />
+                </FormField>
+                {fieldErrors.faultyDefects && (
+                  <p className="text-[11px] text-gt-danger">{fieldErrors.faultyDefects}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                {renderRouteStack(faulty, patchFaulty, {
+                  kind: 'origin',
+                  routeTitle: 'מוצא',
+                  addressKey: 'faultyOrigin',
+                  nameKey: 'faultyOriginContactName',
+                  phoneKey: 'faultyOriginContactPhone',
+                  pin: 'faultyOrigin',
+                })}
+                {renderRouteStack(faulty, patchFaulty, {
+                  kind: 'destination',
+                  routeTitle: 'יעד',
+                  addressKey: 'faultyDestination',
+                  nameKey: 'faultyDestinationContactName',
+                  phoneKey: 'faultyDestinationContactPhone',
+                  pin: 'faultyDestination',
+                  showContacts: showFaultyDestinationContacts,
+                  clearContactsWhenAddressEmpty: true,
+                  storageToggle: {
+                    label: 'לאחסנה',
+                    checked: faultyToStorage,
+                    onChange: setFaultyDestinationToYard,
+                  },
+                })}
+              </div>
+            </div>
+          </FormCard>
+        </div>
 
         {submitError && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-gt-danger-subtle border border-gt-danger/20 text-sm text-gt-danger">
-            <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <div className={PORTAL_ERROR_BANNER_CLASS}>
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" strokeWidth={1.75} />
             <span>{submitError}</span>
           </div>
         )}
 
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-3 pt-1">
-          <Link
-            href="/customer"
-            className="inline-flex items-center justify-center gap-1.5 font-medium rounded-lg border bg-transparent text-gt-text-secondary border-transparent hover:bg-gt-surface-hover px-5 py-2.5 text-sm transition-all duration-150"
-          >
-            ביטול
-          </Link>
-          <Button type="submit" variant="primary" size="lg" disabled={submitting}>
-            {submitting && <Loader2 size={16} className="animate-spin" />}
-            שליחת בקשת תקין תקול
-          </Button>
+        <div className={PORTAL_FORM_FOOTER_CLASS}>
+          <div className={PORTAL_FORM_FOOTER_INNER_CLASS}>
+            <Link href="/customer" className={PORTAL_CANCEL_LINK_CLASS}>
+              ביטול
+            </Link>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              disabled={submitting}
+              className={PORTAL_SUBMIT_CLASS}
+            >
+              {submitting && <Loader2 size={18} className="animate-spin" />}
+              שליחת בקשת תקין תקול
+            </Button>
+          </div>
         </div>
       </form>
 

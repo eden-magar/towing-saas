@@ -290,8 +290,8 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
     const inputBorderClass = hasError
       ? 'border-gt-danger ring-1 ring-gt-danger/30'
       : isNarrow
-        ? 'border-gray-200'
-        : 'border-gt-border'
+      ? 'border-gt-border-field'
+      : 'border-gt-border-field'
 
     const inputSizeClass = isNarrow
       ? 'h-9 py-0 leading-9'
@@ -300,10 +300,10 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
         : 'py-2'
 
     const calendarBtnClass = isNarrow
-      ? 'h-9 w-9 p-0 flex items-center justify-center border-gray-200'
+      ? 'h-9 w-9 p-0 flex items-center justify-center border-gt-border-field'
       : isMobileSized
-        ? 'h-12 w-12 p-0 flex items-center justify-center border-gt-border'
-        : 'p-2 border-gt-border'
+        ? 'h-12 w-12 p-0 flex items-center justify-center border-gt-border-field'
+        : 'p-2 border-gt-border-field'
 
     const todayBtnClass = isNarrow
       ? 'shrink-0 h-9 px-2.5 inline-flex items-center justify-center rounded-lg text-xs font-medium border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
@@ -344,8 +344,8 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             bg-white text-gt-text-primary text-left
             border ${inputBorderClass}
             placeholder:text-gt-text-tertiary
-            hover:border-gt-border-strong
-            focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
+            hover:border-gt-border
+            focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20
             disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
             transition-colors duration-150
             ${inputSizeClass}

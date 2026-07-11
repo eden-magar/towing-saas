@@ -40,7 +40,10 @@ import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
-import { DEFECT_OPTIONS } from '../../../lib/constants/defects'
+import {
+  DEFECT_OPTIONS,
+  defectOptionClassName,
+} from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { createCustomer } from '../../../lib/queries/customers'
@@ -1079,7 +1082,10 @@ function CreateExchangeTowForm({
                             </button>
                           </div>
                           <div className="p-4 grid grid-cols-3 gap-3">
-                            {DEFECT_OPTIONS.map((defect) => (
+                            {DEFECT_OPTIONS.map((defect) => {
+                              const Icon = defect.icon
+                              const selected = selectedDefects.includes(defect.value)
+                              return (
                               <button
                                 key={defect.value}
                                 type="button"
@@ -1090,16 +1096,13 @@ function CreateExchangeTowForm({
                                       : [...prev, defect.value]
                                   )
                                 }}
-                                className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${
-                                  selectedDefects.includes(defect.value)
-                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                    : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-300'
-                                }`}
+                                className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${defectOptionClassName(selected, defect.highlight, 'grid')}`}
                               >
-                                <span className="text-2xl">{defect.icon}</span>
+                                <Icon className="h-6 w-6 shrink-0" aria-hidden />
                                 <span className="text-xs font-medium text-center leading-tight">{defect.label}</span>
                               </button>
-                            ))}
+                              )
+                            })}
                           </div>
                           {selectedDefects.includes('אחר') && (
                             <div className="mt-3 px-1">

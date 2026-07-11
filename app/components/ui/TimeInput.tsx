@@ -165,8 +165,8 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
     const inputBorderClass = hasError
       ? 'border-gt-danger ring-1 ring-gt-danger/30'
       : isNarrow
-        ? 'border-gray-200'
-        : 'border-gt-border'
+        ? 'border-gt-border-field'
+        : 'border-gt-border-field'
 
     const inputSizeClass = isNarrow
       ? 'h-9 py-0 leading-9'
@@ -204,8 +204,8 @@ export const TimeInput = forwardRef<HTMLInputElement, TimeInputProps>(
           bg-white text-gt-text-primary text-left
           border ${inputBorderClass}
           placeholder:text-gt-text-tertiary
-          hover:border-gt-border-strong
-          focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15
+          hover:border-gt-border
+          focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20
           disabled:bg-gt-surface-subtle disabled:text-gt-text-tertiary disabled:cursor-not-allowed
           transition-colors duration-150
           ${inputSizeClass} ${className}
