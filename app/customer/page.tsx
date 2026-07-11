@@ -287,9 +287,11 @@ export default function CustomerDashboard() {
               const to = req.dropoff_address?.trim() || null
 
               return (
-                <div
+                <button
                   key={req.id}
-                  className="w-full bg-white rounded-xl border border-gray-300 shadow-sm p-5 text-right"
+                  type="button"
+                  onClick={() => router.push(`/customer/requests/${req.id}`)}
+                  className="w-full bg-white rounded-xl border border-gray-300 shadow-sm p-5 text-right hover:border-amber-400 hover:shadow-md transition-all"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -303,6 +305,7 @@ export default function CustomerDashboard() {
                         {pendingRequestBadge.label}
                       </span>
                     </div>
+                    <ChevronLeft size={18} className="text-gray-400 shrink-0" />
                   </div>
 
                   {(from || to) && (
@@ -325,7 +328,7 @@ export default function CustomerDashboard() {
                   <div className="flex items-center text-xs text-gray-500">
                     <span>{formatDate(req.scheduled_at)}</span>
                   </div>
-                </div>
+                </button>
               )
             })
           )}

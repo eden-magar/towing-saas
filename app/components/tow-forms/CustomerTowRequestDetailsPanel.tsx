@@ -2,7 +2,9 @@
 
 /**
  * Read-only view of a pending customer tow request (simple or exchange).
- * Opened on demand from the dashboard "בקשות נכנסות" queue modal.
+ * Used from the dashboard "בקשות נכנסות" queue and the customer portal
+ * `/customer/requests/[id]` detail page. Omit `customerName` on the portal
+ * to hide the «לקוח» row (viewer is the customer).
  */
 
 import { useEffect, useState } from 'react'
@@ -286,12 +288,12 @@ export function CustomerTowRequestDetailsPanel({
           )}
 
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm text-right">
-            <div>
-              <span className="text-xs text-gray-500">לקוח</span>
-              <p className="font-medium text-gray-900">
-                {customerName?.trim() || '—'}
-              </p>
-            </div>
+            {customerName?.trim() ? (
+              <div>
+                <span className="text-xs text-gray-500">לקוח</span>
+                <p className="font-medium text-gray-900">{customerName.trim()}</p>
+              </div>
+            ) : null}
             <div>
               <span className="text-xs text-gray-500">מס׳ הזמנת לקוח</span>
               <p className="font-medium text-gray-900">
