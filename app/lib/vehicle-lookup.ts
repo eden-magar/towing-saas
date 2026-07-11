@@ -4,11 +4,19 @@
 import { VehicleLookupResult, VehicleType } from './types'
 import { supabase } from './supabase'
 
-const REGISTRY_FETCH_TIMEOUT_MS = 5000
-/** Suggested default TTL for negative cache; adjust if plates should be re-checked sooner. */
-export const VEHICLE_LOOKUP_MISS_TTL_DAYS = 7
+const REGISTRY_FETCH_TIMEOUT_MS = 9000
+/** Negative-cache TTL for definitive registry-wide misses only. */
+export const REGISTRY_MISS_TTL_MS = 24 * 60 * 60 * 1000
+/** @deprecated Use REGISTRY_MISS_TTL_MS — kept for any external imports. */
+export const VEHICLE_LOOKUP_MISS_TTL_DAYS = REGISTRY_MISS_TTL_MS / (24 * 60 * 60 * 1000)
 /** Probe batch size for data.gov.il (no documented rate limit — conservative cap). */
 const REGISTRY_PROBE_CONCURRENCY = 5
+
+/** Three-way outcome for a single data.gov.il resource probe. */
+type RegistryProbeResult =
+  | { status: 'FOUND'; data: any }
+  | { status: 'ABSENT' }
+  | { status: 'ERROR' }
 
 function notFoundLookupResult(error?: string): VehicleLookupResult {
   return {
@@ -17,6 +25,13 @@ function notFoundLookupResult(error?: string): VehicleLookupResult {
     sourceLabel: '',
     data: null,
     error: error ?? 'הרכב לא נמצא במאגרי משרד התחבורה',
+  }
+}
+
+class RegistryFetchError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RegistryFetchError'
   }
 }
 
@@ -39,11 +54,29 @@ async function fetchJsonWithTimeout(
 
   try {
     const response = await fetch(url, { signal: controller.signal })
-    return await response.json()
+    if (!response.ok) {
+      throw new RegistryFetchError(`HTTP ${response.status}`)
+    }
+    try {
+      return await response.json()
+    } catch {
+      throw new RegistryFetchError('unparseable JSON body')
+    }
   } finally {
     clearTimeout(timeoutId)
     externalSignal?.removeEventListener('abort', onExternalAbort)
   }
+}
+
+/** CKAN datastore_search body: success === true and records array present (may be empty). */
+function parseCkanRecords(
+  body: unknown,
+): { ok: true; records: any[] } | { ok: false } {
+  if (!body || typeof body !== 'object') return { ok: false }
+  const parsed = body as { success?: boolean; result?: { records?: unknown } }
+  if (parsed.success !== true) return { ok: false }
+  if (!parsed.result || !Array.isArray(parsed.result.records)) return { ok: false }
+  return { ok: true, records: parsed.result.records }
 }
 
 
@@ -148,6 +181,11 @@ type ResourceProbe = {
   sourceLabel?: string
   registryStatus?: 'cancelled' | 'inactive'
 }
+
+type RegistryRaceResult =
+  | { status: 'FOUND'; data: any; probe: ResourceProbe }
+  | { status: 'ABSENT' }
+  | { status: 'ERROR' }
 
 /**
  * משקל עצמי (mishkal_azmi) ברכב כבד מגיע בק"ג. ערך 0 / ריק => לא זמין (null).
@@ -301,7 +339,7 @@ async function saveMissToSupabase(licenseNumber: string): Promise<void> {
       body: JSON.stringify({
         licenseNumber,
         isMiss: true,
-        missTtlDays: VEHICLE_LOOKUP_MISS_TTL_DAYS,
+        missTtlMs: REGISTRY_MISS_TTL_MS,
       }),
     })
       .then(async (res) => {
@@ -365,37 +403,38 @@ async function saveToSupabase(
 }
 
 /**
- * חיפוש רכב במאגר ספציפי ב-API
+ * חיפוש רכב במאגר ספציפי ב-API — FOUND / ABSENT / ERROR (never collapse ERROR→ABSENT).
  */
 async function searchInResource(
   licenseNumber: string,
   resourceId: string,
   source: string,
   options?: { fuzzyQFallback?: boolean; signal?: AbortSignal },
-): Promise<{ found: boolean; data: any }> {
+): Promise<RegistryProbeResult> {
   try {
     const cleanLicense = licenseNumber.replace(/[^0-9]/g, '')
 
     const url1 = `https://data.gov.il/api/3/action/datastore_search?resource_id=${resourceId}&filters={"mispar_rechev":"${parseInt(cleanLicense, 10).toString()}"}`
 
-    const data1 = (await fetchJsonWithTimeout(url1, options?.signal)) as {
-      success?: boolean
-      result?: { records?: unknown[] }
+    const data1 = await fetchJsonWithTimeout(url1, options?.signal)
+    const ckan1 = parseCkanRecords(data1)
+    if (!ckan1.ok) {
+      return { status: 'ERROR' }
     }
-
-    if (data1.success && data1.result?.records && data1.result.records.length > 0) {
-      return { found: true, data: data1.result.records[0] }
+    if (ckan1.records.length > 0) {
+      return { status: 'FOUND', data: ckan1.records[0] }
     }
 
     const url2 = `https://data.gov.il/api/3/action/datastore_search?resource_id=${resourceId}&q=${cleanLicense}`
 
-    const data2 = (await fetchJsonWithTimeout(url2, options?.signal)) as {
-      success?: boolean
-      result?: { records?: any[] }
+    const data2 = await fetchJsonWithTimeout(url2, options?.signal)
+    const ckan2 = parseCkanRecords(data2)
+    if (!ckan2.ok) {
+      return { status: 'ERROR' }
     }
 
-    if (data2.success && data2.result?.records && data2.result.records.length > 0) {
-      const record = data2.result.records.find((rec: any) => {
+    if (ckan2.records.length > 0) {
+      const record = ckan2.records.find((rec: any) => {
         const recLicense = String(rec.mispar_rechev || rec.MISPAR_RECHEV || '')
           .replace(/[^0-9]/g, '')
         if (recLicense === cleanLicense || recLicense === parseInt(cleanLicense, 10).toString()) {
@@ -410,53 +449,61 @@ async function searchInResource(
       })
 
       if (record) {
-        return { found: true, data: record }
+        return { status: 'FOUND', data: record }
       }
     }
 
-    return { found: false, data: null }
+    return { status: 'ABSENT' }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       console.warn(`[vehicle-lookup] ${source} lookup timed out or aborted`)
+    } else if (error instanceof RegistryFetchError) {
+      console.warn(`[vehicle-lookup] ${source} lookup error:`, error.message)
     } else {
       console.warn(
         `[vehicle-lookup] ${source} lookup skipped (network):`,
         error instanceof Error ? error.message : error,
       )
     }
-    return { found: false, data: null }
+    return { status: 'ERROR' }
   }
 }
 
+/**
+ * Probe resources in concurrent batches. FOUND wins immediately.
+ * ERROR from any probe (when no FOUND) is preserved — never treated as ABSENT.
+ */
 async function raceResourceProbes(
   licenseNumber: string,
   probes: ResourceProbe[],
-): Promise<{ found: true; data: any; probe: ResourceProbe } | null> {
+): Promise<RegistryRaceResult> {
   const parentAbort = new AbortController()
+  let sawError = false
 
   for (let i = 0; i < probes.length; i += REGISTRY_PROBE_CONCURRENCY) {
     const batch = probes.slice(i, i + REGISTRY_PROBE_CONCURRENCY)
-    try {
-      const winner = await Promise.any(
-        batch.map(async (probe) => {
-          const result = await searchInResource(
-            licenseNumber,
-            probe.resourceId,
-            probe.source,
-            { fuzzyQFallback: probe.fuzzyQFallback, signal: parentAbort.signal },
-          )
-          if (!result.found) throw new Error('miss')
-          return { found: true as const, data: result.data, probe }
+    const outcomes = await Promise.all(
+      batch.map(async (probe) => ({
+        probe,
+        result: await searchInResource(licenseNumber, probe.resourceId, probe.source, {
+          fuzzyQFallback: probe.fuzzyQFallback,
+          signal: parentAbort.signal,
         }),
-      )
+      })),
+    )
+
+    const hit = outcomes.find((o) => o.result.status === 'FOUND')
+    if (hit && hit.result.status === 'FOUND') {
       parentAbort.abort()
-      return winner
-    } catch {
-      // All probes in this batch missed or timed out — try next batch.
+      return { status: 'FOUND', data: hit.result.data, probe: hit.probe }
+    }
+
+    if (outcomes.some((o) => o.result.status === 'ERROR')) {
+      sawError = true
     }
   }
 
-  return null
+  return sawError ? { status: 'ERROR' } : { status: 'ABSENT' }
 }
 
 /**
@@ -575,28 +622,27 @@ async function fetchExtraPrivateInfo(vehicle: any, signal?: AbortSignal): Promis
     const query = encodeURIComponent(model)
     const url = `https://data.gov.il/api/3/action/datastore_search?resource_id=${API_RESOURCES.private_extra}&q=${query}`
 
-    const data = (await fetchJsonWithTimeout(url, signal)) as {
-      success?: boolean
-      result?: { records?: any[] }
+    const data = await fetchJsonWithTimeout(url, signal)
+    const ckan = parseCkanRecords(data)
+    if (!ckan.ok || ckan.records.length === 0) {
+      return null
     }
 
-    if (data.success && data.result?.records && data.result.records.length > 0) {
-      const match = data.result.records.find((record: any) =>
+    const match = ckan.records.find(
+      (record: any) =>
         record.shnat_yitzur == vehicle.shnat_yitzur &&
         record.degem_cd == vehicle.degem_cd &&
-        record.nefach_manoa == vehicle.nefach_manoa
-      )
-      
-      if (match) {
-        if ('automatic_ind' in match) {
-          match.automatic_ind = match.automatic_ind === '1' || match.automatic_ind === 1
-            ? 'אוטומטי'
-            : 'ידני'
-        }
-        return match
+        record.nefach_manoa == vehicle.nefach_manoa,
+    )
+
+    if (match) {
+      if ('automatic_ind' in match) {
+        match.automatic_ind =
+          match.automatic_ind === '1' || match.automatic_ind === 1 ? 'אוטומטי' : 'ידני'
       }
+      return match
     }
-    
+
     return null
   } catch (error) {
     console.error('Error fetching extra private info:', error)
@@ -610,7 +656,11 @@ async function fetchExtraPrivateInfo(vehicle: any, signal?: AbortSignal): Promis
  */
 async function searchCancelledOrInactive(
   licenseNumber: string,
-): Promise<VehicleLookupResult | null> {
+): Promise<
+  | { status: 'FOUND'; result: VehicleLookupResult }
+  | { status: 'ABSENT' }
+  | { status: 'ERROR' }
+> {
   const probes: ResourceProbe[] = [
     {
       resourceId: API_RESOURCES.canceled_private,
@@ -646,15 +696,20 @@ async function searchCancelledOrInactive(
   ]
 
   const hit = await raceResourceProbes(licenseNumber, probes)
-  if (!hit || !hit.probe.mapAs) return null
-
-  return {
-    found: true,
-    source: hit.probe.mapAs as VehicleLookupResult['source'],
-    sourceLabel: hit.probe.sourceLabel ?? SOURCE_LABELS[hit.probe.mapAs],
-    registryStatus: hit.probe.registryStatus,
-    data: mapCancelledInactiveVehicleData(hit.data, licenseNumber),
+  if (hit.status === 'FOUND') {
+    if (!hit.probe.mapAs) return { status: 'ERROR' }
+    return {
+      status: 'FOUND',
+      result: {
+        found: true,
+        source: hit.probe.mapAs as VehicleLookupResult['source'],
+        sourceLabel: hit.probe.sourceLabel ?? SOURCE_LABELS[hit.probe.mapAs],
+        registryStatus: hit.probe.registryStatus,
+        data: mapCancelledInactiveVehicleData(hit.data, licenseNumber),
+      },
+    }
   }
+  return hit.status === 'ERROR' ? { status: 'ERROR' } : { status: 'ABSENT' }
 }
 
 /**
@@ -692,7 +747,7 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
   ]
 
   const activeHit = await raceResourceProbes(cleanLicense, activeProbes)
-  if (activeHit) {
+  if (activeHit.status === 'FOUND') {
     const source = activeHit.probe.source as keyof typeof FIELD_MAPPINGS
     const mappedData = mapVehicleData(activeHit.data, source, cleanLicense)
 
@@ -721,9 +776,17 @@ export async function lookupVehicle(licenseNumber: string): Promise<VehicleLooku
   }
 
   const cancelledOrInactive = await searchCancelledOrInactive(cleanLicense)
-  if (cancelledOrInactive) {
-    console.log(`⚠️ נמצא במאגר ${cancelledOrInactive.registryStatus}`)
-    return cancelledOrInactive
+  if (cancelledOrInactive.status === 'FOUND') {
+    console.log(`⚠️ נמצא במאגר ${cancelledOrInactive.result.registryStatus}`)
+    return cancelledOrInactive.result
+  }
+
+  // Miss cache only on definitive registry-wide ABSENT (never on ERROR).
+  if (activeHit.status === 'ERROR' || cancelledOrInactive.status === 'ERROR') {
+    console.warn('⚠️ שגיאת מאגר — לא נשמר miss (יישלח שוב בחיפוש הבא)')
+    return notFoundLookupResult(
+      'לא ניתן לאמת מול מאגר משרד התחבורה כרגע — נסו שוב',
+    )
   }
 
   void saveMissToSupabase(cleanLicense)

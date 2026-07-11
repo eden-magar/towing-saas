@@ -15,7 +15,9 @@ type CacheVehicleBody = {
   rawData?: unknown
   /** When true, record a negative lookup miss (plate not in registry). */
   isMiss?: boolean
-  /** Optional TTL override in days (default 7). */
+  /** Optional TTL override in milliseconds (default 24h). */
+  missTtlMs?: number
+  /** @deprecated Prefer missTtlMs. */
   missTtlDays?: number
 }
 
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { licenseNumber, sourceType, mappedData, rawData, isMiss, missTtlDays } = body
+  const { licenseNumber, sourceType, mappedData, rawData, isMiss, missTtlMs, missTtlDays } = body
   if (!licenseNumber?.trim()) {
     return NextResponse.json(
       { ok: false, error: 'licenseNumber is required' },
@@ -41,10 +43,16 @@ export async function POST(request: NextRequest) {
   const cleanLicense = licenseNumber.replace(/\D/g, '')
 
   if (isMiss) {
-    const ttlDays = Number.isFinite(missTtlDays) && (missTtlDays ?? 0) > 0 ? missTtlDays! : 7
+    const DEFAULT_MISS_TTL_MS = 24 * 60 * 60 * 1000
+    let ttlMs = DEFAULT_MISS_TTL_MS
+    if (Number.isFinite(missTtlMs) && (missTtlMs ?? 0) > 0) {
+      ttlMs = missTtlMs!
+    } else if (Number.isFinite(missTtlDays) && (missTtlDays ?? 0) > 0) {
+      ttlMs = missTtlDays! * 24 * 60 * 60 * 1000
+    }
+
     const now = new Date()
-    const expiresAt = new Date(now)
-    expiresAt.setDate(expiresAt.getDate() + ttlDays)
+    const expiresAt = new Date(now.getTime() + ttlMs)
 
     const { error } = await supabaseAdmin.from('vehicle_lookup_misses').upsert(
       {
