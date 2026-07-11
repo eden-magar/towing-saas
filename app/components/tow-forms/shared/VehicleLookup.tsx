@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Search, Loader2, AlertTriangle, PenLine } from 'lucide-react'
 import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
@@ -25,6 +25,8 @@ interface VehicleLookupProps {
   manualEntryStyle?: 'link' | 'button'
   /** Where to render the manual-entry trigger in stacked layout. */
   manualEntryPlacement?: 'inline' | 'afterSummary'
+  /** Optional sibling action(s) rendered next to the manual-entry trigger (e.g. storage picker). */
+  manualEntryTrailing?: ReactNode
   /**
    * Manual entry (shared state, controlled by parent form). When
    * `onVehicleLookupNotFoundChange` is provided the component switches to
@@ -58,6 +60,7 @@ export function VehicleLookup({
   narrowColumn = false,
   manualEntryStyle = 'link',
   manualEntryPlacement = 'inline',
+  manualEntryTrailing,
   vehicleLookupNotFound,
   onVehicleLookupNotFoundChange,
   manualManufacturer = '',
@@ -155,6 +158,17 @@ export function VehicleLookup({
         <PenLine className="w-3.5 h-3.5 shrink-0" />
         הזן פרטי רכב ידנית
       </button>
+    )
+  }
+
+  const renderManualEntryRow = () => {
+    const trigger = renderManualEntryTrigger()
+    if (!trigger && !manualEntryTrailing) return null
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {trigger}
+        {manualEntryTrailing}
+      </div>
     )
   }
 
@@ -418,7 +432,7 @@ export function VehicleLookup({
             </div>
           )}
 
-          {manualEntryPlacement === 'inline' && renderManualEntryTrigger()}
+          {manualEntryPlacement === 'inline' && renderManualEntryRow()}
         </>
       ) : (
       <>
@@ -567,7 +581,7 @@ export function VehicleLookup({
         </div>
       )}
 
-      {manualEntryPlacement === 'afterSummary' && renderManualEntryTrigger()}
+      {manualEntryPlacement === 'afterSummary' && renderManualEntryRow()}
 
       {/* רכב לא נמצא / מצב הזנה ידנית */}
       {notFound && !vehicleData?.found && (

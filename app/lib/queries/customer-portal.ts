@@ -5,6 +5,21 @@ import type {
   CustomerPortalTow,
   CustomerPortalTowDetail,
 } from '../types'
+import type { StoredVehicle } from './storage'
+
+/** Narrow portal-facing shape from get_my_stored_vehicles (no notes / internal fields). */
+export type CustomerPortalStoredVehicle = Pick<
+  StoredVehicle,
+  | 'id'
+  | 'plate_number'
+  | 'vehicle_data'
+  | 'vehicle_condition'
+  | 'defects'
+  | 'location'
+  | 'last_stored_at'
+> & {
+  current_status: 'stored' | 'reserved_for_tow'
+}
 
 // שליפת פרטי הלקוח לפי user_id (דרך customer_users)
 export async function getCustomerForUser(userId: string) {
@@ -90,6 +105,18 @@ export async function getCompanyBaseAddressForCustomer(): Promise<CompanyBaseAdd
     lat: row.base_lat != null ? Number(row.base_lat) : null,
     lng: row.base_lng != null ? Number(row.base_lng) : null,
   }
+}
+
+/** Caller's own vehicles in storage (stored + reserved). Identity scoped server-side. */
+export async function getMyStoredVehicles(): Promise<CustomerPortalStoredVehicle[]> {
+  const { data, error } = await supabase.rpc('get_my_stored_vehicles')
+
+  if (error) {
+    console.error('Error fetching customer stored vehicles:', error)
+    throw error
+  }
+
+  return (data ?? []) as CustomerPortalStoredVehicle[]
 }
 
 // שליפת גרירות לקוח (עמוד / pagination)

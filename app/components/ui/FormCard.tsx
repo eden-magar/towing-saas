@@ -20,10 +20,10 @@ export function FormCard({
 }: FormCardProps) {
   return (
     <section
-      className={`bg-white border border-gt-border rounded-xl shadow-sm overflow-hidden mb-3 ${className}`}
+      className={`flex flex-col bg-white border border-gt-border rounded-xl shadow-sm overflow-hidden mb-3 ${className}`}
       dir="rtl"
     >
-      <div className="flex items-center gap-3 px-4 sm:px-5 py-3 sm:py-2.5 bg-gt-surface-subtle border-b border-gt-border">
+      <div className="flex shrink-0 items-center gap-3 px-4 py-3 bg-gt-surface-subtle border-b border-gt-border">
         {Icon && (
           <div className="w-7 h-7 rounded-lg bg-gt-brand-subtle text-gt-brand-text flex items-center justify-center flex-shrink-0">
             <Icon size={14} />
@@ -41,7 +41,7 @@ export function FormCard({
         </div>
         {actions && <div className="flex-shrink-0">{actions}</div>}
       </div>
-      <div className="p-4 sm:p-3">{children}</div>
+      <div className="flex-1 min-h-0 p-4">{children}</div>
     </section>
   )
 }

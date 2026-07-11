@@ -3,9 +3,15 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/app/lib/AuthContext'
-import { getCustomerForUser, getCompanyBaseAddressForCustomer } from '@/app/lib/queries/customer-portal'
+import {
+  getCustomerForUser,
+  getCompanyBaseAddressForCustomer,
+  getMyStoredVehicles,
+  type CustomerPortalStoredVehicle,
+} from '@/app/lib/queries/customer-portal'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
+import { storedVehicleToCondition, formatTimeInStorageHebrew, getStorageCalendarDays } from '@/app/lib/utils/storage-vehicle'
 import {
   Button,
   DateInput,
@@ -18,6 +24,7 @@ import { PhoneInput } from '@/app/components/ui/PhoneInput'
 import { DefectSelector } from '@/app/components/tow-forms/shared/DefectSelector'
 import { VehicleLookup } from '@/app/components/tow-forms/shared/VehicleLookup'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
+import { SelectorModalShell } from '@/app/components/tow-forms/shared/SelectorModalShell'
 import {
   AddressInput,
   type AddressData,
@@ -27,11 +34,63 @@ import {
   AlertCircle,
   CheckCircle2,
   ClipboardList,
+  Clock,
   Loader2,
   MapPin,
   MessageSquareText,
+  Package,
   Truck,
 } from 'lucide-react'
+
+/** Inclusive start of the warning band (4–7 calendar days in storage). */
+const STORAGE_DURATION_WARNING_MIN_DAYS = 4
+/** Inclusive start of the alert band (8+ calendar days in storage). */
+const STORAGE_DURATION_ALERT_MIN_DAYS = 8
+
+const STORAGE_DURATION_PILL_BASE =
+  'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium'
+
+function storageDurationPillClass(days: number): string {
+  if (days >= STORAGE_DURATION_ALERT_MIN_DAYS) {
+    return `${STORAGE_DURATION_PILL_BASE} bg-rose-200 text-rose-900`
+  }
+  if (days >= STORAGE_DURATION_WARNING_MIN_DAYS) {
+    return `${STORAGE_DURATION_PILL_BASE} bg-amber-200 text-amber-900`
+  }
+  return `${STORAGE_DURATION_PILL_BASE} bg-sky-100 text-sky-800`
+}
+
+/** Map a portal stored_vehicles row → VehicleLookupResult (mirrors dashboard hydrate). */
+function buildLookupResultFromStored(
+  vehicle: CustomerPortalStoredVehicle
+): VehicleLookupResult | null {
+  if (!vehicle.vehicle_data) return null
+  const vd = vehicle.vehicle_data
+  return {
+    found: true,
+    source: (vd.source as VehicleLookupResult['source']) || 'private',
+    sourceLabel: vd.sourceLabel || 'רכב פרטי',
+    data: {
+      plateNumber: vehicle.plate_number,
+      manufacturer: vd.manufacturer || null,
+      model: vd.model || null,
+      year: vd.year ? parseInt(vd.year, 10) : null,
+      color: vd.color || null,
+      fuelType: null,
+      totalWeight: vd.totalWeight ? parseInt(vd.totalWeight, 10) : null,
+      vehicleType: null,
+      driveType: vd.driveType || null,
+      driveTechnology: null,
+      gearType: vd.gearType || null,
+      chassis: null,
+      importType: null,
+      curbWeightKg: null,
+      machineryType: null,
+      selfWeight: null,
+      totalWeightTon: null,
+    },
+  }
+}
 
 type FormState = {
   customerOrderNumber: string
@@ -124,6 +183,7 @@ export default function NewCustomerTowRequestPage() {
   const [manualManufacturer, setManualManufacturer] = useState('')
   const [manualColor, setManualColor] = useState('')
   const [selectedDefects, setSelectedDefects] = useState<string[]>([])
+  const [isWorking, setIsWorking] = useState(false)
   const [pickupAddress, setPickupAddress] = useState<AddressData>(emptyAddress)
   const [dropoffAddress, setDropoffAddress] = useState<AddressData>(emptyAddress)
   const [pickupFromStorage, setPickupFromStorage] = useState(false)
@@ -133,6 +193,11 @@ export default function NewCustomerTowRequestPage() {
     lat: number | null
     lng: number | null
   } | null>(null)
+  const [storedVehicles, setStoredVehicles] = useState<CustomerPortalStoredVehicle[]>([])
+  const [storageLoading, setStorageLoading] = useState(false)
+  const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
+  const [storageModalOpen, setStorageModalOpen] = useState(false)
+  const [storageSearch, setStorageSearch] = useState('')
   const [pinDropModal, setPinDropModal] = useState<{
     isOpen: boolean
     field: 'pickup' | 'dropoff' | null
@@ -158,11 +223,65 @@ export default function NewCustomerTowRequestPage() {
         const yard = await getCompanyBaseAddressForCustomer()
         setBaseAddress(yard)
       }
+      setStorageLoading(true)
+      try {
+        const vehicles = await getMyStoredVehicles()
+        setStoredVehicles(vehicles)
+      } catch (err) {
+        console.error('Error loading stored vehicles for portal:', err)
+        setStoredVehicles([])
+      } finally {
+        setStorageLoading(false)
+      }
       setLoading(false)
     }
 
     load()
   }, [user, authLoading])
+
+  useEffect(() => {
+    if (!storageModalOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setStorageModalOpen(false)
+        setStorageSearch('')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [storageModalOpen])
+
+  const closeStorageModal = () => {
+    setStorageModalOpen(false)
+    setStorageSearch('')
+  }
+
+  const selectedStoredVehicle =
+    storedVehicles.find((v) => v.id === selectedStoredVehicleId) ?? null
+  const selectedStoredMakeModel = selectedStoredVehicle
+    ? [selectedStoredVehicle.vehicle_data?.manufacturer, selectedStoredVehicle.vehicle_data?.model]
+        .filter(Boolean)
+        .join(' ')
+    : ''
+  const selectedStoredDuration = selectedStoredVehicle
+    ? formatTimeInStorageHebrew(selectedStoredVehicle.last_stored_at)
+    : null
+  const selectedStoredDurationDays = selectedStoredVehicle
+    ? getStorageCalendarDays(selectedStoredVehicle.last_stored_at)
+    : null
+
+  const filteredStoredVehicles = (() => {
+    const q = storageSearch.trim().toLowerCase()
+    if (!q) return storedVehicles
+    return storedVehicles.filter((vehicle) => {
+      const plate = vehicle.plate_number.toLowerCase()
+      const makeModel = [vehicle.vehicle_data?.manufacturer, vehicle.vehicle_data?.model]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return plate.includes(q) || makeModel.includes(q)
+    })
+  })()
 
   const clearFieldError = (key: FieldErrorKey) => {
     if (fieldErrors[key]) {
@@ -229,6 +348,49 @@ export default function NewCustomerTowRequestPage() {
     }
   }
 
+  const clearStoredVehicleSelection = () => {
+    setSelectedStoredVehicleId(null)
+    setPlateNumber('')
+    setVehicleCode('')
+    setVehicleData(null)
+    setVehicleType('')
+    setVehicleLookupNotFound(false)
+    setManualManufacturer('')
+    setManualColor('')
+    setSelectedDefects([])
+    setIsWorking(false)
+    clearFieldError('plateNumber')
+    clearFieldError('defects')
+    if (pickupFromStorage) {
+      handlePickupFromStorageChange(false)
+    }
+  }
+
+  const handleSelectStoredVehicle = (vehicle: CustomerPortalStoredVehicle) => {
+    if (vehicle.current_status !== 'stored') return
+
+    const { isFaulty, defects } = storedVehicleToCondition(vehicle)
+    const lookup = buildLookupResultFromStored(vehicle)
+
+    setSelectedStoredVehicleId(vehicle.id)
+    setPlateNumber(vehicle.plate_number)
+    setVehicleLookupNotFound(false)
+    setManualManufacturer('')
+    setManualColor('')
+    if (lookup) {
+      setVehicleData(lookup)
+      setVehicleType((lookup.source as VehicleType) || 'private')
+    } else {
+      setVehicleData(null)
+      setVehicleType('')
+    }
+    setIsWorking(!isFaulty)
+    setSelectedDefects(isFaulty ? defects : [])
+    clearFieldError('plateNumber')
+    clearFieldError('defects')
+    handlePickupFromStorageChange(true)
+  }
+
   const validate = (): boolean => {
     const errors: Partial<Record<FieldErrorKey, string>> = {}
     for (const key of requiredFields) {
@@ -239,7 +401,7 @@ export default function NewCustomerTowRequestPage() {
     if (!towDate.trim() || !towTime.trim()) {
       errors.scheduledAt = `${fieldLabels.scheduledAt} הוא שדה חובה`
     }
-    if (selectedDefects.length === 0) {
+    if (!isWorking && selectedDefects.length === 0) {
       errors.defects = 'יש לבחור לפחות תקלה אחת'
     }
     if (!plateNumber.trim()) {
@@ -262,7 +424,7 @@ export default function NewCustomerTowRequestPage() {
     const base = {
       plateNumber: plate,
       towReason: selectedDefects.join(', ') || undefined,
-      isWorking: false as const,
+      isWorking,
       orderIndex: 0,
     }
 
@@ -410,9 +572,9 @@ export default function NewCustomerTowRequestPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4 items-start">
-          <div className="lg:col-span-2 min-w-0">
-        <FormCard icon={ClipboardList} title="פרטי הזמנה" className="mb-0">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-3 items-stretch">
+          <div className="lg:col-span-3 min-w-0 flex flex-col">
+        <FormCard icon={ClipboardList} title="פרטי הזמנה" className="mb-0 h-full">
           <div className="space-y-3">
               <FormField
                 label={fieldLabels.customerOrderNumber}
@@ -513,9 +675,129 @@ export default function NewCustomerTowRequestPage() {
         </FormCard>
           </div>
 
-          <div className="lg:col-span-4 min-w-0 space-y-3">
-        <FormCard icon={Truck} title="פרטי רכב" className="mb-0">
+          <div className="lg:col-span-3 min-w-0 flex flex-col gap-3">
+        <FormCard icon={Truck} title="פרטי רכב" className="mb-0 h-full flex-1">
           <div className="space-y-3">
+            {selectedStoredVehicle && (
+              <div className="rounded-lg border border-gt-brand bg-gt-brand-subtle px-3 py-2">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-xs font-medium text-gt-brand-text">נבחר מאחסנה</p>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium text-gt-text-primary">
+                      {selectedStoredVehicle.plate_number}
+                    </span>
+                    {selectedStoredMakeModel && (
+                      <span className="text-xs text-gt-text-tertiary">{selectedStoredMakeModel}</span>
+                    )}
+                    <span
+                      className={
+                        selectedStoredVehicle.vehicle_condition === 'faulty'
+                          ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700'
+                          : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700'
+                      }
+                    >
+                      {selectedStoredVehicle.vehicle_condition === 'faulty' ? 'תקול' : 'תקין'}
+                    </span>
+                  </div>
+                  {selectedStoredDuration && selectedStoredDurationDays != null && (
+                    <span className={storageDurationPillClass(selectedStoredDurationDays)}>
+                      <Clock size={12} className="shrink-0" />
+                      {selectedStoredDuration}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearStoredVehicleSelection}
+                  className="mt-1.5 text-sm text-gt-brand-text hover:text-gt-brand underline"
+                >
+                  נקה בחירה והזן ידנית
+                </button>
+              </div>
+            )}
+
+            <SelectorModalShell
+              open={storageModalOpen}
+              onClose={closeStorageModal}
+              title="בחר רכב מאחסנה"
+              panelClassName="max-w-lg"
+            >
+              <div className="space-y-3 p-4" dir="rtl">
+                <input
+                  type="search"
+                  value={storageSearch}
+                  onChange={(e) => setStorageSearch(e.target.value)}
+                  placeholder="חיפוש לפי מספר רכב או דגם"
+                  className="w-full rounded-xl border border-gt-border bg-white px-3 py-2.5 text-sm text-gt-text-primary placeholder:text-gt-text-tertiary focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/15"
+                  autoFocus
+                />
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                  {filteredStoredVehicles.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-gt-text-tertiary">
+                      לא נמצאו רכבים תואמים
+                    </p>
+                  ) : (
+                    filteredStoredVehicles.map((vehicle) => {
+                      const isReserved = vehicle.current_status === 'reserved_for_tow'
+                      const isFaulty = vehicle.vehicle_condition === 'faulty'
+                      const makeModel = [
+                        vehicle.vehicle_data?.manufacturer,
+                        vehicle.vehicle_data?.model,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')
+                      const timeInStorage = formatTimeInStorageHebrew(vehicle.last_stored_at)
+                      const timeInStorageDays = getStorageCalendarDays(vehicle.last_stored_at)
+
+                      return (
+                        <button
+                          key={vehicle.id}
+                          type="button"
+                          disabled={isReserved}
+                          onClick={() => {
+                            handleSelectStoredVehicle(vehicle)
+                            closeStorageModal()
+                          }}
+                          className={
+                            isReserved
+                              ? 'flex w-full flex-col items-start gap-1 rounded-xl border border-gt-border bg-gt-surface-subtle px-3 py-2.5 text-right text-sm text-gt-text-tertiary cursor-not-allowed opacity-70'
+                              : 'flex w-full flex-col items-start gap-1 rounded-xl border border-gt-border bg-white px-3 py-2.5 text-right text-sm transition-colors hover:border-gt-brand hover:bg-gt-surface-hover'
+                          }
+                        >
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-gt-text-primary">
+                              {vehicle.plate_number}
+                            </span>
+                            {makeModel && (
+                              <span className="text-xs text-gt-text-tertiary">{makeModel}</span>
+                            )}
+                            <span
+                              className={
+                                isFaulty
+                                  ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700'
+                                  : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700'
+                              }
+                            >
+                              {isFaulty ? 'תקול' : 'תקין'}
+                            </span>
+                          </span>
+                          {timeInStorage && timeInStorageDays != null && (
+                            <span className={storageDurationPillClass(timeInStorageDays)}>
+                              <Clock size={12} className="shrink-0" />
+                              {timeInStorage}
+                            </span>
+                          )}
+                          {isReserved && (
+                            <span className="text-xs text-amber-700">ממתין לגרירה</span>
+                          )}
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            </SelectorModalShell>
+
             <FormField label={fieldLabels.plateNumber} required error={fieldErrors.plateNumber}>
               <VehicleLookup
                 narrowColumn
@@ -524,10 +806,33 @@ export default function NewCustomerTowRequestPage() {
                 onVehicleCodeChange={setVehicleCode}
                 manualEntryStyle="button"
                 manualEntryPlacement="afterSummary"
+                manualEntryTrailing={
+                  !storageLoading && storedVehicles.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setStorageModalOpen(true)}
+                      title="בחר רכב מאחסנה"
+                      className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gray-200 text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                    >
+                      <Package size={14} className="shrink-0" />
+                      מאחסנה
+                    </button>
+                  ) : null
+                }
                 plateNumber={plateNumber}
                 onPlateChange={(plate) => {
                   setPlateNumber(plate)
                   clearFieldError('plateNumber')
+                  if (selectedStoredVehicleId) {
+                    const selected = storedVehicles.find((v) => v.id === selectedStoredVehicleId)
+                    if (!selected || selected.plate_number !== plate) {
+                      setSelectedStoredVehicleId(null)
+                      if (pickupFromStorage) {
+                        handlePickupFromStorageChange(false)
+                      }
+                      setIsWorking(false)
+                    }
+                  }
                 }}
                 vehicleData={vehicleData}
                 onVehicleDataChange={setVehicleData}
@@ -542,7 +847,7 @@ export default function NewCustomerTowRequestPage() {
               />
             </FormField>
 
-            <FormField required error={fieldErrors.defects}>
+            <FormField required={!isWorking} error={fieldErrors.defects}>
               <DefectSelector
                 variant="triggerOnly"
                 triggerLabel="בחר תקלות"
@@ -550,6 +855,15 @@ export default function NewCustomerTowRequestPage() {
                 selectedDefects={selectedDefects}
                 onChange={(d) => {
                   setSelectedDefects(d)
+                  if (d.length > 0) {
+                    setIsWorking(false)
+                  } else if (
+                    selectedStoredVehicleId &&
+                    storedVehicles.find((v) => v.id === selectedStoredVehicleId)
+                      ?.vehicle_condition === 'operational'
+                  ) {
+                    setIsWorking(true)
+                  }
                   clearFieldError('defects')
                 }}
               />
@@ -557,7 +871,7 @@ export default function NewCustomerTowRequestPage() {
           </div>
         </FormCard>
 
-        <FormCard icon={MessageSquareText} title="הערות" className="mb-0">
+        <FormCard icon={MessageSquareText} title="הערות" className="mb-0 shrink-0">
           <FormField label={`${fieldLabels.notes} (אופציונלי)`}>
             <textarea
               value={form.notes}
@@ -570,9 +884,9 @@ export default function NewCustomerTowRequestPage() {
         </FormCard>
           </div>
 
-          <div className="lg:col-span-6 min-w-0">
-        <FormCard icon={MapPin} title="מוצא ויעד" className="mb-0">
-          <div className="grid grid-cols-1 lg:grid-cols-2 lg:gap-6 gap-3">
+          <div className="lg:col-span-6 min-w-0 flex flex-col">
+        <FormCard icon={MapPin} title="מוצא ויעד" className="mb-0 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div className="space-y-3 min-w-0">
               <h4 className="text-xs font-semibold text-gt-text-secondary">מוצא</h4>
               <FormField
