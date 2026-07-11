@@ -28,6 +28,7 @@ import {
   isClosedTowStatus,
 } from '../../../lib/utils/can-edit-closed-tow'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
+import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
   ServiceSurchargeSelector,
@@ -962,6 +963,56 @@ function CreateExchangeTowForm({
   ])
 
   const storageAddress = basePriceList?.base_address || ''
+  const storageYard = yardFromBasePriceList(basePriceList)
+  const workingPickupYardConfirm = storageYard
+    ? {
+        role: 'pickup' as const,
+        yard: storageYard,
+        alreadyFlagged:
+          workingVehicleSource === 'storage' || startFromBase,
+        onConfirm: () => {
+          setWorkingVehicleSource('storage')
+          setStartFromBase(true)
+        },
+        fieldKey: 'create-exchange-working-origin',
+      }
+    : null
+  const workingDropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: workingVehicleDestinationIsStorage,
+        onConfirm: () => {
+          setWorkingVehicleDestinationIsStorage(true)
+          if (storageAddress) {
+            setWorkingVehicleDestinationAddress({
+              address: storageAddress,
+              lat: basePriceList?.base_lat,
+              lng: basePriceList?.base_lng,
+            })
+          }
+        },
+        fieldKey: 'create-exchange-working-dest',
+      }
+    : null
+  const defectiveDropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: defectiveDestination === 'storage',
+        onConfirm: () => {
+          setDefectiveDestination('storage')
+          if (storageAddress) {
+            setDefectiveDestinationAddress({
+              address: storageAddress,
+              lat: basePriceList?.base_lat,
+              lng: basePriceList?.base_lng,
+            })
+          }
+        },
+        fieldKey: 'create-exchange-defective-dest',
+      }
+    : null
 
   const TRUCK_OPTIONS = [
     { value: 'wheel_lift_cradle', label: 'משקפיים' },
@@ -1417,6 +1468,7 @@ function CreateExchangeTowForm({
                                     label=""
                                     hideLabel
                                     onPinDropClick={() => handlePinDropOpen('workingVehicle')}
+                                    storageYardConfirm={workingPickupYardConfirm}
                                   />
                                 )}
                                 <button
@@ -1439,6 +1491,7 @@ function CreateExchangeTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                                  storageYardConfirm={workingDropoffYardConfirm}
                                 />
                                 {!workingVehicleDestinationIsStorage ? (
                                   <button
@@ -1662,6 +1715,11 @@ function CreateExchangeTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
+                                  storageYardConfirm={
+                                    defectiveDestination === 'address'
+                                      ? defectiveDropoffYardConfirm
+                                      : null
+                                  }
                                 />
                                 {defectiveDestination !== 'storage' ? (
                                   <button

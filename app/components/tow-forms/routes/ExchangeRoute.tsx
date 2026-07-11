@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, X, Package, Loader2, Navigation } from 'lucide-react'
 import { AddressInput, AddressData } from './AddressInput'
+import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import { 
   VehicleLookup, 
   DefectSelector, 
@@ -199,6 +200,37 @@ export function ExchangeRoute({
   onPinDropClick,
   storageAddress
 }: ExchangeRouteProps) {
+  const storageYard = yardFromBasePriceList(basePriceList)
+  const workingPickupYardConfirm = storageYard
+    ? {
+        role: 'pickup' as const,
+        yard: storageYard,
+        alreadyFlagged: workingVehicleSource === 'storage' || startFromBase,
+        onConfirm: () => {
+          onWorkingVehicleSourceChange('storage')
+          onStartFromBaseChange(true)
+        },
+        fieldKey: 'exchange-working-origin',
+      }
+    : null
+  const defectiveDropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: defectiveDestination === 'storage',
+        onConfirm: () => {
+          onDefectiveDestinationChange('storage')
+          if (storageAddress) {
+            onDefectiveDestinationAddressChange({
+              address: storageAddress,
+              lat: basePriceList?.base_lat ?? undefined,
+              lng: basePriceList?.base_lng ?? undefined,
+            })
+          }
+        },
+        fieldKey: 'exchange-defective-dest',
+      }
+    : null
 
   // Helper to copy customer info
   const copyFromCustomer = (setter: (name: string) => void, phoneSetter: (phone: string) => void) => {
@@ -387,6 +419,7 @@ export function ExchangeRoute({
                     onChange={onWorkingVehicleAddressChange}
                     placeholder="הזן כתובת..."
                     onPinDropClick={() => onPinDropClick('workingVehicleAddress')}
+                    storageYardConfirm={workingPickupYardConfirm}
                   />
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -505,6 +538,7 @@ export function ExchangeRoute({
                     onChange={onDefectiveDestinationAddressChange}
                     placeholder="הזן כתובת..."
                     onPinDropClick={() => onPinDropClick('defectiveDestinationAddress')}
+                    storageYardConfirm={defectiveDropoffYardConfirm}
                   />
                   <div>
                     <div className="flex items-center justify-between mb-1">

@@ -44,6 +44,7 @@ import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
 import {
   AddressInput,
   type AddressData,
+  type StorageYardConfirmProp,
 } from '@/app/components/tow-forms/routes/AddressInput'
 import type { VehicleLookupResult, VehicleType } from '@/app/lib/types'
 import {
@@ -354,6 +355,34 @@ export default function NewCustomerExchangeRequestPage() {
     }
   }
 
+  const portalYard =
+    baseAddress?.address?.trim()
+      ? {
+          address: baseAddress.address,
+          lat: baseAddress.lat ?? null,
+          lng: baseAddress.lng ?? null,
+        }
+      : null
+  /** Working origin: "מאחסנה" requires picking a stored vehicle — open that picker. */
+  const workingOriginYardConfirm: StorageYardConfirmProp | null = portalYard
+    ? {
+        role: 'pickup',
+        yard: portalYard,
+        alreadyFlagged: workingFromStorage,
+        onConfirm: () => setStorageModalOpen(true),
+        fieldKey: 'portal-exchange-working-origin',
+      }
+    : null
+  const faultyDestYardConfirm: StorageYardConfirmProp | null = portalYard
+    ? {
+        role: 'dropoff',
+        yard: portalYard,
+        alreadyFlagged: faultyToStorage,
+        onConfirm: () => setFaultyDestinationToYard(true),
+        fieldKey: 'portal-exchange-faulty-dest',
+      }
+    : null
+
   /** Non-storage address present → show contacts; empty or yard → hide. */
   const showWorkingOriginContacts =
     !workingFromStorage && working.origin.address.trim().length > 0
@@ -630,6 +659,7 @@ export default function NewCustomerExchangeRequestPage() {
       /** When true, clearing the address also clears contact name/phone. */
       clearContactsWhenAddressEmpty?: boolean
       storageToggle?: { label: string; checked: boolean; onChange: (v: boolean) => void }
+      storageYardConfirm?: StorageYardConfirmProp | null
     }
   ) => {
     const address = opts.kind === 'origin' ? state.origin : state.destination
@@ -690,6 +720,7 @@ export default function NewCustomerExchangeRequestPage() {
             required
             narrowColumn
             onPinDropClick={() => setPinDropModal({ isOpen: true, field: opts.pin })}
+            storageYardConfirm={opts.storageYardConfirm}
           />
         </FormField>
 
@@ -965,6 +996,9 @@ export default function NewCustomerExchangeRequestPage() {
                   pin: 'workingOrigin',
                   showContacts: showWorkingOriginContacts,
                   clearContactsWhenAddressEmpty: true,
+                  storageYardConfirm: workingFromStorage
+                    ? null
+                    : workingOriginYardConfirm,
                 })}
                 {renderRouteStack(working, patchWorking, {
                   kind: 'destination',
@@ -1063,6 +1097,7 @@ export default function NewCustomerExchangeRequestPage() {
                     checked: faultyToStorage,
                     onChange: setFaultyDestinationToYard,
                   },
+                  storageYardConfirm: faultyDestYardConfirm,
                 })}
               </div>
             </div>

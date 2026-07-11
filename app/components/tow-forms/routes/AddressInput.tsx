@@ -1,8 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link2, Loader2, MapPin } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { StorageYardConfirmDialog } from '../shared/StorageYardConfirmDialog'
+import {
+  matchesStorageYard,
+  storageYardDismissKey,
+  type YardAddressRef,
+} from '../../../lib/utils/storage-yard-match'
 
 // ==================== Google Maps Loading ====================
 
@@ -45,6 +51,17 @@ export interface AddressData {
   isPinDropped?: boolean
 }
 
+/** Optional yard-match confirm when address equals company storage base. */
+export type StorageYardConfirmProp = {
+  role: 'pickup' | 'dropoff'
+  yard: YardAddressRef | null | undefined
+  /** True when the relevant storage flag is already set — never prompt. */
+  alreadyFlagged: boolean
+  onConfirm: () => void
+  /** Stable field id so "לא, רק כתובת" sticks for this point+address. */
+  fieldKey: string
+}
+
 interface AddressInputProps {
   // Support both string and AddressData
   value: string | AddressData
@@ -65,6 +82,7 @@ interface AddressInputProps {
   isMobile?: boolean
   /** Compact desktop column layout — h-9 inputs, rounded-lg, border-gray-200. Does not affect isMobile. */
   narrowColumn?: boolean
+  storageYardConfirm?: StorageYardConfirmProp | null
 }
 
 const LINK_RESOLVE_ERROR = 'לא הצלחנו לזהות מיקום מהקישור'
@@ -86,6 +104,7 @@ export function AddressInput({
   inputRef: externalRef,
   isMobile = false,
   narrowColumn = false,
+  storageYardConfirm = null,
 }: AddressInputProps) {
   const internalRef = useRef<HTMLInputElement>(null)
   const inputRef = externalRef || internalRef
@@ -98,6 +117,80 @@ export function AddressInput({
   const addressString = typeof value === 'string' ? value : (value?.address || '')
   const [localValue, setLocalValue] = useState(addressString)
   const isSelectingRef = useRef(false)
+  const dismissedYardKeysRef = useRef<Set<string>>(new Set())
+  const [yardConfirmOpen, setYardConfirmOpen] = useState(false)
+
+  const maybeAskYardConfirm = useCallback(
+    (entered: AddressData) => {
+      const cfg = storageYardConfirm
+      if (!cfg || cfg.alreadyFlagged) {
+        setYardConfirmOpen(false)
+        return
+      }
+      if (!matchesStorageYard(entered, cfg.yard)) return
+      const key = storageYardDismissKey(cfg.fieldKey, entered.address)
+      if (dismissedYardKeysRef.current.has(key)) return
+      setYardConfirmOpen(true)
+    },
+    [storageYardConfirm],
+  )
+  const maybeAskYardConfirmRef = useRef(maybeAskYardConfirm)
+  maybeAskYardConfirmRef.current = maybeAskYardConfirm
+
+  useEffect(() => {
+    if (storageYardConfirm?.alreadyFlagged) {
+      setYardConfirmOpen(false)
+    }
+  }, [storageYardConfirm?.alreadyFlagged])
+
+  // Pin-drop / parent-driven updates (coords present)
+  useEffect(() => {
+    if (!storageYardConfirm || storageYardConfirm.alreadyFlagged) return
+    if (typeof value === 'string') return
+    if (!value?.address?.trim()) return
+    if (value.lat == null || value.lng == null) return
+    maybeAskYardConfirm(value)
+  }, [
+    typeof value === 'string' ? value : value?.address,
+    typeof value === 'string' ? undefined : value?.lat,
+    typeof value === 'string' ? undefined : value?.lng,
+    storageYardConfirm?.alreadyFlagged,
+    storageYardConfirm?.fieldKey,
+    maybeAskYardConfirm,
+  ])
+
+  const handleYardConfirm = () => {
+    setYardConfirmOpen(false)
+    storageYardConfirm?.onConfirm()
+  }
+
+  const handleYardDismiss = () => {
+    const addr =
+      typeof value === 'string' ? value : value?.address || localValue
+    if (storageYardConfirm && addr.trim()) {
+      dismissedYardKeysRef.current.add(
+        storageYardDismissKey(storageYardConfirm.fieldKey, addr),
+      )
+    }
+    setYardConfirmOpen(false)
+  }
+
+  const handleAddressBlur = () => {
+    const entered: AddressData =
+      typeof value === 'object' && value
+        ? { ...value, address: localValue || value.address || '' }
+        : { address: localValue }
+    maybeAskYardConfirmRef.current(entered)
+  }
+
+  const yardConfirmDialog = storageYardConfirm ? (
+    <StorageYardConfirmDialog
+      open={yardConfirmOpen}
+      role={storageYardConfirm.role}
+      onConfirm={handleYardConfirm}
+      onDismiss={handleYardDismiss}
+    />
+  ) : null
 
   const [linkPanelOpen, setLinkPanelOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
@@ -162,6 +255,7 @@ export function AddressInput({
         }
         
         onAddressSelect?.(addressData)
+        maybeAskYardConfirmRef.current(addressData)
         
         // Reset flag after a short delay
         setTimeout(() => {
@@ -179,19 +273,22 @@ export function AddressInput({
     isSelectingRef.current = true
     setLocalValue(address)
 
+    const addressData: AddressData = {
+      address,
+      lat,
+      lng,
+      isPinDropped: false,
+    }
+
     if (isAddressDataMode) {
-      (onChange as (data: AddressData) => void)({
-        address,
-        lat,
-        lng,
-        isPinDropped: false,
-      })
+      (onChange as (data: AddressData) => void)(addressData)
     } else {
       (onChange as (value: string) => void)(address)
       onAddressDataChange?.({ lat, lng })
     }
 
-    onAddressSelect?.({ address, lat, lng, isPinDropped: false })
+    onAddressSelect?.(addressData)
+    maybeAskYardConfirmRef.current(addressData)
 
     setTimeout(() => {
       isSelectingRef.current = false
@@ -367,6 +464,7 @@ export function AddressInput({
           type="text"
           value={localValue}
           onChange={handleInputChange}
+          onBlur={handleAddressBlur}
           placeholder={placeholder}
           readOnly={readOnly}
           className={inputClasses}
@@ -404,6 +502,7 @@ export function AddressInput({
                   readOnly ? 'bg-gray-50' : ''
                 }`
         )}
+        {yardConfirmDialog}
       </div>
     )
   }
@@ -418,6 +517,7 @@ export function AddressInput({
         </label>
       )}
       {renderInputRow(inputClassName)}
+      {yardConfirmDialog}
     </div>
   )
 }

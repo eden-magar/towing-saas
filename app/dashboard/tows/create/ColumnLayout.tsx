@@ -51,6 +51,7 @@ import {
   AddressInput,
   type AddressData,
 } from '../../../components/tow-forms/routes/AddressInput'
+import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import { mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 
@@ -186,6 +187,35 @@ export function ColumnLayout({
     ),
   )
   const storageAddress = form.basePriceList?.base_address || ''
+  const storageYard = yardFromBasePriceList(form.basePriceList)
+  const pickupYardConfirm = storageYard
+    ? {
+        role: 'pickup' as const,
+        yard: storageYard,
+        alreadyFlagged: form.startFromBase,
+        onConfirm: () => form.setStartFromBase(true),
+        fieldKey: 'column-pickup',
+      }
+    : null
+  const dropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: form.dropoffToStorage,
+        onConfirm: () => {
+          form.setDropoffToStorage(true)
+          if (storageAddress) {
+            form.setDropoffAddress({
+              address: storageAddress,
+              lat: form.basePriceList?.base_lat ?? undefined,
+              lng: form.basePriceList?.base_lng ?? undefined,
+              isPinDropped: false,
+            })
+          }
+        },
+        fieldKey: 'column-dropoff',
+      }
+    : null
   const totalDistance =
     form.startFromBase && form.baseToPickupDistance && form.distance
       ? {
@@ -703,6 +733,7 @@ export function ColumnLayout({
                                     }
                                     isMobile={false}
                                     narrowColumn
+                                    storageYardConfirm={pickupYardConfirm}
                                   />
                                 )}
                                 {stop.role === 'dropoff' && (
@@ -717,6 +748,7 @@ export function ColumnLayout({
                                     }
                                     isMobile={false}
                                     narrowColumn
+                                    storageYardConfirm={dropoffYardConfirm}
                                   />
                                 )}
                                 {stop.role === 'stop' && (

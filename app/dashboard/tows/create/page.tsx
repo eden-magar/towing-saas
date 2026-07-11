@@ -44,6 +44,7 @@ import {
   type RouteStop,
 } from '../../../hooks/useTowForm'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
+import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
   VehicleLookup,
@@ -939,6 +940,13 @@ function CreateTowForm({
             '[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3',
             routeAddressStatus,
           )}
+          storageYardConfirm={
+            stop.role === 'pickup'
+              ? pickupYardConfirm
+              : isLastDropoff
+                ? dropoffYardConfirm
+                : null
+          }
         />
 
         {stop.role === 'stop' && (
@@ -1662,6 +1670,88 @@ function CreateTowForm({
         (startFromBase && baseToPickupDistance ? baseToPickupDistance.distanceKm : 0)
 
   const storageAddress = basePriceList?.base_address || ''
+  const storageYard = yardFromBasePriceList(basePriceList)
+  const pickupYardConfirm = storageYard
+    ? {
+        role: 'pickup' as const,
+        yard: storageYard,
+        alreadyFlagged: startFromBase,
+        onConfirm: () => setStartFromBase(true),
+        fieldKey: 'create-pickup',
+      }
+    : null
+  const dropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: dropoffToStorage,
+        onConfirm: () => {
+          setDropoffToStorage(true)
+          if (storageAddress) {
+            const drop = routeStops.find((s) => s.role === 'dropoff')
+            if (drop) {
+              updateStop(drop.id, {
+                address: {
+                  address: storageAddress,
+                  lat: basePriceList?.base_lat,
+                  lng: basePriceList?.base_lng,
+                },
+              })
+            }
+          }
+        },
+        fieldKey: 'create-dropoff',
+      }
+    : null
+  const workingPickupYardConfirm = storageYard
+    ? {
+        role: 'pickup' as const,
+        yard: storageYard,
+        alreadyFlagged:
+          workingVehicleSource === 'storage' || startFromBase,
+        onConfirm: () => {
+          setWorkingVehicleSource('storage')
+          setStartFromBase(true)
+        },
+        fieldKey: 'create-working-origin',
+      }
+    : null
+  const workingDropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: workingVehicleDestinationIsStorage,
+        onConfirm: () => {
+          setWorkingVehicleDestinationIsStorage(true)
+          if (storageAddress) {
+            setWorkingVehicleDestinationAddress({
+              address: storageAddress,
+              lat: basePriceList?.base_lat,
+              lng: basePriceList?.base_lng,
+            })
+          }
+        },
+        fieldKey: 'create-working-dest',
+      }
+    : null
+  const defectiveDropoffYardConfirm = storageYard
+    ? {
+        role: 'dropoff' as const,
+        yard: storageYard,
+        alreadyFlagged: defectiveDestination === 'storage',
+        onConfirm: () => {
+          setDefectiveDestination('storage')
+          if (storageAddress) {
+            setDefectiveDestinationAddress({
+              address: storageAddress,
+              lat: basePriceList?.base_lat,
+              lng: basePriceList?.base_lng,
+            })
+          }
+        },
+        fieldKey: 'create-defective-dest',
+      }
+    : null
 
   // Deadhead (נסיעת סרק): resolve the rate from the active (merged) price list for the hint.
   const activeDeadheadRate = resolveDeadheadRate(
@@ -2909,6 +2999,7 @@ function CreateTowForm({
                                     label=""
                                     hideLabel
                                     onPinDropClick={() => handlePinDropOpen('workingVehicle')}
+                                    storageYardConfirm={workingPickupYardConfirm}
                                   />
                                 )}
                                 <button
@@ -2931,6 +3022,7 @@ function CreateTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                                  storageYardConfirm={workingDropoffYardConfirm}
                                 />
                                 {!workingVehicleDestinationIsStorage ? (
                                   <button
@@ -3174,6 +3266,11 @@ function CreateTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
+                                  storageYardConfirm={
+                                    defectiveDestination === 'address'
+                                      ? defectiveDropoffYardConfirm
+                                      : null
+                                  }
                                 />
                                 <div className="flex flex-wrap items-start gap-2">
                                 {defectiveDestination !== 'storage' ? (

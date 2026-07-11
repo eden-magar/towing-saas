@@ -13,6 +13,7 @@ import {
 } from '../../../lib/queries/storage'
 import { TimeInStoragePill } from '../../storage/TimeInStoragePill'
 import { FormCard } from '../../ui'
+import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 
 interface DistanceResult {
   distanceKm: number
@@ -189,6 +190,36 @@ export function SingleRoute({
 }: SingleRouteProps) {
   const isNarrow = narrowColumn ?? false
   const isMobileSized = isMobile ?? false
+  const storageYard = yardFromBasePriceList(basePriceList)
+  const pickupYardConfirm = storageYard
+    ? {
+        role: 'pickup' as const,
+        yard: storageYard,
+        alreadyFlagged: startFromBase,
+        onConfirm: () => onStartFromBaseChange(true),
+        fieldKey: 'single-pickup',
+      }
+    : null
+  const dropoffYardConfirm =
+    storageYard && onDropoffToStorageChange
+      ? {
+          role: 'dropoff' as const,
+          yard: storageYard,
+          alreadyFlagged: dropoffToStorage,
+          onConfirm: () => {
+            onDropoffToStorageChange(true)
+            if (storageAddress) {
+              onDropoffAddressChange({
+                address: storageAddress,
+                lat: basePriceList?.base_lat ?? undefined,
+                lng: basePriceList?.base_lng ?? undefined,
+                isPinDropped: false,
+              })
+            }
+          },
+          fieldKey: 'single-dropoff',
+        }
+      : null
   const toggleLocationSurcharge = (id: string) => {
     if (selectedLocationSurcharges.includes(id)) {
       onLocationSurchargesChange(selectedLocationSurcharges.filter(i => i !== id))
@@ -477,6 +508,7 @@ export function SingleRoute({
                     required
                     onPinDropClick={() => onPinDropClick('pickup')}
                     isMobile
+                    storageYardConfirm={pickupYardConfirm}
                   />
                 )}
                 {stop.role === 'dropoff' && (
@@ -488,6 +520,7 @@ export function SingleRoute({
                     required
                     onPinDropClick={() => onPinDropClick('dropoff')}
                     isMobile
+                    storageYardConfirm={dropoffYardConfirm}
                   />
                 )}
                 {stop.role === 'stop' && (
@@ -528,6 +561,7 @@ export function SingleRoute({
                 onPinDropClick={() => onPinDropClick('pickup')}
                 isMobile={isMobileSized}
                 narrowColumn={isNarrow && !isMobileSized}
+                storageYardConfirm={pickupYardConfirm}
               />
             </div>
           </div>
@@ -543,6 +577,7 @@ export function SingleRoute({
                 onPinDropClick={() => onPinDropClick('dropoff')}
                 isMobile={isMobileSized}
                 narrowColumn={isNarrow && !isMobileSized}
+                storageYardConfirm={dropoffYardConfirm}
               />
             </div>
           </div>

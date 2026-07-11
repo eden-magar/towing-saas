@@ -47,6 +47,7 @@ import { SelectorModalShell } from '@/app/components/tow-forms/shared/SelectorMo
 import {
   AddressInput,
   type AddressData,
+  type StorageYardConfirmProp,
 } from '@/app/components/tow-forms/routes/AddressInput'
 import type { VehicleLookupResult, VehicleType } from '@/app/lib/types'
 import {
@@ -312,6 +313,33 @@ export default function NewCustomerTowRequestPage() {
       setDropoffAddress(emptyAddress())
     }
   }
+
+  const portalYard =
+    baseAddress?.address?.trim()
+      ? {
+          address: baseAddress.address,
+          lat: baseAddress.lat ?? null,
+          lng: baseAddress.lng ?? null,
+        }
+      : null
+  const pickupYardConfirm: StorageYardConfirmProp | null = portalYard
+    ? {
+        role: 'pickup',
+        yard: portalYard,
+        alreadyFlagged: pickupFromStorage,
+        onConfirm: () => handlePickupFromStorageChange(true),
+        fieldKey: 'portal-pickup',
+      }
+    : null
+  const dropoffYardConfirm: StorageYardConfirmProp | null = portalYard
+    ? {
+        role: 'dropoff',
+        yard: portalYard,
+        alreadyFlagged: dropoffToStorage,
+        onConfirm: () => handleDropoffToStorageChange(true),
+        fieldKey: 'portal-dropoff',
+      }
+    : null
 
   const clearStoredVehicleSelection = () => {
     setSelectedStoredVehicleId(null)
@@ -926,6 +954,7 @@ export default function NewCustomerTowRequestPage() {
                       required
                       narrowColumn
                       onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'pickup' })}
+                      storageYardConfirm={pickupYardConfirm}
                     />
                   </FormField>
                   {showPickupContacts && (
@@ -987,6 +1016,7 @@ export default function NewCustomerTowRequestPage() {
                       required
                       narrowColumn
                       onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'dropoff' })}
+                      storageYardConfirm={dropoffYardConfirm}
                     />
                   </FormField>
                   {showDropoffContacts && (
