@@ -4615,15 +4615,13 @@ export default function CreateTowPage() {
   const driverParam = searchParams.get('driver')
   const storedVehicleParam = searchParams.get('storedVehicle')
 
-  // Resolve viewport before rendering EITHER tree, so neither the desktop form
-  // nor the mobile wizard flashes on first paint. Mirrors the isMobile pattern
-  // in calendar/page.tsx (window.innerWidth < 640 + resize listener).
+  // Resolve viewport once on mount so neither the desktop form nor the mobile
+  // wizard flashes on first paint. Locked after mount — a live resize listener
+  // would remount the other tree (separate useTowForm) and wipe form state on
+  // orientation change when crossing 640px.
   const [isMobile, setIsMobile] = useState<boolean | null>(null)
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 640)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
+    setIsMobile(window.innerWidth < 640)
   }, [])
 
   // The wizard (Part 1) only handles a pure fresh create. Edit / duplicate /
