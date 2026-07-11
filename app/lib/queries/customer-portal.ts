@@ -135,12 +135,6 @@ const CUSTOMER_TOW_LIST_SELECT = `
   completed_at,
   visibility_overrides,
   show_driver_info_override,
-  driver:drivers!tows_driver_id_fkey (
-    user:users (
-      full_name,
-      phone
-    )
-  ),
   vehicles:tow_vehicles (
     plate_number,
     manufacturer,
@@ -159,14 +153,50 @@ const CUSTOMER_TOW_LIST_SELECT = `
   )
 `
 
-function mapCustomerPortalTow(tow: any): CustomerPortalTow {
-  const driverRow = Array.isArray(tow.driver) ? tow.driver[0] : tow.driver
-  const userRow = Array.isArray(driverRow?.user) ? driverRow.user[0] : driverRow?.user
+type PortalDriverContact = { full_name: string; phone: string | null }
+
+/** SECURITY DEFINER RPC: driver name+phone for caller's own tows only. */
+async function fetchMyTowDriverContacts(
+  towIds: string[]
+): Promise<Map<string, PortalDriverContact>> {
+  const byTowId = new Map<string, PortalDriverContact>()
+  if (towIds.length === 0) return byTowId
+
+  const { data, error } = await supabase.rpc('get_my_tow_driver_contacts', {
+    p_tow_ids: towIds,
+  })
+
+  if (error) {
+    console.error('Error fetching portal tow driver contacts:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    })
+    return byTowId
+  }
+
+  for (const row of data ?? []) {
+    const towId = row?.tow_id as string | undefined
+    const fullName = typeof row?.full_name === 'string' ? row.full_name.trim() : ''
+    if (!towId || !fullName) continue
+    byTowId.set(towId, {
+      full_name: fullName,
+      phone: typeof row?.phone === 'string' && row.phone.trim() ? row.phone.trim() : null,
+    })
+  }
+
+  return byTowId
+}
+
+function mapCustomerPortalTow(
+  tow: any,
+  driverByTowId?: Map<string, PortalDriverContact>
+): CustomerPortalTow {
+  const driver = driverByTowId?.get(tow.id) ?? null
   return {
     ...tow,
-    driver: userRow
-      ? { full_name: userRow.full_name, phone: userRow.phone }
-      : null,
+    driver,
     points: [...(tow.points || [])].sort(
       (a: { point_order: number }, b: { point_order: number }) => a.point_order - b.point_order
     ),
@@ -215,7 +245,9 @@ export async function getCustomerTows(
     return { tows: [], hasMore: false }
   }
 
-  const tows = (data ?? []).map(mapCustomerPortalTow)
+  const rows = data ?? []
+  const driverByTowId = await fetchMyTowDriverContacts(rows.map((t: { id: string }) => t.id))
+  const tows = rows.map((tow) => mapCustomerPortalTow(tow, driverByTowId))
   const hasMore =
     count != null ? offset + tows.length < count : tows.length === limit
 
@@ -248,12 +280,6 @@ export async function getCustomerTowDetail(
       show_vehicles_override,
       show_notes_override,
       final_price,
-      driver:drivers!tows_driver_id_fkey (
-        user:users (
-          full_name,
-          phone
-        )
-      ),
       vehicles:tow_vehicles (
         plate_number,
         manufacturer,
@@ -291,9 +317,10 @@ export async function getCustomerTowDetail(
   if (error || !data) return null
 
   const tow = data as any
+  const driverByTowId = await fetchMyTowDriverContacts([towId])
 
   return {
-    ...mapCustomerPortalTow(tow),
+    ...mapCustomerPortalTow(tow, driverByTowId),
     notes: tow.notes,
     visibility_overrides: tow.visibility_overrides,
     show_photos_override: tow.show_photos_override,

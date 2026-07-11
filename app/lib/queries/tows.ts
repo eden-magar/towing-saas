@@ -723,7 +723,12 @@ export async function searchTows(companyId: string, query: string): Promise<TowW
     .limit(8)
 
   if (error) {
-    console.error('Error searching tows:', error)
+    console.error('Error searching tows:', {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    })
     throw error
   }
 
@@ -886,32 +891,52 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
   ])
 
   if (towRes.error) {
-    console.error('Error fetching tow:', towRes.error)
+    console.error('Error fetching tow:', {
+      message: towRes.error.message,
+      details: towRes.error.details,
+      hint: towRes.error.hint,
+      code: towRes.error.code,
+    })
     throw towRes.error
   }
 
   if (!towRes.data) return null
 
   if (vehiclesRes.error) {
-    console.error('Error fetching tow vehicles:', vehiclesRes.error)
+    console.error('Error fetching tow vehicles:', {
+      message: vehiclesRes.error.message,
+      details: vehiclesRes.error.details,
+      hint: vehiclesRes.error.hint,
+      code: vehiclesRes.error.code,
+    })
     throw vehiclesRes.error
   }
 
   if (legsRes.error) {
-    console.error('Error fetching tow legs:', legsRes.error)
+    console.error('Error fetching tow legs:', {
+      message: legsRes.error.message,
+      details: legsRes.error.details,
+      hint: legsRes.error.hint,
+      code: legsRes.error.code,
+    })
     throw legsRes.error
   }
 
   if (pointsRes.error) {
-    console.error('Error fetching tow points:', pointsRes.error)
+    console.error('Error fetching tow points:', {
+      message: pointsRes.error.message,
+      details: pointsRes.error.details,
+      hint: pointsRes.error.hint,
+      code: pointsRes.error.code,
+    })
   }
 
   if (imagesRes.error) {
     console.error('Error fetching tow images:', {
       message: imagesRes.error.message,
-      code: imagesRes.error.code,
       details: imagesRes.error.details,
       hint: imagesRes.error.hint,
+      code: imagesRes.error.code,
     })
   }
 

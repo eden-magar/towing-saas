@@ -64,7 +64,7 @@ export const PORTAL_VISIBILITY_LABELS: Record<
   },
 }
 
-/** Customer default is opt-out: visible unless explicitly false. */
+/** Customer default is opt-in: visible only when explicitly true. */
 export function resolveVisibility(
   customerSetting: boolean | undefined,
   towOverride: boolean | null | undefined,
@@ -72,7 +72,7 @@ export function resolveVisibility(
   if (towOverride !== null && towOverride !== undefined) {
     return towOverride
   }
-  return customerSetting !== false
+  return customerSetting === true
 }
 
 export type PortalVisibilityTowSource = Partial<TowPortalVisibilityOverrides> & {
@@ -90,6 +90,7 @@ export function getTowVisibilityColumnOverride(
 /**
  * Full resolution: tow column override → legacy JSONB override → customer default.
  * Legacy JSONB keeps existing overrides working until columns are set.
+ * Customer inherit branch is opt-in (must be explicitly true).
  */
 export function resolvePortalVisibilityFlag(
   flag: PortalVisibilityFlag,
@@ -101,7 +102,8 @@ export function resolvePortalVisibilityFlag(
     return columnOverride
   }
   const legacyOverride = tow.visibility_overrides?.[flag]
-  if (legacyOverride !== undefined) {
+  // Only honor an explicit boolean in legacy JSONB; missing key → customer opt-in default.
+  if (legacyOverride === true || legacyOverride === false) {
     return legacyOverride
   }
   return resolveVisibility(portalSettings[flag], null)

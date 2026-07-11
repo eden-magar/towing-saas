@@ -57,7 +57,7 @@ export default function CustomerTowDetail() {
   const [userRole, setUserRole] = useState<string>('viewer')
 
   const canShow = (flag: PortalVisibilityFlag): boolean => {
-    if (!tow) return portalSettings[flag] !== false
+    if (!tow) return portalSettings[flag] === true
     return resolvePortalVisibilityFlag(flag, portalSettings, tow)
   }
 
@@ -409,8 +409,8 @@ export default function CustomerTowDetail() {
                         <p className="text-sm text-gray-600 bg-white rounded p-2">{point.notes}</p>
                       )}
 
-                      {/* Point Images */}
-                      {pointImages.length > 0 && (
+                      {/* Point Images — same visibility as bottom "כל התמונות" */}
+                      {pointImages.length > 0 && canShow('show_photos') && (
                         <div>
                           <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
                             <Camera size={12} />
