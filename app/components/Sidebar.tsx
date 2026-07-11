@@ -136,9 +136,9 @@ export default function Sidebar() {
       </div>
       <div className="lg:hidden h-16"></div>
 
-      {/* דסקטופ: סיידבר סטטי (ללא עטיפת fixed) */}
+      {/* דסקטופ: עמודה קבועה בגובה המסך — הגלילה רק ב-main */}
       <aside
-        className={`hidden lg:flex lg:static lg:flex-col bg-white border-l border-gray-200 lg:shadow-sm ${
+        className={`hidden lg:flex lg:flex-col lg:h-full lg:shrink-0 bg-white border-l border-gray-200 lg:shadow-sm ${
           collapsed ? 'lg:w-16' : 'lg:w-64'
         }`}
       >

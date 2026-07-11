@@ -1781,7 +1781,7 @@ function CreateTowForm({
   }
 
   return (
-    <div className="min-h-screen bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
+    <div className="min-h-full bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
       {error && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
           {error}
@@ -1793,8 +1793,8 @@ function CreateTowForm({
         </div>
       )}
 
-      <header className="bg-white border-b border-gray-300 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4">
+      <header className="bg-white border-b border-gray-300">
+        <div className="max-w-5xl mx-auto">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center gap-2">
               <Link
@@ -1851,12 +1851,12 @@ function CreateTowForm({
       </header>
 
       {isFromRequestLoad && (
-        <div className="max-w-5xl mx-auto px-4 pt-3">
+        <div className="max-w-5xl mx-auto pt-3">
           <FromRequestFieldLegend />
         </div>
       )}
 
-      <div className="px-4 py-4 sm:py-6 flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
+      <div className="py-4 sm:py-6 flex flex-col items-center gap-6 lg:flex-row lg:items-start lg:justify-center">
         <div className="w-[680px] max-w-full">
           {/* Section 1 — לקוח */}
           <CreateCustomerSection
@@ -3990,7 +3990,7 @@ function CreateTowForm({
 
         {/* Side panel */}
         {towType && (
-          <aside className="hidden lg:block w-[200px] flex-shrink-0 sticky top-24 self-start">
+          <aside className="hidden lg:block w-[200px] flex-shrink-0 sticky top-4 self-start">
             <div className="bg-white rounded-xl border border-gray-300 p-4 shadow-sm">
               <p className="text-xs text-gray-500 mb-1">מחיר</p>
               <p className="text-2xl font-bold text-gray-900">₪{finalPrice}</p>

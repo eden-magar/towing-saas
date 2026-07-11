@@ -42,9 +42,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl">
-      <body className="bg-slate-900 min-h-screen flex flex-col" suppressHydrationWarning>
+      <body className="bg-slate-900 h-screen overflow-hidden flex flex-col" suppressHydrationWarning>
         <AuthProvider>
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
             {children}
           </div>
           <Footer />

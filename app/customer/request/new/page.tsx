@@ -9,6 +9,7 @@ import {
   getMyStoredVehicles,
   type CustomerPortalStoredVehicle,
 } from '@/app/lib/queries/customer-portal'
+import { PortalRequestTypeSwitcher } from '@/app/components/customer-portal/PortalRequestTypeSwitcher'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
 import { storedVehicleToCondition } from '@/app/lib/utils/storage-vehicle'
@@ -540,11 +541,14 @@ export default function NewCustomerTowRequestPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 space-y-3" dir="rtl">
-      <div className="mb-1">
-        <h1 className="text-xl font-bold text-gt-text-primary">הזמנת גרירה</h1>
-        <p className="text-sm text-gt-text-tertiary mt-1">
-          מילוי פרטי בקשת גרירה פשוטה (רכב אחד, מוצא ליעד)
-        </p>
+      <div className="mb-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-gt-text-primary">הזמנת גרירה</h1>
+          <p className="text-sm text-gt-text-tertiary mt-1">
+            מילוי פרטי בקשת גרירה פשוטה (רכב אחד, מוצא ליעד)
+          </p>
+        </div>
+        <PortalRequestTypeSwitcher active="simple" />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
