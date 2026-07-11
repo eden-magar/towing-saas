@@ -9,6 +9,8 @@
   import { TowWithDetails, searchTows } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getPendingCustomerTowRequests } from '../lib/queries/customer-tow-requests'
+  import { CustomerTowRequestDetailsPanel } from '../components/tow-forms/CustomerTowRequestDetailsPanel'
+  import { SelectorModalShell } from '../components/tow-forms/shared/SelectorModalShell'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
   import { getDayTowsWithPrevDay } from '../lib/queries/calendar'
@@ -178,6 +180,10 @@
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
     const [incomingRequests, setIncomingRequests] = useState<any[]>([])
+    const [viewingIncomingRequest, setViewingIncomingRequest] = useState<{
+      id: string
+      customerName: string | null
+    } | null>(null)
     const [denyConfirmRequest, setDenyConfirmRequest] = useState<typeof rejectionRequests[0] | null>(null)
     const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
     const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
@@ -1357,25 +1363,53 @@
                   ) : incomingRequests.map((req) => (
                     <div
                       key={req.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => router.push(`/dashboard/tows/create?fromRequest=${req.id}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          router.push(`/dashboard/tows/create?fromRequest=${req.id}`)
-                        }
-                      }}
-                      className="px-3 py-2 flex items-start gap-2 min-w-0 cursor-pointer hover:bg-[#33d4ff]/5 transition-colors"
+                      className="px-3 py-2 flex items-center gap-2 min-w-0"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-700 truncate">
-                          {req.customer?.name || '—'}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-medium text-gray-700 truncate">
+                            {req.customer?.name || '—'}
+                          </span>
+                          {req.tow_type === 'exchange' && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-800 border border-violet-200">
+                              החלפה
+                            </span>
+                          )}
+                          {req.tow_type === 'custom' && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-50 text-slate-700 border border-slate-200">
+                              מותאם
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-gray-400 truncate">
                           {formatIncomingScheduledAt(req.scheduled_at)}
                           {req.customer_order_number ? ` · ${req.customer_order_number}` : ''}
                         </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          title="צפה בפרטי גרירה"
+                          onClick={() =>
+                            setViewingIncomingRequest({
+                              id: req.id,
+                              customerName: req.customer?.name ?? null,
+                            })
+                          }
+                          className="px-2 py-1 rounded-md border border-gray-200 bg-white text-[10px] font-medium text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                        >
+                          צפה
+                        </button>
+                        <button
+                          type="button"
+                          title="השלם פרטי גרירה ושגר"
+                          onClick={() =>
+                            router.push(`/dashboard/tows/create?fromRequest=${req.id}`)
+                          }
+                          className="px-2 py-1 rounded-md bg-gt-brand text-[10px] font-medium text-white hover:bg-gt-brand-hover transition-colors whitespace-nowrap"
+                        >
+                          השלם ושגר
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1385,6 +1419,45 @@
           </div>
 
         </div>
+
+        <SelectorModalShell
+          open={!!viewingIncomingRequest}
+          onClose={() => setViewingIncomingRequest(null)}
+          title="פרטי בקשת לקוח"
+          panelClassName="max-w-lg"
+          footer={
+            viewingIncomingRequest ? (
+              <div className="flex flex-col gap-2" dir="rtl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = viewingIncomingRequest.id
+                    setViewingIncomingRequest(null)
+                    router.push(`/dashboard/tows/create?fromRequest=${id}`)
+                  }}
+                  className="w-full min-h-[44px] rounded-xl bg-gt-brand text-sm font-medium text-white transition-colors hover:bg-gt-brand-hover"
+                >
+                  המשך למילוי הגרירה
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingIncomingRequest(null)}
+                  className="w-full min-h-[40px] rounded-xl border border-gray-200 bg-white text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  סגור
+                </button>
+              </div>
+            ) : null
+          }
+        >
+          {viewingIncomingRequest && (
+            <CustomerTowRequestDetailsPanel
+              requestId={viewingIncomingRequest.id}
+              customerName={viewingIncomingRequest.customerName}
+              embedded
+            />
+          )}
+        </SelectorModalShell>
 
         {/* מודל אישור דחייה */}
         {showApprovalModal && selectedRequest && (

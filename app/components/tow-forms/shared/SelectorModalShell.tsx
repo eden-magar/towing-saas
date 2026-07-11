@@ -11,6 +11,8 @@ interface SelectorModalShellProps {
   panelClassName?: string
   /** Extra classes on the backdrop (e.g. sm:hidden for mobile-only modals). */
   overlayClassName?: string
+  /** When set, replaces the default full-width סיום footer button. */
+  footer?: ReactNode
 }
 
 /**
@@ -25,6 +27,7 @@ export function SelectorModalShell({
   children,
   panelClassName = 'max-w-md',
   overlayClassName = '',
+  footer,
 }: SelectorModalShellProps) {
   if (!open) return null
 
@@ -42,13 +45,15 @@ export function SelectorModalShell({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         <div className="shrink-0 border-t border-gray-200 p-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full min-h-[44px] rounded-xl bg-gt-brand text-sm font-medium text-white transition-colors hover:bg-gt-brand-hover"
-          >
-            סיום
-          </button>
+          {footer ?? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full min-h-[44px] rounded-xl bg-gt-brand text-sm font-medium text-white transition-colors hover:bg-gt-brand-hover"
+            >
+              סיום
+            </button>
+          )}
         </div>
       </div>
     </div>
