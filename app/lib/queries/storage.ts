@@ -28,6 +28,8 @@ export interface StoredVehicle {
   vehicle_condition: 'operational' | 'faulty'
   vehicle_code: string | null
   defects: string[] | null
+  /** From the tow that entered storage; null for manual adds / legacy rows */
+  entry_customer_order_number: string | null
   updated_at: string
 }
 
@@ -291,6 +293,8 @@ interface AddToStorageInput {
   vehicleCondition?: 'operational' | 'faulty'
   vehicleCode?: string
   defects?: string[]
+  /** Tow-driven entry only; omit/null for manual storage adds */
+  entryCustomerOrderNumber?: string | null
 }
 
 export async function addVehicleToStorage(input: AddToStorageInput): Promise<string> {
@@ -319,6 +323,7 @@ export async function addVehicleToStorage(input: AddToStorageInput): Promise<str
     p_vehicle_condition: input.vehicleCondition || 'operational',
     p_vehicle_code: input.vehicleCode || null,
     p_defects: input.defects ?? null,
+    p_entry_customer_order_number: input.entryCustomerOrderNumber || null,
   })
 
   if (error) {

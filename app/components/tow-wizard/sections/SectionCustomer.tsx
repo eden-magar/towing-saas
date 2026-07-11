@@ -87,6 +87,7 @@ export function SectionCustomer({ form }: { form: Form }) {
       onNowClick={handleNowClick}
       customerOrderNumber={form.customerOrderNumber}
       onCustomerOrderNumberChange={form.setCustomerOrderNumber}
+      customerOrderNumberFromStorage={form.customerOrderNumberFromStorage}
       isBusinessCustomer={isBusinessCustomer}
       department={form.department}
       onDepartmentChange={form.setDepartment}

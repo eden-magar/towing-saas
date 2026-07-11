@@ -802,7 +802,7 @@ async function handleStorageOnPointCompleted(
 
   const { data: tow, error: towError } = await supabase
     .from('tows')
-    .select('id, company_id, customer_id, driver_id, tow_type')
+    .select('id, company_id, customer_id, driver_id, tow_type, customer_order_number')
     .eq('id', point.tow_id)
     .single()
 
@@ -935,6 +935,7 @@ async function handleStorageOnPointCompleted(
           vehicleCondition: isFaulty ? 'faulty' : 'operational',
           vehicleCode: vehicle.vehicle_code || undefined,
           defects: parsedDefects,
+          entryCustomerOrderNumber: tow.customer_order_number || null,
         })
       } catch (err) {
         console.error('[storage] add failed for plate', vehicle.plate_number, err)

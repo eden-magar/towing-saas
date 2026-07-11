@@ -834,7 +834,17 @@ export function useTowForm(
   const [manualAdjustmentPercent, setManualAdjustmentPercent] = useState<string>('')
   const [manualAdjustmentType, setManualAdjustmentType] = useState<'discount' | 'markup'>('discount')
 
-  const [customerOrderNumber, setCustomerOrderNumber] = useState('')
+  const [customerOrderNumber, setCustomerOrderNumberState] = useState('')
+  const [customerOrderNumberFromStorage, setCustomerOrderNumberFromStorage] =
+    useState(false)
+  const customerOrderNumberRef = useRef('')
+  useEffect(() => {
+    customerOrderNumberRef.current = customerOrderNumber
+  }, [customerOrderNumber])
+  const setCustomerOrderNumber = useCallback((v: string) => {
+    setCustomerOrderNumberState(v)
+    setCustomerOrderNumberFromStorage(false)
+  }, [])
   const [orderNumber, setOrderNumber] = useState<string | null>(null)
   const [department, setDepartment] = useState('')
   const [orderedBy, setOrderedBy] = useState('')
@@ -2970,10 +2980,22 @@ export function useTowForm(
     }
   }
 
+  const applyEntryCustomerOrderFromStorage = (
+    vehicle: StoredVehicleWithCustomer
+  ) => {
+    const entry = vehicle.entry_customer_order_number?.trim()
+    if (!entry) return
+    if (customerOrderNumberRef.current.trim()) return
+    setCustomerOrderNumberState(entry)
+    customerOrderNumberRef.current = entry
+    setCustomerOrderNumberFromStorage(true)
+  }
+
   const hydrateStoredVehicleIntoSlot = (
     vehicle: StoredVehicleWithCustomer,
     slot: StoredVehicleHydrationSlot
   ) => {
+    applyEntryCustomerOrderFromStorage(vehicle)
     const vehicleResult = buildStoredVehicleLookupResult(vehicle)
     const { isFaulty, defects } = storedVehicleToCondition(vehicle)
 
@@ -3124,6 +3146,7 @@ export function useTowForm(
     vehicle: StoredVehicleWithCustomer,
     type: 'single' | 'exchange' | 'custom'
   ) => {
+    applyEntryCustomerOrderFromStorage(vehicle)
     setSelectedStoredVehicleId(vehicle.id)
     setStorageVehicleCondition(vehicle.vehicle_condition)
     setStartFromBase(true)
@@ -3885,6 +3908,7 @@ export function useTowForm(
     customPriceIncludesVat, setCustomPriceIncludesVat,
     // Customer
     customerOrderNumber, setCustomerOrderNumber,
+    customerOrderNumberFromStorage,
     orderNumber,
     isDuplicateLoad,
     isFromRequestLoad,

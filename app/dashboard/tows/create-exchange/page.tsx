@@ -245,6 +245,7 @@ function CreateExchangeTowForm({
     baseToPickupDistance,
     customerOrderNumber,
     setCustomerOrderNumber,
+    customerOrderNumberFromStorage,
     department,
     setDepartment,
     orderedBy,
@@ -1115,6 +1116,7 @@ function CreateExchangeTowForm({
             onNowClick={handleNowClick}
             customerOrderNumber={customerOrderNumber}
             onCustomerOrderNumberChange={setCustomerOrderNumber}
+            customerOrderNumberFromStorage={customerOrderNumberFromStorage}
             isBusinessCustomer={isBusinessCustomer}
             department={department}
             onDepartmentChange={setDepartment}

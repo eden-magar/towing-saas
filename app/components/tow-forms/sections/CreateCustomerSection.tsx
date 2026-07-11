@@ -45,6 +45,8 @@ export interface CreateCustomerSectionProps {
   onNowClick: () => void
   customerOrderNumber: string
   onCustomerOrderNumberChange: (v: string) => void
+  /** True when customerOrderNumber was auto-filled from storage entry order */
+  customerOrderNumberFromStorage?: boolean
   isBusinessCustomer?: boolean
   department?: string
   onDepartmentChange?: (v: string) => void
@@ -114,6 +116,7 @@ export function CreateCustomerSection({
   onNowClick,
   customerOrderNumber,
   onCustomerOrderNumberChange,
+  customerOrderNumberFromStorage = false,
   isBusinessCustomer = false,
   department = '',
   onDepartmentChange,
@@ -223,6 +226,11 @@ export function CreateCustomerSection({
           } ${compact ? 'h-10 text-sm' : 'h-9 text-sm'}`}
         />
       </div>
+      {customerOrderNumberFromStorage && (
+        <p className="mt-1 text-[11px] text-cyan-800/80 text-right leading-snug">
+          מספר ההזמנה מולא אוטומטית — הרכב נכנס לאחסנה בהזמנה זו
+        </p>
+      )}
     </div>
   )
 

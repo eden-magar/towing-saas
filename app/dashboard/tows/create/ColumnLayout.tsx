@@ -324,6 +324,7 @@ export function ColumnLayout({
               onNowClick={handleNowClick}
               customerOrderNumber={form.customerOrderNumber}
               onCustomerOrderNumberChange={form.setCustomerOrderNumber}
+              customerOrderNumberFromStorage={form.customerOrderNumberFromStorage}
               isBusinessCustomer={isBusinessCustomer}
               department={form.department}
               onDepartmentChange={form.setDepartment}
