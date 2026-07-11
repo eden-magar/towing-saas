@@ -4,10 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Search, User, ArrowLeftRight, Loader2 } from 'lucide-react'
 import type { CustomerListItem } from '../../../lib/queries/customers'
 import type { CustomerWithPricing } from '../../../lib/queries/price-lists'
-import {
-  getStoredVehicleStatusDisplay,
-  type StoredVehicleWithCustomer,
-} from '../../../lib/queries/storage'
+import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
 import { Input, Button, FormCard, TimeInput, DateInput } from '../../ui'
 import { PhoneInput } from '../../ui/PhoneInput'
 import { OrdererNameAutocomplete } from '../../customer-orderers/OrdererNameAutocomplete'
@@ -211,7 +208,7 @@ export function CreateCustomerSection({
     : 'grid grid-cols-1 sm:grid-cols-2 gap-2'
 
   const inlineCustomerOrderNumberField = (
-    <div className="w-full sm:w-auto sm:max-w-[11rem] shrink-0">
+    <div className="w-full">
       <label className="block text-[10px] sm:text-xs font-semibold text-gray-800 mb-0.5 text-right">
         מס׳ הזמנת לקוח
       </label>
@@ -234,8 +231,8 @@ export function CreateCustomerSection({
       className={`${sectionPaddingX} py-3.5 sm:py-4 border-b border-gray-100`}
       dir="rtl"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">{identityContent}</div>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3 min-w-0 w-full">{identityContent}</div>
         {inlineCustomerOrderNumberField}
       </div>
     </div>
@@ -435,46 +432,20 @@ export function CreateCustomerSection({
       </div>
     ) : null
 
+  // Display-only: no onSelect prop exists on this section. Real picking happens
+  // after tow type is chosen (e.g. classic create "בחר מאחסנה" / SingleRoute chips).
   const storedVehiclesBlock =
     customerStoredVehicles.length > 0 ? (
-      <div className={`${sectionPaddingX} pb-4 pt-0 border-t border-gray-100`}>
-        <p className="text-xs text-gray-500 mb-2">רכבים באחסנה</p>
-        <div className="flex flex-wrap gap-2">
-          {customerStoredVehicles.map((v) => {
-            const statusDisplay = getStoredVehicleStatusDisplay(v.current_status)
-            const isReserved = v.current_status === 'reserved_for_tow'
-            return (
-              <div
-                key={v.id}
-                className={`px-3 py-1.5 rounded-lg text-sm border flex items-center gap-1 flex-wrap ${
-                  isReserved
-                    ? 'border-amber-300 bg-amber-50'
-                    : 'border-gray-300 bg-white'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
-                  }`}
-                />
-                <span>
-                  {v.plate_number} — {v.vehicle_data?.model || ''}
-                </span>
-                <span className="text-xs text-gray-400 mr-1">
-                  {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
-                </span>
-                {v.current_status !== 'stored' && (
-                  <span
-                    className={`text-xs font-medium px-1.5 py-0.5 rounded ${statusDisplay.badgeClass}`}
-                  >
-                    {statusDisplay.label}
-                  </span>
-                )}
-              </div>
-            )
-          })}
+      <div className={`${sectionPaddingX} pb-4 pt-0 border-t border-gray-100`} dir="rtl">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+            <span className="text-xs font-medium text-gray-500">רכבים באחסנה:</span>
+            <span className="inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 rounded-md bg-gray-100 border border-gray-200 text-xs font-semibold text-gray-800 tabular-nums">
+              {customerStoredVehicles.length}
+            </span>
+          </span>
         </div>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-gray-400 mt-1.5">
           בחירת רכב תתאפשר לאחר בחירת סוג גרירה
         </p>
       </div>
@@ -552,8 +523,8 @@ export function CreateCustomerSection({
           className={`${sectionPaddingX} py-3.5 sm:py-4 border-b border-gray-100`}
           dir="rtl"
         >
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-            <div className="relative flex-1 min-w-0 w-full">
+          <div className="flex flex-col gap-3">
+            <div className="relative w-full min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <Input
                 type="text"
@@ -598,9 +569,12 @@ export function CreateCustomerSection({
                   onClick={() =>
                     onCustomerSelect(customer.id, customer.name || '', customer.phone || '')
                   }
-                  className="w-full flex items-center justify-between px-4 py-2 hover:bg-gray-50 transition-colors text-right"
+                  className="w-full flex items-center justify-between gap-3 px-4 py-2 hover:bg-gray-50 transition-colors text-right"
                 >
-                  <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-800 font-medium truncate min-w-0">
+                    {customer.name}
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
                     {listBadge && (
                       <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
                         {listBadge}
@@ -608,7 +582,6 @@ export function CreateCustomerSection({
                     )}
                     <span className="text-xs text-gray-400">{customer.phone}</span>
                   </div>
-                  <span className="text-sm text-gray-800 font-medium">{customer.name}</span>
                 </button>
               )
             })}

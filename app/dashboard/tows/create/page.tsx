@@ -100,6 +100,8 @@ import type { RoutePoint } from '../../../components/tow-forms/routes/RouteBuild
 import { getActiveTimeSurcharges } from '../../../lib/queries/price-lists'
 import type { TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import { TimeInStoragePill } from '../../../components/storage/TimeInStoragePill'
+import { StorageVehiclePickerModal } from '../../../components/storage/StorageVehiclePickerModal'
 import type { VehicleLookupResult, VehicleType } from '../../../lib/types'
 import { useAuth } from '../../../lib/AuthContext'
 import {
@@ -2499,80 +2501,31 @@ function CreateTowForm({
                       </div>
                     )}
 
-                    {showStorageModal && (
-                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
-                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-800 text-base">בחר רכב מאחסנה</h3>
-                            <button
-                              type="button"
-                              onClick={() => setShowStorageModal(false)}
-                              className={`text-gray-400 hover:text-gray-600 text-xl leading-none${isMobile ? ' p-2 -m-2' : ''}`}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <div className="p-4 flex flex-col gap-2">
-                            {customerStoredVehicles.filter(isPickableStoredVehicle).map((v) => (
-                              <button
-                                key={v.id}
-                                type="button"
-                                onClick={() => {
-                                  if (selectedStoredVehicleId === v.id) {
-                                    handleClearStoredVehicle()
-                                  } else {
-                                    handleSelectStoredVehicle(v)
-                                    if (storageAddress) {
-                                      const pickup = findPickupRouteStop(routeStops)
-                                      if (pickup) {
-                                        updateStop(pickup.id, {
-                                          address: {
-                                            address: storageAddress,
-                                            lat: basePriceList?.base_lat,
-                                            lng: basePriceList?.base_lng,
-                                          },
-                                        })
-                                      }
-                                      setStartFromBase(true)
-                                    }
-                                  }
-                                  setShowStorageModal(false)
-                                }}
-                                className={`w-full px-4 py-3 rounded-xl border-2 text-sm font-medium text-right flex items-center justify-between transition-colors ${
-                                  selectedStoredVehicleId === v.id
-                                    ? 'border-green-500 bg-green-50 text-green-700'
-                                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`w-2.5 h-2.5 rounded-full ${
-                                      v.vehicle_condition === 'operational' ? 'bg-green-500' : 'bg-red-500'
-                                    }`}
-                                  />
-                                  <span>{v.plate_number}</span>
-                                  {v.vehicle_data?.model && (
-                                    <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>
-                                  )}
-                                </div>
-                                <span className="text-xs text-gray-400">
-                                  {v.vehicle_condition === 'operational' ? 'תקין' : 'תקול'}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                          <div className="px-4 pb-4">
-                            <button
-                              type="button"
-                              onClick={() => setShowStorageModal(false)}
-                              className="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
-                            >
-                              ביטול
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    <StorageVehiclePickerModal
+                      isOpen={showStorageModal}
+                      onClose={() => setShowStorageModal(false)}
+                      vehicles={customerStoredVehicles}
+                      onSelect={(v) => {
+                        if (selectedStoredVehicleId === v.id) {
+                          handleClearStoredVehicle()
+                        } else {
+                          handleSelectStoredVehicle(v)
+                          if (storageAddress) {
+                            const pickup = findPickupRouteStop(routeStops)
+                            if (pickup) {
+                              updateStop(pickup.id, {
+                                address: {
+                                  address: storageAddress,
+                                  lat: basePriceList?.base_lat,
+                                  lng: basePriceList?.base_lng,
+                                },
+                              })
+                            }
+                            setStartFromBase(true)
+                          }
+                        }
+                      }}
+                    />
                   </>
                 )}
 
@@ -4174,14 +4127,17 @@ function CreateTowForm({
                     }
                     setShowWorkingStorageModal(false)
                   }}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:border-gray-300 text-sm font-medium text-right flex items-center justify-between"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:border-gray-300 text-sm font-medium text-right flex flex-col items-stretch gap-1.5"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                    <span>{v.plate_number}</span>
-                    {v.vehicle_data?.model && <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>}
+                  <div className="flex items-center justify-between gap-2 w-full">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                      <span>{v.plate_number}</span>
+                      {v.vehicle_data?.model && <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>}
+                    </div>
+                    <span className="text-xs text-gray-400">תקין</span>
                   </div>
-                  <span className="text-xs text-gray-400">תקין</span>
+                  <TimeInStoragePill lastStoredAt={v.last_stored_at} />
                 </button>
               ))}
             </div>

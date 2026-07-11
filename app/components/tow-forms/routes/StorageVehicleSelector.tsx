@@ -2,6 +2,7 @@
 
 import { Loader2, Package } from 'lucide-react'
 import { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
+import { TimeInStoragePill } from '../../storage/TimeInStoragePill'
 
 // ==================== Types ====================
 
@@ -49,15 +50,18 @@ export function StorageVehicleSelector({
             key={sv.id}
             type="button"
             onClick={() => onSelect(sv)}
-            className="px-3 py-2 border border-purple-300 rounded-lg bg-white hover:bg-purple-100 transition-colors text-sm flex items-center gap-2"
+            className="px-3 py-2 border border-purple-300 rounded-lg bg-white hover:bg-purple-100 transition-colors text-sm flex flex-col items-start gap-1"
           >
-            <Package size={14} className="text-purple-500" />
-            <span className="font-medium">{sv.plate_number}</span>
-            {sv.vehicle_data && (
-              <span className="text-xs text-gray-500">
-                {sv.vehicle_data.manufacturer} {sv.vehicle_data.model}
-              </span>
-            )}
+            <span className="flex items-center gap-2">
+              <Package size={14} className="text-purple-500" />
+              <span className="font-medium">{sv.plate_number}</span>
+              {sv.vehicle_data && (
+                <span className="text-xs text-gray-500">
+                  {sv.vehicle_data.manufacturer} {sv.vehicle_data.model}
+                </span>
+              )}
+            </span>
+            <TimeInStoragePill lastStoredAt={sv.last_stored_at} />
           </button>
         ))}
       </div>

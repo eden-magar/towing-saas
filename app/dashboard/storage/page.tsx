@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
 import { normalizePlate } from '../../lib/utils/plate-number'
+import { TimeInStoragePill } from '../../components/storage/TimeInStoragePill'
 import { 
   getStoredVehicles, 
   addVehicleToStorage, 
@@ -478,9 +479,12 @@ export default function StoragePage() {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Calendar size={16} />
-                      <span>{formatDate(vehicle.last_stored_at)}</span>
+                    <div className="flex flex-col items-start gap-1.5 text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={16} />
+                        <span>{formatDate(vehicle.last_stored_at)}</span>
+                      </div>
+                      <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
                     </div>
                   </td>
                   <td className="px-4 py-4">
@@ -642,6 +646,11 @@ export default function StoragePage() {
                 >
                   {getStoredVehicleStatusDisplay(vehicle.current_status).label}
                 </span>
+                <span className="flex items-center gap-1">
+                  <Calendar size={14} />
+                  {formatDate(vehicle.last_stored_at)}
+                </span>
+                <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
                 {vehicle.customer_name && (
                   <span className="flex items-center gap-1">
                     <Building2 size={14} />

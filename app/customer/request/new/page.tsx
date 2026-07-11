@@ -11,7 +11,8 @@ import {
 } from '@/app/lib/queries/customer-portal'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
-import { storedVehicleToCondition, formatTimeInStorageHebrew, getStorageCalendarDays } from '@/app/lib/utils/storage-vehicle'
+import { storedVehicleToCondition } from '@/app/lib/utils/storage-vehicle'
+import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
 import {
   Button,
   DateInput,
@@ -34,31 +35,12 @@ import {
   AlertCircle,
   CheckCircle2,
   ClipboardList,
-  Clock,
   Loader2,
   MapPin,
   MessageSquareText,
   Package,
   Truck,
 } from 'lucide-react'
-
-/** Inclusive start of the warning band (4–7 calendar days in storage). */
-const STORAGE_DURATION_WARNING_MIN_DAYS = 4
-/** Inclusive start of the alert band (8+ calendar days in storage). */
-const STORAGE_DURATION_ALERT_MIN_DAYS = 8
-
-const STORAGE_DURATION_PILL_BASE =
-  'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium'
-
-function storageDurationPillClass(days: number): string {
-  if (days >= STORAGE_DURATION_ALERT_MIN_DAYS) {
-    return `${STORAGE_DURATION_PILL_BASE} bg-rose-200 text-rose-900`
-  }
-  if (days >= STORAGE_DURATION_WARNING_MIN_DAYS) {
-    return `${STORAGE_DURATION_PILL_BASE} bg-amber-200 text-amber-900`
-  }
-  return `${STORAGE_DURATION_PILL_BASE} bg-sky-100 text-sky-800`
-}
 
 /** Map a portal stored_vehicles row → VehicleLookupResult (mirrors dashboard hydrate). */
 function buildLookupResultFromStored(
@@ -263,12 +245,6 @@ export default function NewCustomerTowRequestPage() {
         .filter(Boolean)
         .join(' ')
     : ''
-  const selectedStoredDuration = selectedStoredVehicle
-    ? formatTimeInStorageHebrew(selectedStoredVehicle.last_stored_at)
-    : null
-  const selectedStoredDurationDays = selectedStoredVehicle
-    ? getStorageCalendarDays(selectedStoredVehicle.last_stored_at)
-    : null
 
   const filteredStoredVehicles = (() => {
     const q = storageSearch.trim().toLowerCase()
@@ -699,12 +675,7 @@ export default function NewCustomerTowRequestPage() {
                       {selectedStoredVehicle.vehicle_condition === 'faulty' ? 'תקול' : 'תקין'}
                     </span>
                   </div>
-                  {selectedStoredDuration && selectedStoredDurationDays != null && (
-                    <span className={storageDurationPillClass(selectedStoredDurationDays)}>
-                      <Clock size={12} className="shrink-0" />
-                      {selectedStoredDuration}
-                    </span>
-                  )}
+                  <TimeInStoragePill lastStoredAt={selectedStoredVehicle.last_stored_at} />
                 </div>
                 <button
                   type="button"
@@ -746,8 +717,6 @@ export default function NewCustomerTowRequestPage() {
                       ]
                         .filter(Boolean)
                         .join(' ')
-                      const timeInStorage = formatTimeInStorageHebrew(vehicle.last_stored_at)
-                      const timeInStorageDays = getStorageCalendarDays(vehicle.last_stored_at)
 
                       return (
                         <button
@@ -781,12 +750,7 @@ export default function NewCustomerTowRequestPage() {
                               {isFaulty ? 'תקול' : 'תקין'}
                             </span>
                           </span>
-                          {timeInStorage && timeInStorageDays != null && (
-                            <span className={storageDurationPillClass(timeInStorageDays)}>
-                              <Clock size={12} className="shrink-0" />
-                              {timeInStorage}
-                            </span>
-                          )}
+                          <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
                           {isReserved && (
                             <span className="text-xs text-amber-700">ממתין לגרירה</span>
                           )}

@@ -16,6 +16,7 @@ import {
   isPickableStoredVehicle,
   StoredVehicleWithCustomer,
 } from '../../../lib/queries/storage'
+import { TimeInStoragePill } from '../../storage/TimeInStoragePill'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { PhoneInput } from '../../ui/PhoneInput'
 
@@ -331,14 +332,17 @@ export function ExchangeRoute({
                             key={vehicle.id}
                             type="button"
                             onClick={() => onSelectWorkingVehicle(vehicle)}
-                            className="px-3 py-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex items-center gap-2"
+                            className="px-3 py-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex flex-col items-start gap-1"
                           >
-                            <span className="font-medium text-gray-800">{vehicle.plate_number}</span>
-                            {vehicle.vehicle_data && (
-                              <span className="text-xs text-gray-500 hidden sm:inline">
-                                {vehicle.vehicle_data.manufacturer} {vehicle.vehicle_data.model}
-                              </span>
-                            )}
+                            <span className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-gray-800">{vehicle.plate_number}</span>
+                              {vehicle.vehicle_data && (
+                                <span className="text-xs text-gray-500 hidden sm:inline">
+                                  {vehicle.vehicle_data.manufacturer} {vehicle.vehicle_data.model}
+                                </span>
+                              )}
+                            </span>
+                            <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
                           </button>
                         ))}
                       </div>

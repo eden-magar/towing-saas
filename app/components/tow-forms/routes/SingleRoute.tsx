@@ -11,6 +11,7 @@ import {
   isPickableStoredVehicle,
   StoredVehicleWithCustomer,
 } from '../../../lib/queries/storage'
+import { TimeInStoragePill } from '../../storage/TimeInStoragePill'
 import { FormCard } from '../../ui'
 
 interface DistanceResult {
@@ -231,23 +232,26 @@ export function SingleRoute({
                 onClick={() => onSelectStoredVehicle?.(vehicle)}
                 className={
                   isMobile
-                    ? 'px-3 min-h-[44px] bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex items-center gap-2'
-                    : 'px-3 py-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex items-center gap-2'
+                    ? 'px-3 min-h-[44px] bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex flex-col items-start gap-1'
+                    : 'px-3 py-2 bg-white border border-purple-300 rounded-lg hover:bg-purple-100 transition-colors text-sm flex flex-col items-start gap-1'
                 }
               >
-                 <Package size={14} className="text-purple-500" />
-                <span className="font-medium text-gray-800">{vehicle.plate_number}</span>
-                {(vehicle as any).vehicle_condition === 'faulty' && (
-                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
-                )}
-                {(vehicle as any).vehicle_code && (
-                  <span className="text-xs text-blue-600">#{(vehicle as any).vehicle_code}</span>
-                )}
-                {vehicle.vehicle_data && (
-                  <span className="text-xs text-gray-500">
-                    {vehicle.vehicle_data.manufacturer} {vehicle.vehicle_data.model}
-                  </span>
-                )}
+                <span className="flex items-center gap-2 flex-wrap">
+                  <Package size={14} className="text-purple-500" />
+                  <span className="font-medium text-gray-800">{vehicle.plate_number}</span>
+                  {(vehicle as any).vehicle_condition === 'faulty' && (
+                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">תקול</span>
+                  )}
+                  {(vehicle as any).vehicle_code && (
+                    <span className="text-xs text-blue-600">#{(vehicle as any).vehicle_code}</span>
+                  )}
+                  {vehicle.vehicle_data && (
+                    <span className="text-xs text-gray-500">
+                      {vehicle.vehicle_data.manufacturer} {vehicle.vehicle_data.model}
+                    </span>
+                  )}
+                </span>
+                <TimeInStoragePill lastStoredAt={vehicle.last_stored_at} />
               </button>
             ))}
           </div>

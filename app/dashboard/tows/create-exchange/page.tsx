@@ -51,6 +51,7 @@ import {
   getVehiclesReservedForTow,
   isPickableStoredVehicle,
 } from '../../../lib/queries/storage'
+import { TimeInStoragePill } from '../../../components/storage/TimeInStoragePill'
 import { prepareTowData } from '../../../lib/utils/tow-save-handler'
 import { CustomerContactFields } from '../../../components/customer-contacts/CustomerContactFields'
 import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
@@ -2420,14 +2421,17 @@ function CreateExchangeTowForm({
                     }
                     setShowWorkingStorageModal(false)
                   }}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:border-gray-300 text-sm font-medium text-right flex items-center justify-between"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:border-gray-300 text-sm font-medium text-right flex flex-col items-stretch gap-1.5"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                    <span>{v.plate_number}</span>
-                    {v.vehicle_data?.model && <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>}
+                  <div className="flex items-center justify-between gap-2 w-full">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                      <span>{v.plate_number}</span>
+                      {v.vehicle_data?.model && <span className="text-gray-400 text-xs">— {v.vehicle_data.model}</span>}
+                    </div>
+                    <span className="text-xs text-gray-400">תקין</span>
                   </div>
-                  <span className="text-xs text-gray-400">תקין</span>
+                  <TimeInStoragePill lastStoredAt={v.last_stored_at} />
                 </button>
               ))}
             </div>
