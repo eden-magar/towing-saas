@@ -123,7 +123,7 @@ export async function getMyStoredVehicles(): Promise<CustomerPortalStoredVehicle
 }
 
 // שליפת גרירות לקוח (עמוד / pagination)
-export const CUSTOMER_PORTAL_TOW_PAGE_SIZE = 50
+export const CUSTOMER_PORTAL_TOW_PAGE_SIZE = 8
 
 const CUSTOMER_TOW_LIST_SELECT = `
   id,
@@ -323,6 +323,8 @@ async function applyPortalVisibilityStripToDetail(
 export type CustomerTowsPage = {
   tows: CustomerPortalTow[]
   hasMore: boolean
+  /** Exact total matching the current filters (for classic pagination UI). */
+  total: number
 }
 
 export async function getCustomerTows(
@@ -359,7 +361,7 @@ export async function getCustomerTows(
 
   if (error) {
     console.error('Error fetching customer tows:', error)
-    return { tows: [], hasMore: false }
+    return { tows: [], hasMore: false, total: 0 }
   }
 
   const rows = data ?? []
@@ -371,10 +373,10 @@ export async function getCustomerTows(
       portalSettings
     )
   )
-  const hasMore =
-    count != null ? offset + tows.length < count : tows.length === limit
+  const total = count ?? offset + tows.length
+  const hasMore = count != null ? offset + tows.length < count : tows.length === limit
 
-  return { tows, hasMore }
+  return { tows, hasMore, total }
 }
 
 // שליפת גרירה בודדת עם כל הפרטים

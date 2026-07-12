@@ -101,10 +101,13 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     return true
   })
 
+  const isHome = pathname === '/customer'
+  const isRequestFlow = pathname.startsWith('/customer/request')
+
   return (
-    <div dir="rtl" className="flex flex-1 flex-col min-h-0 bg-gt-portal-canvas">
+    <div dir="rtl" className="flex flex-1 flex-col min-h-0 h-full max-h-full overflow-hidden bg-gt-portal-canvas">
       {/* Header */}
-      <header className="bg-gt-surface border-b border-gt-border-subtle/80 sticky top-0 z-30">
+      <header className="shrink-0 bg-gt-surface border-b border-gt-border-subtle/80 z-30">
         <div className="flex items-center justify-between px-4 h-16">
           {/* Logo + Name */}
           <div className="flex items-center gap-3">
@@ -204,12 +207,17 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         )}
       </header>
 
-      {/* Content — request intake shares the same centered max width as other portal pages */}
+      {/*
+        Home (/customer): fill remaining height and let the list column scroll
+        (md+). Other routes: main scrolls as usual. Mobile home still page-scrolls.
+      */}
       <main
-        className={`mx-auto w-full ${
-          pathname.startsWith('/customer/request')
-            ? 'max-w-6xl px-3 py-2 sm:px-4 sm:py-2.5'
-            : 'max-w-6xl p-4 sm:p-6'
+        className={`mx-auto w-full flex-1 min-h-0 ${
+          isRequestFlow
+            ? 'max-w-6xl px-3 py-2 sm:px-4 sm:py-2.5 overflow-y-auto'
+            : isHome
+              ? 'max-w-6xl p-4 sm:p-6 flex flex-col overflow-hidden max-md:overflow-y-auto'
+              : 'max-w-6xl p-4 sm:p-6 overflow-y-auto'
         }`}
       >
         {children}
