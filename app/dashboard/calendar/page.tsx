@@ -749,35 +749,69 @@ export default function CalendarPage() {
     })
   }, [currentWeekStart, selectedDate, view])
 
-  // ניווט בין שבועות
+  // ניווט בין שבועות — in day view, keep selectedDate on the same weekday in the new week
   const navigateWeek = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentWeekStart)
-    newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7))
-    newDate.setHours(0, 0, 0, 0)
-    setCurrentWeekStart(newDate)
+    const delta = direction === 'next' ? 7 : -7
+    const newWeekStart = new Date(currentWeekStart)
+    newWeekStart.setDate(newWeekStart.getDate() + delta)
+    newWeekStart.setHours(0, 0, 0, 0)
+    setCurrentWeekStart(newWeekStart)
+
+    setSelectedDate((prev) => {
+      const next = new Date(prev)
+      next.setDate(next.getDate() + delta)
+      next.setHours(0, 0, 0, 0)
+      return next
+    })
   }
 
-  // ניווט יום במובייל
+  /** Move day cursor to `date` and refetch that date's week when needed. */
+  const selectCalendarDay = (date: Date) => {
+    const picked = startOfDay(date)
+    setSelectedDate(picked)
+    setCurrentWeekStart(sundayOfWeek(picked))
+    setMobileDayIndex(picked.getDay())
+  }
+
+  // ניווט יום במובייל — sync selectedDate; on week boundary move week + land on Sun/Sat
   const navigateMobileDay = (direction: 'prev' | 'next') => {
-    setMobileDayIndex(currentIndex => {
-      if (direction === 'next') {
-        if (currentIndex < 6) {
-          return currentIndex + 1
-        } else {
-          // עבר לשבוע הבא
-          navigateWeek('next')
-          return 0
-        }
-      } else {
-        if (currentIndex > 0) {
-          return currentIndex - 1
-        } else {
-          // עבר לשבוע הקודם
-          navigateWeek('prev')
-          return 6
-        }
+    if (direction === 'next') {
+      if (mobileDayIndex < 6) {
+        const nextIndex = mobileDayIndex + 1
+        const d = new Date(currentWeekStart)
+        d.setDate(currentWeekStart.getDate() + nextIndex)
+        d.setHours(0, 0, 0, 0)
+        setMobileDayIndex(nextIndex)
+        setSelectedDate(d)
+        return
       }
-    })
+      const newWeekStart = new Date(currentWeekStart)
+      newWeekStart.setDate(newWeekStart.getDate() + 7)
+      newWeekStart.setHours(0, 0, 0, 0)
+      setCurrentWeekStart(newWeekStart)
+      setSelectedDate(newWeekStart)
+      setMobileDayIndex(0)
+      return
+    }
+
+    if (mobileDayIndex > 0) {
+      const nextIndex = mobileDayIndex - 1
+      const d = new Date(currentWeekStart)
+      d.setDate(currentWeekStart.getDate() + nextIndex)
+      d.setHours(0, 0, 0, 0)
+      setMobileDayIndex(nextIndex)
+      setSelectedDate(d)
+      return
+    }
+    const newWeekStart = new Date(currentWeekStart)
+    newWeekStart.setDate(newWeekStart.getDate() - 7)
+    newWeekStart.setHours(0, 0, 0, 0)
+    const saturday = new Date(newWeekStart)
+    saturday.setDate(newWeekStart.getDate() + 6)
+    saturday.setHours(0, 0, 0, 0)
+    setCurrentWeekStart(newWeekStart)
+    setSelectedDate(saturday)
+    setMobileDayIndex(6)
   }
 
   const displayedDays = useMemo(() => {
@@ -856,12 +890,7 @@ export default function CalendarPage() {
   }
 
   const handlePickDate = (date: Date) => {
-    const picked = startOfDay(date)
-    setSelectedDate(picked)
-    if (view === 'week') {
-      setCurrentWeekStart(sundayOfWeek(picked))
-      setMobileDayIndex(picked.getDay())
-    }
+    selectCalendarDay(date)
   }
 
   const handleGlobalSearchResultClick = (hit: CalendarTowSearchHit) => {
@@ -1247,7 +1276,7 @@ const handleSkipPriceUpdate = () => {
 
   // בחירת יום לתצוגה יומית
   const selectDay = (date: Date) => {
-    setSelectedDate(date)
+    selectCalendarDay(date)
     setView('day')
   }
 
@@ -1693,7 +1722,7 @@ const handleSkipPriceUpdate = () => {
                   onClick={() => {
                     const newDate = new Date(selectedDate)
                     newDate.setDate(newDate.getDate() - 1)
-                    setSelectedDate(newDate)
+                    selectCalendarDay(newDate)
                   }}
                   className="p-2 hover:bg-white/50 rounded-lg transition-colors"
                 >
@@ -1713,7 +1742,7 @@ const handleSkipPriceUpdate = () => {
                   onClick={() => {
                     const newDate = new Date(selectedDate)
                     newDate.setDate(newDate.getDate() + 1)
-                    setSelectedDate(newDate)
+                    selectCalendarDay(newDate)
                   }}
                   className="p-2 hover:bg-white/50 rounded-lg transition-colors"
                 >

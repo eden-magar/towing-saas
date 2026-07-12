@@ -10,6 +10,35 @@ export type CalendarViewSnapshot = {
   view: CalendarViewMode
 }
 
+/** Local calendar day as YYYY-MM-DD (avoids UTC day-shift via toISOString). */
+export function toLocalYmd(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** Parse YYYY-MM-DD as local midnight. Also accepts legacy ISO strings. */
+export function fromLocalYmdOrIso(raw: string): Date | null {
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim())
+  if (ymd) {
+    const year = Number(ymd[1])
+    const month = Number(ymd[2])
+    const day = Number(ymd[3])
+    const d = new Date(year, month - 1, day)
+    d.setHours(0, 0, 0, 0)
+    if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+      return null
+    }
+    return d
+  }
+
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return null
+  parsed.setHours(0, 0, 0, 0)
+  return parsed
+}
+
 /** Same week-start rule as app/dashboard/calendar/page.tsx (Sunday-based local week). */
 export function getCalendarWeekStartForDate(date: Date): Date {
   const weekStart = new Date(date)
@@ -41,8 +70,8 @@ function clearCalendarViewSession(): void {
 
 export function persistCalendarViewForReturn(snapshot: CalendarViewSnapshot): void {
   if (typeof window === 'undefined') return
-  sessionStorage.setItem(CALENDAR_WEEK_START_SESSION_KEY, snapshot.weekStart.toISOString())
-  sessionStorage.setItem(CALENDAR_SELECTED_DATE_SESSION_KEY, snapshot.selectedDate.toISOString())
+  sessionStorage.setItem(CALENDAR_WEEK_START_SESSION_KEY, toLocalYmd(snapshot.weekStart))
+  sessionStorage.setItem(CALENDAR_SELECTED_DATE_SESSION_KEY, toLocalYmd(snapshot.selectedDate))
   sessionStorage.setItem(CALENDAR_VIEW_SESSION_KEY, snapshot.view)
 }
 
@@ -60,15 +89,13 @@ export function consumeRestoredCalendarView(): CalendarViewSnapshot | null {
     return null
   }
 
-  const weekStart = new Date(weekStartRaw)
-  const selectedDate = new Date(selectedDateRaw)
-  if (Number.isNaN(weekStart.getTime()) || Number.isNaN(selectedDate.getTime())) {
+  const weekStart = fromLocalYmdOrIso(weekStartRaw)
+  const selectedDate = fromLocalYmdOrIso(selectedDateRaw)
+  if (!weekStart || !selectedDate) {
     clearCalendarViewSession()
     return null
   }
 
-  weekStart.setHours(0, 0, 0, 0)
-  selectedDate.setHours(0, 0, 0, 0)
   clearCalendarViewSession()
 
   return { weekStart, selectedDate, view: viewRaw }

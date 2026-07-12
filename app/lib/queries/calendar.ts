@@ -20,9 +20,7 @@ export async function getCalendarTows(
   const startIso = startDate.toISOString()
   const endIso = endDate.toISOString()
 
-  const { data: tows, error } = await supabase
-    .from('tows')
-    .select(`
+  const towSelect = `
       id,
       status,
       order_number,
@@ -40,21 +38,48 @@ export async function getCalendarTows(
         name,
         phone
       )
-    `)
-    .eq('company_id', companyId)
-    .neq('status', 'cancelled')
-    .or(
-      `and(scheduled_at.gte.${startIso},scheduled_at.lte.${endIso}),` +
-        `and(scheduled_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`
-    )
-    .order('created_at', { ascending: false })
+    `
 
-  if (error) {
-    console.error('Error fetching calendar tows:', JSON.stringify(error), error)
-    throw error
+  // Prefer chained .gte/.lte over an unquoted .or() with ISO timestamps
+  // (dots in "…00.000Z" can break PostgREST filter parsing).
+  const [scheduledRes, unscheduledRes] = await Promise.all([
+    supabase
+      .from('tows')
+      .select(towSelect)
+      .eq('company_id', companyId)
+      .neq('status', 'cancelled')
+      .gte('scheduled_at', startIso)
+      .lte('scheduled_at', endIso)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('tows')
+      .select(towSelect)
+      .eq('company_id', companyId)
+      .neq('status', 'cancelled')
+      .is('scheduled_at', null)
+      .gte('created_at', startIso)
+      .lte('created_at', endIso)
+      .order('created_at', { ascending: false }),
+  ])
+
+  if (scheduledRes.error) {
+    console.error('Error fetching calendar tows (scheduled):', JSON.stringify(scheduledRes.error), scheduledRes.error)
+    throw scheduledRes.error
+  }
+  if (unscheduledRes.error) {
+    console.error('Error fetching calendar tows (unscheduled):', JSON.stringify(unscheduledRes.error), unscheduledRes.error)
+    throw unscheduledRes.error
   }
 
-  if (!tows || tows.length === 0) return []
+  const byId = new Map<string, (typeof scheduledRes.data)[number]>()
+  for (const tow of [...(scheduledRes.data ?? []), ...(unscheduledRes.data ?? [])]) {
+    byId.set(tow.id, tow)
+  }
+  const tows = [...byId.values()].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+
+  if (tows.length === 0) return []
 
   // שליפת כלי רכב
   const towIds = tows.map(t => t.id)
