@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useMemo, useState, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Input } from '../ui'
+import { PortalSuggestDropdown } from '../shared/PortalSuggestDropdown'
 import type { CustomerContact } from '@/app/lib/types'
 
 interface ContactNameAutocompleteProps {
@@ -17,11 +17,8 @@ interface ContactNameAutocompleteProps {
   className?: string
 }
 
-interface DropdownPosition {
-  top: number
-  left: number
-  width: number
-}
+/** Two-line rows need a taller estimate for flip-above. */
+const CONTACT_ROW_HEIGHT_ESTIMATE = 52
 
 export function ContactNameAutocomplete({
   value,
@@ -35,12 +32,6 @@ export function ContactNameAutocomplete({
 }: ContactNameAutocompleteProps) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const [isFocused, setIsFocused] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const [dropdownPos, setDropdownPos] = useState<DropdownPosition | null>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const filteredContacts = useMemo(() => {
     const query = value.trim().toLowerCase()
@@ -53,81 +44,15 @@ export function ContactNameAutocomplete({
     })
   }, [value, contacts])
 
+  const visibleContacts = filteredContacts.slice(0, 10)
+
   const showList =
     isFocused &&
     !disabled &&
     contacts.length > 0 &&
     (loading || filteredContacts.length > 0)
 
-  const updateDropdownPosition = useCallback(() => {
-    const el = anchorRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    setDropdownPos({
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: rect.width,
-    })
-  }, [])
-
-  useLayoutEffect(() => {
-    if (!showList || loading) {
-      setDropdownPos(null)
-      return
-    }
-
-    updateDropdownPosition()
-    window.addEventListener('scroll', updateDropdownPosition, true)
-    window.addEventListener('resize', updateDropdownPosition)
-
-    return () => {
-      window.removeEventListener('scroll', updateDropdownPosition, true)
-      window.removeEventListener('resize', updateDropdownPosition)
-    }
-  }, [showList, loading, updateDropdownPosition, filteredContacts.length, value])
-
-  const dropdown =
-    mounted && showList && !loading && dropdownPos
-      ? createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              top: dropdownPos.top,
-              left: dropdownPos.left,
-              width: dropdownPos.width,
-              zIndex: 50,
-            }}
-            className="max-h-40 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl bg-white shadow-lg"
-            dir="rtl"
-          >
-            {filteredContacts.slice(0, 10).map((contact) => (
-              <button
-                key={contact.id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelectContact(contact)
-                  setIsFocused(false)
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors text-right"
-              >
-                <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
-                  {contact.role_or_title && (
-                    <span className="shrink-0 bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
-                      {contact.role_or_title}
-                    </span>
-                  )}
-                  {contact.phone && <span className="truncate">{contact.phone}</span>}
-                </div>
-                <span className="text-sm text-gray-800 font-medium shrink-0 mr-2">
-                  {contact.name}
-                </span>
-              </button>
-            ))}
-          </div>,
-          document.body
-        )
-      : null
+  const dropdownOpen = showList && !loading
 
   return (
     <div ref={anchorRef} className="relative">
@@ -149,7 +74,43 @@ export function ContactNameAutocomplete({
         </div>
       )}
 
-      {dropdown}
+      <PortalSuggestDropdown
+        anchorRef={anchorRef}
+        open={dropdownOpen}
+        itemCount={visibleContacts.length}
+        rowHeightEstimate={CONTACT_ROW_HEIGHT_ESTIMATE}
+      >
+        {visibleContacts.map((contact) => (
+          <button
+            key={contact.id}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onSelectContact(contact)
+              setIsFocused(false)
+            }}
+            className="w-full flex flex-col items-stretch gap-0.5 px-3 py-2 hover:bg-gray-50 transition-colors text-right"
+          >
+            <span className="w-full min-w-0 truncate text-sm text-gray-800 font-medium">
+              {contact.name}
+            </span>
+            {(contact.role_or_title || contact.phone) && (
+              <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
+                {contact.role_or_title && (
+                  <span className="shrink-0 bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                    {contact.role_or_title}
+                  </span>
+                )}
+                {contact.phone && (
+                  <span className="min-w-0 truncate" dir="ltr">
+                    <bdi>{contact.phone}</bdi>
+                  </span>
+                )}
+              </div>
+            )}
+          </button>
+        ))}
+      </PortalSuggestDropdown>
     </div>
   )
 }

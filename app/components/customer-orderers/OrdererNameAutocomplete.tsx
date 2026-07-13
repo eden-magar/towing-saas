@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import { useMemo, useState, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Input } from '../ui'
+import { PortalSuggestDropdown } from '../shared/PortalSuggestDropdown'
 import type { CustomerOrderer } from '@/app/lib/types'
 
 interface OrdererNameAutocompleteProps {
@@ -19,16 +19,6 @@ interface OrdererNameAutocompleteProps {
   isMobile?: boolean
 }
 
-interface DropdownPosition {
-  top: number
-  left: number
-  width: number
-}
-
-const DROPDOWN_GAP = 4
-const DROPDOWN_MAX_HEIGHT = 160
-const ROW_HEIGHT_ESTIMATE = 40
-const VIEWPORT_MARGIN = 8
 const MOBILE_DROPDOWN_MAX_WIDTH = 360
 
 export function OrdererNameAutocomplete({
@@ -45,12 +35,6 @@ export function OrdererNameAutocomplete({
   const isMobileLayout = isMobile ?? false
   const anchorRef = useRef<HTMLDivElement>(null)
   const [isFocused, setIsFocused] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const [dropdownPos, setDropdownPos] = useState<DropdownPosition | null>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const filteredOrderers = useMemo(() => {
     const query = value.trim().toLowerCase()
@@ -62,101 +46,15 @@ export function OrdererNameAutocomplete({
     })
   }, [value, orderers])
 
+  const visibleOrderers = filteredOrderers.slice(0, 10)
+
   const showList =
     isFocused &&
     !disabled &&
     orderers.length > 0 &&
     (loading || filteredOrderers.length > 0)
 
-  const updateDropdownPosition = useCallback(() => {
-    const el = anchorRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-
-    const width = isMobileLayout
-      ? Math.min(MOBILE_DROPDOWN_MAX_WIDTH, window.innerWidth - VIEWPORT_MARGIN * 2)
-      : rect.width
-
-    let left = rect.left
-    if (isMobileLayout) {
-      if (left + width > window.innerWidth - VIEWPORT_MARGIN) {
-        left = Math.max(VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN)
-      }
-    }
-
-    const estimatedHeight = Math.min(
-      Math.max(filteredOrderers.length, 1) * ROW_HEIGHT_ESTIMATE,
-      DROPDOWN_MAX_HEIGHT,
-    )
-    const spaceBelow = window.innerHeight - rect.bottom - DROPDOWN_GAP
-    const spaceAbove = rect.top - DROPDOWN_GAP
-    const openAbove =
-      spaceBelow < estimatedHeight + VIEWPORT_MARGIN && spaceAbove > spaceBelow
-
-    const top = openAbove
-      ? Math.max(VIEWPORT_MARGIN, rect.top - DROPDOWN_GAP - estimatedHeight)
-      : rect.bottom + DROPDOWN_GAP
-
-    setDropdownPos({ top, left, width })
-  }, [filteredOrderers.length, isMobileLayout])
-
-  useLayoutEffect(() => {
-    if (!showList || loading) {
-      setDropdownPos(null)
-      return
-    }
-
-    updateDropdownPosition()
-    window.addEventListener('scroll', updateDropdownPosition, true)
-    window.addEventListener('resize', updateDropdownPosition)
-
-    return () => {
-      window.removeEventListener('scroll', updateDropdownPosition, true)
-      window.removeEventListener('resize', updateDropdownPosition)
-    }
-  }, [showList, loading, updateDropdownPosition, filteredOrderers.length, value])
-
-  const dropdown =
-    mounted && showList && !loading && dropdownPos
-      ? createPortal(
-          <div
-            style={{
-              position: 'fixed',
-              top: dropdownPos.top,
-              left: dropdownPos.left,
-              width: dropdownPos.width,
-              zIndex: 50,
-            }}
-            className="max-h-40 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl bg-white shadow-lg"
-            dir="rtl"
-          >
-            {filteredOrderers.slice(0, 10).map((orderer) => (
-              <button
-                key={orderer.id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelectOrderer(orderer)
-                  setIsFocused(false)
-                }}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors text-right"
-              >
-                <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
-                  {orderer.department && (
-                    <span className="shrink-0 bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-md">
-                      {orderer.department}
-                    </span>
-                  )}
-                </div>
-                <span className="text-sm text-gray-800 font-medium shrink-0 mr-2">
-                  {orderer.name}
-                </span>
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )
-      : null
+  const dropdownOpen = showList && !loading
 
   return (
     <div ref={anchorRef} className="relative">
@@ -178,7 +76,36 @@ export function OrdererNameAutocomplete({
         </div>
       )}
 
-      {dropdown}
+      <PortalSuggestDropdown
+        anchorRef={anchorRef}
+        open={dropdownOpen}
+        itemCount={visibleOrderers.length}
+        maxWidth={isMobileLayout ? MOBILE_DROPDOWN_MAX_WIDTH : undefined}
+      >
+        {visibleOrderers.map((orderer) => (
+          <button
+            key={orderer.id}
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onSelectOrderer(orderer)
+              setIsFocused(false)
+            }}
+            className="w-full flex flex-col items-stretch gap-0.5 px-3 py-2 hover:bg-gray-50 transition-colors text-right"
+          >
+            <span className="w-full min-w-0 truncate text-sm text-gray-800 font-medium">
+              {orderer.name}
+            </span>
+            {orderer.department && (
+              <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
+                <span className="shrink-0 bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-md">
+                  {orderer.department}
+                </span>
+              </div>
+            )}
+          </button>
+        ))}
+      </PortalSuggestDropdown>
     </div>
   )
 }
