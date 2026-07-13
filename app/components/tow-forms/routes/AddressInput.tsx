@@ -9,6 +9,7 @@ import {
   storageYardDismissKey,
   type YardAddressRef,
 } from '../../../lib/utils/storage-yard-match'
+import { installPacContainerViewportClamp } from '../../../lib/utils/clamp-pac-container'
 
 // ==================== Google Maps Loading ====================
 
@@ -210,38 +211,43 @@ export function AddressInput({
 
   useEffect(() => {
     if (readOnly) return
-    
+    return installPacContainerViewportClamp()
+  }, [readOnly])
+
+  useEffect(() => {
+    if (readOnly) return
+
     const initAutocomplete = async () => {
       await loadGoogleMaps()
       if (!inputRef.current || !window.google?.maps?.places || autocompleteRef.current) return
-      
+
       const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
         componentRestrictions: { country: 'il' },
         fields: ['formatted_address', 'name', 'place_id', 'geometry'],
         types: ['establishment', 'geocode']
       })
-      
+
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace()
         if (!place.formatted_address && !place.name) return
-        
+
         let selectedAddress = place.formatted_address || place.name || ''
         if (place.name && place.formatted_address && !place.formatted_address.startsWith(place.name)) {
           selectedAddress = `${place.name}, ${place.formatted_address}`
         }
-        
+
         isSelectingRef.current = true
         setLocalValue(selectedAddress)
         console.log('AddressInput place_changed:', { selectedAddress, isAddressDataMode })
 
-        
+
         const addressData: AddressData = {
           address: selectedAddress,
           placeId: place.place_id,
           lat: place.geometry?.location?.lat(),
           lng: place.geometry?.location?.lng()
         }
-        
+
         // Call appropriate onChange based on mode
         if (isAddressDataMode) {
           (onChange as (data: AddressData) => void)(addressData)
@@ -253,20 +259,20 @@ export function AddressInput({
             lng: place.geometry?.location?.lng()
           })
         }
-        
+
         onAddressSelect?.(addressData)
         maybeAskYardConfirmRef.current(addressData)
-        
+
         // Reset flag after a short delay
         setTimeout(() => {
           isSelectingRef.current = false
         }, 100)
       })
-      
+
       autocompleteRef.current = autocomplete
     }
-    
-    initAutocomplete()
+
+    void initAutocomplete()
   }, [onChange, onAddressDataChange, onAddressSelect, readOnly, isAddressDataMode])
 
   const applyResolvedAddress = (address: string, lat: number, lng: number) => {

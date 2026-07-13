@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { MapPin, Navigation, Loader2, X } from 'lucide-react'
 import { AddressData } from './useGoogleMaps'
+import { installPacContainerViewportClamp } from '../../lib/utils/clamp-pac-container'
 
 interface AddressInputProps {
   value: AddressData
@@ -34,6 +35,10 @@ export default function AddressInput({
   const [inputValue, setInputValue] = useState(value.address || '')
 
   // אתחול Google Places Autocomplete
+  useEffect(() => {
+    return installPacContainerViewportClamp()
+  }, [])
+
   useEffect(() => {
     if (!inputRef.current || !window.google?.maps?.places) {
       return

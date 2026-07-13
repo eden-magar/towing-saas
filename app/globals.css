@@ -84,6 +84,33 @@ html {
   --gt-shadow-focus: 0 0 0 3px rgba(8, 145, 178, 0.15);
 }
 
+/* Google Places legacy Autocomplete (.pac-container on document.body).
+   Input cells are often half/quarter width — widen + wrap Hebrew text;
+   left/right position is clamped in installPacContainerViewportClamp. */
+.pac-container {
+  min-width: min(24rem, calc(100vw - 1.5rem));
+  max-width: calc(100vw - 1.5rem);
+  z-index: 1100;
+  direction: rtl;
+  text-align: right;
+}
+
+.pac-item {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  padding: 0.5rem 0.75rem;
+  white-space: normal;
+  text-align: right;
+}
+
+.pac-item-query {
+  font-size: inherit;
+}
+
+.pac-matched {
+  font-weight: 700;
+}
+
 @theme {
   --color-gt-canvas: #cddbe6;
   --color-gt-portal-canvas: #e8edf2;

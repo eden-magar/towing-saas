@@ -17,6 +17,7 @@ import {
 import { getDrivers } from '@/app/lib/queries/drivers'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
 import { getTrucks } from '@/app/lib/queries/trucks'
+import { installPacContainerViewportClamp } from '@/app/lib/utils/clamp-pac-container'
 import {
   DriverTaskWithDetails,
   TaskType,
@@ -96,6 +97,8 @@ export default function TasksPage() {
   if (!panelOpen) return
   autocompleteRef.current = null
 
+  const disposePacClamp = installPacContainerViewportClamp()
+
   const initAutocomplete = async () => {
     await loadGoogleMaps()
     if (!addressInputRef.current || !window.google?.maps?.places || autocompleteRef.current) return
@@ -117,7 +120,11 @@ export default function TasksPage() {
     autocompleteRef.current = autocomplete
   }
 
-  initAutocomplete()
+  void initAutocomplete()
+
+  return () => {
+    disposePacClamp()
+  }
 }, [panelOpen])
 
   async function loadAll() {
