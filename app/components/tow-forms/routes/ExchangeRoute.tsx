@@ -8,7 +8,7 @@ import {
   VehicleLookup, 
   DefectSelector, 
   TowTruckTypeSelector, 
-  ServiceSurchargeSelector, 
+  SurchargesSection, 
   SelectedService,
   StartFromBase
 } from '../shared'
@@ -315,14 +315,6 @@ export function ExchangeRoute({
 
   // Get selected working vehicle details
   const selectedWorkingVehicle = customerStoredVehicles.find(v => v.id === selectedWorkingVehicleId)
-
-  const toggleLocationSurcharge = (id: string) => {
-    if (selectedLocationSurcharges.includes(id)) {
-      onLocationSurchargesChange(selectedLocationSurcharges.filter(i => i !== id))
-    } else {
-      onLocationSurchargesChange([...selectedLocationSurcharges, id])
-    }
-  }
 
   return (
     <>
@@ -646,12 +638,17 @@ export function ExchangeRoute({
             </div>
           </div>
 
-          {/* שירותים נוספים */}
-          <ServiceSurchargeSelector
-            services={serviceSurchargesData}
-            selectedServices={selectedServices}
-            onChange={onSelectedServicesChange}
-          />
+          {/* תוספות */}
+          <div className="flex flex-wrap items-center gap-2">
+            <SurchargesSection
+              locationSurchargesData={locationSurchargesData}
+              selectedLocationSurcharges={selectedLocationSurcharges}
+              onLocationSurchargesChange={onLocationSurchargesChange}
+              services={serviceSurchargesData}
+              selectedServices={selectedServices}
+              onSelectedServicesChange={onSelectedServicesChange}
+            />
+          </div>
 
           {/* סוג גרר */}
           <div 
@@ -1055,29 +1052,6 @@ export function ExchangeRoute({
               <span className="text-xs text-red-600">תוספת חג תחושב אוטומטית</span>
             )}
           </div>
-
-          {/* תוספות מיקום */}
-          {locationSurchargesData.filter(l => l.is_active).length > 0 && (
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">📍 תוספות מיקום:</p>
-              <div className="flex flex-wrap gap-2">
-                {locationSurchargesData.filter(l => l.is_active).map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => toggleLocationSurcharge(s.id)}
-                    className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                      selectedLocationSurcharges.includes(s.id) 
-                        ? 'bg-amber-500 text-white' 
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {s.label} (+{s.surcharge_percent}%)
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
         </div>
       </div>

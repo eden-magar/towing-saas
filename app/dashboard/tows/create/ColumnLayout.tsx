@@ -31,6 +31,7 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import { ContactNameAutocomplete } from '../../../components/customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../../components/customer-contacts/SaveCustomerContactPill'
+import { phoneFromSelectedContact } from '../../../lib/utils/customer-contact-save-ui'
 import {
   CreateCustomerSection,
   type CreateCustomerTab,
@@ -41,9 +42,8 @@ import {
   PinDropModal,
   VehicleLookup,
   DefectSelector,
-  ServiceSurchargeSelector,
+  SurchargesSection,
   TowTruckTypeSelector,
-  LocationSurchargeSelector,
 } from '../../../components/tow-forms/shared'
 import { isPickableStoredVehicle } from '../../../lib/queries/storage'
 import { TimeInStoragePill } from '../../../components/storage/TimeInStoragePill'
@@ -547,22 +547,12 @@ export function ColumnLayout({
                             : 'bg-white border border-gray-200 rounded-lg shadow-sm p-3'
                         }
                       >
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                           <DefectSelector
                             variant="triggerOnly"
                             triggerLabel="תקלות"
                             selectedDefects={form.selectedDefects}
                             onChange={form.setSelectedDefects}
-                          />
-                          <ServiceSurchargeSelector
-                            variant="triggerOnly"
-                            triggerLabel="שירותים"
-                            label="שירותים נוספים"
-                            services={form.serviceSurchargesData}
-                            selectedServices={form.selectedServices}
-                            onChange={form.setSelectedServices}
-                            manualSurcharges={form.manualSurcharges}
-                            onManualSurchargesChange={form.setManualSurcharges}
                           />
                           <TowTruckTypeSelector
                             variant="triggerOnly"
@@ -592,6 +582,19 @@ export function ColumnLayout({
                         const showReorderArrows = intermediateStopCount > 0
                         const pickupStop = form.routeStops.find((s) => s.role === 'pickup')
                         const dropoffStop = form.routeStops.find((s) => s.role === 'dropoff')
+
+                        const surchargesPill = (
+                          <SurchargesSection
+                            locationSurchargesData={form.locationSurchargesData}
+                            selectedLocationSurcharges={form.selectedLocationSurcharges}
+                            onLocationSurchargesChange={form.setSelectedLocationSurcharges}
+                            services={form.serviceSurchargesData}
+                            selectedServices={form.selectedServices}
+                            onSelectedServicesChange={form.setSelectedServices}
+                            manualSurcharges={form.manualSurcharges}
+                            onManualSurchargesChange={form.setManualSurcharges}
+                          />
+                        )
 
                         const renderAddressField = (
                           stop: (typeof form.routeStops)[number],
@@ -782,6 +785,7 @@ export function ColumnLayout({
                               <div className="p-3 space-y-3">
                                 <RouteOriginDestGrid
                                   stacked
+                                  onAddStop={form.addStop}
                                   origin={renderAddressField(pickupStop)}
                                   destination={renderAddressField(dropoffStop)}
                                   underDestination={
@@ -800,7 +804,6 @@ export function ColumnLayout({
                                     />
                                   }
                                 />
-                                <RouteAddStopButton onClick={form.addStop} />
                               </div>
                               <RouteAddressesFooter
                                 distance={
@@ -811,16 +814,17 @@ export function ColumnLayout({
                                     </span>
                                   ) : totalDistance ? (
                                     <>
-                                      מרחק כולל {totalDistance.distanceKm.toFixed(1)} ק״מ
+                                      מרחק {totalDistance.distanceKm.toFixed(1)} ק״מ
                                       <span className="mx-1.5 text-gt-text-tertiary">
                                         •
                                       </span>
                                       {totalDistance.durationMinutes} דק׳
                                     </>
                                   ) : (
-                                    <>מרחק כולל 0.0 ק״מ</>
+                                    <>מרחק 0.0 ק״מ</>
                                   )
                                 }
+                                surcharges={surchargesPill}
                                 showStartFromBase={!!form.basePriceList?.base_address}
                                 startFromBase={form.startFromBase}
                                 onStartFromBaseChange={form.setStartFromBase}
@@ -907,14 +911,15 @@ export function ColumnLayout({
                                   </span>
                                 ) : totalDistance ? (
                                   <>
-                                    מרחק כולל {totalDistance.distanceKm.toFixed(1)} ק״מ
+                                    מרחק {totalDistance.distanceKm.toFixed(1)} ק״מ
                                     <span className="mx-1.5 text-gt-text-tertiary">•</span>
                                     {totalDistance.durationMinutes} דק׳
                                   </>
                                 ) : (
-                                  <>מרחק כולל 0.0 ק״מ</>
+                                  <>מרחק 0.0 ק״מ</>
                                 )
                               }
+                              surcharges={surchargesPill}
                               showStartFromBase={!!form.basePriceList?.base_address}
                               startFromBase={form.startFromBase}
                               onStartFromBaseChange={form.setStartFromBase}
@@ -955,17 +960,6 @@ export function ColumnLayout({
                         )
                       })()}
 
-                      {/* Location surcharges */}
-                      {form.locationSurchargesData.filter((l) => l.is_active).length >
-                        0 && (
-                        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-3">
-                          <LocationSurchargeSelector
-                            locationSurcharges={form.locationSurchargesData}
-                            selectedLocationSurcharges={form.selectedLocationSurcharges}
-                            onChange={form.setSelectedLocationSurcharges}
-                          />
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1083,7 +1077,12 @@ export function ColumnLayout({
                           onChange={form.setPickupContactName}
                           onSelectContact={(contact) => {
                             form.setPickupContactName(contact.name)
-                            form.setPickupContactPhone(contact.phone ?? '')
+                            form.setPickupContactPhone(
+                              phoneFromSelectedContact(
+                                contact.phone,
+                                form.pickupContactPhone
+                              )
+                            )
                             contactsSave.setSavePickupContactToCustomer(false)
                           }}
                           contacts={contactsSave.savedContacts}
@@ -1138,7 +1137,12 @@ export function ColumnLayout({
                           onChange={form.setDropoffContactName}
                           onSelectContact={(contact) => {
                             form.setDropoffContactName(contact.name)
-                            form.setDropoffContactPhone(contact.phone ?? '')
+                            form.setDropoffContactPhone(
+                              phoneFromSelectedContact(
+                                contact.phone,
+                                form.dropoffContactPhone
+                              )
+                            )
                             contactsSave.setSaveDropoffContactToCustomer(false)
                           }}
                           contacts={contactsSave.savedContacts}

@@ -7,6 +7,7 @@ import { FormCard } from '../../ui'
 import { PhoneInput } from '../../ui/PhoneInput'
 import { ContactNameAutocomplete } from '../../customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../customer-contacts/SaveCustomerContactPill'
+import { phoneFromSelectedContact } from '../../../lib/utils/customer-contact-save-ui'
 
 type Form = ReturnType<typeof useTowForm>
 
@@ -54,7 +55,9 @@ export function SectionContacts({
                 onChange={form.setPickupContactName}
                 onSelectContact={(contact) => {
                   form.setPickupContactName(contact.name)
-                  form.setPickupContactPhone(contact.phone ?? '')
+                  form.setPickupContactPhone(
+                    phoneFromSelectedContact(contact.phone, form.pickupContactPhone)
+                  )
                   contactsSave.setSavePickupContactToCustomer(false)
                 }}
                 contacts={contactsSave.savedContacts}
@@ -110,7 +113,9 @@ export function SectionContacts({
                 onChange={form.setDropoffContactName}
                 onSelectContact={(contact) => {
                   form.setDropoffContactName(contact.name)
-                  form.setDropoffContactPhone(contact.phone ?? '')
+                  form.setDropoffContactPhone(
+                    phoneFromSelectedContact(contact.phone, form.dropoffContactPhone)
+                  )
                   contactsSave.setSaveDropoffContactToCustomer(false)
                 }}
                 contacts={contactsSave.savedContacts}

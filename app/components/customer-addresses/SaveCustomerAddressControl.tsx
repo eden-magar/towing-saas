@@ -91,7 +91,7 @@ export function SaveCustomerAddressControl({
           disabled={disabled}
           title="שמור כתובת קבועה"
           aria-label="שמור כתובת קבועה"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-colors hover:border-gray-200 hover:bg-gray-50 hover:text-[#21b8e6] disabled:opacity-50"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gt-border-field text-gray-500 transition-colors hover:bg-gray-50 hover:border-gt-border hover:text-[#21b8e6] disabled:opacity-50"
         >
           <Bookmark size={16} aria-hidden />
         </button>

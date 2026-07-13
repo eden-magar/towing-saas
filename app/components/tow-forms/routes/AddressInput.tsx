@@ -468,9 +468,10 @@ export function AddressInput({
     )
   }
 
-  const renderInputRow = (inputClasses: string) => (
-    <>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+  const renderInputRow = (inputClasses: string) => {
+    const showActionRow = !!(onPinDropClick || !readOnly || extraActions)
+    return (
+      <>
         <input
           ref={inputRef}
           type="text"
@@ -479,25 +480,30 @@ export function AddressInput({
           onBlur={handleAddressBlur}
           placeholder={placeholder}
           readOnly={readOnly}
-          className={inputClasses}
+          className={`${inputClasses} w-full`}
         />
-        {/* Fixed order on every field: map pin → paste link → optional save bookmark */}
-        {onPinDropClick && (
-          <button
-            type="button"
-            onClick={onPinDropClick}
-            className={`${actionButtonClassName} hover:text-red-500`}
-            title="הנח סיכה על המפה"
-          >
-            <MapPin size={actionIconSize} />
-          </button>
+        {/* Actions on their own row under the field — full-width input above.
+            Fixed order (RTL start/right → left): map pin → paste link → save bookmark */}
+        {showActionRow && (
+          <div className="mt-1.5 flex items-center justify-start gap-2">
+            {onPinDropClick && (
+              <button
+                type="button"
+                onClick={onPinDropClick}
+                className={`${actionButtonClassName} hover:text-red-500`}
+                title="הנח סיכה על המפה"
+              >
+                <MapPin size={actionIconSize} />
+              </button>
+            )}
+            {renderLinkButton()}
+            {extraActions}
+          </div>
         )}
-        {renderLinkButton()}
-        {extraActions}
-      </div>
-      {renderLinkPanel()}
-    </>
-  )
+        {renderLinkPanel()}
+      </>
+    )
+  }
 
   // Simple input without label (new style - used by RouteBuilder)
   if (!label && !hideLabel) {

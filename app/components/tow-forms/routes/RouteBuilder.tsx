@@ -18,7 +18,7 @@ import { calculateDistance } from '../../../lib/google-maps'
 import { AddressInput, loadGoogleMaps, AddressData } from './AddressInput'
 import { VehicleCard, VehicleOnTruck, createEmptyVehicle } from './VehicleCard'
 import { StorageNotification } from './StorageVehicleSelector'
-import { TowTruckTypeSelector, ServiceSurchargeSelector, type SelectedService } from '../shared'
+import { TowTruckTypeSelector, SurchargesSection, type SelectedService } from '../shared'
 import { PhoneInput } from '../../ui/PhoneInput'
 import { ContactNameAutocomplete } from '../../customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../customer-contacts/SaveCustomerContactPill'
@@ -26,7 +26,10 @@ import {
   SaveCustomerAddressControl,
   type CustomerAddressPendingDraft,
 } from '../../customer-addresses/SaveCustomerAddressControl'
-import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import {
+  phoneFromSelectedContact,
+  shouldOfferSaveCustomerContact,
+} from '../../../lib/utils/customer-contact-save-ui'
 import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
 import {
   STORAGE_OTHER_CUSTOMER_MESSAGE,
@@ -1059,7 +1062,10 @@ export function RouteBuilder({
                                 onSelectContact={(contact) => {
                                   updatePoint(point.id, {
                                     contactName: contact.name,
-                                    contactPhone: contact.phone ?? '',
+                                    contactPhone: phoneFromSelectedContact(
+                                      contact.phone,
+                                      point.contactPhone
+                                    ),
                                   })
                                   onContactSelected?.(point.id)
                                 }}
@@ -1442,7 +1448,7 @@ export function RouteBuilder({
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
-              <h3 className="font-bold text-gray-800 text-base">שירותים נוספים</h3>
+              <h3 className="font-bold text-gray-800 text-base">תוספות</h3>
               <button
                 type="button"
                 onClick={() => setServicesModalPointId(null)}
@@ -1451,12 +1457,14 @@ export function RouteBuilder({
                 ✕
               </button>
             </div>
-            <div className="p-4 overflow-y-auto flex-1 min-h-0">
-              <ServiceSurchargeSelector
+            <div className="p-0 overflow-y-auto flex-1 min-h-0">
+              <SurchargesSection
+                variant="embedded"
                 services={serviceSurchargesData}
                 selectedServices={servicesModalPoint.services ?? []}
-                onChange={(next) => updatePoint(servicesModalPoint.id, { services: next })}
-                label=" "
+                onSelectedServicesChange={(next) =>
+                  updatePoint(servicesModalPoint.id, { services: next })
+                }
               />
             </div>
             <div className="px-4 pb-4 shrink-0">
@@ -1465,7 +1473,7 @@ export function RouteBuilder({
                 onClick={() => setServicesModalPointId(null)}
                 className="w-full py-2.5 bg-[#33d4ff] text-white rounded-xl text-sm font-medium hover:bg-[#21b8e6]"
               >
-                אישור
+                סיום
               </button>
             </div>
           </div>

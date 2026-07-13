@@ -56,7 +56,7 @@ import {
   PinDropModal,
   VehicleLookup,
   ServiceSurchargeSelector,
-  ManualSurchargeSection,
+  SurchargesSection,
   VehicleCoreLookupChips,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
@@ -147,7 +147,10 @@ import {
   pendingAddressFromFields,
 } from '../../../lib/queries/customer-addresses'
 import { insertPendingCustomerOrderers } from '../../../lib/queries/customer-orderers'
-import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import {
+  phoneFromSelectedContact,
+  shouldOfferSaveCustomerContact,
+} from '../../../lib/utils/customer-contact-save-ui'
 import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
 import { shouldOfferSaveCustomerOrderer } from '../../../lib/utils/customer-orderer-save-ui'
 
@@ -2777,6 +2780,7 @@ function CreateTowForm({
                             return (
                               <RouteOriginDestGrid
                                 stacked={isMobile}
+                                onAddStop={addStop}
                                 origin={
                                   pickupRow ? (
                                     <div key={pickupRow.id}>
@@ -2829,33 +2833,9 @@ function CreateTowForm({
                                 </div>
                               </div>
                             ))}
+                            <RouteAddStopButton onClick={addStop} />
                           </div>
                         )}
-
-                        <RouteAddStopButton onClick={addStop} />
-
-                        <div className="border-t border-gray-100 pt-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <LocationSurchargesSection
-                              locationSurchargesData={locationSurchargesData}
-                              selectedLocationSurcharges={selectedLocationSurcharges}
-                              setSelectedLocationSurcharges={
-                                setSelectedLocationSurcharges
-                              }
-                            />
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={selectedServices}
-                              onChange={setSelectedServices}
-                            />
-                          </div>
-                          <div className="mt-4 pt-3 border-t border-gray-100">
-                            <ManualSurchargeSection
-                              manualSurcharges={manualSurcharges}
-                              onChange={setManualSurcharges}
-                            />
-                          </div>
-                        </div>
 
                         <RouteAddressesFooter
                           bleed
@@ -2863,8 +2843,20 @@ function CreateTowForm({
                             distanceLoading ? (
                               <span className="text-gt-text-tertiary">מחשב מרחק...</span>
                             ) : (
-                              <>מרחק כולל {totalDistanceKm.toFixed(1)} ק״מ</>
+                              <>מרחק {totalDistanceKm.toFixed(1)} ק״מ</>
                             )
+                          }
+                          surcharges={
+                            <SurchargesSection
+                              locationSurchargesData={locationSurchargesData}
+                              selectedLocationSurcharges={selectedLocationSurcharges}
+                              onLocationSurchargesChange={setSelectedLocationSurcharges}
+                              services={serviceSurchargesData}
+                              selectedServices={selectedServices}
+                              onSelectedServicesChange={setSelectedServices}
+                              manualSurcharges={manualSurcharges}
+                              onManualSurchargesChange={setManualSurcharges}
+                            />
                           }
                           showStartFromBase={!!basePriceList?.base_address}
                           startFromBase={startFromBase}
@@ -3459,17 +3451,16 @@ function CreateTowForm({
                                     hideLabel
                                     onPinDropClick={() => handlePinDropOpen('workingVehicle')}
                                     storageYardConfirm={workingPickupYardConfirm}
-                                  />
-                                )}
-                                {workingVehicleSource !== 'storage' && (
-                                  <SaveCustomerAddressControl
-                                    className="mt-1.5"
-                                    visible={showSaveWorkingSourceAddressOption}
-                                    address={workingVehicleAddress?.address ?? ''}
-                                    pending={pendingWorkingSourceAddress}
-                                    onConfirm={setPendingWorkingSourceAddress}
-                                    onClear={() => setPendingWorkingSourceAddress(null)}
-                                    disabled={saving}
+                                    extraActions={
+                                      <SaveCustomerAddressControl
+                                        visible={showSaveWorkingSourceAddressOption}
+                                        address={workingVehicleAddress?.address ?? ''}
+                                        pending={pendingWorkingSourceAddress}
+                                        onConfirm={setPendingWorkingSourceAddress}
+                                        onClear={() => setPendingWorkingSourceAddress(null)}
+                                        disabled={saving}
+                                      />
+                                    }
                                   />
                                 )}
                                 <button
@@ -3493,15 +3484,16 @@ function CreateTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
                                   storageYardConfirm={workingDropoffYardConfirm}
-                                />
-                                <SaveCustomerAddressControl
-                                  className="mt-1.5"
-                                  visible={showSaveWorkingDestinationAddressOption}
-                                  address={workingVehicleDestinationAddress?.address ?? ''}
-                                  pending={pendingWorkingDestinationAddress}
-                                  onConfirm={setPendingWorkingDestinationAddress}
-                                  onClear={() => setPendingWorkingDestinationAddress(null)}
-                                  disabled={saving}
+                                  extraActions={
+                                    <SaveCustomerAddressControl
+                                      visible={showSaveWorkingDestinationAddressOption}
+                                      address={workingVehicleDestinationAddress?.address ?? ''}
+                                      pending={pendingWorkingDestinationAddress}
+                                      onConfirm={setPendingWorkingDestinationAddress}
+                                      onClear={() => setPendingWorkingDestinationAddress(null)}
+                                      disabled={saving}
+                                    />
+                                  }
                                 />
                                 {!workingVehicleDestinationIsStorage ? (
                                   <button
@@ -3741,15 +3733,16 @@ function CreateTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('exchange')}
-                                />
-                                <SaveCustomerAddressControl
-                                  className="mt-1.5"
-                                  visible={showSaveExchangePickupAddressOption}
-                                  address={exchangeAddress?.address ?? ''}
-                                  pending={pendingExchangePickupAddress}
-                                  onConfirm={setPendingExchangePickupAddress}
-                                  onClear={() => setPendingExchangePickupAddress(null)}
-                                  disabled={saving}
+                                  extraActions={
+                                    <SaveCustomerAddressControl
+                                      visible={showSaveExchangePickupAddressOption}
+                                      address={exchangeAddress?.address ?? ''}
+                                      pending={pendingExchangePickupAddress}
+                                      onConfirm={setPendingExchangePickupAddress}
+                                      onClear={() => setPendingExchangePickupAddress(null)}
+                                      disabled={saving}
+                                    />
+                                  }
                                 />
                                 <button
                                   type="button"
@@ -3773,15 +3766,16 @@ function CreateTowForm({
                                       ? defectiveDropoffYardConfirm
                                       : null
                                   }
-                                />
-                                <SaveCustomerAddressControl
-                                  className="mt-1.5"
-                                  visible={showSaveDefectiveDestinationAddressOption}
-                                  address={defectiveDestinationAddress?.address ?? ''}
-                                  pending={pendingDefectiveDestinationAddress}
-                                  onConfirm={setPendingDefectiveDestinationAddress}
-                                  onClear={() => setPendingDefectiveDestinationAddress(null)}
-                                  disabled={saving}
+                                  extraActions={
+                                    <SaveCustomerAddressControl
+                                      visible={showSaveDefectiveDestinationAddressOption}
+                                      address={defectiveDestinationAddress?.address ?? ''}
+                                      pending={pendingDefectiveDestinationAddress}
+                                      onConfirm={setPendingDefectiveDestinationAddress}
+                                      onClear={() => setPendingDefectiveDestinationAddress(null)}
+                                      disabled={saving}
+                                    />
+                                  }
                                 />
                                 <div className="flex flex-wrap items-start gap-2">
                                 {defectiveDestination !== 'storage' ? (
@@ -3859,30 +3853,18 @@ function CreateTowForm({
                       />
                     </FormSubcard>
 
-                    <FormSubcard title="תוספות מיקום">
-                      <LocationSurchargesSection
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SurchargesSection
                         locationSurchargesData={locationSurchargesData}
                         selectedLocationSurcharges={selectedLocationSurcharges}
-                        setSelectedLocationSurcharges={setSelectedLocationSurcharges}
-                      />
-                    </FormSubcard>
-
-                    <FormSubcard title="שירותים נוספים">
-                      <ServiceSurchargeSelector
+                        onLocationSurchargesChange={setSelectedLocationSurcharges}
                         services={serviceSurchargesData}
                         selectedServices={towServiceSurcharges}
-                        onChange={setTowServiceSurcharges}
-                        label=" "
-                      />
-                    </FormSubcard>
-
-                    <FormSubcard title="תוספות ידניות">
-                      <ManualSurchargeSection
+                        onSelectedServicesChange={setTowServiceSurcharges}
                         manualSurcharges={manualSurcharges}
-                        onChange={setManualSurcharges}
-                        label="תוספת ידנית"
+                        onManualSurchargesChange={setManualSurcharges}
                       />
-                    </FormSubcard>
+                    </div>
                   </>
                 )}
 
@@ -3935,28 +3917,18 @@ function CreateTowForm({
                         setHasManualTimeSurchargeOverride={setHasManualTimeSurchargeOverride}
                       />
                     </FormSubcard>
-                    <FormSubcard title="תוספות מיקום">
-                      <LocationSurchargesSection
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SurchargesSection
                         locationSurchargesData={locationSurchargesData}
                         selectedLocationSurcharges={selectedLocationSurcharges}
-                        setSelectedLocationSurcharges={setSelectedLocationSurcharges}
-                      />
-                    </FormSubcard>
-                    <FormSubcard title="שירותים נוספים">
-                      <ServiceSurchargeSelector
+                        onLocationSurchargesChange={setSelectedLocationSurcharges}
                         services={serviceSurchargesData}
                         selectedServices={towServiceSurcharges}
-                        onChange={setTowServiceSurcharges}
-                        label=" "
-                      />
-                    </FormSubcard>
-                    <FormSubcard title="תוספות ידניות">
-                      <ManualSurchargeSection
+                        onSelectedServicesChange={setTowServiceSurcharges}
                         manualSurcharges={manualSurcharges}
-                        onChange={setManualSurcharges}
-                        label="תוספת ידנית"
+                        onManualSurchargesChange={setManualSurcharges}
                       />
-                    </FormSubcard>
+                    </div>
                   </>
                 )}
               </div>
@@ -4454,7 +4426,10 @@ function CreateTowForm({
                                 if (pickupStop) {
                                   updateStop(pickupStop.id, {
                                     contactName: contact.name,
-                                    contactPhone: contact.phone ?? '',
+                                    contactPhone: phoneFromSelectedContact(
+                                      contact.phone,
+                                      pickupStop.contactPhone ?? ''
+                                    ),
                                   })
                                 }
                                 setSavePickupContactToCustomer(false)
@@ -4511,7 +4486,10 @@ function CreateTowForm({
                                 if (dropoffStop) {
                                   updateStop(dropoffStop.id, {
                                     contactName: contact.name,
-                                    contactPhone: contact.phone ?? '',
+                                    contactPhone: phoneFromSelectedContact(
+                                      contact.phone,
+                                      dropoffStop.contactPhone ?? ''
+                                    ),
                                   })
                                 }
                                 setSaveDropoffContactToCustomer(false)
@@ -5074,53 +5052,6 @@ function TimeSurchargesSection({
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function LocationSurchargesSection({
-  locationSurchargesData,
-  selectedLocationSurcharges,
-  setSelectedLocationSurcharges,
-}: {
-  locationSurchargesData: LocationSurcharge[]
-  selectedLocationSurcharges: string[]
-  setSelectedLocationSurcharges: (v: string[]) => void
-}) {
-  const active = locationSurchargesData.filter((s) => s.is_active)
-  if (active.length === 0) return null
-  return (
-    <div>
-      <p className="text-sm font-medium text-gray-700 mb-2">
-        תוספות מיקום
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {active.map((s) => {
-          const isSelected = selectedLocationSurcharges.includes(s.id)
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => {
-                if (isSelected)
-                  setSelectedLocationSurcharges(
-                    selectedLocationSurcharges.filter((id) => id !== s.id)
-                  )
-                else
-                  setSelectedLocationSurcharges([
-                    ...selectedLocationSurcharges,
-                    s.id,
-                  ])
-              }}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
-                isSelected ? 'bg-gt-brand text-white' : 'border border-gray-300'
-              }`}
-            >
-              {s.label} ({s.surcharge_percent}%)
-            </button>
-          )
-        })}
-      </div>
     </div>
   )
 }

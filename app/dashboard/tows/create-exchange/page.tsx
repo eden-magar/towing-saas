@@ -32,6 +32,7 @@ import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
   ServiceSurchargeSelector,
+  SurchargesSection,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
@@ -1699,17 +1700,16 @@ function CreateExchangeTowForm({
                                     hideLabel
                                     onPinDropClick={() => handlePinDropOpen('workingVehicle')}
                                     storageYardConfirm={workingPickupYardConfirm}
-                                  />
-                                )}
-                                {workingVehicleSource !== 'storage' && (
-                                  <SaveCustomerAddressControl
-                                    className="mt-1.5"
-                                    visible={showSaveWorkingSourceAddressOption}
-                                    address={workingVehicleAddress?.address ?? ''}
-                                    pending={pendingWorkingSourceAddress}
-                                    onConfirm={setPendingWorkingSourceAddress}
-                                    onClear={() => setPendingWorkingSourceAddress(null)}
-                                    disabled={saving}
+                                    extraActions={
+                                      <SaveCustomerAddressControl
+                                        visible={showSaveWorkingSourceAddressOption}
+                                        address={workingVehicleAddress?.address ?? ''}
+                                        pending={pendingWorkingSourceAddress}
+                                        onConfirm={setPendingWorkingSourceAddress}
+                                        onClear={() => setPendingWorkingSourceAddress(null)}
+                                        disabled={saving}
+                                      />
+                                    }
                                   />
                                 )}
                                 <button
@@ -1733,15 +1733,16 @@ function CreateExchangeTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
                                   storageYardConfirm={workingDropoffYardConfirm}
-                                />
-                                <SaveCustomerAddressControl
-                                  className="mt-1.5"
-                                  visible={showSaveWorkingDestinationAddressOption}
-                                  address={workingVehicleDestinationAddress?.address ?? ''}
-                                  pending={pendingWorkingDestinationAddress}
-                                  onConfirm={setPendingWorkingDestinationAddress}
-                                  onClear={() => setPendingWorkingDestinationAddress(null)}
-                                  disabled={saving}
+                                  extraActions={
+                                    <SaveCustomerAddressControl
+                                      visible={showSaveWorkingDestinationAddressOption}
+                                      address={workingVehicleDestinationAddress?.address ?? ''}
+                                      pending={pendingWorkingDestinationAddress}
+                                      onConfirm={setPendingWorkingDestinationAddress}
+                                      onClear={() => setPendingWorkingDestinationAddress(null)}
+                                      disabled={saving}
+                                    />
+                                  }
                                 />
                                 {!workingVehicleDestinationIsStorage ? (
                                   <button
@@ -1961,15 +1962,16 @@ function CreateExchangeTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('exchange')}
-                                />
-                                <SaveCustomerAddressControl
-                                  className="mt-1.5"
-                                  visible={showSaveExchangePickupAddressOption}
-                                  address={exchangeAddress?.address ?? ''}
-                                  pending={pendingExchangePickupAddress}
-                                  onConfirm={setPendingExchangePickupAddress}
-                                  onClear={() => setPendingExchangePickupAddress(null)}
-                                  disabled={saving}
+                                  extraActions={
+                                    <SaveCustomerAddressControl
+                                      visible={showSaveExchangePickupAddressOption}
+                                      address={exchangeAddress?.address ?? ''}
+                                      pending={pendingExchangePickupAddress}
+                                      onConfirm={setPendingExchangePickupAddress}
+                                      onClear={() => setPendingExchangePickupAddress(null)}
+                                      disabled={saving}
+                                    />
+                                  }
                                 />
                                 <button
                                   type="button"
@@ -1993,15 +1995,16 @@ function CreateExchangeTowForm({
                                       ? defectiveDropoffYardConfirm
                                       : null
                                   }
-                                />
-                                <SaveCustomerAddressControl
-                                  className="mt-1.5"
-                                  visible={showSaveDefectiveDestinationAddressOption}
-                                  address={defectiveDestinationAddress?.address ?? ''}
-                                  pending={pendingDefectiveDestinationAddress}
-                                  onConfirm={setPendingDefectiveDestinationAddress}
-                                  onClear={() => setPendingDefectiveDestinationAddress(null)}
-                                  disabled={saving}
+                                  extraActions={
+                                    <SaveCustomerAddressControl
+                                      visible={showSaveDefectiveDestinationAddressOption}
+                                      address={defectiveDestinationAddress?.address ?? ''}
+                                      pending={pendingDefectiveDestinationAddress}
+                                      onConfirm={setPendingDefectiveDestinationAddress}
+                                      onClear={() => setPendingDefectiveDestinationAddress(null)}
+                                      disabled={saving}
+                                    />
+                                  }
                                 />
                                 {defectiveDestination !== 'storage' ? (
                                   <button
@@ -2078,15 +2081,16 @@ function CreateExchangeTowForm({
                                             onChange={(d: AddressData) => setFollowUpAddress(d)}
                                             placeholder="כתובת היעד של הגרירה הבאה"
                                             onPinDropClick={() => handlePinDropOpen('followUp')}
-                                          />
-                                          <SaveCustomerAddressControl
-                                            className="mt-1.5"
-                                            visible={showSaveFollowUpAddressOption}
-                                            address={followUpAddress?.address ?? ''}
-                                            pending={pendingFollowUpAddress}
-                                            onConfirm={setPendingFollowUpAddress}
-                                            onClear={() => setPendingFollowUpAddress(null)}
-                                            disabled={saving}
+                                            extraActions={
+                                              <SaveCustomerAddressControl
+                                                visible={showSaveFollowUpAddressOption}
+                                                address={followUpAddress?.address ?? ''}
+                                                pending={pendingFollowUpAddress}
+                                                onConfirm={setPendingFollowUpAddress}
+                                                onClear={() => setPendingFollowUpAddress(null)}
+                                                disabled={saving}
+                                              />
+                                            }
                                           />
                                         </div>
 
@@ -2158,13 +2162,16 @@ function CreateExchangeTowForm({
                       />
                     </FormSubcard>
 
-                    <FormSubcard title="תוספות מיקום">
-                      <LocationSurchargesSection
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SurchargesSection
                         locationSurchargesData={locationSurchargesData}
                         selectedLocationSurcharges={selectedLocationSurcharges}
-                        setSelectedLocationSurcharges={setSelectedLocationSurcharges}
+                        onLocationSurchargesChange={setSelectedLocationSurcharges}
+                        services={[]}
+                        selectedServices={[]}
+                        onSelectedServicesChange={() => {}}
                       />
-                    </FormSubcard>
+                    </div>
               </div>
             </FormCard>
           )}
@@ -3052,53 +3059,6 @@ function TimeSurchargesSection({
             חג ({holidaySurcharge.surcharge_percent}%)
           </button>
         )}
-      </div>
-    </div>
-  )
-}
-
-function LocationSurchargesSection({
-  locationSurchargesData,
-  selectedLocationSurcharges,
-  setSelectedLocationSurcharges,
-}: {
-  locationSurchargesData: LocationSurcharge[]
-  selectedLocationSurcharges: string[]
-  setSelectedLocationSurcharges: (v: string[]) => void
-}) {
-  const active = locationSurchargesData.filter((s) => s.is_active)
-  if (active.length === 0) return null
-  return (
-    <div>
-      <p className="text-sm font-medium text-gray-700 mb-2">
-        תוספות מיקום
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {active.map((s) => {
-          const isSelected = selectedLocationSurcharges.includes(s.id)
-          return (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => {
-                if (isSelected)
-                  setSelectedLocationSurcharges(
-                    selectedLocationSurcharges.filter((id) => id !== s.id)
-                  )
-                else
-                  setSelectedLocationSurcharges([
-                    ...selectedLocationSurcharges,
-                    s.id,
-                  ])
-              }}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
-                isSelected ? 'bg-blue-500 text-white' : 'border border-gray-300'
-              }`}
-            >
-              {s.label} ({s.surcharge_percent}%)
-            </button>
-          )
-        })}
       </div>
     </div>
   )

@@ -23,7 +23,7 @@ import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
 import { getVehicleTypeLabel, isKnownVehicleType } from '../../../lib/vehicle-lookup'
 import { dateToYyyyMmDd, formatTodayYyyyMmDd, yyyyMmDdToDisplay } from '../../../lib/utils/date-input-normalize'
 import { toTowVehicleCoreInfo } from '../../../lib/utils/tow-vehicle-core'
-import { ServiceSurchargeSelector, ManualSurchargeSection, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
+import { SurchargesSection, SelectedService, TowTruckTypeSelector } from '../../../components/tow-forms/shared'
 import {
   extractManualSurcharges,
   manualSurchargesToBreakdown,
@@ -2500,17 +2500,13 @@ export default function TowDetailsPage() {
                 </div>
                 <div className="p-4 sm:p-5">
                   {isEditing ? (
-                    <div className="space-y-4">
-                      <ServiceSurchargeSelector
-                        services={serviceSurchargesData}
-                        selectedServices={editSelectedServices}
-                        onChange={setEditSelectedServices}
-                      />
-                      <ManualSurchargeSection
-                        manualSurcharges={editManualSurcharges}
-                        onChange={setEditManualSurcharges}
-                      />
-                    </div>
+                    <SurchargesSection
+                      services={serviceSurchargesData}
+                      selectedServices={editSelectedServices}
+                      onSelectedServicesChange={setEditSelectedServices}
+                      manualSurcharges={editManualSurcharges}
+                      onManualSurchargesChange={setEditManualSurcharges}
+                    />
                   ) : (
                     <div>
                       {tow.price_breakdown?.service_surcharges && tow.price_breakdown.service_surcharges.length > 0 ? (

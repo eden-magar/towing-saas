@@ -5,6 +5,7 @@ import { ContactNameAutocomplete } from './ContactNameAutocomplete'
 import { SaveCustomerContactPill } from './SaveCustomerContactPill'
 import { PhoneInput } from '../ui/PhoneInput'
 import type { CustomerContact } from '@/app/lib/types'
+import { phoneFromSelectedContact } from '@/app/lib/utils/customer-contact-save-ui'
 
 interface CustomerContactFieldsProps {
   name: string
@@ -48,7 +49,7 @@ export function CustomerContactFields({
           onChange={onNameChange}
           onSelectContact={(contact) => {
             onNameChange(contact.name)
-            onPhoneChange(contact.phone ?? '')
+            onPhoneChange(phoneFromSelectedContact(contact.phone, phone))
             onSelectContact?.()
           }}
           contacts={savedContacts}

@@ -6,5 +6,6 @@ export { TowTruckTypeSelector } from './TowTruckTypeSelector'
 export { ServiceSurchargeSelector, type SelectedService } from './ServiceSurchargeSelector'
 export { LocationSurchargeSelector } from './LocationSurchargeSelector'
 export { ManualSurchargeSection } from './ManualSurchargeSection'
+export { SurchargesSection } from './SurchargesSection'
 export { VehicleCoreLookupChips } from './VehicleCoreLookupChips'
 

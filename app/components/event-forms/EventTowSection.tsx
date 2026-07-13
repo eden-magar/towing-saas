@@ -33,6 +33,7 @@ import {
   type CustomerAddressPendingDraft,
 } from '../customer-addresses/SaveCustomerAddressControl'
 import { shouldOfferSaveCustomerAddress } from '../../lib/utils/customer-address-save-ui'
+import { phoneFromSelectedContact } from '../../lib/utils/customer-contact-save-ui'
 import { FlashNotice, useFlashNotice } from '../ui/FlashNotice'
 
 function formatMoney(value: number): string {
@@ -269,7 +270,7 @@ export function EventTowSection({
 
   const handleSelectSavedContact = (contact: { name: string; phone: string | null }) => {
     setContactName(contact.name)
-    setContactPhone(contact.phone ?? '')
+    setContactPhone((prev) => phoneFromSelectedContact(contact.phone, prev))
     setSaveContactToCustomer(false)
   }
 

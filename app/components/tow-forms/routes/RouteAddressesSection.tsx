@@ -56,26 +56,41 @@ export function RouteAddressFieldLabel({
 }
 
 /**
- * Origin | arrow | destination grid. Stacks on mobile (or when `stacked`).
+ * Origin | add-stop(+) | destination grid. Stacks on mobile (or when `stacked`).
  * Address-specific controls under a field belong in `underDestination` / field slots.
+ * Pass `onAddStop` to put a round + in the arrow column (replaces the full-width add button).
  */
 export function RouteOriginDestGrid({
   origin,
   destination,
   underDestination,
   stacked = false,
+  onAddStop,
 }: {
   origin: ReactNode
   destination: ReactNode
   underDestination?: ReactNode
   stacked?: boolean
+  onAddStop?: () => void
 }) {
+  const addStopButton = onAddStop ? (
+    <button
+      type="button"
+      onClick={onAddStop}
+      aria-label="הוסף נקודת עצירה"
+      title="הוסף נקודת עצירה"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gt-brand bg-white text-gt-brand shadow-sm transition-colors hover:bg-gt-brand-subtle"
+    >
+      <Plus className="h-4 w-4" aria-hidden />
+    </button>
+  ) : null
+
   if (stacked) {
     return (
       <div className="flex flex-col gap-3">
         <div className="min-w-0">{origin}</div>
-        <div className="flex justify-center text-gt-text-tertiary" aria-hidden>
-          <ArrowDown size={16} />
+        <div className="flex items-center justify-center gap-2 text-gt-text-tertiary">
+          {addStopButton ?? <ArrowDown size={16} aria-hidden />}
         </div>
         <div className="min-w-0 space-y-2">
           {destination}
@@ -88,14 +103,17 @@ export function RouteOriginDestGrid({
   return (
     <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[1fr_auto_1fr]">
       <div className="min-w-0">{origin}</div>
-      <div
-        className="hidden items-center justify-center pt-8 text-gt-text-tertiary sm:flex"
-        aria-hidden
-      >
-        <ArrowLeft size={16} />
-      </div>
-      <div className="flex justify-center text-gt-text-tertiary sm:hidden" aria-hidden>
-        <ArrowDown size={16} />
+      <div className="flex items-center justify-center pt-8 sm:flex-col sm:gap-1.5">
+        <span
+          className="hidden text-gt-text-tertiary sm:inline-flex"
+          aria-hidden
+        >
+          <ArrowLeft size={14} />
+        </span>
+        <span className="inline-flex text-gt-text-tertiary sm:hidden" aria-hidden>
+          <ArrowDown size={14} />
+        </span>
+        {addStopButton}
       </div>
       <div className="min-w-0 space-y-2">
         {destination}
@@ -105,6 +123,7 @@ export function RouteOriginDestGrid({
   )
 }
 
+/** Fallback full-width add-stop control (list / multi-stop layouts). Prefer onAddStop on RouteOriginDestGrid. */
 export function RouteAddStopButton({
   onClick,
   className = '',
@@ -117,21 +136,23 @@ export function RouteAddStopButton({
       <button
         type="button"
         onClick={onClick}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-gt-brand px-3 py-2 text-sm font-medium text-gt-brand transition-colors hover:bg-gt-brand-subtle"
+        aria-label="הוסף נקודת עצירה"
+        title="הוסף נקודת עצירה"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-gt-brand bg-white text-gt-brand transition-colors hover:bg-gt-brand-subtle"
       >
-        <Plus className="h-4 w-4 shrink-0" />
-        הוסף נקודת עצירה
+        <Plus className="h-4 w-4" aria-hidden />
       </button>
     </div>
   )
 }
 
 /**
- * Footer: distance on one side, empty-leg pricing toggles on the other.
+ * Footer: distance · surcharges pill · empty-leg toggles.
  * Pass `bleed` when nested inside FormSubcard padding so the tint reaches the card edge.
  */
 export function RouteAddressesFooter({
   distance,
+  surcharges,
   startFromBase,
   onStartFromBaseChange,
   showStartFromBase = false,
@@ -142,6 +163,8 @@ export function RouteAddressesFooter({
   bleed = false,
 }: {
   distance: ReactNode
+  /** Compact surcharges trigger (e.g. SurchargesSection pill). */
+  surcharges?: ReactNode
   startFromBase?: boolean
   onStartFromBaseChange?: (next: boolean) => void
   showStartFromBase?: boolean
@@ -161,31 +184,32 @@ export function RouteAddressesFooter({
         bleed ? '-mx-3.5 -mb-3.5 mt-4 sm:-mx-3 sm:-mb-3' : ''
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="text-sm font-medium text-gt-text-secondary">{distance}</div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-sm font-medium text-gt-text-secondary">{distance}</div>
+          {surcharges}
+        </div>
         {showEmptyLegs ? (
-          <div className="space-y-1.5 sm:text-left">
-            <p className="text-[11px] font-medium text-gt-text-tertiary">
-              חיוב נסיעה ריקה
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {showStartFromBase && onStartFromBaseChange ? (
-                <EmptyLegToggleButton
-                  active={!!startFromBase}
-                  onClick={() => onStartFromBaseChange(!startFromBase)}
-                  label="מהחניון למוצא"
-                />
-              ) : null}
-              {showDeadhead && onChargeDeadheadReturnChange ? (
-                <EmptyLegToggleButton
-                  active={!!chargeDeadheadReturn}
-                  onClick={() =>
-                    onChargeDeadheadReturnChange(!chargeDeadheadReturn)
-                  }
-                  label="מהיעד לחניון"
-                />
-              ) : null}
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-gt-text-tertiary">
+              נסיעה ריקה
+            </span>
+            {showStartFromBase && onStartFromBaseChange ? (
+              <EmptyLegToggleButton
+                active={!!startFromBase}
+                onClick={() => onStartFromBaseChange(!startFromBase)}
+                label="מהחניון"
+              />
+            ) : null}
+            {showDeadhead && onChargeDeadheadReturnChange ? (
+              <EmptyLegToggleButton
+                active={!!chargeDeadheadReturn}
+                onClick={() =>
+                  onChargeDeadheadReturnChange(!chargeDeadheadReturn)
+                }
+                label="לחניון"
+              />
+            ) : null}
             {deadheadHints}
           </div>
         ) : null}

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 interface SelectorModalShellProps {
   open: boolean
   onClose: () => void
-  title: string
+  title: ReactNode
   /** Optional subtle line under the title (e.g. multi-select hint). */
   subtitle?: ReactNode
   children: ReactNode

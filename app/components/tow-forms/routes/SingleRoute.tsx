@@ -1,6 +1,6 @@
 'use client'
 
-import { VehicleLookup, DefectSelector, TowTruckTypeSelector, ServiceSurchargeSelector, LocationSurchargeSelector, SelectedService } from '../shared'
+import { VehicleLookup, DefectSelector, TowTruckTypeSelector, SelectedService, SurchargesSection } from '../shared'
 import { Loader2, Package, Car, MapPin, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { AddressInput, AddressData } from './AddressInput'
 import {
@@ -260,13 +260,6 @@ export function SingleRoute({
           fieldKey: 'single-dropoff',
         }
       : null
-  const toggleLocationSurcharge = (id: string) => {
-    if (selectedLocationSurcharges.includes(id)) {
-      onLocationSurchargesChange(selectedLocationSurcharges.filter(i => i !== id))
-    } else {
-      onLocationSurchargesChange([...selectedLocationSurcharges, id])
-    }
-  }
 
   // חישוב מרחק כולל להצגה
   const totalDistance = startFromBase && baseToPickupDistance && distance
@@ -403,14 +396,6 @@ export function SingleRoute({
           <DefectSelector
             selectedDefects={selectedDefects}
             onChange={onDefectsChange}
-            isMobile={isMobile}
-          />
-
-          {/* שירותים נוספים - לפני סוג גרר */}
-          <ServiceSurchargeSelector
-            services={serviceSurchargesData}
-            selectedServices={selectedServices}
-            onChange={onSelectedServicesChange}
             isMobile={isMobile}
           />
 
@@ -605,6 +590,7 @@ export function SingleRoute({
         <div className="space-y-3">
           <RouteOriginDestGrid
             stacked={isNarrow}
+            onAddStop={addStop}
             origin={
               <div>
                 <RouteAddressFieldLabel tone="origin" required>
@@ -695,7 +681,6 @@ export function SingleRoute({
               ) : null
             }
           />
-          <RouteAddStopButton onClick={addStop} />
         </div>
       )}
 
@@ -708,13 +693,25 @@ export function SingleRoute({
             </span>
           ) : totalDistance ? (
             <>
-              מרחק כולל {totalDistance.distanceKm} ק״מ
+              מרחק {totalDistance.distanceKm} ק״מ
               <span className="mx-1.5 text-gt-text-tertiary">•</span>
               {totalDistance.durationMinutes} דק׳
             </>
           ) : (
-            <>מרחק כולל 0.0 ק״מ</>
+            <>מרחק 0.0 ק״מ</>
           )
+        }
+        surcharges={
+          <SurchargesSection
+            locationSurchargesData={locationSurchargesData}
+            selectedLocationSurcharges={selectedLocationSurcharges}
+            onLocationSurchargesChange={onLocationSurchargesChange}
+            services={serviceSurchargesData}
+            selectedServices={selectedServices}
+            onSelectedServicesChange={onSelectedServicesChange}
+            manualSurcharges={manualSurcharges}
+            onManualSurchargesChange={onManualSurchargesChange}
+          />
         }
         showStartFromBase={!!basePriceList?.base_address}
         startFromBase={startFromBase}
@@ -730,28 +727,6 @@ export function SingleRoute({
               {s.label} (+{s.surcharge_percent}%)
             </span>
           ))}
-        </div>
-      )}
-      {/* מובייל: אריחים - שירותים + מיקום */}
-      {isMobile && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1.5">תוספות למסלול</p>
-          <div className="grid grid-cols-2 gap-2">
-            <ServiceSurchargeSelector
-              services={serviceSurchargesData}
-              selectedServices={selectedServices}
-              onChange={onSelectedServicesChange}
-              manualSurcharges={manualSurcharges}
-              onManualSurchargesChange={onManualSurchargesChange}
-              isMobile
-            />
-            <LocationSurchargeSelector
-              locationSurcharges={locationSurchargesData}
-              selectedLocationSurcharges={selectedLocationSurcharges}
-              onChange={onLocationSurchargesChange}
-              isMobile
-            />
-          </div>
         </div>
       )}
 
@@ -770,29 +745,6 @@ export function SingleRoute({
           <span className="text-xs text-red-600">תוספת חג תחושב אוטומטית</span>
         )}
       </div>
-
-      {/* דסקטופ - תוספות מיקום */}
-      {locationSurchargesData.filter(l => l.is_active).length > 0 && (
-        <div className="hidden sm:block">
-          <p className="text-sm font-medium text-gray-700 mb-2">📍 תוספות מיקום:</p>
-          <div className="flex flex-wrap gap-2">
-            {locationSurchargesData.filter(l => l.is_active).map(s => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => toggleLocationSurcharge(s.id)}
-                className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                  selectedLocationSurcharges.includes(s.id)
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {s.label} (+{s.surcharge_percent}%)
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </>
   )
 
