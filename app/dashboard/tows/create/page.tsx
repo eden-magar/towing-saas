@@ -59,10 +59,13 @@ import {
   VehicleCoreLookupChips,
   DefectSelector,
   TowTruckTypeSelector,
+  TRUCK_TYPES,
+  truckTypeOptionClassName,
   RequiredTruckTypeMissingModal,
   isRequiredTruckTypeError,
   VehicleCardActions,
   vehicleActionTriggerClass,
+  ManualVehicleEntryTrigger,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
@@ -2262,12 +2265,6 @@ function CreateTowForm({
     )
   }
 
-  const TRUCK_OPTIONS = [
-    { value: 'wheel_lift_cradle', label: 'משקפיים' },
-    { value: 'flatbed', label: 'רמסע' },
-    { value: 'carrier', label: 'מובילית' },
-  ] as const
-
   const openDefectsModal = () => {
     const normalized = hydrateDefectsFromTowReason(serializeDefects(selectedDefects))
     setSelectedDefects(normalized)
@@ -2370,19 +2367,18 @@ function CreateTowForm({
           setTruckTypePickerOpen(true)
         }}
       />
-      {/* Hidden host so validation can open the truck picker even when the trigger is not yet shown. */}
-      <div className="sr-only" aria-hidden>
-        <TowTruckTypeSelector
-          variant="triggerOnly"
-          open={truckTypePickerOpen}
-          onOpenChange={setTruckTypePickerOpen}
-          selectedTypes={requiredTruckTypes}
-          onChange={(types) => {
-            setRequiredTruckTypes(types)
-            if (types.length > 0) setTruckTypeError(false)
-          }}
-        />
-      </div>
+      {/* Host picker for validation CTA — modal portaled; trigger hidden. */}
+      <TowTruckTypeSelector
+        variant="triggerOnly"
+        hideTrigger
+        open={truckTypePickerOpen}
+        onOpenChange={setTruckTypePickerOpen}
+        selectedTypes={requiredTruckTypes}
+        onChange={(types) => {
+          setRequiredTruckTypes(types)
+          if (types.length > 0) setTruckTypeError(false)
+        }}
+      />
       {saveWarning && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl">
           {saveWarning}
@@ -2636,9 +2632,30 @@ function CreateTowForm({
                             </div>
                             <div className="mt-1.5">
                               <VehicleCardActions>
+                                <ManualVehicleEntryTrigger
+                                  active={vehicleLookupNotFound}
+                                  values={{
+                                    plateNumber: vehiclePlate,
+                                    vehicleType,
+                                    manufacturer: manualManufacturer,
+                                    color: manualColor,
+                                    chassis: manualChassis,
+                                    weight: manualWeight,
+                                  }}
+                                  onSave={(v) => {
+                                    setPlateStorageWarning(null)
+                                    setVehiclePlate(v.plateNumber)
+                                    setVehicleData(null)
+                                    setVehicleLookupNotFound(true)
+                                    setVehicleType(v.vehicleType)
+                                    setManualManufacturer(v.manufacturer)
+                                    setManualColor(v.color)
+                                    setManualChassis(v.chassis)
+                                    setManualWeight(v.weight)
+                                  }}
+                                />
                                 <DefectSelector
                                   variant="triggerOnly"
-                                  fill
                                   selectedDefects={selectedDefects}
                                   onChange={setSelectedDefects}
                                   triggerClassName={
@@ -2651,21 +2668,23 @@ function CreateTowForm({
                                   }
                                 />
                                 {vehicleData === null && !vehicleLookupNotFound ? (
-                                  <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-dashed border-gray-200 px-2 text-center text-xs text-gray-400">
-                                    סוג גרר לאחר בדיקה
+                                  <span
+                                    title="סוג הגרר יופיע לאחר בדיקת רישוי"
+                                    className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-xl border border-dashed border-gray-200 px-3 text-sm text-gray-400"
+                                  >
+                                    סוג גרר
                                   </span>
                                 ) : (
                                   <div
                                     ref={truckTypeSectionRef}
                                     className={
                                       truckTypeError
-                                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
-                                        : 'w-full min-w-0'
+                                        ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                        : 'shrink-0'
                                     }
                                   >
                                     <TowTruckTypeSelector
                                       variant="triggerOnly"
-                                      fill
                                       selectedTypes={requiredTruckTypes}
                                       onChange={(types) => {
                                         setRequiredTruckTypes(types)
@@ -2674,27 +2693,6 @@ function CreateTowForm({
                                     />
                                   </div>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPlateStorageWarning(null)
-                                    setVehicleData(null)
-                                    setVehicleLookupNotFound(true)
-                                    setVehicleType('')
-                                    setManualManufacturer('')
-                                    setManualColor('')
-                                    setManualWeight('')
-                                    setManualChassis('')
-                                  }}
-                                  className={vehicleActionTriggerClass(vehicleLookupNotFound)}
-                                >
-                                  {vehicleLookupNotFound ? (
-                                    <Check className="h-4 w-4 shrink-0" aria-hidden />
-                                  ) : (
-                                    <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-                                  )}
-                                  <span className="truncate">פרטי רכב ידנית</span>
-                                </button>
                               </VehicleCardActions>
                             </div>
                             {vehicleData?.data?.driveType?.includes?.('קדמית') && (
@@ -2774,82 +2772,6 @@ function CreateTowForm({
                               data={vehicleData.data}
                               vehicleType={vehicleType}
                             />
-                          </div>
-                        )}
-                        {vehicleLookupNotFound && (
-                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                            <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
-                                <select
-                                  value={vehicleType}
-                                  onChange={(e) => setVehicleType(e.target.value as any)}
-                                  className={withRequestFieldClass(
-                                    'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm',
-                                    vehicleTypeStatus,
-                                  )}
-                                >
-                                  <option value="">בחר סוג רכב</option>
-                                  <option value="private">פרטי</option>
-                                  <option value="suv">ג&apos;יפ / SUV</option>
-                                  <option value="truck">משאית</option>
-                                  <option value="heavy">צמ&quot;ה</option>
-                                  <option value="motorcycle">אופנוע</option>
-                                  <option value="bus">אוטובוס / מיניבוס</option>
-                                  <option value="van">רכב מסחרי</option>
-                                  <option value="other">אחר</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">יצרן</label>
-                                <input
-                                  type="text"
-                                  value={manualManufacturer}
-                                  onChange={(e) => setManualManufacturer(e.target.value)}
-                                  placeholder="למשל: טויוטה"
-                                  className={withRequestFieldClass(
-                                    'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm',
-                                    manualManufacturerStatus,
-                                  )}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">צבע</label>
-                                <input
-                                  type="text"
-                                  value={manualColor}
-                                  onChange={(e) => setManualColor(e.target.value)}
-                                  placeholder="למשל: לבן"
-                                  className={withRequestFieldClass(
-                                    'w-full px-3 py-2 border border-gray-300 rounded-xl text-sm',
-                                    manualColorStatus,
-                                  )}
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
-                                <input
-                                  type="text"
-                                  value={manualChassis}
-                                  onChange={(e) => setManualChassis(e.target.value)}
-                                  placeholder="אופציונלי"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm font-mono"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-600 mb-1">
-                                  {(vehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
-                                </label>
-                                <input type="number" value={manualWeight}
-                                  onChange={(e) => setManualWeight(e.target.value)}
-                                  placeholder={(vehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
-                                {(vehicleType as string) === 'van' && (!manualWeight || Number(manualWeight) === 0) && (
-                                  <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
-                                )}
-                              </div>
-                            </div>
                           </div>
                         )}
                       </div>
@@ -3091,28 +3013,30 @@ function CreateTowForm({
                               ✕
                             </button>
                           </div>
-                          <div className="p-4 grid grid-cols-3 gap-2">
-                            {TRUCK_OPTIONS.map((opt) => (
+                          <div className="grid grid-cols-3 gap-2 p-4" dir="rtl">
+                            {TRUCK_TYPES.map((opt) => {
+                              const selected = requiredTruckTypes.includes(opt.id)
+                              return (
                               <button
-                                key={opt.value}
+                                key={opt.id}
                                 type="button"
                                 onClick={() => {
-                                  const current = requiredTruckTypes.filter((t) => t !== opt.value)
-                                  if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
-                                  else setRequiredTruckTypes([...current, opt.value])
+                                  const current = requiredTruckTypes.filter((t) => t !== opt.id)
+                                  if (requiredTruckTypes.includes(opt.id)) setRequiredTruckTypes(current)
+                                  else setRequiredTruckTypes([...current, opt.id])
                                 }}
-                                className={`py-4 px-2 rounded-xl border-2 text-sm font-semibold transition-colors relative ${
-                                  requiredTruckTypes.includes(opt.value)
-                                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                                }`}
+                                aria-pressed={selected}
+                                className={`flex min-h-[4.5rem] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center text-sm font-medium transition-colors ${truckTypeOptionClassName(
+                                  selected,
+                                )}`}
                               >
-                                {opt.label}
-                                {requiredTruckTypes.includes(opt.value) && (
-                                  <span className="absolute top-1 left-1 text-blue-500 text-xs">✓</span>
-                                )}
+                                <span className="text-xl leading-none" aria-hidden>
+                                  {opt.icon}
+                                </span>
+                                <span className="leading-snug">{opt.label}</span>
                               </button>
-                            ))}
+                              )
+                            })}
                           </div>
                           <div className="px-4 pb-4 flex gap-2">
                             <button
@@ -3330,19 +3254,41 @@ function CreateTowForm({
                                     className="text-xs"
                                   />
                                 </div>
-                                <div className="mt-1.5 grid w-full grid-cols-2 gap-2" dir="rtl" role="group" aria-label="פעולות רכב">
+                                <div className="mt-1.5">
+                                  <VehicleCardActions>
+                                  <ManualVehicleEntryTrigger
+                                    active={workingVehicleNotFound}
+                                    values={{
+                                      plateNumber: workingVehiclePlate,
+                                      vehicleType: workingVehicleType,
+                                      manufacturer: workingManualManufacturer,
+                                      color: workingManualColor,
+                                      chassis: workingManualChassis,
+                                      weight: workingManualWeight,
+                                    }}
+                                    onSave={(v) => {
+                                      setPlateStorageWarning(null)
+                                      setWorkingVehiclePlate(v.plateNumber)
+                                      setWorkingVehicleData(null)
+                                      setWorkingVehicleNotFound(true)
+                                      setWorkingVehicleType(v.vehicleType)
+                                      setWorkingManualManufacturer(v.manufacturer)
+                                      setWorkingManualColor(v.color)
+                                      setWorkingManualChassis(v.chassis)
+                                      setWorkingManualWeight(v.weight)
+                                    }}
+                                  />
                                   <div
                                     ref={truckTypeSectionRef}
                                     className={
                                       truckTypeError
-                                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
-                                        : 'w-full min-w-0'
+                                        ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                        : 'shrink-0'
                                     }
                                   >
                                     {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
                                       <TowTruckTypeSelector
                                         variant="triggerOnly"
-                                        fill
                                         selectedTypes={requiredTruckTypes}
                                         onChange={(types) => {
                                           setRequiredTruckTypes(types)
@@ -3350,31 +3296,15 @@ function CreateTowForm({
                                         }}
                                       />
                                     ) : (
-                                      <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-dashed border-gray-200 px-2 text-center text-xs text-gray-400">
-                                        סוג גרר לאחר בדיקה
+                                      <span
+                                        title="סוג הגרר יופיע לאחר בדיקת רישוי"
+                                        className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-xl border border-dashed border-gray-200 px-3 text-sm text-gray-400"
+                                      >
+                                        סוג גרר
                                       </span>
                                     )}
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPlateStorageWarning(null)
-                                      setWorkingVehicleData(null)
-                                      setWorkingVehicleNotFound(true)
-                                      setWorkingVehicleType('')
-                                      setWorkingManualManufacturer('')
-                                      setWorkingManualColor('')
-                                      setWorkingManualWeight('')
-                                    }}
-                                    className={vehicleActionTriggerClass(workingVehicleNotFound)}
-                                  >
-                                    {workingVehicleNotFound ? (
-                                      <Check className="h-4 w-4 shrink-0" aria-hidden />
-                                    ) : (
-                                      <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-                                    )}
-                                    <span className="truncate">פרטי רכב ידנית</span>
-                                  </button>
+                                  </VehicleCardActions>
                                 </div>
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
@@ -3406,60 +3336,7 @@ function CreateTowForm({
                               />
                             </div>
                           )}
-                          <div className="min-h-0">
-                            {workingVehicleNotFound && (
-                              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                                <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">סוג רכב *</label>
-                                    <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
-                                      className="w-full px-3 py-2 border border-gt-border-subtle rounded-xl text-sm">
-                                      <option value="">בחר סוג רכב</option>
-                                      <option value="private">פרטי</option>
-                                      <option value="suv">ג'יפ / SUV</option>
-                                      <option value="truck">משאית</option>
-                                      <option value="heavy">צמ"ה</option>
-                                      <option value="motorcycle">אופנוע</option>
-                                      <option value="bus">אוטובוס</option>
-                                      <option value="van">רכב מסחרי</option>
-                                      <option value="other">אחר</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יצרן</label>
-                                    <Input type="text" value={workingManualManufacturer}
-                                      onChange={(e) => setWorkingManualManufacturer(e.target.value)}
-                                      placeholder="למשל: טויוטה" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">צבע</label>
-                                    <Input type="text" value={workingManualColor}
-                                      onChange={(e) => setWorkingManualColor(e.target.value)}
-                                      placeholder="למשל: לבן" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">מספר שלדה</label>
-                                    <Input type="text" value={workingManualChassis}
-                                      onChange={(e) => setWorkingManualChassis(e.target.value)}
-                                      placeholder="אופציונלי"
-                                      className="font-mono" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                                      {(workingVehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
-                                    </label>
-                                    <Input type="number" value={workingManualWeight}
-                                      onChange={(e) => setWorkingManualWeight(e.target.value)}
-                                      placeholder={(workingVehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'} />
-                                    {(workingVehicleType as string) === 'van' && (!workingManualWeight || Number(workingManualWeight) === 0) && (
-                                      <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          <div className="min-h-0" />
                             </div>
                           </div>
 
@@ -3588,9 +3465,30 @@ function CreateTowForm({
                               </div>
                               <div className="mt-1.5">
                                 <VehicleCardActions>
+                                <ManualVehicleEntryTrigger
+                                  active={defectiveVehicleNotFound}
+                                  values={{
+                                    plateNumber: defectiveVehiclePlate,
+                                    vehicleType: defectiveVehicleType,
+                                    manufacturer: defectiveManualManufacturer,
+                                    color: defectiveManualColor,
+                                    chassis: defectiveManualChassis,
+                                    weight: defectiveManualWeight,
+                                  }}
+                                  onSave={(v) => {
+                                    setPlateStorageWarning(null)
+                                    setDefectiveVehiclePlate(v.plateNumber)
+                                    setDefectiveVehicleData(null)
+                                    setDefectiveVehicleNotFound(true)
+                                    setDefectiveVehicleType(v.vehicleType)
+                                    setDefectiveManualManufacturer(v.manufacturer)
+                                    setDefectiveManualColor(v.color)
+                                    setDefectiveManualChassis(v.chassis)
+                                    setDefectiveManualWeight(v.weight)
+                                  }}
+                                />
                                 <DefectSelector
                                   variant="triggerOnly"
-                                  fill
                                   selectedDefects={selectedDefects}
                                   onChange={setSelectedDefects}
                                 />
@@ -3599,48 +3497,22 @@ function CreateTowForm({
                                   onClick={() => setHasSecondTruck(!hasSecondTruck)}
                                   className={vehicleActionTriggerClass(hasSecondTruck)}
                                 >
-                                  <span className="truncate">
+                                  <span className="shrink-0">
                                     {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
                                   </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPlateStorageWarning(null)
-                                    setDefectiveVehicleData(null)
-                                    setDefectiveVehicleNotFound(true)
-                                    setDefectiveVehicleType('')
-                                    setDefectiveManualManufacturer('')
-                                    setDefectiveManualColor('')
-                                    setDefectiveManualWeight('')
-                                  }}
-                                  className={vehicleActionTriggerClass(defectiveVehicleNotFound)}
-                                >
-                                  {defectiveVehicleNotFound ? (
-                                    <Check className="h-4 w-4 shrink-0" aria-hidden />
-                                  ) : (
-                                    <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-                                  )}
-                                  <span className="truncate">פרטי רכב ידנית</span>
                                 </button>
                                 </VehicleCardActions>
                               </div>
                               {hasSecondTruck && (
                                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                                  <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {TRUCK_OPTIONS.map((opt) => (
-                                      <button key={opt.value} type="button"
-                                        onClick={() => {
-                                          const current = defectiveTruckTypes.filter(t => t !== opt.value)
-                                          if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
-                                          else setDefectiveTruckTypes([...current, opt.value])
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
-                                        {opt.label}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  <p className="mb-2 text-xs font-medium text-gray-500">
+                                    סוג גרר לרכב התקול *
+                                  </p>
+                                  <TowTruckTypeSelector
+                                    variant="gridOnly"
+                                    selectedTypes={defectiveTruckTypes}
+                                    onChange={setDefectiveTruckTypes}
+                                  />
                                 </div>
                               )}
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
@@ -3672,60 +3544,7 @@ function CreateTowForm({
                                   />
                                 </div>
                               )}
-                              <div className="min-h-0">
-                                {defectiveVehicleNotFound && (
-                                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                                    <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
-                                        <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value as VehicleType)}
-                                          className="w-full px-3 py-2 border border-gt-border-subtle rounded-xl text-sm">
-                                          <option value="">בחר סוג רכב</option>
-                                          <option value="private">פרטי</option>
-                                          <option value="suv">ג'יפ / SUV</option>
-                                          <option value="truck">משאית</option>
-                                          <option value="heavy">צמ"ה</option>
-                                          <option value="motorcycle">אופנוע</option>
-                                          <option value="bus">אוטובוס</option>
-                                          <option value="van">רכב מסחרי</option>
-                                          <option value="other">אחר</option>
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">יצרן</label>
-                                        <Input type="text" value={defectiveManualManufacturer}
-                                          onChange={(e) => setDefectiveManualManufacturer(e.target.value)}
-                                          placeholder="למשל: טויוטה" />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">צבע</label>
-                                        <Input type="text" value={defectiveManualColor}
-                                          onChange={(e) => setDefectiveManualColor(e.target.value)}
-                                          placeholder="למשל: לבן" />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
-                                        <Input type="text" value={defectiveManualChassis}
-                                          onChange={(e) => setDefectiveManualChassis(e.target.value)}
-                                          placeholder="אופציונלי"
-                                          className="font-mono" />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">
-                                          {(defectiveVehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
-                                        </label>
-                                        <Input type="number" value={defectiveManualWeight}
-                                          onChange={(e) => setDefectiveManualWeight(e.target.value)}
-                                          placeholder={(defectiveVehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'} />
-                                        {(defectiveVehicleType as string) === 'van' && (!defectiveManualWeight || Number(defectiveManualWeight) === 0) && (
-                                          <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              <div className="min-h-0" />
                             </div>
                           </div>
 

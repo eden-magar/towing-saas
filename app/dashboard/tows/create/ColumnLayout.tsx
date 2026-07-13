@@ -291,18 +291,17 @@ export function ColumnLayout({
           setTruckTypePickerOpen(true)
         }}
       />
-      <div className="sr-only" aria-hidden>
-        <TowTruckTypeSelector
-          variant="triggerOnly"
-          open={truckTypePickerOpen}
-          onOpenChange={setTruckTypePickerOpen}
-          selectedTypes={form.requiredTruckTypes}
-          onChange={(types) => {
-            form.setRequiredTruckTypes(types)
-            if (types.length > 0) form.setTruckTypeError(false)
-          }}
-        />
-      </div>
+      <TowTruckTypeSelector
+        variant="triggerOnly"
+        hideTrigger
+        open={truckTypePickerOpen}
+        onOpenChange={setTruckTypePickerOpen}
+        selectedTypes={form.requiredTruckTypes}
+        onChange={(types) => {
+          form.setRequiredTruckTypes(types)
+          if (types.length > 0) form.setTruckTypeError(false)
+        }}
+      />
 
       <header className="bg-white border-b border-gray-300">
         <div className="max-w-7xl mx-auto">
@@ -565,7 +564,6 @@ export function ColumnLayout({
                           manualEntryTrailing={
                             <DefectSelector
                               variant="triggerOnly"
-                              fill
                               selectedDefects={form.selectedDefects}
                               onChange={form.setSelectedDefects}
                             />
@@ -575,13 +573,12 @@ export function ColumnLayout({
                               ref={form.truckTypeSectionRef}
                               className={
                                 form.truckTypeError
-                                  ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
-                                  : 'w-full min-w-0'
+                                  ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                  : 'shrink-0'
                               }
                             >
                               <TowTruckTypeSelector
                                 variant="triggerOnly"
-                                fill
                                 selectedTypes={form.requiredTruckTypes}
                                 onChange={(types) => {
                                   form.setRequiredTruckTypes(types)

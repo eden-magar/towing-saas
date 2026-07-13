@@ -9,15 +9,15 @@ interface TowTruckTypeSelectorProps {
   onChange: (types: string[]) => void
   label?: string
   /** Compact trigger + modal only (no inline chip grid). */
-  variant?: 'default' | 'triggerOnly'
+  variant?: 'default' | 'triggerOnly' | 'gridOnly'
   /** Label on the compact trigger button (triggerOnly variant). */
   triggerLabel?: string
   isMobile?: boolean
   /** Controlled open (e.g. from required-truck-type validation modal). */
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  /** Stretch trigger to fill VehicleCardActions cell. */
-  fill?: boolean
+  /** Render only the picker modal (host for validation CTA). */
+  hideTrigger?: boolean
 }
 
 export const TRUCK_TYPES = [
@@ -26,19 +26,42 @@ export const TRUCK_TYPES = [
   { id: 'carrier', label: 'מובילית', icon: '🚚' },
 ] as const
 
+/** Neutral vs accent tile classes — sibling of fault grid tiles. */
+export function truckTypeOptionClassName(selected: boolean): string {
+  return selected
+    ? 'border-[#33d4ff] bg-[#33d4ff]/10 text-gt-text-primary ring-1 ring-[#33d4ff]'
+    : 'border-gray-200 bg-white text-gray-700 hover:border-[#33d4ff]/60'
+}
+
+/** Base label + optional value for the compact trigger (value may truncate). */
+export function truckTypesTriggerParts(
+  selectedTypes: string[],
+  emptyLabel = 'סוג גרר',
+  filledPrefix = 'גרר',
+): { label: string; value: string | null } {
+  const labels = selectedTypes
+    .map((id) => TRUCK_TYPES.find((t) => t.id === id)?.label)
+    .filter((x): x is (typeof TRUCK_TYPES)[number]['label'] => Boolean(x))
+  if (labels.length === 0) return { label: emptyLabel, value: null }
+  if (labels.length === 1) return { label: filledPrefix, value: labels[0] }
+  if (labels.length === 2) {
+    return { label: filledPrefix, value: `${labels[0]}, ${labels[1]}` }
+  }
+  return { label: filledPrefix, value: `${labels[0]} +${labels.length - 1}` }
+}
+
 /** Trigger summary: "סוג גרר" | "גרר · רמסע" | "גרר · רמסע +1" */
 export function formatTruckTypesTriggerLabel(
   selectedTypes: string[],
   emptyLabel = 'סוג גרר',
   filledPrefix = 'גרר',
 ): string {
-  const labels = selectedTypes
-    .map((id) => TRUCK_TYPES.find((t) => t.id === id)?.label)
-    .filter((x): x is (typeof TRUCK_TYPES)[number]['label'] => Boolean(x))
-  if (labels.length === 0) return emptyLabel
-  if (labels.length === 1) return `${filledPrefix} · ${labels[0]}`
-  if (labels.length === 2) return `${filledPrefix} · ${labels[0]}, ${labels[1]}`
-  return `${filledPrefix} · ${labels[0]} +${labels.length - 1}`
+  const { label, value } = truckTypesTriggerParts(
+    selectedTypes,
+    emptyLabel,
+    filledPrefix,
+  )
+  return value ? `${label} · ${value}` : label
 }
 
 export function TowTruckTypeSelector({
@@ -50,7 +73,7 @@ export function TowTruckTypeSelector({
   isMobile = false,
   open: openProp,
   onOpenChange,
-  fill = false,
+  hideTrigger = false,
 }: TowTruckTypeSelectorProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const showModal = openProp ?? internalOpen
@@ -67,47 +90,72 @@ export function TowTruckTypeSelector({
     }
   }
 
-  const typeList = (
-    <div className="space-y-2 p-4">
-      {TRUCK_TYPES.map((type) => (
-        <button
-          key={`modal-${type.id}`}
-          type="button"
-          onClick={() => toggleType(type.id)}
-          className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all ${
-            selectedTypes.includes(type.id)
-              ? 'border-gt-brand bg-gt-brand text-white'
-              : 'border-gray-200 bg-white text-gray-600'
-          }`}
-        >
-          <span className="text-xl">{type.icon}</span>
-          {type.label}
-        </button>
-      ))}
+  const renderGrid = (opts: { keyPrefix?: string; padded?: boolean }) => (
+    <div
+      className={`grid grid-cols-2 gap-2 sm:grid-cols-3${opts.padded ? ' p-4' : ''}`}
+      dir="rtl"
+    >
+      {TRUCK_TYPES.map((type) => {
+        const selected = selectedTypes.includes(type.id)
+        return (
+          <button
+            key={`${opts.keyPrefix ?? ''}${type.id}`}
+            type="button"
+            onClick={() => toggleType(type.id)}
+            aria-pressed={selected}
+            className={`flex h-full min-h-[4.5rem] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center text-sm font-medium transition-colors ${truckTypeOptionClassName(
+              selected,
+            )}`}
+          >
+            <span className="text-xl leading-none" aria-hidden>
+              {type.icon}
+            </span>
+            <span className="line-clamp-2 w-full leading-snug">{type.label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 
+  if (variant === 'gridOnly') {
+    return <div>{renderGrid({})}</div>
+  }
+
   if (variant === 'triggerOnly') {
     const summary = formatTruckTypesTriggerLabel(selectedTypes, triggerLabel)
+    const { label: baseLabel, value: valueSuffix } = truckTypesTriggerParts(
+      selectedTypes,
+      triggerLabel,
+    )
     return (
-      <div className={fill ? 'min-w-0 w-full' : 'shrink-0 min-w-0 max-w-full'}>
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          title={summary}
-          aria-label={summary}
-          className={vehicleActionTriggerClass(selectedTypes.length > 0)}
-        >
-          <span aria-hidden>🚚</span>
-          <span className="truncate">{summary}</span>
-        </button>
+      <div className="max-w-full shrink-0">
+        {!hideTrigger && (
+          <button
+            type="button"
+            onClick={() => setShowModal(true)}
+            title={summary}
+            aria-label={summary}
+            className={vehicleActionTriggerClass(selectedTypes.length > 0)}
+          >
+            <span aria-hidden>🚚</span>
+            <span className="inline-flex min-w-0 max-w-full items-center">
+              <span className="shrink-0">{baseLabel}</span>
+              {valueSuffix ? (
+                <span className="min-w-0 max-w-[8rem] truncate sm:max-w-[10rem]">
+                  {' · '}
+                  {valueSuffix}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        )}
         <SelectorModalShell
           open={showModal}
           onClose={() => setShowModal(false)}
           title={label}
           panelClassName="max-w-md sm:max-w-lg"
         >
-          {typeList}
+          {renderGrid({ keyPrefix: 'modal-', padded: true })}
         </SelectorModalShell>
       </div>
     )
@@ -159,26 +207,10 @@ export function TowTruckTypeSelector({
         title={label}
         overlayClassName="sm:hidden"
       >
-        {typeList}
+        {renderGrid({ keyPrefix: 'modal-', padded: true })}
       </SelectorModalShell>
 
-      <div className="hidden flex-wrap gap-2 sm:flex">
-        {TRUCK_TYPES.map((type) => (
-          <button
-            key={type.id}
-            type="button"
-            onClick={() => toggleType(type.id)}
-            className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
-              selectedTypes.includes(type.id)
-                ? 'border-[#33d4ff] bg-[#33d4ff] text-white'
-                : 'border-gray-200 bg-white text-gray-600 hover:border-[#33d4ff]'
-            }`}
-          >
-            <span className="ml-1">{type.icon}</span>
-            {type.label}
-          </button>
-        ))}
-      </div>
+      <div className="hidden sm:block">{renderGrid({})}</div>
       {!isMobile && selectedTypes.length > 0 && (
         <p className="mt-2 text-xs text-gray-500">נבחרו {selectedTypes.length} סוגים</p>
       )}

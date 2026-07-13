@@ -1,8 +1,13 @@
+export {
+  ManualVehicleEntryModal,
+  ManualVehicleEntryTrigger,
+  type ManualVehicleEntryValues,
+} from './ManualVehicleEntryModal'
 export { VehicleLookup } from './VehicleLookup'
 export { DefectSelector, formatDefectsTriggerLabel } from './DefectSelector'
 export { StartFromBase } from './StartFromBase'
 export { PinDropModal } from './PinDropModal'
-export { TowTruckTypeSelector, formatTruckTypesTriggerLabel, TRUCK_TYPES } from './TowTruckTypeSelector'
+export { TowTruckTypeSelector, formatTruckTypesTriggerLabel, TRUCK_TYPES, truckTypeOptionClassName } from './TowTruckTypeSelector'
 export {
   RequiredTruckTypeMissingModal,
   REQUIRED_TRUCK_TYPE_MESSAGE,

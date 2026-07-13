@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Car, Key, X, Search, Loader2, PenLine, Check } from 'lucide-react'
+import { Car, Key, X, Search, Loader2 } from 'lucide-react'
 import { VehicleData } from './VehicleInfoCard'
 import { VehicleCoreLookupChips } from '../shared/VehicleCoreLookupChips'
 import { DefectSelector } from '../shared/DefectSelector'
-import { vehicleActionTriggerClass } from '../shared/VehicleCardActions'
+import { ManualVehicleEntryTrigger } from '../shared/ManualVehicleEntryModal'
+import { VehicleCardActions } from '../shared/VehicleCardActions'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
-import { VehicleLookupResult } from '../../../lib/types'
+import { VehicleLookupResult, type VehicleType } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 
@@ -56,22 +57,6 @@ export function VehicleCard({
   className = '' 
 }: VehicleCardProps) {
   const [isSearching, setIsSearching] = useState(false)
-
-  const handleSkipToManualEntry = () => {
-    if (vehicle.fromStorage) return
-    onChange({
-      ...vehicle,
-      isLoading: false,
-      isFound: false,
-      vehicleNotFound: true,
-      vehicleType: undefined,
-      registrySource: null,
-      vehicleData: undefined,
-      manualManufacturer: undefined,
-      manualColor: undefined,
-      manualWeight: undefined,
-    })
-  }
 
   const handleSearch = async () => {
     if (vehicle.plateNumber.length < 5 || vehicle.fromStorage) return
@@ -264,37 +249,48 @@ export function VehicleCard({
             )}
           </div>
           {(!vehicle.fromStorage || !vehicle.isWorking) && (
-            <div
-              className={`mt-1.5 grid w-full gap-2 ${
-                !vehicle.isWorking && !vehicle.fromStorage ? 'grid-cols-2' : 'grid-cols-1'
-              }`}
-              dir="rtl"
-              role="group"
-              aria-label="פעולות רכב"
-            >
+            <VehicleCardActions className="mt-1.5">
+              {!vehicle.fromStorage && (
+                <ManualVehicleEntryTrigger
+                  active={Boolean(vehicle.vehicleNotFound)}
+                  values={{
+                    plateNumber: vehicle.plateNumber,
+                    vehicleType: (vehicle.vehicleType as VehicleType | '') || '',
+                    manufacturer: vehicle.manualManufacturer ?? '',
+                    color: vehicle.manualColor ?? '',
+                    chassis: '',
+                    weight: vehicle.manualWeight ?? '',
+                  }}
+                  onSave={(v) => {
+                    onChange({
+                      ...vehicle,
+                      plateNumber: v.plateNumber,
+                      isLoading: false,
+                      isFound: false,
+                      vehicleNotFound: true,
+                      vehicleType: v.vehicleType || undefined,
+                      registrySource: null,
+                      vehicleData: {
+                        manufacturer: v.manufacturer || undefined,
+                        color: v.color || undefined,
+                        totalWeight: v.weight || undefined,
+                        chassis: v.chassis || undefined,
+                      } as VehicleData,
+                      manualManufacturer: v.manufacturer || undefined,
+                      manualColor: v.color || undefined,
+                      manualWeight: v.weight || undefined,
+                    })
+                  }}
+                />
+              )}
               {!vehicle.isWorking && (
                 <DefectSelector
                   variant="triggerOnly"
-                  fill
                   selectedDefects={vehicle.defects || []}
                   onChange={(defects) => onChange({ ...vehicle, defects })}
                 />
               )}
-              {!vehicle.fromStorage && (
-                <button
-                  type="button"
-                  onClick={handleSkipToManualEntry}
-                  className={vehicleActionTriggerClass(Boolean(vehicle.vehicleNotFound))}
-                >
-                  {vehicle.vehicleNotFound ? (
-                    <Check className="h-4 w-4 shrink-0" aria-hidden />
-                  ) : (
-                    <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-                  )}
-                  <span className="truncate">פרטי רכב ידנית</span>
-                </button>
-              )}
-            </div>
+            </VehicleCardActions>
           )}
           {(isSearching || vehicle.isLoading) && (
             <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
@@ -316,102 +312,6 @@ export function VehicleCard({
           />
         )}
 
-        {/* שדות ידניים אם לא נמצא — same as exchange tow (create/page.tsx) */}
-        {vehicle.vehicleNotFound && !vehicle.fromStorage && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-            <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                  סוג רכב *
-                </label>
-                <select
-                  value={vehicle.vehicleType ?? ''}
-                  onChange={(e) =>
-                    onChange({
-                      ...vehicle,
-                      vehicleType: e.target.value || undefined,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm"
-                >
-                  <option value="">בחר סוג רכב</option>
-                  <option value="private">פרטי</option>
-                  <option value="suv">ג&apos;יפ / SUV</option>
-                  <option value="truck">משאית</option>
-                  <option value="heavy">צמ&quot;ה</option>
-                  <option value="motorcycle">אופנוע</option>
-                  <option value="bus">אוטובוס</option>
-                  <option value="van">רכב מסחרי</option>
-                  <option value="other">אחר</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יצרן</label>
-                <input
-                  type="text"
-                  value={vehicle.manualManufacturer ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    onChange({
-                      ...vehicle,
-                      manualManufacturer: v || undefined,
-                      vehicleData: {
-                        ...(vehicle.vehicleData || {}),
-                        manufacturer: v || undefined,
-                      } as VehicleData,
-                    })
-                  }}
-                  placeholder="למשל: טויוטה"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">צבע</label>
-                <input
-                  type="text"
-                  value={vehicle.manualColor ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    onChange({
-                      ...vehicle,
-                      manualColor: v || undefined,
-                      vehicleData: {
-                        ...(vehicle.vehicleData || {}),
-                        color: v || undefined,
-                      } as VehicleData,
-                    })
-                  }}
-                  placeholder="למשל: לבן"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                  משקל (ק&quot;ג)
-                </label>
-                <input
-                  type="number"
-                  value={vehicle.manualWeight ?? ''}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    onChange({
-                      ...vehicle,
-                      manualWeight: v || undefined,
-                      vehicleData: {
-                        ...(vehicle.vehicleData || {}),
-                        totalWeight: v || undefined,
-                      } as VehicleData,
-                    })
-                  }}
-                  placeholder="אופציונלי"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-        
         {/* Vehicle code */}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">

@@ -37,6 +37,7 @@ import {
   TowTruckTypeSelector,
   RequiredTruckTypeMissingModal,
   isRequiredTruckTypeError,
+  ManualVehicleEntryTrigger,
   VehicleCardActions,
   vehicleActionTriggerClass,
 } from '../../../components/tow-forms/shared'
@@ -1231,12 +1232,6 @@ function CreateExchangeTowForm({
       }
     : null
 
-  const TRUCK_OPTIONS = [
-    { value: 'wheel_lift_cradle', label: 'משקפיים' },
-    { value: 'flatbed', label: 'רמסע' },
-    { value: 'carrier', label: 'מובילית' },
-  ] as const
-
   const lockedOpacity = quoteApproved ? 1 : 0.35
   const lockedPointer = quoteApproved ? 'auto' : 'none'
 
@@ -1290,18 +1285,17 @@ function CreateExchangeTowForm({
           setTruckTypePickerOpen(true)
         }}
       />
-      <div className="sr-only" aria-hidden>
-        <TowTruckTypeSelector
-          variant="triggerOnly"
-          open={truckTypePickerOpen}
-          onOpenChange={setTruckTypePickerOpen}
-          selectedTypes={requiredTruckTypes}
-          onChange={(types) => {
-            setRequiredTruckTypes(types)
-            if (types.length > 0) setTruckTypeError(false)
-          }}
-        />
-      </div>
+      <TowTruckTypeSelector
+        variant="triggerOnly"
+        hideTrigger
+        open={truckTypePickerOpen}
+        onOpenChange={setTruckTypePickerOpen}
+        selectedTypes={requiredTruckTypes}
+        onChange={(types) => {
+          setRequiredTruckTypes(types)
+          if (types.length > 0) setTruckTypeError(false)
+        }}
+      />
 
       <FlashNotice message={addressNotice} />
 
@@ -1546,19 +1540,41 @@ function CreateExchangeTowForm({
                                     className="text-xs"
                                   />
                                 </div>
-                                <div className="mt-1.5 grid w-full grid-cols-2 gap-2" dir="rtl" role="group" aria-label="פעולות רכב">
+                                <div className="mt-1.5">
+                                  <VehicleCardActions>
+                                  <ManualVehicleEntryTrigger
+                                    active={workingVehicleNotFound}
+                                    values={{
+                                      plateNumber: workingVehiclePlate,
+                                      vehicleType: workingVehicleType,
+                                      manufacturer: workingManualManufacturer,
+                                      color: workingManualColor,
+                                      chassis: workingManualChassis,
+                                      weight: workingManualWeight,
+                                    }}
+                                    onSave={(v) => {
+                                      setPlateStorageWarning(null)
+                                      setWorkingVehiclePlate(v.plateNumber)
+                                      setWorkingVehicleData(null)
+                                      setWorkingVehicleNotFound(true)
+                                      setWorkingVehicleType(v.vehicleType)
+                                      setWorkingManualManufacturer(v.manufacturer)
+                                      setWorkingManualColor(v.color)
+                                      setWorkingManualChassis(v.chassis)
+                                      setWorkingManualWeight(v.weight)
+                                    }}
+                                  />
                                   <div
                                     ref={truckTypeSectionRef}
                                     className={
                                       truckTypeError
-                                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
-                                        : 'w-full min-w-0'
+                                        ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                        : 'shrink-0'
                                     }
                                   >
                                     {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
                                       <TowTruckTypeSelector
                                         variant="triggerOnly"
-                                        fill
                                         selectedTypes={requiredTruckTypes}
                                         onChange={(types) => {
                                           setRequiredTruckTypes(types)
@@ -1566,31 +1582,15 @@ function CreateExchangeTowForm({
                                         }}
                                       />
                                     ) : (
-                                      <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-dashed border-gray-200 px-2 text-center text-xs text-gray-400">
-                                        סוג גרר לאחר בדיקה
+                                      <span
+                                        title="סוג הגרר יופיע לאחר בדיקת רישוי"
+                                        className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-xl border border-dashed border-gray-200 px-3 text-sm text-gray-400"
+                                      >
+                                        סוג גרר
                                       </span>
                                     )}
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPlateStorageWarning(null)
-                                      setWorkingVehicleData(null)
-                                      setWorkingVehicleNotFound(true)
-                                      setWorkingVehicleType('')
-                                      setWorkingManualManufacturer('')
-                                      setWorkingManualColor('')
-                                      setWorkingManualWeight('')
-                                    }}
-                                    className={vehicleActionTriggerClass(workingVehicleNotFound)}
-                                  >
-                                    {workingVehicleNotFound ? (
-                                      <Check className="h-4 w-4 shrink-0" aria-hidden />
-                                    ) : (
-                                      <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-                                    )}
-                                    <span className="truncate">פרטי רכב ידנית</span>
-                                  </button>
+                                  </VehicleCardActions>
                                 </div>
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
@@ -1623,55 +1623,7 @@ function CreateExchangeTowForm({
                               </div>
                             </div>
                           )}
-                          <div className="min-h-0">
-                            {workingVehicleNotFound && (
-                              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                                <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                                <div className="grid grid-cols-2 gap-3">
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">סוג רכב *</label>
-                                    <select value={workingVehicleType} onChange={(e) => setWorkingVehicleType(e.target.value as VehicleType)}
-                                      className="w-full px-3 py-2 border border-gt-border-subtle rounded-xl text-sm">
-                                      <option value="">בחר סוג רכב</option>
-                                      <option value="private">פרטי</option>
-                                      <option value="suv">ג'יפ / SUV</option>
-                                      <option value="truck">משאית</option>
-                                      <option value="heavy">צמ"ה</option>
-                                      <option value="motorcycle">אופנוע</option>
-                                      <option value="bus">אוטובוס</option>
-                                      <option value="van">רכב מסחרי</option>
-                                      <option value="other">אחר</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יצרן</label>
-                                    <Input type="text" value={workingManualManufacturer}
-                                      onChange={(e) => setWorkingManualManufacturer(e.target.value)}
-                                      placeholder="למשל: טויוטה" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">צבע</label>
-                                    <Input type="text" value={workingManualColor}
-                                      onChange={(e) => setWorkingManualColor(e.target.value)}
-                                      placeholder="למשל: לבן" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">מספר שלדה</label>
-                                    <Input type="text" value={workingManualChassis}
-                                      onChange={(e) => setWorkingManualChassis(e.target.value)}
-                                      placeholder="אופציונלי"
-                                      className="font-mono" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">משקל (ק"ג)</label>
-                                    <Input type="number" value={workingManualWeight}
-                                      onChange={(e) => setWorkingManualWeight(e.target.value)}
-                                      placeholder="אופציונלי" />
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          <div className="min-h-0" />
                             </div>
                           </div>
 
@@ -1798,9 +1750,30 @@ function CreateExchangeTowForm({
                               </div>
                               <div className="mt-1.5">
                                 <VehicleCardActions>
+                                  <ManualVehicleEntryTrigger
+                                    active={defectiveVehicleNotFound}
+                                    values={{
+                                      plateNumber: defectiveVehiclePlate,
+                                      vehicleType: defectiveVehicleType,
+                                      manufacturer: defectiveManualManufacturer,
+                                      color: defectiveManualColor,
+                                      chassis: defectiveManualChassis,
+                                      weight: defectiveManualWeight,
+                                    }}
+                                    onSave={(v) => {
+                                      setPlateStorageWarning(null)
+                                      setDefectiveVehiclePlate(v.plateNumber)
+                                      setDefectiveVehicleData(null)
+                                      setDefectiveVehicleNotFound(true)
+                                      setDefectiveVehicleType(v.vehicleType)
+                                      setDefectiveManualManufacturer(v.manufacturer)
+                                      setDefectiveManualColor(v.color)
+                                      setDefectiveManualChassis(v.chassis)
+                                      setDefectiveManualWeight(v.weight)
+                                    }}
+                                  />
                                   <DefectSelector
                                     variant="triggerOnly"
-                                    fill
                                     selectedDefects={selectedDefects}
                                     onChange={setSelectedDefects}
                                   />
@@ -1809,48 +1782,22 @@ function CreateExchangeTowForm({
                                     onClick={() => setHasSecondTruck(!hasSecondTruck)}
                                     className={vehicleActionTriggerClass(hasSecondTruck)}
                                   >
-                                    <span className="truncate">
+                                    <span className="shrink-0">
                                       {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
                                     </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPlateStorageWarning(null)
-                                      setDefectiveVehicleData(null)
-                                      setDefectiveVehicleNotFound(true)
-                                      setDefectiveVehicleType('')
-                                      setDefectiveManualManufacturer('')
-                                      setDefectiveManualColor('')
-                                      setDefectiveManualWeight('')
-                                    }}
-                                    className={vehicleActionTriggerClass(defectiveVehicleNotFound)}
-                                  >
-                                    {defectiveVehicleNotFound ? (
-                                      <Check className="h-4 w-4 shrink-0" aria-hidden />
-                                    ) : (
-                                      <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-                                    )}
-                                    <span className="truncate">פרטי רכב ידנית</span>
                                   </button>
                                 </VehicleCardActions>
                               </div>
                               {hasSecondTruck && (
                                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                                  <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {TRUCK_OPTIONS.map((opt) => (
-                                      <button key={opt.value} type="button"
-                                        onClick={() => {
-                                          const current = defectiveTruckTypes.filter(t => t !== opt.value)
-                                          if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
-                                          else setDefectiveTruckTypes([...current, opt.value])
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
-                                        {opt.label}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  <p className="mb-2 text-xs font-medium text-gray-500">
+                                    סוג גרר לרכב התקול *
+                                  </p>
+                                  <TowTruckTypeSelector
+                                    variant="gridOnly"
+                                    selectedTypes={defectiveTruckTypes}
+                                    onChange={setDefectiveTruckTypes}
+                                  />
                                 </div>
                               )}
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
@@ -1883,55 +1830,7 @@ function CreateExchangeTowForm({
                                   </div>
                                 </div>
                               )}
-                              <div className="min-h-0">
-                                {defectiveVehicleNotFound && (
-                                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                                    <p className="text-sm text-amber-700 font-medium">הרכב לא נמצא במאגר — יש למלא ידנית</p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">סוג רכב *</label>
-                                        <select value={defectiveVehicleType} onChange={(e) => setDefectiveVehicleType(e.target.value as VehicleType)}
-                                          className="w-full px-3 py-2 border border-gt-border-subtle rounded-xl text-sm">
-                                          <option value="">בחר סוג רכב</option>
-                                          <option value="private">פרטי</option>
-                                          <option value="suv">ג'יפ / SUV</option>
-                                          <option value="truck">משאית</option>
-                                          <option value="heavy">צמ"ה</option>
-                                          <option value="motorcycle">אופנוע</option>
-                                          <option value="bus">אוטובוס</option>
-                                          <option value="van">רכב מסחרי</option>
-                                          <option value="other">אחר</option>
-                                        </select>
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">יצרן</label>
-                                        <Input type="text" value={defectiveManualManufacturer}
-                                          onChange={(e) => setDefectiveManualManufacturer(e.target.value)}
-                                          placeholder="למשל: טויוטה" />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">צבע</label>
-                                        <Input type="text" value={defectiveManualColor}
-                                          onChange={(e) => setDefectiveManualColor(e.target.value)}
-                                          placeholder="למשל: לבן" />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">מספר שלדה</label>
-                                        <Input type="text" value={defectiveManualChassis}
-                                          onChange={(e) => setDefectiveManualChassis(e.target.value)}
-                                          placeholder="אופציונלי"
-                                          className="font-mono" />
-                                      </div>
-                                      <div>
-                                        <label className="block text-xs text-gray-600 mb-1">משקל (ק"ג)</label>
-                                        <Input type="number" value={defectiveManualWeight}
-                                          onChange={(e) => setDefectiveManualWeight(e.target.value)}
-                                          placeholder="אופציונלי" />
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                              <div className="min-h-0" />
                             </div>
                           </div>
 

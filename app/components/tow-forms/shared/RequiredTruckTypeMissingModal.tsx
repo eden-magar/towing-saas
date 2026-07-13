@@ -1,5 +1,6 @@
 'use client'
 
+import { AlertTriangle } from 'lucide-react'
 import { SelectorModalShell } from './SelectorModalShell'
 
 /** Same string `useTowSave` / quote-save set via `setError` for missing truck type. */
@@ -19,6 +20,10 @@ interface RequiredTruckTypeMissingModalProps {
 /**
  * Centered modal when save is blocked for missing required truck type.
  * Replaces the fixed top error strip for this message only.
+ *
+ * Exchange: save only requires `requiredTruckTypes` (the primary / working-vehicle
+ * picker). Defective “גרר נוסף” is a separate optional path — this CTA opens the
+ * primary picker. If they still lack something else, the next save attempt surfaces it.
  */
 export function RequiredTruckTypeMissingModal({
   open,
@@ -29,7 +34,13 @@ export function RequiredTruckTypeMissingModal({
     <SelectorModalShell
       open={open}
       onClose={onClose}
-      title="סוג גרר לא נבחר"
+      tone="danger"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden />
+          סוג גרר לא נבחר
+        </span>
+      }
       panelClassName="max-w-md"
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3" dir="rtl">
@@ -43,8 +54,10 @@ export function RequiredTruckTypeMissingModal({
           <button
             type="button"
             onClick={() => {
-              onClose()
+              // Open picker first, then dismiss this dialog — same open state the
+              // vehicle-card / host TowTruckTypeSelector listens to.
               onChooseTruckType()
+              onClose()
             }}
             className="w-full min-h-[44px] rounded-xl bg-gt-brand text-sm font-medium text-white transition-colors hover:bg-gt-brand-hover sm:flex-1"
           >
@@ -53,9 +66,8 @@ export function RequiredTruckTypeMissingModal({
         </div>
       }
     >
-      <div className="space-y-2 p-4 text-sm text-gt-text-secondary" dir="rtl">
-        <p className="font-medium text-gt-text-primary">סוג גרר לא נבחר</p>
-        <p>יש לבחור לפחות סוג גרר אחד לפני שמירת הגרירה.</p>
+      <div className="p-4 text-sm text-gt-text-secondary" dir="rtl">
+        <p>יש לבחור לפחות סוג גרר אחד לפני שמירת הגרירה. לחצו «בחר סוג גרר» לבחירה מהרשימה.</p>
       </div>
     </SelectorModalShell>
   )

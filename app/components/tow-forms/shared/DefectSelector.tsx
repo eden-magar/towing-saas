@@ -25,16 +25,27 @@ function shortDefectLabel(raw: string): string {
   return base.split('/')[0]?.trim() || base
 }
 
+/** Base label + optional value suffix for the compact trigger (value may truncate). */
+export function defectsTriggerParts(
+  selectedDefects: string[],
+  emptyLabel = 'תקלות',
+): { label: string; value: string | null } {
+  const shorts = selectedDefects.map(shortDefectLabel).filter(Boolean)
+  if (shorts.length === 0) return { label: emptyLabel, value: null }
+  if (shorts.length === 1) return { label: emptyLabel, value: shorts[0] }
+  if (shorts.length === 2) {
+    return { label: emptyLabel, value: `${shorts[0]}, ${shorts[1]}` }
+  }
+  return { label: emptyLabel, value: `${shorts[0]} +${shorts.length - 1}` }
+}
+
 /** Trigger summary: "תקלות" | "תקלות · מנוע, תקר" | "תקלות · מנוע +2" */
 export function formatDefectsTriggerLabel(
   selectedDefects: string[],
   emptyLabel = 'תקלות',
 ): string {
-  const shorts = selectedDefects.map(shortDefectLabel).filter(Boolean)
-  if (shorts.length === 0) return emptyLabel
-  if (shorts.length === 1) return `${emptyLabel} · ${shorts[0]}`
-  if (shorts.length === 2) return `${emptyLabel} · ${shorts[0]}, ${shorts[1]}`
-  return `${emptyLabel} · ${shorts[0]} +${shorts.length - 1}`
+  const { label, value } = defectsTriggerParts(selectedDefects, emptyLabel)
+  return value ? `${label} · ${value}` : label
 }
 
 interface DefectSelectorProps {
@@ -48,8 +59,6 @@ interface DefectSelectorProps {
   /** Optional class override for the triggerOnly button (e.g. compact red inline). */
   triggerClassName?: string
   isMobile?: boolean
-  /** Stretch trigger to fill VehicleCardActions cell. */
-  fill?: boolean
 }
 
 export function DefectSelector({
@@ -60,7 +69,6 @@ export function DefectSelector({
   triggerLabel = 'תקלות',
   triggerClassName,
   isMobile = false,
-  fill = false,
 }: DefectSelectorProps) {
   const [otherText, setOtherText] = useState(() => extractOtherText(selectedDefects))
   const [showModal, setShowModal] = useState(false)
@@ -146,8 +154,12 @@ export function DefectSelector({
 
   if (variant === 'triggerOnly') {
     const summary = formatDefectsTriggerLabel(selectedDefects, triggerLabel)
+    const { label: baseLabel, value: valueSuffix } = defectsTriggerParts(
+      selectedDefects,
+      triggerLabel,
+    )
     return (
-      <div className={fill ? 'min-w-0 w-full' : 'shrink-0 min-w-0 max-w-full'}>
+      <div className="max-w-full shrink-0">
         <button
           type="button"
           onClick={() => setShowModal(true)}
@@ -158,7 +170,15 @@ export function DefectSelector({
           }
         >
           <span aria-hidden>🔧</span>
-          <span className="truncate">{summary}</span>
+          <span className="inline-flex min-w-0 max-w-full items-center">
+            <span className="shrink-0">{baseLabel}</span>
+            {valueSuffix ? (
+              <span className="min-w-0 max-w-[8rem] truncate sm:max-w-[10rem]">
+                {' · '}
+                {valueSuffix}
+              </span>
+            ) : null}
+          </span>
         </button>
         <SelectorModalShell open={showModal} onClose={() => setShowModal(false)} title={label}>
           {renderGrid({ keyPrefix: 'modal-', padded: true })}

@@ -102,18 +102,17 @@ export function TowCreateWizard() {
           setTruckTypePickerOpen(true)
         }}
       />
-      <div className="sr-only" aria-hidden>
-        <TowTruckTypeSelector
-          variant="triggerOnly"
-          open={truckTypePickerOpen}
-          onOpenChange={setTruckTypePickerOpen}
-          selectedTypes={form.requiredTruckTypes}
-          onChange={(types) => {
-            form.setRequiredTruckTypes(types)
-            if (types.length > 0) form.setTruckTypeError(false)
-          }}
-        />
-      </div>
+      <TowTruckTypeSelector
+        variant="triggerOnly"
+        hideTrigger
+        open={truckTypePickerOpen}
+        onOpenChange={setTruckTypePickerOpen}
+        selectedTypes={form.requiredTruckTypes}
+        onChange={(types) => {
+          form.setRequiredTruckTypes(types)
+          if (types.length > 0) form.setTruckTypeError(false)
+        }}
+      />
 
       {/* Continuous scroll of sections — order matches desktop create/page.tsx */}
       <SectionCustomer form={form} />

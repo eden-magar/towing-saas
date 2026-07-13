@@ -1,6 +1,8 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface SelectorModalShellProps {
   open: boolean
@@ -15,12 +17,15 @@ interface SelectorModalShellProps {
   overlayClassName?: string
   /** When set, replaces the default full-width סיום footer button. */
   footer?: ReactNode
+  /** Header / title tone. `danger` for blocking validation errors. */
+  tone?: 'default' | 'danger'
 }
 
 /**
  * Centered modal shell shared by DefectSelector, ServiceSurchargeSelector, and
  * TowTruckTypeSelector — title header, scrollable body, full-width סיום footer.
- * Backdrop tap closes the modal.
+ * Backdrop tap closes the modal. Portaled to document.body so parents like
+ * `sr-only` / overflow clips cannot hide the dialog.
  */
 export function SelectorModalShell({
   open,
@@ -31,22 +36,47 @@ export function SelectorModalShell({
   panelClassName = 'max-w-md',
   overlayClassName = '',
   footer,
+  tone = 'default',
 }: SelectorModalShellProps) {
-  if (!open) return null
+  const [mounted, setMounted] = useState(false)
 
-  return (
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!open || !mounted) return null
+
+  const isDanger = tone === 'danger'
+
+  return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ${overlayClassName}`.trim()}
+      className={`fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 ${overlayClassName}`.trim()}
       onClick={onClose}
     >
       <div
         className={`flex max-h-[80vh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl ${panelClassName}`.trim()}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
-        <div className="shrink-0 border-b border-gray-200 p-4">
-          <h3 className="font-bold text-gray-800">{title}</h3>
+        <div
+          className={`shrink-0 border-b p-4 ${
+            isDanger ? 'border-red-200 bg-red-50' : 'border-gray-200'
+          }`}
+        >
+          <h3
+            className={`font-bold ${isDanger ? 'text-red-700' : 'text-gray-800'}`}
+          >
+            {title}
+          </h3>
           {subtitle ? (
-            <p className="mt-1 text-xs text-gt-text-tertiary leading-snug">{subtitle}</p>
+            <p
+              className={`mt-1 text-xs leading-snug ${
+                isDanger ? 'text-red-600/80' : 'text-gt-text-tertiary'
+              }`}
+            >
+              {subtitle}
+            </p>
           ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
@@ -62,6 +92,7 @@ export function SelectorModalShell({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -6,8 +6,11 @@ import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
-import { SelectorModalShell } from './SelectorModalShell'
-import { vehicleActionTriggerClass } from './VehicleCardActions'
+import { VehicleCardActions, vehicleActionTriggerClass } from './VehicleCardActions'
+import {
+  ManualVehicleEntryModal,
+  type ManualVehicleEntryValues,
+} from './ManualVehicleEntryModal'
 
 interface VehicleLookupProps {
   plateNumber: string
@@ -133,31 +136,31 @@ export function VehicleLookup({
     }
   }
 
-  // "Skip to manual" — open modal; only reset fields when entering manual mode fresh
+  // "Skip to manual" — open modal; commit happens on שמור only
   const openManualEntry = () => {
-    if (!notFound) {
-      onVehicleDataChange(null)
-      setNotFound(true)
-      onVehicleTypeChange('')
-      onManualManufacturerChange?.('')
-      onManualColorChange?.('')
-      onManualWeightChange?.('')
-      onManualChassisChange?.('')
-    }
     setShowManualModal(true)
   }
 
-  const manualInputClass = isNarrow
-    ? 'w-full px-3 h-9 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
-    : isMobileSized
-      ? 'w-full px-3 h-12 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
-      : 'w-full px-3 py-2 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
+  const handleManualSave = (values: ManualVehicleEntryValues) => {
+    // Plate set without clearing manual mode / without lookup (card blur won't fire).
+    onPlateChange(values.plateNumber)
+    onVehicleDataChange(null)
+    setNotFound(true)
+    onVehicleTypeChange(values.vehicleType)
+    onManualManufacturerChange?.(values.manufacturer)
+    onManualColorChange?.(values.color)
+    onManualWeightChange?.(values.weight)
+    onManualChassisChange?.(values.chassis)
+  }
 
-  const manualSelectClass = isNarrow
-    ? 'w-full px-3 h-9 border border-gt-border-field rounded-lg text-sm bg-white hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
-    : isMobileSized
-      ? 'w-full px-3 h-12 border border-gt-border-field rounded-lg text-sm bg-white hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
-      : 'w-full px-3 py-2 border border-gt-border-field rounded-lg text-sm bg-white hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
+  const manualCommittedValues: ManualVehicleEntryValues = {
+    plateNumber,
+    vehicleType,
+    manufacturer: manualManufacturer,
+    color: manualColor,
+    chassis: manualChassis,
+    weight: manualWeight,
+  }
 
   const renderManualEntryTrigger = (opts?: { compact?: boolean }) => {
     if (!manualEnabled || vehicleData?.found) return null
@@ -198,7 +201,7 @@ export function VehicleLookup({
         ) : (
           <PenLine className="h-4 w-4 shrink-0" aria-hidden />
         )}
-        <span className="truncate">פרטי רכב ידנית</span>
+        <span className="shrink-0">פרטי רכב ידנית</span>
       </button>
     )
   }
@@ -206,202 +209,11 @@ export function VehicleLookup({
   const renderManualEntryRow = () => {
     const trigger = renderManualEntryTrigger()
     if (!trigger && !manualEntryTrailing && !manualEntryEnd) return null
-    const cells = [manualEntryTrailing, manualEntryEnd, trigger].filter(Boolean)
+    const cells = [trigger, manualEntryTrailing, manualEntryEnd].filter(Boolean)
     if (cells.length >= 2) {
-      return (
-        <div
-          className={`grid w-full gap-2 ${
-            cells.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'
-          }`}
-          dir="rtl"
-          role="group"
-          aria-label="פעולות רכב"
-        >
-          {cells}
-        </div>
-      )
+      return <VehicleCardActions>{cells}</VehicleCardActions>
     }
     return <div className="w-full">{cells[0]}</div>
-  }
-
-  const manualFieldLabelClass = (narrowManual = false) =>
-    `block mb-1 ${
-      isNarrow || narrowManual
-        ? 'text-xs text-gray-500 font-medium'
-        : 'text-xs text-gray-600'
-    }`
-
-  const handleManualPlateChange = (raw: string) => {
-    // Stay in manual mode — do not clear notFound (outer plate onChange does that).
-    onPlateChange(normalizePlate(raw))
-  }
-
-  const renderManualFields = (options?: { narrowManualLayout?: boolean }) => {
-    const narrowManual = options?.narrowManualLayout ?? false
-
-    if (narrowManual) {
-      return (
-        <div className="space-y-2">
-          <div>
-            <label className={manualFieldLabelClass(true)}>מספר רישוי *</label>
-            <input
-              type="text"
-              value={plateNumber}
-              onChange={(e) => handleManualPlateChange(e.target.value)}
-              placeholder="מספר רישוי"
-              disabled={disabled}
-              className={`${manualInputClass} font-semibold font-mono`}
-            />
-          </div>
-          <div>
-            <label className={manualFieldLabelClass(true)}>סוג רכב *</label>
-            <select
-              value={vehicleType}
-              onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
-              className={manualSelectClass}
-            >
-              <option value="">בחר סוג רכב</option>
-              <option value="private">פרטי</option>
-              <option value="suv">ג&apos;יפ / SUV</option>
-              <option value="truck">משאית</option>
-              <option value="heavy">צמ&quot;ה</option>
-              <option value="motorcycle">אופנוע</option>
-              <option value="bus">אוטובוס / מיניבוס</option>
-              <option value="van">רכב מסחרי</option>
-              <option value="other">אחר</option>
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="min-w-0">
-              <label className={manualFieldLabelClass(true)}>יצרן</label>
-              <input
-                type="text"
-                value={manualManufacturer}
-                onChange={(e) => onManualManufacturerChange?.(e.target.value)}
-                placeholder="למשל: טויוטה"
-                className={manualInputClass}
-              />
-            </div>
-            <div className="min-w-0">
-              <label className={manualFieldLabelClass(true)}>צבע</label>
-              <input
-                type="text"
-                value={manualColor}
-                onChange={(e) => onManualColorChange?.(e.target.value)}
-                placeholder="למשל: לבן"
-                className={manualInputClass}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="min-w-0">
-              <label className={manualFieldLabelClass(true)}>מספר שלדה</label>
-              <input
-                type="text"
-                value={manualChassis}
-                onChange={(e) => onManualChassisChange?.(e.target.value)}
-                placeholder="אופציונלי"
-                className={`${manualInputClass} font-mono`}
-              />
-            </div>
-            <div className="min-w-0">
-              <label className={manualFieldLabelClass(true)}>
-                {(vehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
-              </label>
-              <input
-                type="number"
-                value={manualWeight}
-                onChange={(e) => onManualWeightChange?.(e.target.value)}
-                placeholder={(vehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'}
-                className={manualInputClass}
-              />
-              {(vehicleType as string) === 'van' && (!manualWeight || Number(manualWeight) === 0) && (
-                <p className="text-xs text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-    <div className={stackLayout ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
-      <div className={stackLayout ? undefined : 'sm:col-span-2'}>
-        <label className={manualFieldLabelClass()}>מספר רישוי *</label>
-        <input
-          type="text"
-          value={plateNumber}
-          onChange={(e) => handleManualPlateChange(e.target.value)}
-          placeholder="מספר רישוי"
-          disabled={disabled}
-          className={`${manualInputClass} font-semibold font-mono`}
-        />
-      </div>
-      <div>
-        <label className={manualFieldLabelClass()}>סוג רכב *</label>
-        <select
-          value={vehicleType}
-          onChange={(e) => onVehicleTypeChange(e.target.value as VehicleType | '')}
-          className={manualSelectClass}
-        >
-          <option value="">בחר סוג רכב</option>
-          <option value="private">פרטי</option>
-          <option value="suv">ג&apos;יפ / SUV</option>
-          <option value="truck">משאית</option>
-          <option value="heavy">צמ&quot;ה</option>
-          <option value="motorcycle">אופנוע</option>
-          <option value="bus">אוטובוס / מיניבוס</option>
-          <option value="van">רכב מסחרי</option>
-          <option value="other">אחר</option>
-        </select>
-      </div>
-      <div>
-        <label className={manualFieldLabelClass()}>יצרן</label>
-        <input
-          type="text"
-          value={manualManufacturer}
-          onChange={(e) => onManualManufacturerChange?.(e.target.value)}
-          placeholder="למשל: טויוטה"
-          className={manualInputClass}
-        />
-      </div>
-      <div>
-        <label className={manualFieldLabelClass()}>צבע</label>
-        <input
-          type="text"
-          value={manualColor}
-          onChange={(e) => onManualColorChange?.(e.target.value)}
-          placeholder="למשל: לבן"
-          className={manualInputClass}
-        />
-      </div>
-      <div>
-        <label className={manualFieldLabelClass()}>מספר שלדה</label>
-        <input
-          type="text"
-          value={manualChassis}
-          onChange={(e) => onManualChassisChange?.(e.target.value)}
-          placeholder="אופציונלי"
-          className={`${manualInputClass} font-mono`}
-        />
-      </div>
-      <div>
-        <label className={manualFieldLabelClass()}>
-          {(vehicleType as string) === 'van' ? 'משקל (ק״ג) *' : 'משקל (ק"ג)'}
-        </label>
-        <input
-          type="number"
-          value={manualWeight}
-          onChange={(e) => onManualWeightChange?.(e.target.value)}
-          placeholder={(vehicleType as string) === 'van' ? 'חובה לרכב מסחרי' : 'אופציונלי'}
-          className={manualInputClass}
-        />
-        {(vehicleType as string) === 'van' && (!manualWeight || Number(manualWeight) === 0) && (
-          <p className="text-sm text-red-500 mt-1">יש להזין משקל כדי לחשב מחיר לרכב מסחרי</p>
-        )}
-      </div>
-    </div>
-    )
   }
 
   return (
@@ -502,8 +314,8 @@ export function VehicleLookup({
                 />
               )}
 
-              {actionsWithPlate && manualEntryTrailing}
               {actionsWithPlate && renderManualEntryTrigger({ compact: true })}
+              {actionsWithPlate && manualEntryTrailing}
               {actionsWithPlate && manualEntryEnd}
             </div>
           </div>
@@ -714,16 +526,12 @@ export function VehicleLookup({
       )}
 
       {manualEnabled && (
-        <SelectorModalShell
+        <ManualVehicleEntryModal
           open={showManualModal}
           onClose={() => setShowManualModal(false)}
-          title="פרטי רכב ידניים"
-          panelClassName="max-w-md"
-        >
-          <div className="p-4" dir="rtl">
-            {renderManualFields({ narrowManualLayout: isNarrow || isMobileSized })}
-          </div>
-        </SelectorModalShell>
+          values={manualCommittedValues}
+          onSave={handleManualSave}
+        />
       )}
     </div>
   )

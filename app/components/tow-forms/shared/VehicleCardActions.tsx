@@ -3,8 +3,8 @@
 import type { ReactNode } from 'react'
 
 /**
- * One-row vehicle actions group: תקלות · סוג גרר · פרטי רכב ידנית.
- * Children should be full-width triggers (DefectSelector / TowTruckTypeSelector / manual button).
+ * Vehicle actions group: פרטי רכב ידנית · תקלות · סוג גרר (RTL right→left).
+ * One row on desktop; wrap only on narrow/mobile widths.
  */
 export function VehicleCardActions({
   children,
@@ -15,7 +15,7 @@ export function VehicleCardActions({
 }) {
   return (
     <div
-      className={`grid w-full grid-cols-3 gap-2 ${className}`.trim()}
+      className={`flex w-full flex-nowrap items-stretch gap-2 overflow-x-auto max-sm:flex-wrap sm:overflow-visible ${className}`.trim()}
       dir="rtl"
       role="group"
       aria-label="פעולות רכב"
@@ -28,7 +28,7 @@ export function VehicleCardActions({
 /** Shared prominent trigger look for the three vehicle-card actions. */
 export function vehicleActionTriggerClass(active: boolean, extra = ''): string {
   return [
-    'inline-flex w-full min-w-0 min-h-[44px] items-center justify-center gap-1.5 rounded-xl border px-2.5 text-sm font-semibold transition-colors',
+    'inline-flex max-w-full min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 sm:px-3 text-sm font-semibold transition-colors whitespace-nowrap',
     active
       ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
       : 'border-gt-border bg-white text-gt-text-primary hover:border-gt-brand hover:bg-gt-brand-subtle/40',

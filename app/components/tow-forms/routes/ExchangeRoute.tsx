@@ -541,7 +541,6 @@ export function ExchangeRoute({
                 manualEntryTrailing={
                   <DefectSelector
                     variant="triggerOnly"
-                    fill
                     selectedDefects={selectedDefects}
                     onChange={onDefectsChange}
                   />
@@ -551,13 +550,12 @@ export function ExchangeRoute({
                     ref={truckTypeSectionRef}
                     className={
                       truckTypeError
-                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
-                        : 'w-full min-w-0'
+                        ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                        : 'shrink-0'
                     }
                   >
                     <TowTruckTypeSelector
                       variant="triggerOnly"
-                      fill
                       selectedTypes={requiredTruckTypes}
                       onChange={onRequiredTruckTypesChange}
                     />
