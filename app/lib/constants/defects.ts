@@ -278,6 +278,6 @@ export function defectOptionClassName(
   }
 
   return selected
-    ? 'border-blue-500 bg-blue-50 text-blue-700'
-    : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-300'
+    ? 'border-red-500 bg-red-50 text-red-800 ring-1 ring-red-400'
+    : 'border-gray-200 bg-white text-gray-700 hover:border-[#33d4ff]/60'
 }

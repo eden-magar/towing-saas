@@ -11,6 +11,7 @@ import {
   toggleOther,
 } from '../../../lib/constants/defects'
 import { SelectorModalShell } from './SelectorModalShell'
+import { vehicleActionTriggerClass } from './VehicleCardActions'
 
 /** Short label for a defect value (first segment before `/`, or אחר text). */
 function shortDefectLabel(raw: string): string {
@@ -47,6 +48,8 @@ interface DefectSelectorProps {
   /** Optional class override for the triggerOnly button (e.g. compact red inline). */
   triggerClassName?: string
   isMobile?: boolean
+  /** Stretch trigger to fill VehicleCardActions cell. */
+  fill?: boolean
 }
 
 export function DefectSelector({
@@ -57,6 +60,7 @@ export function DefectSelector({
   triggerLabel = 'תקלות',
   triggerClassName,
   isMobile = false,
+  fill = false,
 }: DefectSelectorProps) {
   const [otherText, setOtherText] = useState(() => extractOtherText(selectedDefects))
   const [showModal, setShowModal] = useState(false)
@@ -91,22 +95,11 @@ export function DefectSelector({
     return selectedDefects.includes(defect)
   }
 
-  const chipClass = (selected: boolean, highlight?: boolean, brand = false) => {
-    if (highlight) return defectOptionClassName(selected, true, 'chip')
-    if (brand) {
-      return selected
-        ? 'bg-gt-brand text-white'
-        : 'bg-gray-100 text-gray-600'
-    }
-    return defectOptionClassName(selected, false, 'chip')
-  }
-
-  const renderChips = (opts: {
-    keyPrefix?: string
-    minTouch?: boolean
-    brand?: boolean
-  }) => (
-    <div className={`flex flex-wrap gap-2${opts.minTouch ? ' p-4' : ''}`}>
+  const renderGrid = (opts: { keyPrefix?: string; padded?: boolean }) => (
+    <div
+      className={`grid grid-cols-2 gap-2 sm:grid-cols-3${opts.padded ? ' p-4' : ''}`}
+      dir="rtl"
+    >
       {DEFECT_OPTIONS.map((defect) => {
         const Icon = defect.icon
         const selected = isSelected(defect.value)
@@ -115,33 +108,38 @@ export function DefectSelector({
             key={`${opts.keyPrefix ?? ''}${defect.value}`}
             type="button"
             onClick={() => toggleDefect(defect.value)}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm transition-colors ${
-              opts.minTouch ? 'min-h-[44px] px-4 py-2.5' : ''
-            } ${chipClass(selected, defect.highlight, opts.brand)}`}
+            className={`flex h-full min-h-[4.5rem] w-full flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-3 text-center text-sm font-medium transition-colors ${defectOptionClassName(
+              selected,
+              defect.highlight,
+              'grid',
+            )}`}
           >
-            <Icon className="h-4 w-4 shrink-0" aria-hidden />
-            <span>{defect.label}</span>
+            <Icon className="h-5 w-5 shrink-0" aria-hidden />
+            <span className="line-clamp-2 w-full leading-snug">{defect.label}</span>
           </button>
         )
       })}
     </div>
   )
 
+  const otherField = (className: string) =>
+    isSelected(OTHER_DEFECT_VALUE) ? (
+      <div className={className}>
+        <input
+          type="text"
+          value={otherText}
+          onChange={(e) => updateOtherText(e.target.value)}
+          placeholder="פרט את התקלה..."
+          className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand"
+        />
+      </div>
+    ) : null
+
   if (variant === 'chipsOnly') {
     return (
       <div>
-        {renderChips({})}
-        {isSelected(OTHER_DEFECT_VALUE) && (
-          <div className="mt-3">
-            <input
-              type="text"
-              value={otherText}
-              onChange={(e) => updateOtherText(e.target.value)}
-              placeholder="פרט את התקלה..."
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-            />
-          </div>
-        )}
+        {renderGrid({})}
+        {otherField('mt-3')}
       </div>
     )
   }
@@ -149,37 +147,22 @@ export function DefectSelector({
   if (variant === 'triggerOnly') {
     const summary = formatDefectsTriggerLabel(selectedDefects, triggerLabel)
     return (
-      <div className="shrink-0 min-w-0 max-w-full">
+      <div className={fill ? 'min-w-0 w-full' : 'shrink-0 min-w-0 max-w-full'}>
         <button
           type="button"
           onClick={() => setShowModal(true)}
           title={summary}
           aria-label={summary}
           className={
-            triggerClassName ??
-            `inline-flex max-w-full min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
-              selectedDefects.length > 0
-                ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-                : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
-            }`
+            triggerClassName ?? vehicleActionTriggerClass(selectedDefects.length > 0)
           }
         >
           <span aria-hidden>🔧</span>
           <span className="truncate">{summary}</span>
         </button>
         <SelectorModalShell open={showModal} onClose={() => setShowModal(false)} title={label}>
-          {renderChips({ keyPrefix: 'modal-', minTouch: true, brand: true })}
-          {isSelected(OTHER_DEFECT_VALUE) && (
-            <div className="px-4 pb-4">
-              <input
-                type="text"
-                value={otherText}
-                onChange={(e) => updateOtherText(e.target.value)}
-                placeholder="פרט את התקלה..."
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand"
-              />
-            </div>
-          )}
+          {renderGrid({ keyPrefix: 'modal-', padded: true })}
+          {otherField('px-4 pb-4')}
         </SelectorModalShell>
       </div>
     )
@@ -188,13 +171,13 @@ export function DefectSelector({
   return (
     <div>
       {!isMobile && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
       )}
       {isMobile ? (
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`sm:hidden relative flex items-center justify-center w-full min-h-[48px] rounded-xl border text-sm font-medium transition-colors ${
+          className={`relative flex min-h-[48px] w-full items-center justify-center rounded-xl border text-sm font-medium transition-colors sm:hidden ${
             selectedDefects.length > 0
               ? 'border-[#33d4ff] bg-[#33d4ff]/5 text-gray-800'
               : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -202,7 +185,7 @@ export function DefectSelector({
         >
           <span>תקלות</span>
           {selectedDefects.length > 0 && (
-            <span className="absolute top-1.5 left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#33d4ff] text-white text-[11px] font-bold flex items-center justify-center">
+            <span className="absolute top-1.5 left-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#33d4ff] px-1 text-[11px] font-bold text-white">
               {selectedDefects.length}
             </span>
           )}
@@ -211,7 +194,7 @@ export function DefectSelector({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+          className="flex w-full items-center justify-between rounded-xl border border-gray-200 p-3 text-right text-sm hover:bg-gray-50 sm:hidden"
         >
           <span className="text-gray-600">
             {selectedDefects.length > 0 ? selectedDefects.join(', ') : 'בחר תקלות...'}
@@ -226,57 +209,13 @@ export function DefectSelector({
         title={label}
         overlayClassName="sm:hidden"
       >
-        {renderChips({ keyPrefix: 'modal-', minTouch: true })}
-        {isSelected(OTHER_DEFECT_VALUE) && (
-          <div className="px-4 pb-4">
-            <input
-              type="text"
-              value={otherText}
-              onChange={(e) => updateOtherText(e.target.value)}
-              placeholder="פרט את התקלה..."
-              className={
-                isMobile
-                  ? 'w-full px-4 h-12 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
-                  : 'w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]'
-              }
-            />
-          </div>
-        )}
+        {renderGrid({ keyPrefix: 'modal-', padded: true })}
+        {otherField('px-4 pb-4')}
       </SelectorModalShell>
 
-      <div className="hidden sm:flex flex-wrap gap-2">
-        {DEFECT_OPTIONS.map((defect) => {
-          const Icon = defect.icon
-          const selected = isSelected(defect.value)
-          return (
-            <button
-              key={defect.value}
-              type="button"
-              onClick={() => toggleDefect(defect.value)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${chipClass(
-                selected,
-                defect.highlight
-              )}`}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span>{defect.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      <div className="hidden sm:block">{renderGrid({})}</div>
 
-      {!isMobile && isSelected(OTHER_DEFECT_VALUE) && (
-        <div className="mt-3">
-          <input
-            type="text"
-            value={otherText}
-            onChange={(e) => updateOtherText(e.target.value)}
-            placeholder="פרט את התקלה..."
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-            autoFocus
-          />
-        </div>
-      )}
+      {!isMobile && otherField('mt-3')}
     </div>
   )
 }

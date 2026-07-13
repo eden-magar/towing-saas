@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Search, Loader2, AlertTriangle, PenLine } from 'lucide-react'
+import { Search, Loader2, AlertTriangle, PenLine, Check } from 'lucide-react'
 import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 import { SelectorModalShell } from './SelectorModalShell'
+import { vehicleActionTriggerClass } from './VehicleCardActions'
 
 interface VehicleLookupProps {
   plateNumber: string
@@ -160,17 +161,28 @@ export function VehicleLookup({
 
   const renderManualEntryTrigger = (opts?: { compact?: boolean }) => {
     if (!manualEnabled || vehicleData?.found) return null
+    const manualFilled =
+      notFound &&
+      (!!vehicleType ||
+        !!manualManufacturer.trim() ||
+        !!manualColor.trim() ||
+        !!manualWeight.trim() ||
+        !!manualChassis.trim())
     if (opts?.compact) {
       return (
         <button
           type="button"
           onClick={openManualEntry}
           disabled={disabled}
-          title="הזן פרטי רכב ידנית"
-          aria-label="הזן פרטי רכב ידנית"
-          className="inline-flex items-center justify-center h-8 w-8 shrink-0 rounded-lg border border-gt-border-field text-gt-text-secondary hover:bg-gt-surface-hover hover:border-gt-border hover:text-gt-text-primary transition-colors disabled:opacity-50"
+          title="פרטי רכב ידנית"
+          aria-label="פרטי רכב ידנית"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gt-border-field text-gt-text-secondary transition-colors hover:border-gt-border hover:bg-gt-surface-hover hover:text-gt-text-primary disabled:opacity-50"
         >
-          <PenLine className="w-3.5 h-3.5 shrink-0" />
+          {manualFilled ? (
+            <Check className="h-3.5 w-3.5 shrink-0 text-gt-brand" />
+          ) : (
+            <PenLine className="h-3.5 w-3.5 shrink-0" />
+          )}
         </button>
       )
     }
@@ -179,16 +191,14 @@ export function VehicleLookup({
         type="button"
         onClick={openManualEntry}
         disabled={disabled}
-        className={
-          manualEntryStyle === 'button'
-            ? isNarrow
-              ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gray-200 text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors disabled:opacity-50'
-              : 'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors disabled:opacity-50'
-            : 'inline-flex items-center gap-1 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:underline underline-offset-2 transition-colors disabled:opacity-50'
-        }
+        className={vehicleActionTriggerClass(manualFilled || notFound)}
       >
-        <PenLine className="w-3.5 h-3.5 shrink-0" />
-        הזן פרטי רכב ידנית
+        {manualFilled || notFound ? (
+          <Check className="h-4 w-4 shrink-0" aria-hidden />
+        ) : (
+          <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+        )}
+        <span className="truncate">פרטי רכב ידנית</span>
       </button>
     )
   }
@@ -196,13 +206,22 @@ export function VehicleLookup({
   const renderManualEntryRow = () => {
     const trigger = renderManualEntryTrigger()
     if (!trigger && !manualEntryTrailing && !manualEntryEnd) return null
-    return (
-      <div className="flex flex-wrap items-center gap-3">
-        {manualEntryTrailing}
-        {trigger}
-        {manualEntryEnd}
-      </div>
-    )
+    const cells = [manualEntryTrailing, manualEntryEnd, trigger].filter(Boolean)
+    if (cells.length >= 2) {
+      return (
+        <div
+          className={`grid w-full gap-2 ${
+            cells.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'
+          }`}
+          dir="rtl"
+          role="group"
+          aria-label="פעולות רכב"
+        >
+          {cells}
+        </div>
+      )
+    }
+    return <div className="w-full">{cells[0]}</div>
   }
 
   const manualFieldLabelClass = (narrowManual = false) =>

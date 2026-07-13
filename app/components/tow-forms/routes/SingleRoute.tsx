@@ -368,27 +368,33 @@ export function SingleRoute({
         narrowColumn={isNarrow}
         manualEntryStyle="button"
         manualEntryTrailing={
-          <>
-            <DefectSelector
+          <DefectSelector
+            variant="triggerOnly"
+            fill
+            selectedDefects={selectedDefects}
+            onChange={onDefectsChange}
+          />
+        }
+        manualEntryEnd={
+          <div
+            ref={truckTypeSectionRef}
+            className={
+              truckTypeError
+                ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                : 'w-full min-w-0'
+            }
+          >
+            <TowTruckTypeSelector
               variant="triggerOnly"
-              selectedDefects={selectedDefects}
-              onChange={onDefectsChange}
+              fill
+              selectedTypes={requiredTruckTypes}
+              onChange={onRequiredTruckTypesChange}
             />
-            <div
-              ref={truckTypeSectionRef}
-              className={truckTypeError ? 'rounded-lg ring-2 ring-red-500 ring-offset-1' : undefined}
-            >
-              <TowTruckTypeSelector
-                variant="triggerOnly"
-                selectedTypes={requiredTruckTypes}
-                onChange={onRequiredTruckTypesChange}
-              />
-            </div>
-          </>
+          </div>
         }
       />
       {truckTypeError && (
-        <p className="text-red-500 text-sm font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
+        <p className="text-sm font-medium text-red-500">⚠️ יש לבחור סוג גרר נדרש</p>
       )}
     </>
   )

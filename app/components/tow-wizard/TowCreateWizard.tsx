@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, Truck } from 'lucide-react'
 import { useTowForm } from '../../hooks/useTowForm'
@@ -9,6 +9,11 @@ import { useContactsSave } from '../../hooks/useContactsSave'
 import { useAddressesSave } from '../../hooks/useAddressesSave'
 import { FormCard } from '../ui'
 import { FlashNotice, useFlashNotice } from '../ui/FlashNotice'
+import {
+  RequiredTruckTypeMissingModal,
+  isRequiredTruckTypeError,
+  TowTruckTypeSelector,
+} from '../tow-forms/shared'
 import { SectionTowType } from './sections/SectionTowType'
 import { SectionCustomer } from './sections/SectionCustomer'
 import { SectionSingleRoute } from './sections/SectionSingleRoute'
@@ -28,6 +33,7 @@ export function TowCreateWizard() {
   const router = useRouter()
   const persistContactsRef = useRef<() => Promise<void>>(async () => {})
   const persistAddressesRef = useRef<() => Promise<number>>(async () => 0)
+  const [truckTypePickerOpen, setTruckTypePickerOpen] = useState(false)
   const lastPersistedAddressCountRef = useRef(0)
   const { notice, setNotice } = useFlashNotice()
   const form = useTowForm(undefined, {
@@ -80,11 +86,34 @@ export function TowCreateWizard() {
 
       <FlashNotice message={notice} />
 
-      {form.error && (
-        <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+      {form.error && !isRequiredTruckTypeError(form.error) && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {form.error}
         </div>
       )}
+      <RequiredTruckTypeMissingModal
+        open={isRequiredTruckTypeError(form.error)}
+        onClose={() => {
+          form.setError('')
+          form.setTruckTypeError(false)
+        }}
+        onChooseTruckType={() => {
+          form.setTruckTypeError(false)
+          setTruckTypePickerOpen(true)
+        }}
+      />
+      <div className="sr-only" aria-hidden>
+        <TowTruckTypeSelector
+          variant="triggerOnly"
+          open={truckTypePickerOpen}
+          onOpenChange={setTruckTypePickerOpen}
+          selectedTypes={form.requiredTruckTypes}
+          onChange={(types) => {
+            form.setRequiredTruckTypes(types)
+            if (types.length > 0) form.setTruckTypeError(false)
+          }}
+        />
+      </div>
 
       {/* Continuous scroll of sections — order matches desktop create/page.tsx */}
       <SectionCustomer form={form} />

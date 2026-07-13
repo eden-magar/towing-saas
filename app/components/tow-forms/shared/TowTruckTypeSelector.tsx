@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { SelectorModalShell } from './SelectorModalShell'
+import { vehicleActionTriggerClass } from './VehicleCardActions'
 
 interface TowTruckTypeSelectorProps {
   selectedTypes: string[]
@@ -12,6 +13,11 @@ interface TowTruckTypeSelectorProps {
   /** Label on the compact trigger button (triggerOnly variant). */
   triggerLabel?: string
   isMobile?: boolean
+  /** Controlled open (e.g. from required-truck-type validation modal). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  /** Stretch trigger to fill VehicleCardActions cell. */
+  fill?: boolean
 }
 
 export const TRUCK_TYPES = [
@@ -42,31 +48,55 @@ export function TowTruckTypeSelector({
   variant = 'default',
   triggerLabel = 'סוג גרר',
   isMobile = false,
+  open: openProp,
+  onOpenChange,
+  fill = false,
 }: TowTruckTypeSelectorProps) {
-  const [showModal, setShowModal] = useState(false)
-  
+  const [internalOpen, setInternalOpen] = useState(false)
+  const showModal = openProp ?? internalOpen
+  const setShowModal = (next: boolean) => {
+    onOpenChange?.(next)
+    if (openProp === undefined) setInternalOpen(next)
+  }
+
   const toggleType = (typeId: string) => {
     if (selectedTypes.includes(typeId)) {
-      onChange(selectedTypes.filter(t => t !== typeId))
+      onChange(selectedTypes.filter((t) => t !== typeId))
     } else {
       onChange([...selectedTypes, typeId])
     }
   }
 
+  const typeList = (
+    <div className="space-y-2 p-4">
+      {TRUCK_TYPES.map((type) => (
+        <button
+          key={`modal-${type.id}`}
+          type="button"
+          onClick={() => toggleType(type.id)}
+          className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all ${
+            selectedTypes.includes(type.id)
+              ? 'border-gt-brand bg-gt-brand text-white'
+              : 'border-gray-200 bg-white text-gray-600'
+          }`}
+        >
+          <span className="text-xl">{type.icon}</span>
+          {type.label}
+        </button>
+      ))}
+    </div>
+  )
+
   if (variant === 'triggerOnly') {
     const summary = formatTruckTypesTriggerLabel(selectedTypes, triggerLabel)
     return (
-      <div className="shrink-0 min-w-0 max-w-full">
+      <div className={fill ? 'min-w-0 w-full' : 'shrink-0 min-w-0 max-w-full'}>
         <button
           type="button"
           onClick={() => setShowModal(true)}
           title={summary}
           aria-label={summary}
-          className={`inline-flex max-w-full min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
-            selectedTypes.length > 0
-              ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-              : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
-          }`}
+          className={vehicleActionTriggerClass(selectedTypes.length > 0)}
         >
           <span aria-hidden>🚚</span>
           <span className="truncate">{summary}</span>
@@ -77,23 +107,7 @@ export function TowTruckTypeSelector({
           title={label}
           panelClassName="max-w-md sm:max-w-lg"
         >
-          <div className="space-y-2 p-4">
-            {TRUCK_TYPES.map((type) => (
-              <button
-                key={`modal-${type.id}`}
-                type="button"
-                onClick={() => toggleType(type.id)}
-                className={`flex min-h-[48px] w-full items-center gap-3 rounded-xl border p-4 text-sm font-medium transition-all ${
-                  selectedTypes.includes(type.id)
-                    ? 'border-gt-brand bg-gt-brand text-white'
-                    : 'border-gray-200 bg-white text-gray-600'
-                }`}
-              >
-                <span className="text-xl">{type.icon}</span>
-                {type.label}
-              </button>
-            ))}
-          </div>
+          {typeList}
         </SelectorModalShell>
       </div>
     )
@@ -102,15 +116,14 @@ export function TowTruckTypeSelector({
   return (
     <div>
       {!isMobile && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+        <label className="mb-2 block text-sm font-medium text-gray-700">{label}</label>
       )}
-      
-      {/* כפתור מובייל */}
+
       {isMobile ? (
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`sm:hidden relative flex items-center justify-center w-full min-h-[48px] rounded-xl border text-sm font-medium transition-colors ${
+          className={`relative flex min-h-[48px] w-full items-center justify-center rounded-xl border text-sm font-medium transition-colors sm:hidden ${
             selectedTypes.length > 0
               ? 'border-[#33d4ff] bg-[#33d4ff]/5 text-gray-800'
               : 'border-gray-200 text-gray-600 hover:bg-gray-50'
@@ -118,7 +131,7 @@ export function TowTruckTypeSelector({
         >
           <span>גררים</span>
           {selectedTypes.length > 0 && (
-            <span className="absolute top-1.5 left-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#33d4ff] text-white text-[11px] font-bold flex items-center justify-center">
+            <span className="absolute top-1.5 left-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#33d4ff] px-1 text-[11px] font-bold text-white">
               {selectedTypes.length}
             </span>
           )}
@@ -127,54 +140,38 @@ export function TowTruckTypeSelector({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="sm:hidden w-full p-3 border border-gray-200 rounded-xl text-sm text-right flex items-center justify-between hover:bg-gray-50"
+          className="flex w-full items-center justify-between rounded-xl border border-gray-200 p-3 text-right text-sm hover:bg-gray-50 sm:hidden"
         >
           <span className="text-gray-600">
-            {selectedTypes.length > 0 
-              ? TRUCK_TYPES.filter(t => selectedTypes.includes(t.id)).map(t => `${t.icon} ${t.label}`).join(', ')
+            {selectedTypes.length > 0
+              ? TRUCK_TYPES.filter((t) => selectedTypes.includes(t.id))
+                  .map((t) => `${t.icon} ${t.label}`)
+                  .join(', ')
               : 'בחר סוגי גרר...'}
           </span>
           <span className="text-gray-400">▼</span>
         </button>
       )}
 
-      {/* מודל מובייל */}
       <SelectorModalShell
         open={showModal}
         onClose={() => setShowModal(false)}
         title={label}
         overlayClassName="sm:hidden"
       >
-        <div className="space-y-2 p-4">
-          {TRUCK_TYPES.map((type) => (
-            <button
-              key={`modal-${type.id}`}
-              type="button"
-              onClick={() => toggleType(type.id)}
-              className={`w-full min-h-[48px] p-4 rounded-xl text-sm font-medium transition-all border flex items-center gap-3 ${
-                selectedTypes.includes(type.id)
-                  ? 'bg-[#33d4ff] text-white border-[#33d4ff]'
-                  : 'bg-white text-gray-600 border-gray-200'
-              }`}
-            >
-              <span className="text-xl">{type.icon}</span>
-              {type.label}
-            </button>
-          ))}
-        </div>
+        {typeList}
       </SelectorModalShell>
 
-      {/* דסקטופ */}
-      <div className="hidden sm:flex flex-wrap gap-2">
+      <div className="hidden flex-wrap gap-2 sm:flex">
         {TRUCK_TYPES.map((type) => (
           <button
             key={type.id}
             type="button"
             onClick={() => toggleType(type.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all ${
               selectedTypes.includes(type.id)
-                ? 'bg-[#33d4ff] text-white border-[#33d4ff]'
-                : 'bg-white text-gray-600 border-gray-200 hover:border-[#33d4ff]'
+                ? 'border-[#33d4ff] bg-[#33d4ff] text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-[#33d4ff]'
             }`}
           >
             <span className="ml-1">{type.icon}</span>
@@ -183,9 +180,7 @@ export function TowTruckTypeSelector({
         ))}
       </div>
       {!isMobile && selectedTypes.length > 0 && (
-        <p className="text-xs text-gray-500 mt-2">
-          נבחרו {selectedTypes.length} סוגים
-        </p>
+        <p className="mt-2 text-xs text-gray-500">נבחרו {selectedTypes.length} סוגים</p>
       )}
     </div>
   )

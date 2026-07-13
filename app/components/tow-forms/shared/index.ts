@@ -3,6 +3,12 @@ export { DefectSelector, formatDefectsTriggerLabel } from './DefectSelector'
 export { StartFromBase } from './StartFromBase'
 export { PinDropModal } from './PinDropModal'
 export { TowTruckTypeSelector, formatTruckTypesTriggerLabel, TRUCK_TYPES } from './TowTruckTypeSelector'
+export {
+  RequiredTruckTypeMissingModal,
+  REQUIRED_TRUCK_TYPE_MESSAGE,
+  isRequiredTruckTypeError,
+} from './RequiredTruckTypeMissingModal'
+export { VehicleCardActions, vehicleActionTriggerClass } from './VehicleCardActions'
 export { ServiceSurchargeSelector, type SelectedService } from './ServiceSurchargeSelector'
 export { LocationSurchargeSelector } from './LocationSurchargeSelector'
 export { ManualSurchargeSection } from './ManualSurchargeSection'

@@ -59,6 +59,10 @@ import {
   VehicleCoreLookupChips,
   DefectSelector,
   TowTruckTypeSelector,
+  RequiredTruckTypeMissingModal,
+  isRequiredTruckTypeError,
+  VehicleCardActions,
+  vehicleActionTriggerClass,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
@@ -1197,6 +1201,7 @@ function CreateTowForm({
   const [showStorageModal, setShowStorageModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
+  const [truckTypePickerOpen, setTruckTypePickerOpen] = useState(false)
   useEffect(() => {
     if (!fromRequestOtherDefectText) return
     setOtherDefectText(fromRequestOtherDefectText)
@@ -2349,11 +2354,35 @@ function CreateTowForm({
 
   return (
     <div className="min-h-full bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
-      {error && (
+      {error && !isRequiredTruckTypeError(error) && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
           {error}
         </div>
       )}
+      <RequiredTruckTypeMissingModal
+        open={isRequiredTruckTypeError(error)}
+        onClose={() => {
+          setError('')
+          setTruckTypeError(false)
+        }}
+        onChooseTruckType={() => {
+          setTruckTypeError(false)
+          setTruckTypePickerOpen(true)
+        }}
+      />
+      {/* Hidden host so validation can open the truck picker even when the trigger is not yet shown. */}
+      <div className="sr-only" aria-hidden>
+        <TowTruckTypeSelector
+          variant="triggerOnly"
+          open={truckTypePickerOpen}
+          onOpenChange={setTruckTypePickerOpen}
+          selectedTypes={requiredTruckTypes}
+          onChange={(types) => {
+            setRequiredTruckTypes(types)
+            if (types.length > 0) setTruckTypeError(false)
+          }}
+        />
+      </div>
       {saveWarning && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl">
           {saveWarning}
@@ -2605,50 +2634,68 @@ function CreateTowForm({
                                 )}
                               </button>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                              <DefectSelector
-                                variant="triggerOnly"
-                                selectedDefects={selectedDefects}
-                                onChange={setSelectedDefects}
-                                triggerClassName={
-                                  defectsStatus
-                                    ? withRequestFieldClass(
-                                        'inline-flex max-w-full min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors text-gray-700',
-                                        defectsStatus,
-                                      )
-                                    : undefined
-                                }
-                              />
-                              {vehicleData === null && !vehicleLookupNotFound ? (
-                                <span className="inline-flex min-h-[36px] items-center rounded-lg border border-dashed border-gray-200 px-2.5 text-xs text-gray-400">
-                                  סוג הגרר יופיע לאחר בדיקת רישוי
-                                </span>
-                              ) : (
-                                <div ref={truckTypeSectionRef}>
-                                  <TowTruckTypeSelector
-                                    variant="triggerOnly"
-                                    selectedTypes={requiredTruckTypes}
-                                    onChange={setRequiredTruckTypes}
-                                  />
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPlateStorageWarning(null)
-                                  setVehicleData(null)
-                                  setVehicleLookupNotFound(true)
-                                  setVehicleType('')
-                                  setManualManufacturer('')
-                                  setManualColor('')
-                                  setManualWeight('')
-                                  setManualChassis('')
-                                }}
-                                className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
-                              >
-                                <PenLine className="w-3.5 h-3.5" />
-                                הזן פרטי רכב ידנית
-                              </button>
+                            <div className="mt-1.5">
+                              <VehicleCardActions>
+                                <DefectSelector
+                                  variant="triggerOnly"
+                                  fill
+                                  selectedDefects={selectedDefects}
+                                  onChange={setSelectedDefects}
+                                  triggerClassName={
+                                    defectsStatus
+                                      ? withRequestFieldClass(
+                                          vehicleActionTriggerClass(selectedDefects.length > 0),
+                                          defectsStatus,
+                                        )
+                                      : undefined
+                                  }
+                                />
+                                {vehicleData === null && !vehicleLookupNotFound ? (
+                                  <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-dashed border-gray-200 px-2 text-center text-xs text-gray-400">
+                                    סוג גרר לאחר בדיקה
+                                  </span>
+                                ) : (
+                                  <div
+                                    ref={truckTypeSectionRef}
+                                    className={
+                                      truckTypeError
+                                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                        : 'w-full min-w-0'
+                                    }
+                                  >
+                                    <TowTruckTypeSelector
+                                      variant="triggerOnly"
+                                      fill
+                                      selectedTypes={requiredTruckTypes}
+                                      onChange={(types) => {
+                                        setRequiredTruckTypes(types)
+                                        if (types.length > 0) setTruckTypeError(false)
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPlateStorageWarning(null)
+                                    setVehicleData(null)
+                                    setVehicleLookupNotFound(true)
+                                    setVehicleType('')
+                                    setManualManufacturer('')
+                                    setManualColor('')
+                                    setManualWeight('')
+                                    setManualChassis('')
+                                  }}
+                                  className={vehicleActionTriggerClass(vehicleLookupNotFound)}
+                                >
+                                  {vehicleLookupNotFound ? (
+                                    <Check className="h-4 w-4 shrink-0" aria-hidden />
+                                  ) : (
+                                    <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+                                  )}
+                                  <span className="truncate">פרטי רכב ידנית</span>
+                                </button>
+                              </VehicleCardActions>
                             </div>
                             {vehicleData?.data?.driveType?.includes?.('קדמית') && (
                               <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg mt-2">
@@ -3283,17 +3330,28 @@ function CreateTowForm({
                                     className="text-xs"
                                   />
                                 </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div ref={truckTypeSectionRef}>
+                                <div className="mt-1.5 grid w-full grid-cols-2 gap-2" dir="rtl" role="group" aria-label="פעולות רכב">
+                                  <div
+                                    ref={truckTypeSectionRef}
+                                    className={
+                                      truckTypeError
+                                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                        : 'w-full min-w-0'
+                                    }
+                                  >
                                     {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
                                       <TowTruckTypeSelector
                                         variant="triggerOnly"
+                                        fill
                                         selectedTypes={requiredTruckTypes}
-                                        onChange={setRequiredTruckTypes}
+                                        onChange={(types) => {
+                                          setRequiredTruckTypes(types)
+                                          if (types.length > 0) setTruckTypeError(false)
+                                        }}
                                       />
                                     ) : (
-                                      <span className="inline-flex min-h-[36px] items-center rounded-lg border border-dashed border-gray-200 px-2.5 text-xs text-gray-400">
-                                        סוג הגרר יופיע לאחר בדיקת רישוי
+                                      <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-dashed border-gray-200 px-2 text-center text-xs text-gray-400">
+                                        סוג גרר לאחר בדיקה
                                       </span>
                                     )}
                                   </div>
@@ -3308,10 +3366,14 @@ function CreateTowForm({
                                       setWorkingManualColor('')
                                       setWorkingManualWeight('')
                                     }}
-                                    className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                                    className={vehicleActionTriggerClass(workingVehicleNotFound)}
                                   >
-                                    <PenLine className="w-3.5 h-3.5" />
-                                    הזן פרטי רכב ידנית
+                                    {workingVehicleNotFound ? (
+                                      <Check className="h-4 w-4 shrink-0" aria-hidden />
+                                    ) : (
+                                      <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+                                    )}
+                                    <span className="truncate">פרטי רכב ידנית</span>
                                   </button>
                                 </div>
                               </div>
@@ -3524,22 +3586,22 @@ function CreateTowForm({
                                   className="text-xs"
                                 />
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
+                              <div className="mt-1.5">
+                                <VehicleCardActions>
                                 <DefectSelector
                                   variant="triggerOnly"
+                                  fill
                                   selectedDefects={selectedDefects}
                                   onChange={setSelectedDefects}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => setHasSecondTruck(!hasSecondTruck)}
-                                  className={`inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border text-xs font-medium transition-colors ${
-                                    hasSecondTruck
-                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                      : 'border-gray-200 text-gt-text-secondary hover:border-orange-200'
-                                  }`}
+                                  className={vehicleActionTriggerClass(hasSecondTruck)}
                                 >
-                                  {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
+                                  <span className="truncate">
+                                    {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
+                                  </span>
                                 </button>
                                 <button
                                   type="button"
@@ -3552,11 +3614,16 @@ function CreateTowForm({
                                     setDefectiveManualColor('')
                                     setDefectiveManualWeight('')
                                   }}
-                                  className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                                  className={vehicleActionTriggerClass(defectiveVehicleNotFound)}
                                 >
-                                  <PenLine className="w-3.5 h-3.5" />
-                                  הזן פרטי רכב ידנית
+                                  {defectiveVehicleNotFound ? (
+                                    <Check className="h-4 w-4 shrink-0" aria-hidden />
+                                  ) : (
+                                    <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+                                  )}
+                                  <span className="truncate">פרטי רכב ידנית</span>
                                 </button>
+                                </VehicleCardActions>
                               </div>
                               {hasSecondTruck && (
                                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">

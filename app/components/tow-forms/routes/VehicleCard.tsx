@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Car, Key, X, Search, Loader2, PenLine } from 'lucide-react'
+import { Car, Key, X, Search, Loader2, PenLine, Check } from 'lucide-react'
 import { VehicleData } from './VehicleInfoCard'
 import { VehicleCoreLookupChips } from '../shared/VehicleCoreLookupChips'
 import { DefectSelector } from '../shared/DefectSelector'
+import { vehicleActionTriggerClass } from '../shared/VehicleCardActions'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
@@ -263,10 +264,18 @@ export function VehicleCard({
             )}
           </div>
           {(!vehicle.fromStorage || !vehicle.isWorking) && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <div
+              className={`mt-1.5 grid w-full gap-2 ${
+                !vehicle.isWorking && !vehicle.fromStorage ? 'grid-cols-2' : 'grid-cols-1'
+              }`}
+              dir="rtl"
+              role="group"
+              aria-label="פעולות רכב"
+            >
               {!vehicle.isWorking && (
                 <DefectSelector
                   variant="triggerOnly"
+                  fill
                   selectedDefects={vehicle.defects || []}
                   onChange={(defects) => onChange({ ...vehicle, defects })}
                 />
@@ -275,10 +284,14 @@ export function VehicleCard({
                 <button
                   type="button"
                   onClick={handleSkipToManualEntry}
-                  className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                  className={vehicleActionTriggerClass(Boolean(vehicle.vehicleNotFound))}
                 >
-                  <PenLine className="w-3.5 h-3.5" />
-                  הזן פרטי רכב ידנית
+                  {vehicle.vehicleNotFound ? (
+                    <Check className="h-4 w-4 shrink-0" aria-hidden />
+                  ) : (
+                    <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                  <span className="truncate">פרטי רכב ידנית</span>
                 </button>
               )}
             </div>

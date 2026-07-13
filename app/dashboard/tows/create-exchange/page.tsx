@@ -19,6 +19,7 @@ import {
   X,
   User,
   AlertTriangle,
+  PenLine,
 } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { useAuth } from '../../../lib/AuthContext'
@@ -34,6 +35,10 @@ import {
   SurchargesSection,
   DefectSelector,
   TowTruckTypeSelector,
+  RequiredTruckTypeMissingModal,
+  isRequiredTruckTypeError,
+  VehicleCardActions,
+  vehicleActionTriggerClass,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
@@ -346,6 +351,7 @@ function CreateExchangeTowForm({
   const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
   const [showDefectsExchangeModal, setShowDefectsExchangeModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
+  const [truckTypePickerOpen, setTruckTypePickerOpen] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
   const [saveWorkingSourceContactToCustomer, setSaveWorkingSourceContactToCustomer] =
     useState(false)
@@ -1268,11 +1274,34 @@ function CreateExchangeTowForm({
 
   return (
     <div className="min-h-screen bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
-      {error && (
-        <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+      {error && !isRequiredTruckTypeError(error) && (
+        <div className="fixed top-4 left-4 right-4 z-50 rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
           {error}
         </div>
       )}
+      <RequiredTruckTypeMissingModal
+        open={isRequiredTruckTypeError(error)}
+        onClose={() => {
+          setError('')
+          setTruckTypeError(false)
+        }}
+        onChooseTruckType={() => {
+          setTruckTypeError(false)
+          setTruckTypePickerOpen(true)
+        }}
+      />
+      <div className="sr-only" aria-hidden>
+        <TowTruckTypeSelector
+          variant="triggerOnly"
+          open={truckTypePickerOpen}
+          onOpenChange={setTruckTypePickerOpen}
+          selectedTypes={requiredTruckTypes}
+          onChange={(types) => {
+            setRequiredTruckTypes(types)
+            if (types.length > 0) setTruckTypeError(false)
+          }}
+        />
+      </div>
 
       <FlashNotice message={addressNotice} />
 
@@ -1517,20 +1546,51 @@ function CreateExchangeTowForm({
                                     className="text-xs"
                                   />
                                 </div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <div ref={truckTypeSectionRef}>
+                                <div className="mt-1.5 grid w-full grid-cols-2 gap-2" dir="rtl" role="group" aria-label="פעולות רכב">
+                                  <div
+                                    ref={truckTypeSectionRef}
+                                    className={
+                                      truckTypeError
+                                        ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                        : 'w-full min-w-0'
+                                    }
+                                  >
                                     {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
                                       <TowTruckTypeSelector
                                         variant="triggerOnly"
+                                        fill
                                         selectedTypes={requiredTruckTypes}
-                                        onChange={setRequiredTruckTypes}
+                                        onChange={(types) => {
+                                          setRequiredTruckTypes(types)
+                                          if (types.length > 0) setTruckTypeError(false)
+                                        }}
                                       />
                                     ) : (
-                                      <span className="inline-flex min-h-[36px] items-center rounded-lg border border-dashed border-gray-200 px-2.5 text-xs text-gray-400">
-                                        סוג הגרר יופיע לאחר בדיקת רישוי
+                                      <span className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-dashed border-gray-200 px-2 text-center text-xs text-gray-400">
+                                        סוג גרר לאחר בדיקה
                                       </span>
                                     )}
                                   </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPlateStorageWarning(null)
+                                      setWorkingVehicleData(null)
+                                      setWorkingVehicleNotFound(true)
+                                      setWorkingVehicleType('')
+                                      setWorkingManualManufacturer('')
+                                      setWorkingManualColor('')
+                                      setWorkingManualWeight('')
+                                    }}
+                                    className={vehicleActionTriggerClass(workingVehicleNotFound)}
+                                  >
+                                    {workingVehicleNotFound ? (
+                                      <Check className="h-4 w-4 shrink-0" aria-hidden />
+                                    ) : (
+                                      <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+                                    )}
+                                    <span className="truncate">פרטי רכב ידנית</span>
+                                  </button>
                                 </div>
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
@@ -1736,23 +1796,44 @@ function CreateExchangeTowForm({
                                   className="text-xs"
                                 />
                               </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <DefectSelector
-                                  variant="triggerOnly"
-                                  selectedDefects={selectedDefects}
-                                  onChange={setSelectedDefects}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setHasSecondTruck(!hasSecondTruck)}
-                                  className={`inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border text-xs font-medium transition-colors ${
-                                    hasSecondTruck
-                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                      : 'border-gray-200 text-gt-text-secondary hover:border-orange-200'
-                                  }`}
-                                >
-                                  {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
-                                </button>
+                              <div className="mt-1.5">
+                                <VehicleCardActions>
+                                  <DefectSelector
+                                    variant="triggerOnly"
+                                    fill
+                                    selectedDefects={selectedDefects}
+                                    onChange={setSelectedDefects}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setHasSecondTruck(!hasSecondTruck)}
+                                    className={vehicleActionTriggerClass(hasSecondTruck)}
+                                  >
+                                    <span className="truncate">
+                                      {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPlateStorageWarning(null)
+                                      setDefectiveVehicleData(null)
+                                      setDefectiveVehicleNotFound(true)
+                                      setDefectiveVehicleType('')
+                                      setDefectiveManualManufacturer('')
+                                      setDefectiveManualColor('')
+                                      setDefectiveManualWeight('')
+                                    }}
+                                    className={vehicleActionTriggerClass(defectiveVehicleNotFound)}
+                                  >
+                                    {defectiveVehicleNotFound ? (
+                                      <Check className="h-4 w-4 shrink-0" aria-hidden />
+                                    ) : (
+                                      <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+                                    )}
+                                    <span className="truncate">פרטי רכב ידנית</span>
+                                  </button>
+                                </VehicleCardActions>
                               </div>
                               {hasSecondTruck && (
                                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">

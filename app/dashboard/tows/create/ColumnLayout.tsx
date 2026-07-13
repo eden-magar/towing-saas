@@ -44,6 +44,8 @@ import {
   DefectSelector,
   SurchargesSection,
   TowTruckTypeSelector,
+  RequiredTruckTypeMissingModal,
+  isRequiredTruckTypeError,
 } from '../../../components/tow-forms/shared'
 import { isPickableStoredVehicle } from '../../../lib/queries/storage'
 import { TimeInStoragePill } from '../../../components/storage/TimeInStoragePill'
@@ -266,16 +268,41 @@ export function ColumnLayout({
     setShowDriverPicker(true)
   }
 
+  const [truckTypePickerOpen, setTruckTypePickerOpen] = useState(false)
+
   return (
     <div
       className="min-h-full bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8"
       dir="rtl"
     >
-      {form.error && (
-        <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+      {form.error && !isRequiredTruckTypeError(form.error) && (
+        <div className="fixed top-4 left-4 right-4 z-50 rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
           {form.error}
         </div>
       )}
+      <RequiredTruckTypeMissingModal
+        open={isRequiredTruckTypeError(form.error)}
+        onClose={() => {
+          form.setError('')
+          form.setTruckTypeError(false)
+        }}
+        onChooseTruckType={() => {
+          form.setTruckTypeError(false)
+          setTruckTypePickerOpen(true)
+        }}
+      />
+      <div className="sr-only" aria-hidden>
+        <TowTruckTypeSelector
+          variant="triggerOnly"
+          open={truckTypePickerOpen}
+          onOpenChange={setTruckTypePickerOpen}
+          selectedTypes={form.requiredTruckTypes}
+          onChange={(types) => {
+            form.setRequiredTruckTypes(types)
+            if (types.length > 0) form.setTruckTypeError(false)
+          }}
+        />
+      </div>
 
       <header className="bg-white border-b border-gray-300">
         <div className="max-w-7xl mx-auto">
@@ -536,31 +563,36 @@ export function ColumnLayout({
                           manualChassis={form.manualChassis}
                           onManualChassisChange={form.setManualChassis}
                           manualEntryTrailing={
-                            <>
-                              <DefectSelector
+                            <DefectSelector
+                              variant="triggerOnly"
+                              fill
+                              selectedDefects={form.selectedDefects}
+                              onChange={form.setSelectedDefects}
+                            />
+                          }
+                          manualEntryEnd={
+                            <div
+                              ref={form.truckTypeSectionRef}
+                              className={
+                                form.truckTypeError
+                                  ? 'w-full min-w-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                  : 'w-full min-w-0'
+                              }
+                            >
+                              <TowTruckTypeSelector
                                 variant="triggerOnly"
-                                selectedDefects={form.selectedDefects}
-                                onChange={form.setSelectedDefects}
+                                fill
+                                selectedTypes={form.requiredTruckTypes}
+                                onChange={(types) => {
+                                  form.setRequiredTruckTypes(types)
+                                  if (types.length > 0) form.setTruckTypeError(false)
+                                }}
                               />
-                              <div
-                                ref={form.truckTypeSectionRef}
-                                className={
-                                  form.truckTypeError
-                                    ? 'rounded-lg ring-2 ring-red-500 ring-offset-1'
-                                    : undefined
-                                }
-                              >
-                                <TowTruckTypeSelector
-                                  variant="triggerOnly"
-                                  selectedTypes={form.requiredTruckTypes}
-                                  onChange={form.setRequiredTruckTypes}
-                                />
-                              </div>
-                            </>
+                            </div>
                           }
                         />
                         {form.truckTypeError && (
-                          <p className="text-red-500 text-sm font-medium">
+                          <p className="text-sm font-medium text-red-500">
                             ⚠️ יש לבחור סוג גרר נדרש
                           </p>
                         )}
