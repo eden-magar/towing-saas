@@ -5,10 +5,11 @@ import {
   LocationSurcharge,
   ServiceSurcharge,
   getActiveTimeSurcharges,
+  resolveSurchargeCatalog,
 } from '../queries/price-lists'
 import { RoutePoint, VehicleOnTruck } from '../../components/tow-forms/routes/RouteBuilder'
 import { SelectedService } from '../../components/tow-forms/shared'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, resolveVehicleBasePrice } from './price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, resolveVehicleBasePrice, customerDiscountForPriceMode } from './price-calculator'
 import { VehicleType, VehicleLookupResult } from '../types'
 import { normalizePlate } from './plate-number'
 import { serializeDefects } from '../constants/defects'
@@ -251,9 +252,11 @@ function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string 
     return [...(fields.activeTimeSurchargeIds ?? [])].sort().join(',')
   }
   const surchargeSource =
-    fields.priceMode === 'recommended_customer' &&
-    (fields.selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
-      ? fields.selectedCustomerPricing!.customer_time_surcharges!
+    fields.priceMode === 'recommended_customer'
+      ? resolveSurchargeCatalog(
+          fields.selectedCustomerPricing?.customer_time_surcharges,
+          fields.timeSurchargesData,
+        )
       : fields.timeSurchargesData
   if (fields.towDate && fields.towTime && surchargeSource?.length) {
     return getActiveTimeSurcharges(
@@ -272,11 +275,11 @@ function exchangeTimeSurchargeIds(fields: ExchangePriceAffectingFields): string 
 function timeSurchargesForPriceCalc(
   input: Pick<SaveTowInput, 'priceMode' | 'selectedCustomerPricing' | 'timeSurchargesData'>
 ): TimeSurcharge[] {
-  if (
-    input.priceMode === 'recommended_customer' &&
-    (input.selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
-  ) {
-    return input.selectedCustomerPricing!.customer_time_surcharges!
+  if (input.priceMode === 'recommended_customer') {
+    return resolveSurchargeCatalog(
+      input.selectedCustomerPricing?.customer_time_surcharges,
+      input.timeSurchargesData,
+    )
   }
   return input.timeSurchargesData || []
 }
@@ -472,7 +475,10 @@ export function singlePriceSignatureFromSaveInput(input: SaveTowInput): string {
     manualWeight: input.manualWeight,
     priceMode: input.priceMode,
     customerId: input.customerId,
-    discountPercent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    discountPercent: customerDiscountForPriceMode(
+      input.priceMode,
+      input.selectedCustomerPricing?.discount_percent,
+    ),
     selectedLocationSurcharges: input.selectedLocationSurcharges,
     selectedServices: input.selectedServices,
     activeTimeSurchargeIds: (input.activeTimeSurcharges ?? []).map((s) => s.id),
@@ -1305,7 +1311,10 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     locationSurcharges,
     serviceSurcharges,
     priceMode: 'recommended',
-    discountPercent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    discountPercent: customerDiscountForPriceMode(
+      input.priceMode,
+      input.selectedCustomerPricing?.discount_percent,
+    ),
     manualAdjustmentPercent: input.manualAdjustmentPercent ?? 0,
     vatPercent: input.vatPercent ?? 0.18,
   })
@@ -1331,6 +1340,11 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
   const { taxable: serviceSurchargesBreakdown, exempt: vatExemptBreakdown } =
     buildServiceSurchargesBreakdown(input)
 
+  const customerDiscountPct = customerDiscountForPriceMode(
+    input.priceMode,
+    input.selectedCustomerPricing?.discount_percent,
+  )
+
   return {
     base_price: round2(result.basePrice),
     vehicle_type: input.vehicleType || '',
@@ -1343,7 +1357,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     vat_exempt_surcharges: vatExemptBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     subtotal: round2(result.beforeVat),
-    discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    discount_percent: customerDiscountPct,
     discount_amount: round2(result.discountAmount),
     ...manualAdjustmentBreakdownFields(input),
     ...selectedPriceItemBreakdownFields(input),
@@ -1430,7 +1444,10 @@ export function buildCustomTowPriceBreakdown(
     locationSurcharges,
     serviceSurcharges,
     priceMode: 'recommended',
-    discountPercent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    discountPercent: customerDiscountForPriceMode(
+      input.priceMode,
+      input.selectedCustomerPricing?.discount_percent,
+    ),
     manualAdjustmentPercent: input.manualAdjustmentPercent ?? 0,
     vatPercent: input.vatPercent ?? 0.18,
   })
@@ -1464,6 +1481,11 @@ export function buildCustomTowPriceBreakdown(
       selectedServices: routeServices,
     })
 
+  const customerDiscountPct = customerDiscountForPriceMode(
+    input.priceMode,
+    input.selectedCustomerPricing?.discount_percent,
+  )
+
   return {
     base_price: round2(result.basePrice),
     vehicle_type: 'mixed',
@@ -1475,7 +1497,7 @@ export function buildCustomTowPriceBreakdown(
     service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     vat_exempt_surcharges: vatExemptBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     subtotal: round2(result.beforeVat),
-    discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
+    discount_percent: customerDiscountPct,
     discount_amount: round2(result.discountAmount),
     ...manualAdjustmentBreakdownFields(input),
     ...selectedPriceItemBreakdownFields(input),

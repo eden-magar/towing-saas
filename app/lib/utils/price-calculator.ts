@@ -27,6 +27,16 @@
 import { VehicleType } from '../types'
 import { TimeSurcharge, getActiveTimeSurcharges } from '../queries/price-lists'
 
+/** Customer standing discount applies only in ללקוח (`recommended_customer`) mode. */
+export function customerDiscountForPriceMode(
+  priceMode: string | null | undefined,
+  discountPercent: number | null | undefined,
+): number {
+  if (priceMode !== 'recommended_customer') return 0
+  const n = Number(discountPercent)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 /**
  * Apply a signed percent adjustment to a money base.
  * - Discount (negative percent) is capped at 100% and never exceeds `base`.

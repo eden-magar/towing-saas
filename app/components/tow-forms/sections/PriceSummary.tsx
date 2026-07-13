@@ -5,7 +5,7 @@ import { LocationSurcharge, ServiceSurcharge, TimeSurcharge, CustomerWithPricing
 import { SelectedService } from '../shared'
 import { manualSurchargesToCalcInput } from '../../../lib/utils/manual-surcharge'
 import type { ManualSurcharge } from '../../../lib/utils/manual-surcharge'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, resolveDeadheadRate, customerDiscountForPriceMode } from '../../../lib/utils/price-calculator'
 import { VehicleType } from '../../../lib/types'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
@@ -236,7 +236,10 @@ export function PriceSummary({
       locationSurcharges,
       serviceSurcharges,
       priceMode: 'recommended',
-      discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      discountPercent: customerDiscountForPriceMode(
+        priceMode,
+        selectedCustomerPricing?.discount_percent,
+      ),
       vatPercent: effectiveVatPercent
     })
   }

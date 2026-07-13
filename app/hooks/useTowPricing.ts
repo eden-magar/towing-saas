@@ -7,13 +7,14 @@ import {
   ServiceSurcharge, 
   getActiveTimeSurcharges,
   getCustomerPricingByCustomerId,
+  resolveSurchargeCatalog,
 } from '../lib/queries/price-lists'
 import { SelectedService } from '../components/tow-forms/shared'
 import { manualSurchargesToCalcInput } from '../lib/utils/manual-surcharge'
 import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { TowType } from '../components/tow-forms/sections'
 import { VehicleType } from '../lib/types'
-import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, TowPriceResult } from '../lib/utils/price-calculator'
+import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, customerDiscountForPriceMode, TowPriceResult } from '../lib/utils/price-calculator'
 
 function aggregateRouteServices(services: SelectedService[] | undefined): SelectedService[] {
   if (!services?.length) return []
@@ -175,10 +176,12 @@ export function useTowPricing(params: UseTowPricingParams) {
   const effectiveManualAdj = manualAdjustmentType === 'discount' ? -adjPercent : adjPercent
 
   const effectiveTimeSurcharges = useMemo((): TimeSurcharge[] => {
-    return priceMode === 'recommended_customer' &&
-      (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
-        ? selectedCustomerPricing!.customer_time_surcharges!
-        : timeSurchargesData
+    return priceMode === 'recommended_customer'
+      ? resolveSurchargeCatalog(
+          selectedCustomerPricing?.customer_time_surcharges,
+          timeSurchargesData,
+        )
+      : timeSurchargesData
   }, [priceMode, selectedCustomerPricing?.customer_time_surcharges, timeSurchargesData])
 
   // Customer pricing — load only the selected customer (not all customers)
@@ -225,14 +228,33 @@ export function useTowPricing(params: UseTowPricingParams) {
   }, [selectedCustomerId, companyId, isEditMode])
 
   // החלפת תוספות כשמשתנה priceMode
+  // Customer catalogs OVERRIDE company only when non-empty; empty → company fallback.
   useEffect(() => {
     if (priceMode === 'recommended_customer' && selectedCustomerPricing?.price_list) {
-      const customerTime = selectedCustomerPricing.customer_time_surcharges || []
-      const activeCustomerTime = getActiveTimeSurcharges(customerTime, towTime, towDate, isHoliday)
-      setActiveTimeSurchargesList(activeCustomerTime)
+      const timeSource = resolveSurchargeCatalog(
+        selectedCustomerPricing.customer_time_surcharges,
+        timeSurchargesData,
+      )
+      setActiveTimeSurchargesList(
+        getActiveTimeSurcharges(timeSource, towTime, towDate, isHoliday),
+      )
       if (setHasManualTimeSurchargeOverride) setHasManualTimeSurchargeOverride(false)
-      if (setLocationSurchargesData) setLocationSurchargesData(selectedCustomerPricing.customer_location_surcharges || [])
-      if (setServiceSurchargesData) setServiceSurchargesData(selectedCustomerPricing.customer_service_surcharges || [])
+      if (setLocationSurchargesData) {
+        setLocationSurchargesData(
+          resolveSurchargeCatalog(
+            selectedCustomerPricing.customer_location_surcharges,
+            companyLocationSurchargesData,
+          ),
+        )
+      }
+      if (setServiceSurchargesData) {
+        setServiceSurchargesData(
+          resolveSurchargeCatalog(
+            selectedCustomerPricing.customer_service_surcharges,
+            companyServiceSurchargesData,
+          ),
+        )
+      }
       if (!isEditMode) {
         if (setSelectedLocationSurcharges) setSelectedLocationSurcharges([])
         if (setSelectedServices) setSelectedServices([])
@@ -247,7 +269,7 @@ export function useTowPricing(params: UseTowPricingParams) {
         if (setSelectedServices) setSelectedServices([])
       }
     }
-  }, [priceMode, selectedCustomerPricing, isEditMode])
+  }, [priceMode, selectedCustomerPricing, isEditMode, companyLocationSurchargesData, companyServiceSurchargesData, timeSurchargesData])
 
   // Time surcharges calculation
   useEffect(() => {
@@ -344,7 +366,10 @@ export function useTowPricing(params: UseTowPricingParams) {
         locationSurcharges: locSurcharges,
         serviceSurcharges: svcSurcharges,
         priceMode: 'recommended',
-        discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+        discountPercent: customerDiscountForPriceMode(
+          priceMode,
+          selectedCustomerPricing?.discount_percent,
+        ),
         manualAdjustmentPercent: effectiveManualAdj,
         vatPercent: vatPercent
       })
@@ -415,7 +440,10 @@ export function useTowPricing(params: UseTowPricingParams) {
       locationSurcharges,
       serviceSurcharges,
       priceMode: 'recommended',
-      discountPercent: selectedCustomerPricing?.discount_percent ?? 0,
+      discountPercent: customerDiscountForPriceMode(
+        priceMode,
+        selectedCustomerPricing?.discount_percent,
+      ),
       manualAdjustmentPercent: effectiveManualAdj,
       vatPercent: vatPercent,
     })

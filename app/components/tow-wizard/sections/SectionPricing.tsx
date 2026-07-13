@@ -5,6 +5,7 @@ import { Wallet, Plus, Pencil } from 'lucide-react'
 import { useTowForm } from '../../../hooks/useTowForm'
 import { FormCard } from '../../ui'
 import { TimeSurcharge } from '../../../lib/queries/price-lists'
+import { resolveSurchargeCatalog } from '../../../lib/queries/price-lists'
 import {
   getActiveTimeSurchargeSummary,
   getTimeSurchargeLabel,
@@ -209,11 +210,12 @@ export function SectionPricing({
     ? `${form.manualAdjustmentType === 'discount' ? 'הנחה' : 'תוספת'} ${adjPercent}%`
     : null
 
-  const displayTimeSurcharges =
-    form.priceMode === 'recommended_customer' &&
-    (form.selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
-      ? form.selectedCustomerPricing!.customer_time_surcharges!
-      : form.timeSurchargesData
+  const displayTimeSurcharges = resolveSurchargeCatalog(
+    form.priceMode === 'recommended_customer'
+      ? form.selectedCustomerPricing?.customer_time_surcharges
+      : null,
+    form.timeSurchargesData,
+  )
 
   const usesCompanyTimeFallback =
     form.priceMode === 'recommended_customer' &&

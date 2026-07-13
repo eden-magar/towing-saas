@@ -971,6 +971,20 @@ function getWeekdayEveningNightSurcharges(
 }
 
 /**
+ * Customer surcharge catalog OVERRIDES the company catalog when non-empty.
+ * If the customer has no rows of that kind, the company catalog applies.
+ * (Having a custom price_lists / km rate must not wipe all surcharges.)
+ */
+export function resolveSurchargeCatalog<T>(
+  customerCatalog: T[] | null | undefined,
+  companyCatalog: T[] | null | undefined,
+): T[] {
+  return (customerCatalog?.length ?? 0) > 0
+    ? customerCatalog!
+    : (companyCatalog ?? [])
+}
+
+/**
  * מחשב אילו תוספות זמן חלות על זמן ותאריך נתונים
  * הלוגיקה:
  * - שבת: תוספת שבת בלבד (ללא בדיקת שעות)

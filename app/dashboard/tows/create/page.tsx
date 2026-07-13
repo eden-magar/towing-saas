@@ -124,7 +124,7 @@ import {
 import type { AddressData } from '../../../lib/google-maps'
 import type { SelectedService } from '../../../components/tow-forms/shared'
 import type { RoutePoint } from '../../../components/tow-forms/routes/RouteBuilder'
-import { getActiveTimeSurcharges } from '../../../lib/queries/price-lists'
+import { getActiveTimeSurcharges, resolveSurchargeCatalog } from '../../../lib/queries/price-lists'
 import type { TimeSurcharge, LocationSurcharge, ServiceSurcharge } from '../../../lib/queries/price-lists'
 import type { StoredVehicleWithCustomer } from '../../../lib/queries/storage'
 import { TimeInStoragePill } from '../../../components/storage/TimeInStoragePill'
@@ -517,11 +517,12 @@ function CreateTowForm({
     !!selectedCustomerId &&
     customers.find((c) => c.id === selectedCustomerId)?.customer_type === 'business'
 
-  const displayTimeSurcharges =
-    priceMode === 'recommended_customer' &&
-    (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
-      ? selectedCustomerPricing!.customer_time_surcharges!
-      : timeSurchargesData
+  const displayTimeSurcharges = resolveSurchargeCatalog(
+    priceMode === 'recommended_customer'
+      ? selectedCustomerPricing?.customer_time_surcharges
+      : null,
+    timeSurchargesData,
+  )
 
   const usesCompanyTimeFallback =
     priceMode === 'recommended_customer' &&

@@ -15,6 +15,7 @@ import {
   getLocationSurcharges, 
   getServiceSurcharges, 
   getWeightBrackets,
+  resolveSurchargeCatalog,
   CustomerWithPricing, 
   FixedPriceItem, 
   TimeSurcharge, 
@@ -798,6 +799,9 @@ export function useTowForm(
   const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
   const [locationSurchargesData, setLocationSurchargesData] = useState<LocationSurcharge[]>([])
   const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
+  /** Immutable company baselines — never overwritten by ללקוח catalog swap. */
+  const [companyLocationSurchargesData, setCompanyLocationSurchargesData] = useState<LocationSurcharge[]>([])
+  const [companyServiceSurchargesData, setCompanyServiceSurchargesData] = useState<ServiceSurcharge[]>([])
   
   // Selected surcharges
   const [selectedLocationSurcharges, setSelectedLocationSurcharges] = useState<string[]>([])
@@ -1218,12 +1222,14 @@ export function useTowForm(
     if (needsCustomerPricing && !selectedCustomerPricing) return
 
     const customerCatalog =
-      priceMode === 'recommended_customer' &&
-      (selectedCustomerPricing?.customer_time_surcharges?.length ?? 0) > 0
-        ? selectedCustomerPricing!.customer_time_surcharges!
+      priceMode === 'recommended_customer'
+        ? selectedCustomerPricing?.customer_time_surcharges
         : []
 
-    if (inferIsHolidayFromSavedBreakdown(breakdown, [timeSurchargesData, customerCatalog])) {
+    if (inferIsHolidayFromSavedBreakdown(breakdown, [
+      timeSurchargesData,
+      resolveSurchargeCatalog(customerCatalog, timeSurchargesData),
+    ])) {
       setIsHoliday(true)
     }
     editIsHolidayHydratedRef.current = true
@@ -2868,10 +2874,16 @@ export function useTowForm(
         .then((value) => setTimeSurchargesData(value))
         .catch((err) => console.error('Error loading timeSurcharges:', err))
       getLocationSurcharges(companyId)
-        .then((value) => setLocationSurchargesData(value))
+        .then((value) => {
+          setCompanyLocationSurchargesData(value)
+          setLocationSurchargesData(value)
+        })
         .catch((err) => console.error('Error loading locationSurcharges:', err))
       getServiceSurcharges(companyId)
-        .then((value) => setServiceSurchargesData(value))
+        .then((value) => {
+          setCompanyServiceSurchargesData(value)
+          setServiceSurchargesData(value)
+        })
         .catch((err) => console.error('Error loading serviceSurcharges:', err))
       getDrivers(companyId)
         .then((v) => setDrivers(v))
@@ -3067,8 +3079,8 @@ export function useTowForm(
     setServiceSurchargesData,
     setSelectedLocationSurcharges,
     setSelectedServices,
-    companyLocationSurchargesData: locationSurchargesData,
-    companyServiceSurchargesData: serviceSurchargesData,
+    companyLocationSurchargesData,
+    companyServiceSurchargesData,
     vatPercent,
     manualAdjustmentPercent,
     manualAdjustmentType,
