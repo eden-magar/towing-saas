@@ -535,34 +535,32 @@ export function ColumnLayout({
                           onManualWeightChange={form.setManualWeight}
                           manualChassis={form.manualChassis}
                           onManualChassisChange={form.setManualChassis}
+                          manualEntryTrailing={
+                            <>
+                              <DefectSelector
+                                variant="triggerOnly"
+                                selectedDefects={form.selectedDefects}
+                                onChange={form.setSelectedDefects}
+                              />
+                              <div
+                                ref={form.truckTypeSectionRef}
+                                className={
+                                  form.truckTypeError
+                                    ? 'rounded-lg ring-2 ring-red-500 ring-offset-1'
+                                    : undefined
+                                }
+                              >
+                                <TowTruckTypeSelector
+                                  variant="triggerOnly"
+                                  selectedTypes={form.requiredTruckTypes}
+                                  onChange={form.setRequiredTruckTypes}
+                                />
+                              </div>
+                            </>
+                          }
                         />
-                      </div>
-
-                      {/* תקלות / שירותים / סוג גרר — compact trigger row */}
-                      <div
-                        ref={form.truckTypeSectionRef}
-                        className={
-                          form.truckTypeError
-                            ? 'bg-white border border-gray-200 rounded-lg shadow-sm p-3 ring-2 ring-red-500 ring-offset-2'
-                            : 'bg-white border border-gray-200 rounded-lg shadow-sm p-3'
-                        }
-                      >
-                        <div className="grid grid-cols-2 gap-2">
-                          <DefectSelector
-                            variant="triggerOnly"
-                            triggerLabel="תקלות"
-                            selectedDefects={form.selectedDefects}
-                            onChange={form.setSelectedDefects}
-                          />
-                          <TowTruckTypeSelector
-                            variant="triggerOnly"
-                            triggerLabel="סוג גרר"
-                            selectedTypes={form.requiredTruckTypes}
-                            onChange={form.setRequiredTruckTypes}
-                          />
-                        </div>
                         {form.truckTypeError && (
-                          <p className="text-red-500 text-sm mt-2 font-medium">
+                          <p className="text-red-500 text-sm font-medium">
                             ⚠️ יש לבחור סוג גרר נדרש
                           </p>
                         )}

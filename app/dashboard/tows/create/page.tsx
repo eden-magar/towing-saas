@@ -58,6 +58,8 @@ import {
   ServiceSurchargeSelector,
   SurchargesSection,
   VehicleCoreLookupChips,
+  DefectSelector,
+  TowTruckTypeSelector,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
@@ -1414,31 +1416,33 @@ function CreateTowForm({
         )}
 
         {isLastDropoff && (
-          <div className="space-y-2">
-            <DropToStorageToggle
-              active={dropoffToStorage}
-              onClick={() => {
-                if (dropoffToStorage) {
-                  setDropoffToStorage(false)
-                  updateStop(stop.id, { address: { address: '' } })
-                  setHasStorageFollowUp(false)
-                  setFollowUpAddress({ address: '' })
-                  setFollowUpContactName('')
-                  setFollowUpContactPhone('')
-                  return
-                }
-                setDropoffToStorage(true)
-                if (storageAddress) {
-                  updateStop(stop.id, {
-                    address: {
-                      address: storageAddress,
-                      lat: basePriceList?.base_lat,
-                      lng: basePriceList?.base_lng,
-                    },
-                  })
-                }
-              }}
-            />
+          <div className="space-y-2 flex flex-col items-stretch">
+            <div className="flex justify-start">
+              <DropToStorageToggle
+                active={dropoffToStorage}
+                onClick={() => {
+                  if (dropoffToStorage) {
+                    setDropoffToStorage(false)
+                    updateStop(stop.id, { address: { address: '' } })
+                    setHasStorageFollowUp(false)
+                    setFollowUpAddress({ address: '' })
+                    setFollowUpContactName('')
+                    setFollowUpContactPhone('')
+                    return
+                  }
+                  setDropoffToStorage(true)
+                  if (storageAddress) {
+                    updateStop(stop.id, {
+                      address: {
+                        address: storageAddress,
+                        lat: basePriceList?.base_lat,
+                        lng: basePriceList?.base_lng,
+                      },
+                    })
+                  }
+                }}
+              />
+            </div>
             {dropoffToStorage && (
               <div className="flex gap-2 items-center flex-wrap">
                 <span className="text-sm text-gray-600">מצב הרכב:</span>
@@ -2546,23 +2550,56 @@ function CreateTowForm({
                                 )}
                               </button>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setPlateStorageWarning(null)
-                                setVehicleData(null)
-                                setVehicleLookupNotFound(true)
-                                setVehicleType('')
-                                setManualManufacturer('')
-                                setManualColor('')
-                                setManualWeight('')
-                                setManualChassis('')
-                              }}
-                              className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
-                            >
-                              <PenLine className="w-3.5 h-3.5" />
-                              הזן פרטי רכב ידנית
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                              <DefectSelector
+                                variant="triggerOnly"
+                                selectedDefects={selectedDefects}
+                                onChange={setSelectedDefects}
+                                triggerClassName={
+                                  defectsStatus
+                                    ? withRequestFieldClass(
+                                        'inline-flex max-w-full min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors text-gray-700',
+                                        defectsStatus,
+                                      )
+                                    : undefined
+                                }
+                              />
+                              {vehicleData === null && !vehicleLookupNotFound ? (
+                                <span className="inline-flex min-h-[36px] items-center rounded-lg border border-dashed border-gray-200 px-2.5 text-xs text-gray-400">
+                                  סוג הגרר יופיע לאחר בדיקת רישוי
+                                </span>
+                              ) : (
+                                <div ref={truckTypeSectionRef}>
+                                  <TowTruckTypeSelector
+                                    variant="triggerOnly"
+                                    selectedTypes={requiredTruckTypes}
+                                    onChange={setRequiredTruckTypes}
+                                  />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPlateStorageWarning(null)
+                                  setVehicleData(null)
+                                  setVehicleLookupNotFound(true)
+                                  setVehicleType('')
+                                  setManualManufacturer('')
+                                  setManualColor('')
+                                  setManualWeight('')
+                                  setManualChassis('')
+                                }}
+                                className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                              >
+                                <PenLine className="w-3.5 h-3.5" />
+                                הזן פרטי רכב ידנית
+                              </button>
+                            </div>
+                            {vehicleData?.data?.driveType?.includes?.('קדמית') && (
+                              <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg mt-2">
+                                מומלץ: רמסע (רכב עם הנעה קדמית)
+                              </p>
+                            )}
                             {plateStorageWarning && (
                               <p className="text-sm text-red-500 mt-1">{plateStorageWarning}</p>
                             )}
@@ -2715,60 +2752,6 @@ function CreateTowForm({
                         )}
                       </div>
                     </FormSubcard>
-
-                    {/* Block 2 — תקלות וגרר */}
-                    <div ref={truckTypeSectionRef}>
-                      <FormSubcard title="תקלות וגרר">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <button
-                            type="button"
-                            onClick={openDefectsModal}
-                            className={
-                              defectsStatus
-                                ? withRequestFieldClass(
-                                    'w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors text-gray-700',
-                                    defectsStatus,
-                                  )
-                                : `w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                                    selectedDefects.length > 0
-                                      ? 'border-red-400 bg-red-50 text-red-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`
-                            }
-                          >
-                            🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
-                          </button>
-                          {vehicleData === null && !vehicleLookupNotFound ? (
-                            <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-2 py-3 text-center text-sm text-gray-400">
-                              סוג הגרר יופיע לאחר בדיקת רישוי
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setShowTruckModal(true)}
-                              className={`w-full py-3 rounded-xl border-2 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                                requiredTruckTypes.length > 0
-                                  ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-                                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                              }`}
-                            >
-                              🚛{' '}
-                              {requiredTruckTypes.length > 0
-                                ? requiredTruckTypes
-                                    .map((t) => TRUCK_OPTIONS.find((o) => o.value === t)?.label)
-                                    .filter(Boolean)
-                                    .join(', ')
-                                : 'סוג גרר נדרש'}
-                            </button>
-                          )}
-                        </div>
-                        {vehicleData?.data?.driveType?.includes?.('קדמית') && (
-                          <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg mt-3">
-                            מומלץ: רמסע (רכב עם הנעה קדמית)
-                          </p>
-                        )}
-                      </FormSubcard>
-                    </div>
 
                     {/* Block 3 — כתובות ומסלול */}
                     <FormSubcard title="כתובות ומסלול">
@@ -3287,22 +3270,37 @@ function CreateTowForm({
                                     className="text-xs"
                                   />
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPlateStorageWarning(null)
-                                    setWorkingVehicleData(null)
-                                    setWorkingVehicleNotFound(true)
-                                    setWorkingVehicleType('')
-                                    setWorkingManualManufacturer('')
-                                    setWorkingManualColor('')
-                                    setWorkingManualWeight('')
-                                  }}
-                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors w-fit"
-                                >
-                                  <PenLine className="w-3.5 h-3.5" />
-                                  הזן פרטי רכב ידנית
-                                </button>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div ref={truckTypeSectionRef}>
+                                    {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
+                                      <TowTruckTypeSelector
+                                        variant="triggerOnly"
+                                        selectedTypes={requiredTruckTypes}
+                                        onChange={setRequiredTruckTypes}
+                                      />
+                                    ) : (
+                                      <span className="inline-flex min-h-[36px] items-center rounded-lg border border-dashed border-gray-200 px-2.5 text-xs text-gray-400">
+                                        סוג הגרר יופיע לאחר בדיקת רישוי
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPlateStorageWarning(null)
+                                      setWorkingVehicleData(null)
+                                      setWorkingVehicleNotFound(true)
+                                      setWorkingVehicleType('')
+                                      setWorkingManualManufacturer('')
+                                      setWorkingManualColor('')
+                                      setWorkingManualWeight('')
+                                    }}
+                                    className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                                  >
+                                    <PenLine className="w-3.5 h-3.5" />
+                                    הזן פרטי רכב ידנית
+                                  </button>
+                                </div>
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
                             <div className="flex flex-col">
@@ -3388,28 +3386,6 @@ function CreateTowForm({
                             )}
                           </div>
                             </div>
-                          </div>
-
-                          <div className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">גרר נדרש</div>
-                            {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') && (
-                              <div className="p-3 bg-gt-brand-subtle border border-gt-brand-subtle-border rounded-xl">
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">סוג גרר נדרש *</p>
-                                <div className="flex gap-2 flex-wrap">
-                                  {TRUCK_OPTIONS.map((opt) => (
-                                    <button key={opt.value} type="button"
-                                      onClick={() => {
-                                        const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                        if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
-                                        else setRequiredTruckTypes([...current, opt.value])
-                                      }}
-                                      className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-gt-brand text-white' : 'bg-white text-gray-700 border-2 border-gt-border-subtle'}`}>
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           <div className="flex flex-col gap-2">
@@ -3548,22 +3524,58 @@ function CreateTowForm({
                                   className="text-xs"
                                 />
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPlateStorageWarning(null)
-                                  setDefectiveVehicleData(null)
-                                  setDefectiveVehicleNotFound(true)
-                                  setDefectiveVehicleType('')
-                                  setDefectiveManualManufacturer('')
-                                  setDefectiveManualColor('')
-                                  setDefectiveManualWeight('')
-                                }}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors w-fit"
-                              >
-                                <PenLine className="w-3.5 h-3.5" />
-                                הזן פרטי רכב ידנית
-                              </button>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <DefectSelector
+                                  variant="triggerOnly"
+                                  selectedDefects={selectedDefects}
+                                  onChange={setSelectedDefects}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setHasSecondTruck(!hasSecondTruck)}
+                                  className={`inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border text-xs font-medium transition-colors ${
+                                    hasSecondTruck
+                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
+                                      : 'border-gray-200 text-gt-text-secondary hover:border-orange-200'
+                                  }`}
+                                >
+                                  {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPlateStorageWarning(null)
+                                    setDefectiveVehicleData(null)
+                                    setDefectiveVehicleNotFound(true)
+                                    setDefectiveVehicleType('')
+                                    setDefectiveManualManufacturer('')
+                                    setDefectiveManualColor('')
+                                    setDefectiveManualWeight('')
+                                  }}
+                                  className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                                >
+                                  <PenLine className="w-3.5 h-3.5" />
+                                  הזן פרטי רכב ידנית
+                                </button>
+                              </div>
+                              {hasSecondTruck && (
+                                <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                                  <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
+                                  <div className="flex gap-2 flex-wrap">
+                                    {TRUCK_OPTIONS.map((opt) => (
+                                      <button key={opt.value} type="button"
+                                        onClick={() => {
+                                          const current = defectiveTruckTypes.filter(t => t !== opt.value)
+                                          if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
+                                          else setDefectiveTruckTypes([...current, opt.value])
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
                                 <div className="flex flex-col">
                                   <VehicleRegistryStatusBanner status={defectiveVehicleData.registryStatus} />
@@ -3647,61 +3659,6 @@ function CreateTowForm({
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          </div>
-
-                          <div ref={truckTypeSectionRef} className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">תקלות וגרר</div>
-                            <div className="flex flex-col gap-2">
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const normalized = hydrateDefectsFromTowReason(
-                                      serializeDefects(selectedDefects)
-                                    )
-                                    setSelectedDefects(normalized)
-                                    setOtherDefectText(extractOtherText(normalized))
-                                    setShowDefectsExchangeModal(true)
-                                  }}
-                                  className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                                    selectedDefects.length > 0
-                                      ? 'border-red-300 bg-red-50 text-red-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setHasSecondTruck(!hasSecondTruck)}
-                                  className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                                    hasSecondTruck
-                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-orange-200'
-                                  }`}
-                                >
-                                  {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
-                                </button>
-                              </div>
-                              {hasSecondTruck && (
-                                <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                                  <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {TRUCK_OPTIONS.map((opt) => (
-                                      <button key={opt.value} type="button"
-                                        onClick={() => {
-                                          const current = defectiveTruckTypes.filter(t => t !== opt.value)
-                                          if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
-                                          else setDefectiveTruckTypes([...current, opt.value])
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
-                                        {opt.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
 

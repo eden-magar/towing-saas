@@ -535,13 +535,30 @@ export function ExchangeRoute({
                 onVehicleTypeChange={onDefectiveVehicleTypeChange}
                 vehicleCode={defectiveVehicleCode}
                 onVehicleCodeChange={onDefectiveVehicleCodeChange}
+                manualEntryStyle="button"
+                manualEntryTrailing={
+                  <>
+                    <DefectSelector
+                      variant="triggerOnly"
+                      selectedDefects={selectedDefects}
+                      onChange={onDefectsChange}
+                    />
+                    <div
+                      ref={truckTypeSectionRef}
+                      className={truckTypeError ? 'rounded-lg ring-2 ring-red-500 ring-offset-1' : undefined}
+                    >
+                      <TowTruckTypeSelector
+                        variant="triggerOnly"
+                        selectedTypes={requiredTruckTypes}
+                        onChange={onRequiredTruckTypesChange}
+                      />
+                    </div>
+                  </>
+                }
               />
-
-              {/* תקלות */}
-              <DefectSelector
-                selectedDefects={selectedDefects}
-                onChange={onDefectsChange}
-              />
+              {truckTypeError && (
+                <p className="text-red-500 text-sm font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
+              )}
 
               {/* יעד הרכב התקול */}
               <div>
@@ -648,20 +665,6 @@ export function ExchangeRoute({
               selectedServices={selectedServices}
               onSelectedServicesChange={onSelectedServicesChange}
             />
-          </div>
-
-          {/* סוג גרר */}
-          <div 
-            ref={truckTypeSectionRef}
-            className={`rounded-xl transition-all ${truckTypeError ? 'ring-2 ring-red-500 ring-offset-2' : ''}`}
-          >
-            <TowTruckTypeSelector
-              selectedTypes={requiredTruckTypes}
-              onChange={onRequiredTruckTypesChange}
-            />
-            {truckTypeError && (
-              <p className="text-red-500 text-sm mt-2 font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
-            )}
           </div>
 
         </div>

@@ -40,17 +40,17 @@ export function RouteAddressFieldLabel({
   children: ReactNode
   required?: boolean
 }) {
-  const dot =
-    tone === 'origin'
-      ? 'bg-emerald-500'
-      : tone === 'destination'
-        ? 'bg-red-500'
-        : 'bg-sky-500'
+  // Same accent for origin/destination — red destination looked like an error.
+  const dot = tone === 'stop' ? 'bg-gt-brand/50' : 'bg-gt-brand'
   return (
     <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-gt-text-secondary">
       <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
       {children}
-      {required ? <span className="text-red-500">*</span> : null}
+      {required ? (
+        <span className="text-gt-text-tertiary font-normal" aria-hidden>
+          *
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -94,7 +94,9 @@ export function RouteOriginDestGrid({
         </div>
         <div className="min-w-0 space-y-2">
           {destination}
-          {underDestination}
+          {underDestination ? (
+            <div className="flex justify-start">{underDestination}</div>
+          ) : null}
         </div>
       </div>
     )
@@ -117,7 +119,9 @@ export function RouteOriginDestGrid({
       </div>
       <div className="min-w-0 space-y-2">
         {destination}
-        {underDestination}
+        {underDestination ? (
+          <div className="flex justify-start">{underDestination}</div>
+        ) : null}
       </div>
     </div>
   )
@@ -223,10 +227,12 @@ export function DropToStorageToggle({
   active,
   onClick,
   label = 'הורדה לאחסנה',
+  className = '',
 }: {
   active: boolean
   onClick: () => void
   label?: string
+  className?: string
 }) {
   return (
     <button
@@ -237,7 +243,7 @@ export function DropToStorageToggle({
         active
           ? 'border-purple-300 bg-purple-50 text-purple-700'
           : 'border-gt-border-subtle bg-gt-surface-subtle text-gt-text-tertiary hover:border-purple-200 hover:text-purple-600'
-      }`}
+      } ${className}`}
     >
       <span aria-hidden>⚑</span>
       {label}

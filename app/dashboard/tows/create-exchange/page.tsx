@@ -33,6 +33,8 @@ import {
   PinDropModal,
   ServiceSurchargeSelector,
   SurchargesSection,
+  DefectSelector,
+  TowTruckTypeSelector,
 } from '../../../components/tow-forms/shared'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { CreateCustomerSection } from '../../../components/tow-forms/sections/CreateCustomerSection'
@@ -1556,6 +1558,21 @@ function CreateExchangeTowForm({
                                     className="text-xs"
                                   />
                                 </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div ref={truckTypeSectionRef}>
+                                    {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') ? (
+                                      <TowTruckTypeSelector
+                                        variant="triggerOnly"
+                                        selectedTypes={requiredTruckTypes}
+                                        onChange={setRequiredTruckTypes}
+                                      />
+                                    ) : (
+                                      <span className="inline-flex min-h-[36px] items-center rounded-lg border border-dashed border-gray-200 px-2.5 text-xs text-gray-400">
+                                        סוג הגרר יופיע לאחר בדיקת רישוי
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                           {workingVehicleData?.found && workingVehicleData.data && (
                             <div className="flex flex-col">
@@ -1637,28 +1654,6 @@ function CreateExchangeTowForm({
                             )}
                           </div>
                             </div>
-                          </div>
-
-                          <div className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">גרר נדרש</div>
-                            {(workingVehicleData?.found || workingVehicleNotFound || workingVehicleSource === 'storage') && (
-                              <div className="p-3 bg-gt-brand-subtle border border-gt-brand-subtle-border rounded-xl">
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">סוג גרר נדרש *</p>
-                                <div className="flex gap-2 flex-wrap">
-                                  {TRUCK_OPTIONS.map((opt) => (
-                                    <button key={opt.value} type="button"
-                                      onClick={() => {
-                                        const current = requiredTruckTypes.filter(t => t !== opt.value)
-                                        if (requiredTruckTypes.includes(opt.value)) setRequiredTruckTypes(current)
-                                        else setRequiredTruckTypes([...current, opt.value])
-                                      }}
-                                      className={`px-4 py-2 rounded-xl text-sm ${requiredTruckTypes.includes(opt.value) ? 'bg-gt-brand text-white' : 'bg-white text-gray-700 border-2 border-gt-border-subtle'}`}>
-                                      {opt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                           </div>
 
                           <div className="flex flex-col gap-2">
@@ -1797,6 +1792,42 @@ function CreateExchangeTowForm({
                                   className="text-xs"
                                 />
                               </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <DefectSelector
+                                  variant="triggerOnly"
+                                  selectedDefects={selectedDefects}
+                                  onChange={setSelectedDefects}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setHasSecondTruck(!hasSecondTruck)}
+                                  className={`inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border text-xs font-medium transition-colors ${
+                                    hasSecondTruck
+                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
+                                      : 'border-gray-200 text-gt-text-secondary hover:border-orange-200'
+                                  }`}
+                                >
+                                  {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
+                                </button>
+                              </div>
+                              {hasSecondTruck && (
+                                <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                                  <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
+                                  <div className="flex gap-2 flex-wrap">
+                                    {TRUCK_OPTIONS.map((opt) => (
+                                      <button key={opt.value} type="button"
+                                        onClick={() => {
+                                          const current = defectiveTruckTypes.filter(t => t !== opt.value)
+                                          if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
+                                          else setDefectiveTruckTypes([...current, opt.value])
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                               {defectiveVehicleData?.found && defectiveVehicleData.data && (
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-1.5 mb-2">
@@ -1876,61 +1907,6 @@ function CreateExchangeTowForm({
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          </div>
-
-                          <div ref={truckTypeSectionRef} className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">תקלות וגרר</div>
-                            <div className="flex flex-col gap-2">
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const normalized = hydrateDefectsFromTowReason(
-                                      serializeDefects(selectedDefects)
-                                    )
-                                    setSelectedDefects(normalized)
-                                    setOtherDefectText(extractOtherText(normalized))
-                                    setShowDefectsExchangeModal(true)
-                                  }}
-                                  className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                                    selectedDefects.length > 0
-                                      ? 'border-red-300 bg-red-50 text-red-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  🔧 {selectedDefects.length > 0 ? `תקלות (${selectedDefects.length})` : 'בחר תקלות'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setHasSecondTruck(!hasSecondTruck)}
-                                  className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                                    hasSecondTruck
-                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-orange-200'
-                                  }`}
-                                >
-                                  {hasSecondTruck ? '✓ גרר נוסף' : '+ גרר נוסף'}
-                                </button>
-                              </div>
-                              {hasSecondTruck && (
-                                <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
-                                  <p className="text-xs font-medium text-gray-500 mb-2">סוג גרר לרכב התקול *</p>
-                                  <div className="flex gap-2 flex-wrap">
-                                    {TRUCK_OPTIONS.map((opt) => (
-                                      <button key={opt.value} type="button"
-                                        onClick={() => {
-                                          const current = defectiveTruckTypes.filter(t => t !== opt.value)
-                                          if (defectiveTruckTypes.includes(opt.value)) setDefectiveTruckTypes(current)
-                                          else setDefectiveTruckTypes([...current, opt.value])
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-sm ${defectiveTruckTypes.includes(opt.value) ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 border border-gray-200'}`}>
-                                        {opt.label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
 

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import {
   DEFECT_OPTIONS,
   OTHER_DEFECT_VALUE,
+  OTHER_DEFECT_PREFIX,
   applyOtherText,
   defectOptionClassName,
   extractOtherText,
@@ -11,13 +12,37 @@ import {
 } from '../../../lib/constants/defects'
 import { SelectorModalShell } from './SelectorModalShell'
 
+/** Short label for a defect value (first segment before `/`, or אחר text). */
+function shortDefectLabel(raw: string): string {
+  if (raw === OTHER_DEFECT_VALUE) return 'אחר'
+  if (raw.startsWith(OTHER_DEFECT_PREFIX)) {
+    const text = raw.slice(OTHER_DEFECT_PREFIX.length).trim()
+    return text || 'אחר'
+  }
+  const option = DEFECT_OPTIONS.find((o) => o.value === raw)
+  const base = option?.label ?? raw
+  return base.split('/')[0]?.trim() || base
+}
+
+/** Trigger summary: "תקלות" | "תקלות · מנוע, תקר" | "תקלות · מנוע +2" */
+export function formatDefectsTriggerLabel(
+  selectedDefects: string[],
+  emptyLabel = 'תקלות',
+): string {
+  const shorts = selectedDefects.map(shortDefectLabel).filter(Boolean)
+  if (shorts.length === 0) return emptyLabel
+  if (shorts.length === 1) return `${emptyLabel} · ${shorts[0]}`
+  if (shorts.length === 2) return `${emptyLabel} · ${shorts[0]}, ${shorts[1]}`
+  return `${emptyLabel} · ${shorts[0]} +${shorts.length - 1}`
+}
+
 interface DefectSelectorProps {
   selectedDefects: string[]
   onChange: (defects: string[]) => void
   label?: string
   /** Chip grid + אחר field only (for embedding in a parent modal). */
   variant?: 'default' | 'chipsOnly' | 'triggerOnly'
-  /** Label on the compact trigger button (triggerOnly variant). */
+  /** Base label on the compact trigger (triggerOnly). Value summary is appended. */
   triggerLabel?: string
   /** Optional class override for the triggerOnly button (e.g. compact red inline). */
   triggerClassName?: string
@@ -122,32 +147,25 @@ export function DefectSelector({
   }
 
   if (variant === 'triggerOnly') {
+    const summary = formatDefectsTriggerLabel(selectedDefects, triggerLabel)
     return (
-      <div className="shrink-0">
+      <div className="shrink-0 min-w-0 max-w-full">
         <button
           type="button"
           onClick={() => setShowModal(true)}
+          title={summary}
+          aria-label={summary}
           className={
             triggerClassName ??
-            `relative flex w-full min-h-[36px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+            `inline-flex max-w-full min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
               selectedDefects.length > 0
                 ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
                 : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
             }`
           }
         >
-          <span>{triggerLabel}</span>
-          {selectedDefects.length > 0 && (
-            <span
-              className={
-                triggerClassName
-                  ? 'absolute -top-1.5 -left-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-danger px-1 text-[11px] font-bold text-white'
-                  : 'absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white'
-              }
-            >
-              {selectedDefects.length}
-            </span>
-          )}
+          <span aria-hidden>🔧</span>
+          <span className="truncate">{summary}</span>
         </button>
         <SelectorModalShell open={showModal} onClose={() => setShowModal(false)} title={label}>
           {renderChips({ keyPrefix: 'modal-', minTouch: true, brand: true })}

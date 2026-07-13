@@ -366,53 +366,29 @@ export function SingleRoute({
         onManualChassisChange={onManualChassisChange}
         isMobile={isMobileSized}
         narrowColumn={isNarrow}
-      />
-
-      {isMobile ? (
-        <>
-          <div className="grid grid-cols-2 gap-2">
+        manualEntryStyle="button"
+        manualEntryTrailing={
+          <>
             <DefectSelector
+              variant="triggerOnly"
               selectedDefects={selectedDefects}
               onChange={onDefectsChange}
-              isMobile
             />
             <div
               ref={truckTypeSectionRef}
-              className={truckTypeError ? 'rounded-xl ring-2 ring-red-500 ring-offset-2' : ''}
+              className={truckTypeError ? 'rounded-lg ring-2 ring-red-500 ring-offset-1' : undefined}
             >
               <TowTruckTypeSelector
+                variant="triggerOnly"
                 selectedTypes={requiredTruckTypes}
                 onChange={onRequiredTruckTypesChange}
-                isMobile
               />
             </div>
-          </div>
-          {truckTypeError && (
-            <p className="text-red-500 text-sm mt-2 font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
-          )}
-        </>
-      ) : (
-        <>
-          <DefectSelector
-            selectedDefects={selectedDefects}
-            onChange={onDefectsChange}
-            isMobile={isMobile}
-          />
-
-          <div
-            ref={truckTypeSectionRef}
-            className={`rounded-xl transition-all ${truckTypeError ? 'ring-2 ring-red-500 ring-offset-2' : ''}`}
-          >
-            <TowTruckTypeSelector
-              selectedTypes={requiredTruckTypes}
-              onChange={onRequiredTruckTypesChange}
-              isMobile={isMobile}
-            />
-            {truckTypeError && (
-              <p className="text-red-500 text-sm mt-2 font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
-            )}
-          </div>
-        </>
+          </>
+        }
+      />
+      {truckTypeError && (
+        <p className="text-red-500 text-sm font-medium">⚠️ יש לבחור סוג גרר נדרש</p>
       )}
     </>
   )

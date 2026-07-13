@@ -14,11 +14,26 @@ interface TowTruckTypeSelectorProps {
   isMobile?: boolean
 }
 
-const TRUCK_TYPES = [
+export const TRUCK_TYPES = [
   { id: 'wheel_lift_cradle', label: 'משקפיים', icon: '🔧' },
   { id: 'flatbed', label: 'רמסע', icon: '🚛' },
   { id: 'carrier', label: 'מובילית', icon: '🚚' },
-]
+] as const
+
+/** Trigger summary: "סוג גרר" | "גרר · רמסע" | "גרר · רמסע +1" */
+export function formatTruckTypesTriggerLabel(
+  selectedTypes: string[],
+  emptyLabel = 'סוג גרר',
+  filledPrefix = 'גרר',
+): string {
+  const labels = selectedTypes
+    .map((id) => TRUCK_TYPES.find((t) => t.id === id)?.label)
+    .filter((x): x is (typeof TRUCK_TYPES)[number]['label'] => Boolean(x))
+  if (labels.length === 0) return emptyLabel
+  if (labels.length === 1) return `${filledPrefix} · ${labels[0]}`
+  if (labels.length === 2) return `${filledPrefix} · ${labels[0]}, ${labels[1]}`
+  return `${filledPrefix} · ${labels[0]} +${labels.length - 1}`
+}
 
 export function TowTruckTypeSelector({
   selectedTypes,
@@ -39,23 +54,22 @@ export function TowTruckTypeSelector({
   }
 
   if (variant === 'triggerOnly') {
+    const summary = formatTruckTypesTriggerLabel(selectedTypes, triggerLabel)
     return (
-      <div>
+      <div className="shrink-0 min-w-0 max-w-full">
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`relative flex w-full min-h-[36px] items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+          title={summary}
+          aria-label={summary}
+          className={`inline-flex max-w-full min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors ${
             selectedTypes.length > 0
               ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
               : 'border-gray-200 text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-hover'
           }`}
         >
-          <span>{triggerLabel}</span>
-          {selectedTypes.length > 0 && (
-            <span className="absolute top-1 left-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gt-brand px-1 text-[11px] font-bold text-white">
-              {selectedTypes.length}
-            </span>
-          )}
+          <span aria-hidden>🚚</span>
+          <span className="truncate">{summary}</span>
         </button>
         <SelectorModalShell
           open={showModal}

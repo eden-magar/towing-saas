@@ -64,6 +64,8 @@ import type {
   CustomerUserWithDetails,
 } from '@/app/lib/types'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
+import { AddressInput, type AddressData } from '@/app/components/tow-forms/routes/AddressInput'
+import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
 
 interface CustomerDetail {
   id: string
@@ -135,8 +137,16 @@ export default function CustomerDetailPage() {
   const emptyContactForm = { name: '', phone: '', role_or_title: '', notes: '' }
   const [contactForm, setContactForm] = useState(emptyContactForm)
 
-  const emptyAddressForm = { label: '', address: '', notes: '' }
+  const emptyAddressForm = {
+    label: '',
+    address: '',
+    place_id: null as string | null,
+    lat: null as number | null,
+    lng: null as number | null,
+    notes: '',
+  }
   const [addressForm, setAddressForm] = useState(emptyAddressForm)
+  const [addressPinOpen, setAddressPinOpen] = useState(false)
 
   const emptyOrdererForm = { department: '', name: '' }
   const [ordererForm, setOrdererForm] = useState(emptyOrdererForm)
@@ -318,6 +328,7 @@ export default function CustomerDetailPage() {
   const openAddAddressModal = () => {
     setEditingAddressId(null)
     setAddressForm(emptyAddressForm)
+    setAddressPinOpen(false)
     setError('')
     setShowAddressModal(true)
   }
@@ -327,10 +338,24 @@ export default function CustomerDetailPage() {
     setAddressForm({
       label: row.label,
       address: row.address,
+      place_id: row.place_id,
+      lat: row.lat,
+      lng: row.lng,
       notes: row.notes || '',
     })
+    setAddressPinOpen(false)
     setError('')
     setShowAddressModal(true)
+  }
+
+  const handleAddressDataChange = (data: AddressData) => {
+    setAddressForm((prev) => ({
+      ...prev,
+      address: data.address,
+      place_id: data.placeId ?? null,
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
+    }))
   }
 
   const handleSaveAddress = async () => {
@@ -343,6 +368,9 @@ export default function CustomerDetailPage() {
       const payload = {
         label: addressForm.label,
         address: addressForm.address,
+        place_id: addressForm.place_id,
+        lat: addressForm.lat,
+        lng: addressForm.lng,
         notes: addressForm.notes || null,
       }
 
@@ -355,6 +383,7 @@ export default function CustomerDetailPage() {
       setShowAddressModal(false)
       setEditingAddressId(null)
       setAddressForm(emptyAddressForm)
+      setAddressPinOpen(false)
       await loadData()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'שגיאה בשמירת הכתובת'
@@ -1305,6 +1334,7 @@ export default function CustomerDetailPage() {
                 onClick={() => {
                   setShowAddressModal(false)
                   setEditingAddressId(null)
+                  setAddressPinOpen(false)
                 }}
                 className="p-2 hover:bg-white/20 rounded-lg"
               >
@@ -1332,12 +1362,17 @@ export default function CustomerDetailPage() {
 
               <div>
                 <label className="block text-sm text-gray-600 mb-1">כתובת מלאה *</label>
-                <textarea
-                  value={addressForm.address}
-                  onChange={(e) => setAddressForm({ ...addressForm, address: e.target.value })}
-                  rows={2}
-                  placeholder="רחוב, עיר..."
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
+                <AddressInput
+                  hideLabel
+                  value={{
+                    address: addressForm.address,
+                    placeId: addressForm.place_id ?? undefined,
+                    lat: addressForm.lat ?? undefined,
+                    lng: addressForm.lng ?? undefined,
+                  }}
+                  onChange={handleAddressDataChange}
+                  placeholder="התחל להקליד כתובת..."
+                  onPinDropClick={() => setAddressPinOpen(true)}
                 />
               </div>
 
@@ -1356,6 +1391,7 @@ export default function CustomerDetailPage() {
                   onClick={() => {
                     setShowAddressModal(false)
                     setEditingAddressId(null)
+                    setAddressPinOpen(false)
                   }}
                   className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
                 >
@@ -1377,6 +1413,22 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       )}
+
+      <PinDropModal
+        isOpen={addressPinOpen}
+        onClose={() => setAddressPinOpen(false)}
+        onConfirm={(data) => {
+          handleAddressDataChange(data)
+          setAddressPinOpen(false)
+        }}
+        initialAddress={{
+          address: addressForm.address,
+          placeId: addressForm.place_id ?? undefined,
+          lat: addressForm.lat ?? undefined,
+          lng: addressForm.lng ?? undefined,
+        }}
+        title="בחר מיקום לכתובת"
+      />
 
       {/* Add / Edit Orderer Modal */}
       {showOrdererModal && (

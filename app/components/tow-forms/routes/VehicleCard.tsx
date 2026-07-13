@@ -4,20 +4,11 @@ import { useState } from 'react'
 import { Car, Key, X, Search, Loader2, PenLine } from 'lucide-react'
 import { VehicleData } from './VehicleInfoCard'
 import { VehicleCoreLookupChips } from '../shared/VehicleCoreLookupChips'
+import { DefectSelector } from '../shared/DefectSelector'
 import { lookupVehicle } from '../../../lib/vehicle-lookup'
 import { VehicleLookupResult } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
-import {
-  DEFECT_OPTIONS,
-  OTHER_DEFECT_VALUE,
-  applyOtherText,
-  defectOptionClassName,
-  extractOtherText,
-  hydrateDefectsFromTowReason,
-  isOtherSelected,
-  serializeDefects,
-} from '../../../lib/constants/defects'
 
 // ==================== Types ====================
 
@@ -64,17 +55,6 @@ export function VehicleCard({
   className = '' 
 }: VehicleCardProps) {
   const [isSearching, setIsSearching] = useState(false)
-  const [showDefectsModal, setShowDefectsModal] = useState(false)
-  const [otherDefectText, setOtherDefectText] = useState('')
-
-  const openDefectsModal = () => {
-    const normalized = hydrateDefectsFromTowReason(
-      serializeDefects(vehicle.defects || [])
-    )
-    setOtherDefectText(extractOtherText(normalized))
-    onChange({ ...vehicle, defects: normalized })
-    setShowDefectsModal(true)
-  }
 
   const handleSkipToManualEntry = () => {
     if (vehicle.fromStorage) return
@@ -282,15 +262,26 @@ export function VehicleCard({
               </button>
             )}
           </div>
-          {!vehicle.fromStorage && (
-            <button
-              type="button"
-              onClick={handleSkipToManualEntry}
-              className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
-            >
-              <PenLine className="w-3.5 h-3.5" />
-              הזן פרטי רכב ידנית
-            </button>
+          {(!vehicle.fromStorage || !vehicle.isWorking) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {!vehicle.isWorking && (
+                <DefectSelector
+                  variant="triggerOnly"
+                  selectedDefects={vehicle.defects || []}
+                  onChange={(defects) => onChange({ ...vehicle, defects })}
+                />
+              )}
+              {!vehicle.fromStorage && (
+                <button
+                  type="button"
+                  onClick={handleSkipToManualEntry}
+                  className="inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-lg border border-gt-brand text-gt-brand text-xs font-medium hover:bg-gt-brand-subtle transition-colors"
+                >
+                  <PenLine className="w-3.5 h-3.5" />
+                  הזן פרטי רכב ידנית
+                </button>
+              )}
+            </div>
           )}
           {(isSearching || vehicle.isLoading) && (
             <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
@@ -422,142 +413,6 @@ export function VehicleCard({
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
           />
         </div>
-        
-        {/* Defects — button + modal (same pattern as exchange tow create/page.tsx) */}
-        {!vehicle.isWorking && (
-          <>
-            <button
-              type="button"
-              onClick={openDefectsModal}
-              className={`w-full py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
-                (vehicle.defects || []).length > 0
-                  ? 'border-red-300 bg-red-50 text-red-700'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-              }`}
-            >
-              🔧 פירוט התקלה
-              {(vehicle.defects || []).length > 0 && (
-                <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-red-600 text-white text-xs font-bold leading-5 text-center">
-                  {(vehicle.defects || []).length}
-                </span>
-              )}
-            </button>
-            {(vehicle.defects || []).length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {(vehicle.defects || []).map((d) => (
-                  <span
-                    key={d}
-                    className="inline-flex items-center px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs border border-gray-200"
-                  >
-                    {d}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {showDefectsModal && (
-              <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                    <h3 className="font-bold text-gray-800 text-base">בחר תקלות</h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowDefectsModal(false)}
-                      className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="p-4 grid grid-cols-3 gap-3">
-                    {DEFECT_OPTIONS.map((defect) => {
-                      const Icon = defect.icon
-                      const defects = vehicle.defects || []
-                      const selected =
-                        defect.value === OTHER_DEFECT_VALUE
-                          ? isOtherSelected(defects)
-                          : defects.includes(defect.value)
-                      return (
-                      <button
-                        key={defect.value}
-                        type="button"
-                        onClick={() => {
-                          const prev = vehicle.defects || []
-                          if (defect.value === OTHER_DEFECT_VALUE) {
-                            if (isOtherSelected(prev)) {
-                              setOtherDefectText('')
-                              onChange({
-                                ...vehicle,
-                                defects: prev.filter(
-                                  (d) =>
-                                    d !== OTHER_DEFECT_VALUE &&
-                                    !d.startsWith('אחר:')
-                                ),
-                              })
-                              return
-                            }
-                            onChange({
-                              ...vehicle,
-                              defects: [...prev, OTHER_DEFECT_VALUE],
-                            })
-                            return
-                          }
-                          onChange({
-                            ...vehicle,
-                            defects: prev.includes(defect.value)
-                              ? prev.filter((x) => x !== defect.value)
-                              : [...prev, defect.value],
-                          })
-                        }}
-                        className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${defectOptionClassName(selected, defect.highlight, 'grid')}`}
-                      >
-                        <Icon className="h-6 w-6 shrink-0" aria-hidden />
-                        <span className="text-xs font-medium text-center leading-tight">{defect.label}</span>
-                      </button>
-                      )
-                    })}
-                  </div>
-                  {isOtherSelected(vehicle.defects || []) && (
-                    <div className="mt-3 px-4">
-                      <label className="block text-sm">תיאור התקלה:</label>
-                      <input
-                        type="text"
-                        value={otherDefectText}
-                        onChange={(e) => setOtherDefectText(e.target.value)}
-                        placeholder="תאר את התקלה..."
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  )}
-                  <div className="px-4 pb-4 pt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const prev = vehicle.defects || []
-                        onChange({
-                          ...vehicle,
-                          defects: isOtherSelected(prev)
-                            ? applyOtherText(prev, otherDefectText)
-                            : prev,
-                        })
-                        setShowDefectsModal(false)
-                      }}
-                      className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl font-medium text-sm"
-                    >
-                      אישור
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDefectsModal(false)}
-                      className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm"
-                    >
-                      ביטול
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
         
       </div>
     </div>
