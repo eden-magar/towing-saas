@@ -41,7 +41,7 @@ export function StartFromBase({
         />
         <div className="flex-1">
           <span className={`font-medium ${checked ? 'text-emerald-700' : 'text-gray-700'}`}>
-            🏠 יציאה מהבסיס
+            🏠 מהחניון למוצא
           </span>
           <p className="text-xs text-gray-500 mt-0.5">
             {baseAddress}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { 
-  MapPin, Plus, ChevronDown, ChevronUp, GripVertical, Trash2, Home,
+  Plus, ChevronDown, ChevronUp, GripVertical, Trash2, Home,
   ArrowDown, ArrowUp, User, Check, Package, Loader2, X
 } from 'lucide-react'
 import {
@@ -803,7 +803,7 @@ export function RouteBuilder({
             onChange={toggleBase}
             className="w-4 h-4 rounded border-gray-300 text-[#33d4ff] focus:ring-[#33d4ff]"
           />
-          <span className="text-sm text-gray-700">יציאה מבסיס ({baseAddress})</span>
+          <span className="text-sm text-gray-700">מהחניון למוצא ({baseAddress})</span>
         </label>
       )}
       
@@ -953,41 +953,37 @@ export function RouteBuilder({
                           </button>
                         </div>
                       )}
-                      <div className="flex-1 flex items-center gap-2 min-w-0">
+                      <div className="flex-1 min-w-0">
                         <AddressInput
                           value={point.address}
                           onChange={(address: string) => updatePoint(point.id, { address })}
                           onAddressDataChange={(data) => updatePoint(point.id, { addressData: data })}
                           readOnly={isBase}
                           inputRef={point.id === newlyAddedPointId ? newPointAddressRef : undefined}
+                          onPinDropClick={
+                            isBase ? undefined : () => onPinDropClick?.(point.id)
+                          }
+                          extraActions={
+                            !isBase &&
+                            customerAddressSaveEnabled &&
+                            onConfirmPendingAddress &&
+                            onClearPendingAddress ? (
+                              <SaveCustomerAddressControl
+                                visible={shouldOfferSaveCustomerAddress(
+                                  customerId,
+                                  point.address,
+                                  savedCustomerAddresses
+                                )}
+                                address={point.address}
+                                pending={pendingAddressByPointId[point.id] ?? null}
+                                onConfirm={(draft) => onConfirmPendingAddress(point.id, draft)}
+                                onClear={() => onClearPendingAddress(point.id)}
+                              />
+                            ) : null
+                          }
                         />
-                        <button
-                          type="button"
-                          onClick={() => onPinDropClick?.(point.id)}
-                          className={`shrink-0 px-3 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50${isMobile ? ' min-h-[44px]' : ''}`}
-                        >
-                          <MapPin size={16} className="text-red-500" />
-                        </button>
                       </div>
                     </div>
-                    {!isBase &&
-                      customerAddressSaveEnabled &&
-                      onConfirmPendingAddress &&
-                      onClearPendingAddress && (
-                        <div className="px-3 pb-2">
-                          <SaveCustomerAddressControl
-                            visible={shouldOfferSaveCustomerAddress(
-                              customerId,
-                              point.address,
-                              savedCustomerAddresses
-                            )}
-                            address={point.address}
-                            pending={pendingAddressByPointId[point.id] ?? null}
-                            onConfirm={(draft) => onConfirmPendingAddress(point.id, draft)}
-                            onClear={() => onClearPendingAddress(point.id)}
-                          />
-                        </div>
-                      )}
 
                     {/* 2 — איש קשר */}
                     {!isBase && (

@@ -12,12 +12,9 @@ import {
   Package,
   Loader2,
   MapPin,
-  Home,
-  Plus,
   X,
   ChevronUp,
   ChevronDown,
-  Navigation,
   User,
   AlertTriangle,
   Check,
@@ -54,6 +51,13 @@ import {
   AddressInput,
   type AddressData,
 } from '../../../components/tow-forms/routes/AddressInput'
+import {
+  DropToStorageToggle,
+  RouteAddStopButton,
+  RouteAddressFieldLabel,
+  RouteAddressesFooter,
+  RouteOriginDestGrid,
+} from '../../../components/tow-forms/routes/RouteAddressesSection'
 import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import { mergePriceLists, resolveDeadheadRate } from '../../../lib/utils/price-calculator'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
@@ -581,313 +585,375 @@ export function ColumnLayout({
                       מסלול
                     </h3>
                     <div className="space-y-3">
-                      {/* Route points (pickup / stops / dropoff) — unified reorderable list */}
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-3">
-                        <div className="space-y-2">
-                          {(() => {
-                            const intermediateStopCount = form.routeStops.filter(
-                              (s) => s.role === 'stop',
-                            ).length
-                            const showReorderArrows = intermediateStopCount > 0
-                            return form.routeStops.map((stop, index) => {
-                            const stopOrdinal =
-                              stop.role === 'stop'
-                                ? form.routeStops
-                                    .slice(0, index + 1)
-                                    .filter((s) => s.role === 'stop').length
-                                : 0
-                            const prevStop =
-                              index > 0 ? form.routeStops[index - 1] : null
-                            const nextStop =
-                              index < form.routeStops.length - 1
-                                ? form.routeStops[index + 1]
-                                : null
-                            const canMoveUp =
-                              showReorderArrows &&
-                              index > 0 &&
-                              !(
-                                stop.role === 'dropoff' && prevStop?.role === 'pickup'
-                              )
-                            const canMoveDown =
-                              showReorderArrows &&
-                              index < form.routeStops.length - 1 &&
-                              !(stop.role === 'pickup' && nextStop?.role === 'dropoff')
-                            return (
-                              <div
-                                key={stop.id}
-                                className="bg-white border border-gray-200 rounded-lg p-3 space-y-2"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                                    <MapPin
-                                      size={16}
-                                      className={
-                                        stop.role === 'pickup'
-                                          ? 'text-emerald-500 shrink-0'
-                                          : stop.role === 'dropoff'
-                                            ? 'text-red-500 shrink-0'
-                                            : 'text-blue-500 shrink-0'
-                                      }
-                                    />
-                                    {stop.role === 'pickup' && (
-                                      <>
-                                        מוצא <span className="text-red-500">*</span>
-                                      </>
-                                    )}
-                                    {stop.role === 'dropoff' && (
-                                      <>
-                                        יעד <span className="text-red-500">*</span>
-                                      </>
-                                    )}
-                                    {stop.role === 'stop' && <>עצירה {stopOrdinal}</>}
-                                  </span>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {stop.role === 'pickup' &&
-                                      form.basePriceList?.base_address && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            form.setStartFromBase(!form.startFromBase)
-                                          }
-                                          aria-pressed={form.startFromBase}
-                                          className={
-                                            form.startFromBase
-                                              ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium transition-colors'
-                                              : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                                          }
-                                        >
-                                          <Home size={14} />
-                                          מהבסיס
-                                        </button>
-                                      )}
-                                    {stop.role === 'dropoff' && (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const next = !form.dropoffToStorage
-                                            form.setDropoffToStorage(next)
-                                            if (next && storageAddress) {
-                                              form.setDropoffAddress({
-                                                address: storageAddress,
-                                                isPinDropped: false,
-                                              })
-                                            }
-                                          }}
-                                          aria-pressed={form.dropoffToStorage}
-                                          className={
-                                            form.dropoffToStorage
-                                              ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-purple-300 bg-purple-50 text-purple-700 text-xs font-medium transition-colors'
-                                              : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                                          }
-                                        >
-                                          <Package size={14} />
-                                          לאחסנה
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            form.setChargeDeadheadReturn(
-                                              !form.chargeDeadheadReturn,
-                                            )
-                                          }
-                                          aria-pressed={form.chargeDeadheadReturn}
-                                          className={
-                                            form.chargeDeadheadReturn
-                                              ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-teal-300 bg-teal-50 text-teal-700 text-xs font-medium transition-colors'
-                                              : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                                          }
-                                        >
-                                          נסיעת סרק
-                                        </button>
-                                      </>
-                                    )}
-                                    {showReorderArrows && (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() => form.moveStopUp(stop.id)}
-                                          disabled={!canMoveUp}
-                                          className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
-                                          aria-label="הזז למעלה"
-                                        >
-                                          <ChevronUp size={16} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => form.moveStopDown(stop.id)}
-                                          disabled={!canMoveDown}
-                                          className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
-                                          aria-label="הזז למטה"
-                                        >
-                                          <ChevronDown size={16} />
-                                        </button>
-                                      </>
-                                    )}
-                                    {stop.role === 'stop' && (
+                      {(() => {
+                        const intermediateStopCount = form.routeStops.filter(
+                          (s) => s.role === 'stop',
+                        ).length
+                        const showReorderArrows = intermediateStopCount > 0
+                        const pickupStop = form.routeStops.find((s) => s.role === 'pickup')
+                        const dropoffStop = form.routeStops.find((s) => s.role === 'dropoff')
+
+                        const renderAddressField = (
+                          stop: (typeof form.routeStops)[number],
+                          stopOrdinal?: number,
+                        ) => {
+                          const isPickup = stop.role === 'pickup'
+                          const isDropoff = stop.role === 'dropoff'
+                          const saveControl = isPickup ? (
+                            <SaveCustomerAddressControl
+                              visible={addressesSave.showSavePickupAddressOption}
+                              address={form.pickupAddress.address}
+                              pending={addressesSave.pendingPickupAddress}
+                              onConfirm={addressesSave.setPendingPickupAddress}
+                              onClear={() =>
+                                addressesSave.setPendingPickupAddress(null)
+                              }
+                              disabled={form.saving}
+                            />
+                          ) : isDropoff ? (
+                            <SaveCustomerAddressControl
+                              visible={addressesSave.showSaveDropoffAddressOption}
+                              address={form.dropoffAddress.address}
+                              pending={addressesSave.pendingDropoffAddress}
+                              onConfirm={addressesSave.setPendingDropoffAddress}
+                              onClear={() =>
+                                addressesSave.setPendingDropoffAddress(null)
+                              }
+                              disabled={form.saving}
+                            />
+                          ) : (
+                            <SaveCustomerAddressControl
+                              visible={shouldOfferSaveCustomerAddress(
+                                form.selectedCustomerId,
+                                stop.address?.address ?? '',
+                                addressesSave.savedAddresses,
+                              )}
+                              address={stop.address?.address ?? ''}
+                              pending={
+                                addressesSave.pendingStopAddresses[stop.id] ?? null
+                              }
+                              onConfirm={(draft) =>
+                                addressesSave.setPendingStopAddress(stop.id, draft)
+                              }
+                              onClear={() =>
+                                addressesSave.setPendingStopAddress(stop.id, null)
+                              }
+                              disabled={form.saving}
+                            />
+                          )
+
+                          return (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <RouteAddressFieldLabel
+                                  tone={
+                                    isPickup
+                                      ? 'origin'
+                                      : isDropoff
+                                        ? 'destination'
+                                        : 'stop'
+                                  }
+                                  required={isPickup || isDropoff}
+                                >
+                                  {isPickup && 'מוצא'}
+                                  {isDropoff && 'יעד'}
+                                  {stop.role === 'stop' && `עצירה ${stopOrdinal}`}
+                                </RouteAddressFieldLabel>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {showReorderArrows && (
+                                    <>
                                       <button
                                         type="button"
-                                        onClick={() => form.removeStop(stop.id)}
-                                        className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-red-500"
-                                        aria-label="הסר עצירה"
+                                        onClick={() => form.moveStopUp(stop.id)}
+                                        disabled={
+                                          form.routeStops.findIndex(
+                                            (s) => s.id === stop.id,
+                                          ) === 0 ||
+                                          (isDropoff &&
+                                            form.routeStops[
+                                              form.routeStops.findIndex(
+                                                (s) => s.id === stop.id,
+                                              ) - 1
+                                            ]?.role === 'pickup')
+                                        }
+                                        className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
+                                        aria-label="הזז למעלה"
                                       >
-                                        <X size={16} />
+                                        <ChevronUp size={16} />
                                       </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => form.moveStopDown(stop.id)}
+                                        disabled={
+                                          form.routeStops.findIndex(
+                                            (s) => s.id === stop.id,
+                                          ) ===
+                                            form.routeStops.length - 1 ||
+                                          (isPickup &&
+                                            form.routeStops[
+                                              form.routeStops.findIndex(
+                                                (s) => s.id === stop.id,
+                                              ) + 1
+                                            ]?.role === 'dropoff')
+                                        }
+                                        className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 disabled:opacity-40"
+                                        aria-label="הזז למטה"
+                                      >
+                                        <ChevronDown size={16} />
+                                      </button>
+                                    </>
+                                  )}
+                                  {stop.role === 'stop' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => form.removeStop(stop.id)}
+                                      className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white text-red-500"
+                                      aria-label="הסר עצירה"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {isPickup && (
+                                <AddressInput
+                                  hideLabel
+                                  value={form.pickupAddress}
+                                  onChange={form.setPickupAddress}
+                                  placeholder="הזן כתובת איסוף..."
+                                  required
+                                  onPinDropClick={() =>
+                                    form.setPinDropModal({
+                                      isOpen: true,
+                                      field: 'pickup',
+                                    })
+                                  }
+                                  extraActions={saveControl}
+                                  isMobile={false}
+                                  narrowColumn
+                                  storageYardConfirm={pickupYardConfirm}
+                                />
+                              )}
+                              {isDropoff && (
+                                <AddressInput
+                                  hideLabel
+                                  value={form.dropoffAddress}
+                                  onChange={form.setDropoffAddress}
+                                  placeholder="הזן כתובת יעד..."
+                                  required
+                                  onPinDropClick={() =>
+                                    form.setPinDropModal({
+                                      isOpen: true,
+                                      field: 'dropoff',
+                                    })
+                                  }
+                                  extraActions={saveControl}
+                                  isMobile={false}
+                                  narrowColumn
+                                  storageYardConfirm={dropoffYardConfirm}
+                                />
+                              )}
+                              {stop.role === 'stop' && (
+                                <AddressInput
+                                  hideLabel
+                                  value={stop.address}
+                                  onChange={(addr: AddressData) =>
+                                    form.updateStop(stop.id, { address: addr })
+                                  }
+                                  placeholder="הזן כתובת עצירה..."
+                                  onPinDropClick={() =>
+                                    form.setPinDropModal({
+                                      isOpen: true,
+                                      field: `routestop:${stop.id}`,
+                                    })
+                                  }
+                                  extraActions={saveControl}
+                                  isMobile={false}
+                                  narrowColumn
+                                />
+                              )}
+                            </div>
+                          )
+                        }
+
+                        if (!showReorderArrows && pickupStop && dropoffStop) {
+                          return (
+                            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                              <div className="p-3 space-y-3">
+                                <RouteOriginDestGrid
+                                  stacked
+                                  origin={renderAddressField(pickupStop)}
+                                  destination={renderAddressField(dropoffStop)}
+                                  underDestination={
+                                    <DropToStorageToggle
+                                      active={form.dropoffToStorage}
+                                      onClick={() => {
+                                        const next = !form.dropoffToStorage
+                                        form.setDropoffToStorage(next)
+                                        if (next && storageAddress) {
+                                          form.setDropoffAddress({
+                                            address: storageAddress,
+                                            isPinDropped: false,
+                                          })
+                                        }
+                                      }}
+                                    />
+                                  }
+                                />
+                                <RouteAddStopButton onClick={form.addStop} />
+                              </div>
+                              <RouteAddressesFooter
+                                distance={
+                                  form.distanceLoading || form.baseToPickupLoading ? (
+                                    <span className="inline-flex items-center gap-2 text-gt-text-tertiary">
+                                      <Loader2 size={14} className="animate-spin" />
+                                      מחשב מרחק...
+                                    </span>
+                                  ) : totalDistance ? (
+                                    <>
+                                      מרחק כולל {totalDistance.distanceKm.toFixed(1)} ק״מ
+                                      <span className="mx-1.5 text-gt-text-tertiary">
+                                        •
+                                      </span>
+                                      {totalDistance.durationMinutes} דק׳
+                                    </>
+                                  ) : (
+                                    <>מרחק כולל 0.0 ק״מ</>
+                                  )
+                                }
+                                showStartFromBase={!!form.basePriceList?.base_address}
+                                startFromBase={form.startFromBase}
+                                onStartFromBaseChange={form.setStartFromBase}
+                                showDeadhead
+                                chargeDeadheadReturn={form.chargeDeadheadReturn}
+                                onChargeDeadheadReturnChange={
+                                  form.setChargeDeadheadReturn
+                                }
+                                deadheadHints={
+                                  <>
+                                    {form.chargeDeadheadReturn &&
+                                      form.dropoffToBaseLoading && (
+                                        <p className="text-xs text-gray-400">
+                                          מחשב מרחק חזרה לאחסנה...
+                                        </p>
+                                      )}
+                                    {form.chargeDeadheadReturn &&
+                                      !form.dropoffToBaseLoading &&
+                                      form.dropoffToBaseDistance?.distanceKm !=
+                                        null && (
+                                        <p className="text-xs text-gray-400">
+                                          מרחק חזרה לאחסנה:{' '}
+                                          {form.dropoffToBaseDistance.distanceKm.toFixed(
+                                            1,
+                                          )}{' '}
+                                          ק״מ
+                                        </p>
+                                      )}
+                                    {form.chargeDeadheadReturn &&
+                                      activeDeadheadRate <= 0 && (
+                                        <p className="text-xs text-amber-600">
+                                          לא הוגדר מחיר לק״מ סרק במחירון
+                                        </p>
+                                      )}
+                                  </>
+                                }
+                              />
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+                            <div className="p-3 space-y-2">
+                              {form.routeStops.map((stop, index) => {
+                                const stopOrdinal =
+                                  stop.role === 'stop'
+                                    ? form.routeStops
+                                        .slice(0, index + 1)
+                                        .filter((s) => s.role === 'stop').length
+                                    : undefined
+                                return (
+                                  <div
+                                    key={stop.id}
+                                    className="rounded-lg border border-gray-200 p-3 space-y-2"
+                                  >
+                                    {renderAddressField(stop, stopOrdinal)}
+                                    {stop.role === 'dropoff' && (
+                                      <DropToStorageToggle
+                                        active={form.dropoffToStorage}
+                                        onClick={() => {
+                                          const next = !form.dropoffToStorage
+                                          form.setDropoffToStorage(next)
+                                          if (next && storageAddress) {
+                                            form.setDropoffAddress({
+                                              address: storageAddress,
+                                              isPinDropped: false,
+                                            })
+                                          }
+                                        }}
+                                      />
                                     )}
                                   </div>
-                                </div>
-                                {stop.role === 'pickup' && (
-                                  <>
-                                    <AddressInput
-                                      hideLabel
-                                      value={form.pickupAddress}
-                                      onChange={form.setPickupAddress}
-                                      placeholder="הזן כתובת איסוף..."
-                                      required
-                                      onPinDropClick={() =>
-                                        form.setPinDropModal({ isOpen: true, field: 'pickup' })
-                                      }
-                                      isMobile={false}
-                                      narrowColumn
-                                      storageYardConfirm={pickupYardConfirm}
-                                    />
-                                    <SaveCustomerAddressControl
-                                      className="mt-1.5"
-                                      visible={addressesSave.showSavePickupAddressOption}
-                                      address={form.pickupAddress.address}
-                                      pending={addressesSave.pendingPickupAddress}
-                                      onConfirm={addressesSave.setPendingPickupAddress}
-                                      onClear={() => addressesSave.setPendingPickupAddress(null)}
-                                      disabled={form.saving}
-                                    />
-                                  </>
-                                )}
-                                {stop.role === 'dropoff' && (
-                                  <>
-                                    <AddressInput
-                                      hideLabel
-                                      value={form.dropoffAddress}
-                                      onChange={form.setDropoffAddress}
-                                      placeholder="הזן כתובת יעד..."
-                                      required
-                                      onPinDropClick={() =>
-                                        form.setPinDropModal({ isOpen: true, field: 'dropoff' })
-                                      }
-                                      isMobile={false}
-                                      narrowColumn
-                                      storageYardConfirm={dropoffYardConfirm}
-                                    />
-                                    <SaveCustomerAddressControl
-                                      className="mt-1.5"
-                                      visible={addressesSave.showSaveDropoffAddressOption}
-                                      address={form.dropoffAddress.address}
-                                      pending={addressesSave.pendingDropoffAddress}
-                                      onConfirm={addressesSave.setPendingDropoffAddress}
-                                      onClear={() => addressesSave.setPendingDropoffAddress(null)}
-                                      disabled={form.saving}
-                                    />
-                                  </>
-                                )}
-                                {stop.role === 'stop' && (
-                                  <>
-                                    <AddressInput
-                                      hideLabel
-                                      value={stop.address}
-                                      onChange={(addr: AddressData) =>
-                                        form.updateStop(stop.id, { address: addr })
-                                      }
-                                      placeholder="הזן כתובת עצירה..."
-                                      onPinDropClick={() =>
-                                        form.setPinDropModal({
-                                          isOpen: true,
-                                          field: `routestop:${stop.id}`,
-                                        })
-                                      }
-                                      isMobile={false}
-                                      narrowColumn
-                                    />
-                                    <SaveCustomerAddressControl
-                                      className="mt-1.5"
-                                      visible={shouldOfferSaveCustomerAddress(
-                                        form.selectedCustomerId,
-                                        stop.address?.address ?? '',
-                                        addressesSave.savedAddresses
-                                      )}
-                                      address={stop.address?.address ?? ''}
-                                      pending={addressesSave.pendingStopAddresses[stop.id] ?? null}
-                                      onConfirm={(draft) =>
-                                        addressesSave.setPendingStopAddress(stop.id, draft)
-                                      }
-                                      onClear={() =>
-                                        addressesSave.setPendingStopAddress(stop.id, null)
-                                      }
-                                      disabled={form.saving}
-                                    />
-                                  </>
-                                )}
-                              </div>
-                            )
-                          })
-                          })()}
-                          <div className="border-t border-gray-100 pt-2 mt-1">
-                            <button
-                              type="button"
-                              onClick={form.addStop}
-                              className="inline-flex items-center gap-1 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:underline underline-offset-2 transition-colors"
-                            >
-                              <Plus size={14} className="shrink-0" />
-                              הוסף נקודת עצירה
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Deadhead hint */}
-                        {form.chargeDeadheadReturn && form.dropoffToBaseLoading && (
-                          <p className="text-xs text-gray-400 mt-2">
-                            מחשב מרחק חזרה לאחסנה...
-                          </p>
-                        )}
-                        {form.chargeDeadheadReturn &&
-                          !form.dropoffToBaseLoading &&
-                          form.dropoffToBaseDistance?.distanceKm != null && (
-                            <p className="text-xs text-gray-400 mt-2">
-                              מרחק חזרה לאחסנה:{' '}
-                              {form.dropoffToBaseDistance.distanceKm.toFixed(1)} ק״מ
-                            </p>
-                          )}
-                        {form.chargeDeadheadReturn && activeDeadheadRate <= 0 && (
-                          <p className="text-xs text-amber-600 mt-2">
-                            לא הוגדר מחיר לק״מ סרק במחירון
-                          </p>
-                        )}
-
-                        {/* Distance */}
-                        {(form.distanceLoading || form.baseToPickupLoading) && (
-                          <div className="mt-2 flex items-center gap-2 text-gray-500">
-                            <Loader2 size={16} className="animate-spin" />
-                            <span className="text-sm">מחשב מרחק...</span>
-                          </div>
-                        )}
-                        {!form.distanceLoading &&
-                          !form.baseToPickupLoading &&
-                          totalDistance && (
-                            <div className="mt-2 flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <Navigation
-                                size={16}
-                                className="text-blue-600 flex-shrink-0"
-                              />
-                              <span className="text-sm text-blue-800">
-                                <span className="font-bold">{totalDistance.distanceKm}</span>{' '}
-                                ק״מ
-                                <span className="mx-2">•</span>
-                                <span className="font-bold">
-                                  {totalDistance.durationMinutes}
-                                </span>{' '}
-                                דק׳
-                              </span>
+                                )
+                              })}
+                              <RouteAddStopButton onClick={form.addStop} />
                             </div>
-                          )}
-                      </div>
+                            <RouteAddressesFooter
+                              distance={
+                                form.distanceLoading || form.baseToPickupLoading ? (
+                                  <span className="inline-flex items-center gap-2 text-gt-text-tertiary">
+                                    <Loader2 size={14} className="animate-spin" />
+                                    מחשב מרחק...
+                                  </span>
+                                ) : totalDistance ? (
+                                  <>
+                                    מרחק כולל {totalDistance.distanceKm.toFixed(1)} ק״מ
+                                    <span className="mx-1.5 text-gt-text-tertiary">•</span>
+                                    {totalDistance.durationMinutes} דק׳
+                                  </>
+                                ) : (
+                                  <>מרחק כולל 0.0 ק״מ</>
+                                )
+                              }
+                              showStartFromBase={!!form.basePriceList?.base_address}
+                              startFromBase={form.startFromBase}
+                              onStartFromBaseChange={form.setStartFromBase}
+                              showDeadhead
+                              chargeDeadheadReturn={form.chargeDeadheadReturn}
+                              onChargeDeadheadReturnChange={
+                                form.setChargeDeadheadReturn
+                              }
+                              deadheadHints={
+                                <>
+                                  {form.chargeDeadheadReturn &&
+                                    form.dropoffToBaseLoading && (
+                                      <p className="text-xs text-gray-400">
+                                        מחשב מרחק חזרה לאחסנה...
+                                      </p>
+                                    )}
+                                  {form.chargeDeadheadReturn &&
+                                    !form.dropoffToBaseLoading &&
+                                    form.dropoffToBaseDistance?.distanceKm != null && (
+                                      <p className="text-xs text-gray-400">
+                                        מרחק חזרה לאחסנה:{' '}
+                                        {form.dropoffToBaseDistance.distanceKm.toFixed(
+                                          1,
+                                        )}{' '}
+                                        ק״מ
+                                      </p>
+                                    )}
+                                  {form.chargeDeadheadReturn &&
+                                    activeDeadheadRate <= 0 && (
+                                      <p className="text-xs text-amber-600">
+                                        לא הוגדר מחיר לק״מ סרק במחירון
+                                      </p>
+                                    )}
+                                </>
+                              }
+                            />
+                          </div>
+                        )
+                      })()}
 
                       {/* Location surcharges */}
                       {form.locationSurchargesData.filter((l) => l.is_active).length >

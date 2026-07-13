@@ -1,8 +1,15 @@
 'use client'
 
-import { VehicleLookup, DefectSelector, StartFromBase, TowTruckTypeSelector, ServiceSurchargeSelector, LocationSurchargeSelector, SelectedService } from '../shared'
-import { Loader2, Navigation, Package, Car, MapPin, Home, Plus, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { VehicleLookup, DefectSelector, TowTruckTypeSelector, ServiceSurchargeSelector, LocationSurchargeSelector, SelectedService } from '../shared'
+import { Loader2, Package, Car, MapPin, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { AddressInput, AddressData } from './AddressInput'
+import {
+  DropToStorageToggle,
+  RouteAddStopButton,
+  RouteAddressFieldLabel,
+  RouteAddressesFooter,
+  RouteOriginDestGrid,
+} from './RouteAddressesSection'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { type ManualSurcharge } from '../../../lib/utils/manual-surcharge'
@@ -427,7 +434,7 @@ export function SingleRoute({
 
   const renderRouteFields = () => (
     <>
-       {/* כתובות */}
+      {/* כתובות */}
       {isMobile ? (
         <div className="space-y-2">
           {routeStops.map((stop, index) => {
@@ -436,72 +443,75 @@ export function SingleRoute({
                 ? routeStops.slice(0, index + 1).filter((s) => s.role === 'stop').length
                 : 0
 
+            const saveAction =
+              stop.role === 'pickup' &&
+              addressSaveEnabled &&
+              onConfirmPendingPickupAddress &&
+              onClearPendingPickupAddress ? (
+                <SaveCustomerAddressControl
+                  visible={shouldOfferSaveCustomerAddress(
+                    selectedCustomerId,
+                    pickupAddress.address,
+                    savedCustomerAddresses
+                  )}
+                  address={pickupAddress.address}
+                  pending={pendingPickupAddress}
+                  onConfirm={onConfirmPendingPickupAddress}
+                  onClear={onClearPendingPickupAddress}
+                  disabled={saveAddressDisabled}
+                />
+              ) : stop.role === 'dropoff' &&
+                addressSaveEnabled &&
+                onConfirmPendingDropoffAddress &&
+                onClearPendingDropoffAddress ? (
+                <SaveCustomerAddressControl
+                  visible={shouldOfferSaveCustomerAddress(
+                    selectedCustomerId,
+                    dropoffAddress.address,
+                    savedCustomerAddresses
+                  )}
+                  address={dropoffAddress.address}
+                  pending={pendingDropoffAddress}
+                  onConfirm={onConfirmPendingDropoffAddress}
+                  onClear={onClearPendingDropoffAddress}
+                  disabled={saveAddressDisabled}
+                />
+              ) : stop.role === 'stop' &&
+                addressSaveEnabled &&
+                onConfirmPendingStopAddress &&
+                onClearPendingStopAddress ? (
+                <SaveCustomerAddressControl
+                  visible={shouldOfferSaveCustomerAddress(
+                    selectedCustomerId,
+                    stop.address?.address ?? '',
+                    savedCustomerAddresses
+                  )}
+                  address={stop.address?.address ?? ''}
+                  pending={pendingStopAddresses[stop.id] ?? null}
+                  onConfirm={(draft) => onConfirmPendingStopAddress(stop.id, draft)}
+                  onClear={() => onClearPendingStopAddress(stop.id)}
+                  disabled={saveAddressDisabled}
+                />
+              ) : null
+
             return (
               <div key={stop.id} className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
-                    <MapPin
-                      size={16}
-                      className={
-                        stop.role === 'pickup'
-                          ? 'text-emerald-500 shrink-0'
-                          : stop.role === 'dropoff'
-                            ? 'text-red-500 shrink-0'
-                            : 'text-blue-500 shrink-0'
-                      }
-                    />
-                    {stop.role === 'pickup' && (
-                      <>
-                        מוצא <span className="text-red-500">*</span>
-                      </>
-                    )}
-                    {stop.role === 'dropoff' && (
-                      <>
-                        יעד <span className="text-red-500">*</span>
-                      </>
-                    )}
+                  <RouteAddressFieldLabel
+                    tone={
+                      stop.role === 'pickup'
+                        ? 'origin'
+                        : stop.role === 'dropoff'
+                          ? 'destination'
+                          : 'stop'
+                    }
+                    required={stop.role === 'pickup' || stop.role === 'dropoff'}
+                  >
+                    {stop.role === 'pickup' && 'מוצא'}
+                    {stop.role === 'dropoff' && 'יעד'}
                     {stop.role === 'stop' && <>עצירה {stopOrdinal}</>}
-                  </span>
+                  </RouteAddressFieldLabel>
                   <div className="flex items-center gap-1 shrink-0">
-                    {stop.role === 'pickup' && basePriceList?.base_address && (
-                      <button
-                        type="button"
-                        onClick={() => onStartFromBaseChange(!startFromBase)}
-                        aria-pressed={startFromBase}
-                        className={
-                          startFromBase
-                            ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-blue-300 bg-blue-50 text-blue-700 text-xs font-medium transition-colors'
-                            : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                        }
-                      >
-                        <Home size={16} />
-                        מהבסיס
-                      </button>
-                    )}
-                    {stop.role === 'dropoff' && onDropoffToStorageChange && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = !dropoffToStorage
-                          onDropoffToStorageChange(next)
-                          if (next && storageAddress) {
-                            onDropoffAddressChange({
-                              address: storageAddress,
-                              isPinDropped: false,
-                            })
-                          }
-                        }}
-                        aria-pressed={dropoffToStorage}
-                        className={
-                          dropoffToStorage
-                            ? 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-purple-300 bg-purple-50 text-purple-700 text-xs font-medium transition-colors'
-                            : 'inline-flex items-center gap-1.5 min-h-[36px] px-2.5 rounded-full border border-gray-200 bg-gray-50 text-gray-500 text-xs font-medium transition-colors'
-                        }
-                      >
-                        <Package size={16} />
-                        לאחסנה
-                      </button>
-                    )}
                     <button
                       type="button"
                       onClick={() => moveStopUp(stop.id)}
@@ -533,20 +543,85 @@ export function SingleRoute({
                   </div>
                 </div>
                 {stop.role === 'pickup' && (
+                  <AddressInput
+                    hideLabel
+                    value={pickupAddress}
+                    onChange={onPickupAddressChange}
+                    placeholder="הזן כתובת איסוף..."
+                    required
+                    onPinDropClick={() => onPinDropClick('pickup')}
+                    extraActions={saveAction}
+                    isMobile
+                    storageYardConfirm={pickupYardConfirm}
+                  />
+                )}
+                {stop.role === 'dropoff' && (
                   <>
                     <AddressInput
                       hideLabel
-                      value={pickupAddress}
-                      onChange={onPickupAddressChange}
-                      placeholder="הזן כתובת איסוף..."
+                      value={dropoffAddress}
+                      onChange={onDropoffAddressChange}
+                      placeholder="הזן כתובת יעד..."
                       required
-                      onPinDropClick={() => onPinDropClick('pickup')}
+                      onPinDropClick={() => onPinDropClick('dropoff')}
+                      extraActions={saveAction}
                       isMobile
-                      storageYardConfirm={pickupYardConfirm}
+                      storageYardConfirm={dropoffYardConfirm}
                     />
-                    {addressSaveEnabled && onConfirmPendingPickupAddress && onClearPendingPickupAddress && (
+                    {onDropoffToStorageChange && (
+                      <DropToStorageToggle
+                        active={dropoffToStorage}
+                        onClick={() => {
+                          const next = !dropoffToStorage
+                          onDropoffToStorageChange(next)
+                          if (next && storageAddress) {
+                            onDropoffAddressChange({
+                              address: storageAddress,
+                              isPinDropped: false,
+                            })
+                          }
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+                {stop.role === 'stop' && (
+                  <AddressInput
+                    hideLabel
+                    value={stop.address}
+                    onChange={(addr: AddressData) => updateStop(stop.id, { address: addr })}
+                    placeholder="הזן כתובת עצירה..."
+                    onPinDropClick={() => onPinDropClick(`routestop:${stop.id}`)}
+                    extraActions={saveAction}
+                    isMobile
+                  />
+                )}
+              </div>
+            )
+          })}
+          <RouteAddStopButton onClick={addStop} />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <RouteOriginDestGrid
+            stacked={isNarrow}
+            origin={
+              <div>
+                <RouteAddressFieldLabel tone="origin" required>
+                  מוצא
+                </RouteAddressFieldLabel>
+                <AddressInput
+                  hideLabel
+                  value={pickupAddress}
+                  onChange={onPickupAddressChange}
+                  placeholder="הזן כתובת איסוף..."
+                  required
+                  onPinDropClick={() => onPinDropClick('pickup')}
+                  extraActions={
+                    addressSaveEnabled &&
+                    onConfirmPendingPickupAddress &&
+                    onClearPendingPickupAddress ? (
                       <SaveCustomerAddressControl
-                        className="mt-1.5"
                         visible={shouldOfferSaveCustomerAddress(
                           selectedCustomerId,
                           pickupAddress.address,
@@ -558,24 +633,31 @@ export function SingleRoute({
                         onClear={onClearPendingPickupAddress}
                         disabled={saveAddressDisabled}
                       />
-                    )}
-                  </>
-                )}
-                {stop.role === 'dropoff' && (
-                  <>
-                    <AddressInput
-                      hideLabel
-                      value={dropoffAddress}
-                      onChange={onDropoffAddressChange}
-                      placeholder="הזן כתובת יעד..."
-                      required
-                      onPinDropClick={() => onPinDropClick('dropoff')}
-                      isMobile
-                      storageYardConfirm={dropoffYardConfirm}
-                    />
-                    {addressSaveEnabled && onConfirmPendingDropoffAddress && onClearPendingDropoffAddress && (
+                    ) : null
+                  }
+                  isMobile={isMobileSized}
+                  narrowColumn={isNarrow && !isMobileSized}
+                  storageYardConfirm={pickupYardConfirm}
+                />
+              </div>
+            }
+            destination={
+              <div>
+                <RouteAddressFieldLabel tone="destination" required>
+                  יעד
+                </RouteAddressFieldLabel>
+                <AddressInput
+                  hideLabel
+                  value={dropoffAddress}
+                  onChange={onDropoffAddressChange}
+                  placeholder="הזן כתובת יעד..."
+                  required
+                  onPinDropClick={() => onPinDropClick('dropoff')}
+                  extraActions={
+                    addressSaveEnabled &&
+                    onConfirmPendingDropoffAddress &&
+                    onClearPendingDropoffAddress ? (
                       <SaveCustomerAddressControl
-                        className="mt-1.5"
                         visible={shouldOfferSaveCustomerAddress(
                           selectedCustomerId,
                           dropoffAddress.address,
@@ -587,180 +669,57 @@ export function SingleRoute({
                         onClear={onClearPendingDropoffAddress}
                         disabled={saveAddressDisabled}
                       />
-                    )}
-                  </>
-                )}
-                {stop.role === 'stop' && (
-                  <>
-                    <AddressInput
-                      hideLabel
-                      value={stop.address}
-                      onChange={(addr: AddressData) => updateStop(stop.id, { address: addr })}
-                      placeholder="הזן כתובת עצירה..."
-                      onPinDropClick={() => onPinDropClick(`routestop:${stop.id}`)}
-                      isMobile
-                    />
-                    {addressSaveEnabled &&
-                      onConfirmPendingStopAddress &&
-                      onClearPendingStopAddress && (
-                        <SaveCustomerAddressControl
-                          className="mt-1.5"
-                          visible={shouldOfferSaveCustomerAddress(
-                            selectedCustomerId,
-                            stop.address?.address ?? '',
-                            savedCustomerAddresses
-                          )}
-                          address={stop.address?.address ?? ''}
-                          pending={pendingStopAddresses[stop.id] ?? null}
-                          onConfirm={(draft) => onConfirmPendingStopAddress(stop.id, draft)}
-                          onClear={() => onClearPendingStopAddress(stop.id)}
-                          disabled={saveAddressDisabled}
-                        />
-                      )}
-                  </>
-                )}
-              </div>
-            )
-          })}
-          <div className="border-t border-gray-100 pt-2 mt-1">
-            <button
-              type="button"
-              onClick={addStop}
-              className="inline-flex items-center gap-1 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:underline underline-offset-2 transition-colors"
-            >
-              <Plus size={14} className="shrink-0" />
-              הוסף נקודת עצירה
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className={isNarrow ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
-          <div className="flex items-start gap-2">
-            <div className="w-3 h-3 bg-emerald-500 rounded-full flex-shrink-0 mt-9"></div>
-            <div className="flex-1">
-              <AddressInput
-                label="מוצא"
-                value={pickupAddress}
-                onChange={onPickupAddressChange}
-                placeholder="הזן כתובת איסוף..."
-                required
-                onPinDropClick={() => onPinDropClick('pickup')}
-                isMobile={isMobileSized}
-                narrowColumn={isNarrow && !isMobileSized}
-                storageYardConfirm={pickupYardConfirm}
-              />
-              {addressSaveEnabled && onConfirmPendingPickupAddress && onClearPendingPickupAddress && (
-                <SaveCustomerAddressControl
-                  className="mt-1.5"
-                  visible={shouldOfferSaveCustomerAddress(
-                    selectedCustomerId,
-                    pickupAddress.address,
-                    savedCustomerAddresses
-                  )}
-                  address={pickupAddress.address}
-                  pending={pendingPickupAddress}
-                  onConfirm={onConfirmPendingPickupAddress}
-                  onClear={onClearPendingPickupAddress}
-                  disabled={saveAddressDisabled}
-                />
-              )}
-            </div>
-          </div>
-          <div className="flex items-start gap-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0 mt-9"></div>
-            <div className="flex-1">
-              <AddressInput
-                label="יעד"
-                value={dropoffAddress}
-                onChange={onDropoffAddressChange}
-                placeholder="הזן כתובת יעד..."
-                required
-                onPinDropClick={() => onPinDropClick('dropoff')}
-                isMobile={isMobileSized}
-                narrowColumn={isNarrow && !isMobileSized}
-                storageYardConfirm={dropoffYardConfirm}
-              />
-              {addressSaveEnabled && onConfirmPendingDropoffAddress && onClearPendingDropoffAddress && (
-                <SaveCustomerAddressControl
-                  className="mt-1.5"
-                  visible={shouldOfferSaveCustomerAddress(
-                    selectedCustomerId,
-                    dropoffAddress.address,
-                    savedCustomerAddresses
-                  )}
-                  address={dropoffAddress.address}
-                  pending={pendingDropoffAddress}
-                  onConfirm={onConfirmPendingDropoffAddress}
-                  onClear={onClearPendingDropoffAddress}
-                  disabled={saveAddressDisabled}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* צ'קבוקסים - אחסנה + יציאה מהבסיס (דסקטופ בלבד; במובייל הומרו לכפתורים ליד הכתובות) */}
-      {!isMobile && (
-        <div className={isNarrow ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-2 gap-2'}>
-          {/* יעד לאחסנה */}
-          {onDropoffToStorageChange && (
-            <label className="flex items-center gap-2 cursor-pointer bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors p-2">
-              <input
-                type="checkbox"
-                checked={dropoffToStorage}
-                onChange={(e) => {
-                  onDropoffToStorageChange(e.target.checked)
-                  if (e.target.checked && storageAddress) {
-                    onDropoffAddressChange({
-                      address: storageAddress,
-                      isPinDropped: false
-                    })
+                    ) : null
                   }
-                }}
-                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-              />
-              <Package size={16} className="text-purple-600" />
-              <span className="text-xs font-medium text-gray-700">לאחסנה</span>
-            </label>
-          )}
-
-          {/* יציאה מהבסיס */}
-          {basePriceList?.base_address && (
-            <label className="flex items-center gap-2 cursor-pointer bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors p-2">
-              <input
-                type="checkbox"
-                checked={startFromBase}
-                onChange={(e) => onStartFromBaseChange(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-base">🏠</span>
-              <span className="text-xs font-medium text-gray-700">מהבסיס</span>
-            </label>
-          )}
+                  isMobile={isMobileSized}
+                  narrowColumn={isNarrow && !isMobileSized}
+                  storageYardConfirm={dropoffYardConfirm}
+                />
+              </div>
+            }
+            underDestination={
+              onDropoffToStorageChange ? (
+                <DropToStorageToggle
+                  active={dropoffToStorage}
+                  onClick={() => {
+                    const next = !dropoffToStorage
+                    onDropoffToStorageChange(next)
+                    if (next && storageAddress) {
+                      onDropoffAddressChange({
+                        address: storageAddress,
+                        isPinDropped: false,
+                      })
+                    }
+                  }}
+                />
+              ) : null
+            }
+          />
+          <RouteAddStopButton onClick={addStop} />
         </div>
       )}
 
-      {/* תצוגת מרחק */}
-      {(distanceLoading || baseToPickupLoading) && (
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-3 text-gray-500">
-            <Loader2 size={20} className="animate-spin" />
-            <span className="text-sm">מחשב מרחק...</span>
-          </div>
-        </div>
-      )}
-
-      {!distanceLoading && !baseToPickupLoading && totalDistance && (
-        <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-          <Navigation size={16} className="text-blue-600 flex-shrink-0" />
-          <span className="text-sm text-blue-800">
-            <span className="font-bold">{totalDistance.distanceKm}</span> ק״מ
-            <span className="mx-2">•</span>
-            <span className="font-bold">{totalDistance.durationMinutes}</span> דק׳
-          </span>
-        </div>
-      )}
+      <RouteAddressesFooter
+        distance={
+          distanceLoading || baseToPickupLoading ? (
+            <span className="inline-flex items-center gap-2 text-gt-text-tertiary">
+              <Loader2 size={14} className="animate-spin" />
+              מחשב מרחק...
+            </span>
+          ) : totalDistance ? (
+            <>
+              מרחק כולל {totalDistance.distanceKm} ק״מ
+              <span className="mx-1.5 text-gt-text-tertiary">•</span>
+              {totalDistance.durationMinutes} דק׳
+            </>
+          ) : (
+            <>מרחק כולל 0.0 ק״מ</>
+          )
+        }
+        showStartFromBase={!!basePriceList?.base_address}
+        startFromBase={startFromBase}
+        onStartFromBaseChange={onStartFromBaseChange}
+      />
 
       {/* תוספות זמן - אוטומטיות (דסקטופ בלבד; במובייל יוצגו בסעיף תוספות זמן/מחיר בעתיד) */}
       {!isMobile && activeTimeSurcharges.length > 0 && (

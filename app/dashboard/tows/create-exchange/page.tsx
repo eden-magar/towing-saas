@@ -1721,7 +1721,7 @@ function CreateExchangeTowForm({
                                       : 'bg-white text-gray-600 border-gt-border-subtle hover:border-gt-border-strong'
                                   }`}
                                 >
-                                  יציאה מהחניון
+                                  מהחניון למוצא
                                 </button>
                               </div>
                               <div className="border-t border-gray-100 pt-3">

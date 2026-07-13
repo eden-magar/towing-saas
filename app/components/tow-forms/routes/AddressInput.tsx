@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { Link2, Loader2, MapPin } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { StorageYardConfirmDialog } from '../shared/StorageYardConfirmDialog'
@@ -78,6 +78,11 @@ interface AddressInputProps {
   hideLabel?: boolean
   required?: boolean
   onPinDropClick?: () => void
+  /**
+   * Extra inline actions after map-pin + paste-link (e.g. save-address bookmark).
+   * Layout slot only — does not affect Places / link resolve.
+   */
+  extraActions?: ReactNode
   // External ref for focus control
   inputRef?: React.RefObject<HTMLInputElement>
   isMobile?: boolean
@@ -102,6 +107,7 @@ export function AddressInput({
   hideLabel,
   required,
   onPinDropClick,
+  extraActions,
   inputRef: externalRef,
   isMobile = false,
   narrowColumn = false,
@@ -464,7 +470,7 @@ export function AddressInput({
 
   const renderInputRow = (inputClasses: string) => (
     <>
-          <div className="flex gap-2 items-center min-w-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <input
           ref={inputRef}
           type="text"
@@ -475,7 +481,7 @@ export function AddressInput({
           readOnly={readOnly}
           className={inputClasses}
         />
-        {renderLinkButton()}
+        {/* Fixed order on every field: map pin → paste link → optional save bookmark */}
         {onPinDropClick && (
           <button
             type="button"
@@ -486,6 +492,8 @@ export function AddressInput({
             <MapPin size={actionIconSize} />
           </button>
         )}
+        {renderLinkButton()}
+        {extraActions}
       </div>
       {renderLinkPanel()}
     </>

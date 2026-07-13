@@ -44,6 +44,13 @@ import {
   type RouteStop,
 } from '../../../hooks/useTowForm'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
+import {
+  DropToStorageToggle,
+  RouteAddStopButton,
+  RouteAddressFieldLabel,
+  RouteAddressesFooter,
+  RouteOriginDestGrid,
+} from '../../../components/tow-forms/routes/RouteAddressesSection'
 import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
@@ -1245,7 +1252,7 @@ function CreateTowForm({
   const isStopNotesExpanded = (stop: RouteStop) =>
     !!(stop.orderNotes?.trim()) || expandedStopNotesIds.has(stop.id)
 
-  const renderRouteStopFields = (stop: RouteStop) => {
+  const renderRouteStopFields = (stop: RouteStop, options?: { hideHeading?: boolean }) => {
     const dropoffRow = findDropoffRouteStop(routeStops)
     const isLastDropoff = stop.role === 'dropoff' && stop.id === dropoffRow?.id
     const routeAddressStatus =
@@ -1255,27 +1262,72 @@ function CreateTowForm({
           ? getRequestFieldStatus('dropoffAddress', stop.address?.address ?? '')
           : null
 
+    const saveAddressAction =
+      stop.role === 'pickup' ? (
+        <SaveCustomerAddressControl
+          visible={showSavePickupAddressOption}
+          address={stop.address?.address ?? ''}
+          pending={pendingPickupAddress}
+          onConfirm={setPendingPickupAddress}
+          onClear={() => setPendingPickupAddress(null)}
+          disabled={saving}
+        />
+      ) : stop.role === 'dropoff' ? (
+        <SaveCustomerAddressControl
+          visible={showSaveDropoffAddressOption}
+          address={stop.address?.address ?? ''}
+          pending={pendingDropoffAddress}
+          onConfirm={setPendingDropoffAddress}
+          onClear={() => setPendingDropoffAddress(null)}
+          disabled={saving}
+        />
+      ) : (
+        <SaveCustomerAddressControl
+          visible={shouldOfferSaveCustomerAddress(
+            selectedCustomerId,
+            stop.address?.address ?? '',
+            savedAddresses
+          )}
+          address={stop.address?.address ?? ''}
+          pending={pendingStopAddresses[stop.id] ?? null}
+          onConfirm={(draft) => setPendingStopAddress(stop.id, draft)}
+          onClear={() => setPendingStopAddress(stop.id, null)}
+          disabled={saving}
+        />
+      )
+
     return (
       <div className="space-y-3 w-full">
-        <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
-          <span className="text-xs font-semibold text-gt-text-secondary">
-            {getRouteStopHeadingLabel(stop)}
-          </span>
-          {stop.role === 'stop' && (
-            <button
-              type="button"
-              onClick={() => removeStop(stop.id)}
-              className={
-                isMobile
-                  ? 'p-2.5 text-gt-text-tertiary hover:text-red-500 shrink-0'
-                  : 'p-1 text-gt-text-tertiary hover:text-red-500 shrink-0'
+        {!options?.hideHeading && (
+          <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
+            <RouteAddressFieldLabel
+              tone={
+                stop.role === 'pickup'
+                  ? 'origin'
+                  : stop.role === 'dropoff'
+                    ? 'destination'
+                    : 'stop'
               }
-              aria-label="הסר נקודת עצירה"
+              required={stop.role === 'pickup' || stop.role === 'dropoff'}
             >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+              {getRouteStopHeadingLabel(stop)}
+            </RouteAddressFieldLabel>
+            {stop.role === 'stop' && (
+              <button
+                type="button"
+                onClick={() => removeStop(stop.id)}
+                className={
+                  isMobile
+                    ? 'p-2.5 text-gt-text-tertiary hover:text-red-500 shrink-0'
+                    : 'p-1 text-gt-text-tertiary hover:text-red-500 shrink-0'
+                }
+                aria-label="הסר נקודת עצירה"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         <AddressInput
           value={stop.address}
@@ -1283,6 +1335,7 @@ function CreateTowForm({
           label={routeRoleLabel(stop.role)}
           hideLabel
           onPinDropClick={() => handlePinDropOpen(`routestop:${stop.id}`)}
+          extraActions={saveAddressAction}
           className={addressInputStatusClass(
             '[&_input]:h-10 [&_input]:border-gt-border [&_input]:focus:border-gt-brand [&_input]:focus:ring-[3px] [&_input]:focus:ring-gt-brand/15 [&_button]:h-10 [&_button]:border-gt-border [&_button]:px-3',
             routeAddressStatus,
@@ -1295,40 +1348,6 @@ function CreateTowForm({
                 : null
           }
         />
-        {stop.role === 'pickup' && (
-          <SaveCustomerAddressControl
-            visible={showSavePickupAddressOption}
-            address={stop.address?.address ?? ''}
-            pending={pendingPickupAddress}
-            onConfirm={setPendingPickupAddress}
-            onClear={() => setPendingPickupAddress(null)}
-            disabled={saving}
-          />
-        )}
-        {stop.role === 'dropoff' && (
-          <SaveCustomerAddressControl
-            visible={showSaveDropoffAddressOption}
-            address={stop.address?.address ?? ''}
-            pending={pendingDropoffAddress}
-            onConfirm={setPendingDropoffAddress}
-            onClear={() => setPendingDropoffAddress(null)}
-            disabled={saving}
-          />
-        )}
-        {stop.role === 'stop' && (
-          <SaveCustomerAddressControl
-            visible={shouldOfferSaveCustomerAddress(
-              selectedCustomerId,
-              stop.address?.address ?? '',
-              savedAddresses
-            )}
-            address={stop.address?.address ?? ''}
-            pending={pendingStopAddresses[stop.id] ?? null}
-            onConfirm={(draft) => setPendingStopAddress(stop.id, draft)}
-            onClear={() => setPendingStopAddress(stop.id, null)}
-            disabled={saving}
-          />
-        )}
 
         {stop.role === 'stop' && (
           <div className="space-y-2">
@@ -1391,56 +1410,32 @@ function CreateTowForm({
           </div>
         )}
 
-        {stop.role === 'pickup' && (
-          <button
-            type="button"
-            onClick={() => setStartFromBase(!startFromBase)}
-            className={`inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
-              startFromBase
-                ? 'border-blue-300 bg-blue-50 text-blue-700'
-                : 'border-gt-border-subtle bg-gt-surface-subtle text-gt-text-tertiary'
-            }`}
-          >
-            יציאה מהחניון
-          </button>
-        )}
-
         {isLastDropoff && (
           <div className="space-y-2">
-            <div className="flex flex-wrap items-start gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (dropoffToStorage) {
-                    setDropoffToStorage(false)
-                    updateStop(stop.id, { address: { address: '' } })
-                    setHasStorageFollowUp(false)
-                    setFollowUpAddress({ address: '' })
-                    setFollowUpContactName('')
-                    setFollowUpContactPhone('')
-                    return
-                  }
-                  setDropoffToStorage(true)
-                  if (storageAddress) {
-                    updateStop(stop.id, {
-                      address: {
-                        address: storageAddress,
-                        lat: basePriceList?.base_lat,
-                        lng: basePriceList?.base_lng,
-                      },
-                    })
-                  }
-                }}
-                className={`inline-flex px-3 py-1.5 rounded-lg text-sm border font-medium ${
-                  dropoffToStorage
-                    ? 'border-purple-300 bg-purple-50 text-purple-700'
-                    : 'border-gt-border-subtle bg-gt-surface-subtle text-gt-text-tertiary'
-                }`}
-              >
-                הורדה לאחסנה
-              </button>
-              {renderDeadheadToggle('pill')}
-            </div>
+            <DropToStorageToggle
+              active={dropoffToStorage}
+              onClick={() => {
+                if (dropoffToStorage) {
+                  setDropoffToStorage(false)
+                  updateStop(stop.id, { address: { address: '' } })
+                  setHasStorageFollowUp(false)
+                  setFollowUpAddress({ address: '' })
+                  setFollowUpContactName('')
+                  setFollowUpContactPhone('')
+                  return
+                }
+                setDropoffToStorage(true)
+                if (storageAddress) {
+                  updateStop(stop.id, {
+                    address: {
+                      address: storageAddress,
+                      lat: basePriceList?.base_lat,
+                      lng: basePriceList?.base_lng,
+                    },
+                  })
+                }
+              }}
+            />
             {dropoffToStorage && (
               <div className="flex gap-2 items-center flex-wrap">
                 <span className="text-sm text-gray-600">מצב הרכב:</span>
@@ -2159,7 +2154,7 @@ function CreateTowForm({
   )
 
   // Single + exchange only; custom intentionally excluded.
-  // Rendered beside the "הורדה לאחסנה"/"שמור באחסנה" control so the two storage controls read as a pair.
+  // Empty-leg return toggle — label shown as "מהיעד לחניון" in route footer / exchange UI.
   const renderDeadheadToggle = (variant: 'pill' | 'compact' = 'pill') => {
     if (towType !== 'single' && towType !== 'exchange') return null
     const buttonClass =
@@ -2181,7 +2176,7 @@ function CreateTowForm({
           onClick={() => setChargeDeadheadReturn(!chargeDeadheadReturn)}
           className={buttonClass}
         >
-          חייב נסיעת סרק
+          מהיעד לחניון
         </button>
         {chargeDeadheadReturn && dropoffToBaseLoading && (
           <p className="text-xs text-gray-400">מחשב מרחק חזרה לאחסנה...</p>
@@ -2780,14 +2775,23 @@ function CreateTowForm({
                             const pickupRow = findPickupRouteStop(routeStops)
                             const dropoffRow = findDropoffRouteStop(routeStops)
                             return (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {pickupRow && (
-                                  <div key={pickupRow.id}>{renderRouteStopFields(pickupRow)}</div>
-                                )}
-                                {dropoffRow && (
-                                  <div key={dropoffRow.id}>{renderRouteStopFields(dropoffRow)}</div>
-                                )}
-                              </div>
+                              <RouteOriginDestGrid
+                                stacked={isMobile}
+                                origin={
+                                  pickupRow ? (
+                                    <div key={pickupRow.id}>
+                                      {renderRouteStopFields(pickupRow)}
+                                    </div>
+                                  ) : null
+                                }
+                                destination={
+                                  dropoffRow ? (
+                                    <div key={dropoffRow.id}>
+                                      {renderRouteStopFields(dropoffRow)}
+                                    </div>
+                                  ) : null
+                                }
+                              />
                             )
                           })()
                         ) : (
@@ -2828,21 +2832,8 @@ function CreateTowForm({
                           </div>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={addStop}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gt-brand text-gt-brand text-sm font-medium hover:bg-gt-brand-subtle transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                          הוסף נקודת עצירה
-                        </button>
-                        {distanceLoading ? (
-                          <p className="text-sm text-gray-500">מחשב מרחק...</p>
-                        ) : (
-                          <p className="text-sm font-medium">
-                            מרחק כולל: {totalDistanceKm.toFixed(1)} ק״מ
-                          </p>
-                        )}
+                        <RouteAddStopButton onClick={addStop} />
+
                         <div className="border-t border-gray-100 pt-3">
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <LocationSurchargesSection
@@ -2865,6 +2856,45 @@ function CreateTowForm({
                             />
                           </div>
                         </div>
+
+                        <RouteAddressesFooter
+                          bleed
+                          distance={
+                            distanceLoading ? (
+                              <span className="text-gt-text-tertiary">מחשב מרחק...</span>
+                            ) : (
+                              <>מרחק כולל {totalDistanceKm.toFixed(1)} ק״מ</>
+                            )
+                          }
+                          showStartFromBase={!!basePriceList?.base_address}
+                          startFromBase={startFromBase}
+                          onStartFromBaseChange={setStartFromBase}
+                          showDeadhead={towType === 'single' || towType === 'exchange'}
+                          chargeDeadheadReturn={chargeDeadheadReturn}
+                          onChargeDeadheadReturnChange={setChargeDeadheadReturn}
+                          deadheadHints={
+                            <>
+                              {chargeDeadheadReturn && dropoffToBaseLoading && (
+                                <p className="text-xs text-gray-400">
+                                  מחשב מרחק חזרה לאחסנה...
+                                </p>
+                              )}
+                              {chargeDeadheadReturn &&
+                                !dropoffToBaseLoading &&
+                                dropoffToBaseDistance?.distanceKm != null && (
+                                  <p className="text-xs text-gray-400">
+                                    מרחק חזרה לאחסנה:{' '}
+                                    {dropoffToBaseDistance.distanceKm.toFixed(1)} ק״מ
+                                  </p>
+                                )}
+                              {chargeDeadheadReturn && activeDeadheadRate <= 0 && (
+                                <p className="text-xs text-amber-600">
+                                  לא הוגדר מחיר לק״מ סרק במחירון
+                                </p>
+                              )}
+                            </>
+                          }
+                        />
                       </div>
                     </FormSubcard>
 
@@ -3451,7 +3481,7 @@ function CreateTowForm({
                                       : 'bg-white text-gray-600 border-gt-border-subtle hover:border-gt-border-strong'
                                   }`}
                                 >
-                                  יציאה מהחניון
+                                  מהחניון למוצא
                                 </button>
                               </div>
                               <div className="border-t border-gray-100 pt-3">
