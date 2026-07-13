@@ -9,6 +9,7 @@ import {
   type CustomerAddressPendingDraft,
 } from '../customer-addresses/SaveCustomerAddressControl'
 import type { AddressData } from '../../lib/google-maps'
+import type { CustomerAddress } from '../../lib/types'
 
 const FOLLOW_UP_STATUS_LABELS: Record<string, string> = {
   pending: 'ממתינה',
@@ -42,6 +43,8 @@ export type StorageFollowUpSectionProps = {
   onConfirmPendingAddress?: (draft: CustomerAddressPendingDraft) => void
   onClearPendingAddress?: () => void
   saveAddressDisabled?: boolean
+  /** Saved customer addresses for suggestions (omit when no customer). */
+  savedAddresses?: CustomerAddress[]
 }
 
 function clearFollowUpFields(
@@ -78,6 +81,7 @@ export function StorageFollowUpSection({
   onConfirmPendingAddress,
   onClearPendingAddress,
   saveAddressDisabled = false,
+  savedAddresses,
 }: StorageFollowUpSectionProps) {
   const showSection = storageEligible || (!!editTowId && !!followUpChildTowId)
   if (!showSection) return null
@@ -161,6 +165,7 @@ export function StorageFollowUpSection({
                 placeholder="כתובת היעד של הגרירה הבאה"
                 onPinDropClick={childIsLive ? undefined : onPinDropOpen}
                 readOnly={childIsLive}
+                savedAddresses={savedAddresses}
               />
             </div>
           ) : (
@@ -170,6 +175,7 @@ export function StorageFollowUpSection({
               placeholder="כתובת היעד של הגרירה הבאה"
               onPinDropClick={childIsLive ? undefined : onPinDropOpen}
               readOnly={childIsLive}
+              savedAddresses={savedAddresses}
             />
           )}
           {onConfirmPendingAddress && onClearPendingAddress && (

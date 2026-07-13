@@ -1695,6 +1695,7 @@ function CreateExchangeTowForm({
                                     hideLabel
                                     onPinDropClick={() => handlePinDropOpen('workingVehicle')}
                                     storageYardConfirm={workingPickupYardConfirm}
+                                    savedAddresses={savedAddresses}
                                     extraActions={
                                       <SaveCustomerAddressControl
                                         visible={showSaveWorkingSourceAddressOption}
@@ -1728,6 +1729,7 @@ function CreateExchangeTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
                                   storageYardConfirm={workingDropoffYardConfirm}
+                                  savedAddresses={savedAddresses}
                                   extraActions={
                                     <SaveCustomerAddressControl
                                       visible={showSaveWorkingDestinationAddressOption}
@@ -1938,6 +1940,7 @@ function CreateExchangeTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('exchange')}
+                                  savedAddresses={savedAddresses}
                                   extraActions={
                                     <SaveCustomerAddressControl
                                       visible={showSaveExchangePickupAddressOption}
@@ -1971,6 +1974,7 @@ function CreateExchangeTowForm({
                                       ? defectiveDropoffYardConfirm
                                       : null
                                   }
+                                  savedAddresses={savedAddresses}
                                   extraActions={
                                     <SaveCustomerAddressControl
                                       visible={showSaveDefectiveDestinationAddressOption}
@@ -2057,6 +2061,7 @@ function CreateExchangeTowForm({
                                             onChange={(d: AddressData) => setFollowUpAddress(d)}
                                             placeholder="כתובת היעד של הגרירה הבאה"
                                             onPinDropClick={() => handlePinDropOpen('followUp')}
+                                            savedAddresses={savedAddresses}
                                             extraActions={
                                               <SaveCustomerAddressControl
                                                 visible={showSaveFollowUpAddressOption}

@@ -1352,6 +1352,7 @@ function CreateTowForm({
                 ? dropoffYardConfirm
                 : null
           }
+          savedAddresses={savedAddresses}
         />
 
         {stop.role === 'stop' && (
@@ -1484,6 +1485,7 @@ function CreateTowForm({
               onConfirmPendingAddress={setPendingFollowUpAddress}
               onClearPendingAddress={() => setPendingFollowUpAddress(null)}
               saveAddressDisabled={saving}
+              savedAddresses={savedAddresses}
             />
           </div>
         )}
@@ -3427,6 +3429,7 @@ function CreateTowForm({
                                     hideLabel
                                     onPinDropClick={() => handlePinDropOpen('workingVehicle')}
                                     storageYardConfirm={workingPickupYardConfirm}
+                                    savedAddresses={savedAddresses}
                                     extraActions={
                                       <SaveCustomerAddressControl
                                         visible={showSaveWorkingSourceAddressOption}
@@ -3460,6 +3463,7 @@ function CreateTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
                                   storageYardConfirm={workingDropoffYardConfirm}
+                                  savedAddresses={savedAddresses}
                                   extraActions={
                                     <SaveCustomerAddressControl
                                       visible={showSaveWorkingDestinationAddressOption}
@@ -3690,6 +3694,7 @@ function CreateTowForm({
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('exchange')}
+                                  savedAddresses={savedAddresses}
                                   extraActions={
                                     <SaveCustomerAddressControl
                                       visible={showSaveExchangePickupAddressOption}
@@ -3723,6 +3728,7 @@ function CreateTowForm({
                                       ? defectiveDropoffYardConfirm
                                       : null
                                   }
+                                  savedAddresses={savedAddresses}
                                   extraActions={
                                     <SaveCustomerAddressControl
                                       visible={showSaveDefectiveDestinationAddressOption}
@@ -3789,6 +3795,7 @@ function CreateTowForm({
                                   onConfirmPendingAddress={setPendingFollowUpAddress}
                                   onClearPendingAddress={() => setPendingFollowUpAddress(null)}
                                   saveAddressDisabled={saving}
+                                  savedAddresses={savedAddresses}
                                 />
                               </div>
                             </div>

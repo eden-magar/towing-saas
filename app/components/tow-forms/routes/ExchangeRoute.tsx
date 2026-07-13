@@ -450,6 +450,7 @@ export function ExchangeRoute({
                     placeholder="הזן כתובת..."
                     onPinDropClick={() => onPinDropClick('workingVehicleAddress')}
                     storageYardConfirm={workingPickupYardConfirm}
+                    savedAddresses={savedCustomerAddresses}
                     extraActions={
                       addressSaveEnabled &&
                       onConfirmPendingWorkingSourceAddress &&
@@ -604,6 +605,7 @@ export function ExchangeRoute({
                     placeholder="הזן כתובת..."
                     onPinDropClick={() => onPinDropClick('defectiveDestinationAddress')}
                     storageYardConfirm={defectiveDropoffYardConfirm}
+                    savedAddresses={savedCustomerAddresses}
                     extraActions={
                       addressSaveEnabled &&
                       onConfirmPendingDefectiveDestinationAddress &&
@@ -742,6 +744,7 @@ export function ExchangeRoute({
                     onChange={(addr: AddressData) => updateStop('before', stop.id, 'address', addr)}
                     placeholder="כתובת..."
                     onPinDropClick={() => onPinDropClick(`stop-before-${stop.id}`)}
+                    savedAddresses={savedCustomerAddresses}
                     extraActions={
                       addressSaveEnabled &&
                       onConfirmPendingStopAddress &&
@@ -802,6 +805,7 @@ export function ExchangeRoute({
                 onChange={onExchangeAddressChange}
                 placeholder="הזן כתובת..."
                 onPinDropClick={() => onPinDropClick('exchangeAddress')}
+                savedAddresses={savedCustomerAddresses}
                 extraActions={
                   addressSaveEnabled &&
                   onConfirmPendingExchangePickupAddress &&
@@ -893,6 +897,7 @@ export function ExchangeRoute({
                     onChange={(addr: AddressData) => updateStop('after', stop.id, 'address', addr)}
                     placeholder="כתובת..."
                     onPinDropClick={() => onPinDropClick(`stop-after-${stop.id}`)}
+                    savedAddresses={savedCustomerAddresses}
                     extraActions={
                       addressSaveEnabled &&
                       onConfirmPendingStopAddress &&

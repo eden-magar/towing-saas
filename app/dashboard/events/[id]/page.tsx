@@ -1905,6 +1905,7 @@ export default function EventDetailsPage() {
                       placeholder="הזן כתובת או הדבק קישור..."
                       onPinDropClick={() => setLocationPinOpen(true)}
                       readOnly={locationSaving}
+                      savedAddresses={savedAddresses}
                     />
                     <SaveCustomerAddressControl
                       visible={showSaveLocationAddressOption}

@@ -430,6 +430,7 @@ export function EventTowSection({
             placeholder="הזן כתובת או הדבק קישור..."
             onPinDropClick={() => setPinOpen(true)}
             readOnly={saving}
+            savedAddresses={savedAddresses}
           />
           <SaveCustomerAddressControl
             className="mt-2"

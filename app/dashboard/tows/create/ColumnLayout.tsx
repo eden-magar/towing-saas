@@ -733,6 +733,7 @@ export function ColumnLayout({
                                   isMobile={false}
                                   narrowColumn
                                   storageYardConfirm={pickupYardConfirm}
+                                  savedAddresses={addressesSave.savedAddresses}
                                 />
                               )}
                               {isDropoff && (
@@ -752,6 +753,7 @@ export function ColumnLayout({
                                   isMobile={false}
                                   narrowColumn
                                   storageYardConfirm={dropoffYardConfirm}
+                                  savedAddresses={addressesSave.savedAddresses}
                                 />
                               )}
                               {stop.role === 'stop' && (
@@ -771,6 +773,7 @@ export function ColumnLayout({
                                   extraActions={saveControl}
                                   isMobile={false}
                                   narrowColumn
+                                  savedAddresses={addressesSave.savedAddresses}
                                 />
                               )}
                             </div>

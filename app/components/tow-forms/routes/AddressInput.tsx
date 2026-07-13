@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
-import { Link2, Loader2, MapPin } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react'
+import { Bookmark, Link2, Loader2, MapPin } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { StorageYardConfirmDialog } from '../shared/StorageYardConfirmDialog'
 import {
@@ -9,7 +9,8 @@ import {
   storageYardDismissKey,
   type YardAddressRef,
 } from '../../../lib/utils/storage-yard-match'
-import { installPacContainerViewportClamp } from '../../../lib/utils/clamp-pac-container'
+import { PortalSuggestDropdown } from '../../shared/PortalSuggestDropdown'
+import type { CustomerAddress } from '../../../lib/types'
 
 // ==================== Google Maps Loading ====================
 
@@ -35,7 +36,7 @@ export function loadGoogleMaps(): Promise<void> {
     script.onload = () => {
       isGoogleMapsLoaded = true
       isGoogleMapsLoading = false
-      googleMapsCallbacks.forEach(cb => cb())
+      googleMapsCallbacks.forEach((cb) => cb())
       googleMapsCallbacks = []
     }
     document.head.appendChild(script)
@@ -89,15 +90,43 @@ interface AddressInputProps {
   /** Compact desktop column layout — h-9 inputs, rounded-lg, border-gray-200. Does not affect isMobile. */
   narrowColumn?: boolean
   storageYardConfirm?: StorageYardConfirmProp | null
+  /**
+   * Optional saved customer addresses shown above Google predictions.
+   * Omit / empty → Google-only (portal, no customer selected).
+   */
+  savedAddresses?: CustomerAddress[]
 }
 
 const LINK_RESOLVE_ERROR = 'לא הצלחנו לזהות מיקום מהקישור'
+const PLACES_DEBOUNCE_MS = 250
+const SAVED_SUGGEST_LIMIT = 5
+const GOOGLE_SUGGEST_LIMIT = 5
+const ROW_HEIGHT_ESTIMATE = 52
+
+type GoogleSuggestion = {
+  kind: 'google'
+  placeId: string
+  primary: string
+  secondary: string
+}
+
+type SavedSuggestion = {
+  kind: 'saved'
+  id: string
+  label: string
+  address: string
+  placeId: string | null
+  lat: number | null
+  lng: number | null
+}
+
+type Suggestion = SavedSuggestion | GoogleSuggestion
 
 // ==================== Component ====================
 
-export function AddressInput({ 
-  value, 
-  onChange, 
+export function AddressInput({
+  value,
+  onChange,
   onAddressDataChange,
   onAddressSelect,
   placeholder = 'הזן כתובת',
@@ -112,20 +141,32 @@ export function AddressInput({
   isMobile = false,
   narrowColumn = false,
   storageYardConfirm = null,
+  savedAddresses = [],
 }: AddressInputProps) {
   const internalRef = useRef<HTMLInputElement>(null)
   const inputRef = externalRef || internalRef
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null)
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null)
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const placesReadyRef = useRef(false)
 
   const isNarrow = narrowColumn ?? false
   const isMobileSized = isMobile ?? false
-  
+
   // Handle both string and AddressData value types
-  const addressString = typeof value === 'string' ? value : (value?.address || '')
+  const addressString = typeof value === 'string' ? value : value?.address || ''
   const [localValue, setLocalValue] = useState(addressString)
   const isSelectingRef = useRef(false)
   const dismissedYardKeysRef = useRef<Set<string>>(new Set())
   const [yardConfirmOpen, setYardConfirmOpen] = useState(false)
+
+  const [isFocused, setIsFocused] = useState(false)
+  const [googlePredictions, setGooglePredictions] = useState<GoogleSuggestion[]>([])
+  const [placesLoading, setPlacesLoading] = useState(false)
+  const [highlightIndex, setHighlightIndex] = useState(-1)
+  const [detailsLoading, setDetailsLoading] = useState(false)
 
   const maybeAskYardConfirm = useCallback(
     (entered: AddressData) => {
@@ -183,6 +224,7 @@ export function AddressInput({
   }
 
   const handleAddressBlur = () => {
+    window.setTimeout(() => setIsFocused(false), 150)
     const entered: AddressData =
       typeof value === 'object' && value
         ? { ...value, address: localValue || value.address || '' }
@@ -203,108 +245,274 @@ export function AddressInput({
   const [linkUrl, setLinkUrl] = useState('')
   const [linkLoading, setLinkLoading] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
-  
+
   // Detect if using old interface (AddressData) or new interface (string)
   const isAddressDataMode = typeof value === 'object'
 
   // Sync with parent value
   useEffect(() => {
     if (!isSelectingRef.current) {
-      const newValue = typeof value === 'string' ? value : (value?.address || '')
+      const newValue = typeof value === 'string' ? value : value?.address || ''
       setLocalValue(newValue) // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [value])
 
+  const ensureSessionToken = useCallback(() => {
+    if (!window.google?.maps?.places) return null
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken()
+    }
+    return sessionTokenRef.current
+  }, [])
+
+  const resetSessionToken = useCallback(() => {
+    sessionTokenRef.current = null
+  }, [])
+
+  // Init Places services (no legacy Autocomplete widget)
   useEffect(() => {
     if (readOnly) return
-    return installPacContainerViewportClamp()
-  }, [readOnly])
+    let cancelled = false
 
-  useEffect(() => {
-    if (readOnly) return
-
-    const initAutocomplete = async () => {
+    const init = async () => {
       await loadGoogleMaps()
-      if (!inputRef.current || !window.google?.maps?.places || autocompleteRef.current) return
-
-      const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-        componentRestrictions: { country: 'il' },
-        fields: ['formatted_address', 'name', 'place_id', 'geometry'],
-        types: ['establishment', 'geocode']
-      })
-
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace()
-        if (!place.formatted_address && !place.name) return
-
-        let selectedAddress = place.formatted_address || place.name || ''
-        if (place.name && place.formatted_address && !place.formatted_address.startsWith(place.name)) {
-          selectedAddress = `${place.name}, ${place.formatted_address}`
-        }
-
-        isSelectingRef.current = true
-        setLocalValue(selectedAddress)
-        console.log('AddressInput place_changed:', { selectedAddress, isAddressDataMode })
-
-
-        const addressData: AddressData = {
-          address: selectedAddress,
-          placeId: place.place_id,
-          lat: place.geometry?.location?.lat(),
-          lng: place.geometry?.location?.lng()
-        }
-
-        // Call appropriate onChange based on mode
-        if (isAddressDataMode) {
-          (onChange as (data: AddressData) => void)(addressData)
-        } else {
-          (onChange as (value: string) => void)(selectedAddress)
-          onAddressDataChange?.({
-            placeId: place.place_id,
-            lat: place.geometry?.location?.lat(),
-            lng: place.geometry?.location?.lng()
-          })
-        }
-
-        onAddressSelect?.(addressData)
-        maybeAskYardConfirmRef.current(addressData)
-
-        // Reset flag after a short delay
-        setTimeout(() => {
-          isSelectingRef.current = false
-        }, 100)
-      })
-
-      autocompleteRef.current = autocomplete
+      if (cancelled || !window.google?.maps?.places) return
+      autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService()
+      const attribution = document.createElement('div')
+      placesServiceRef.current = new window.google.maps.places.PlacesService(attribution)
+      placesReadyRef.current = true
     }
 
-    void initAutocomplete()
-  }, [onChange, onAddressDataChange, onAddressSelect, readOnly, isAddressDataMode])
+    void init()
+    return () => {
+      cancelled = true
+    }
+  }, [readOnly])
+
+  const query = localValue.trim()
+  const savedSuggestions: SavedSuggestion[] = useMemo(() => {
+    if (query.length < 1 || savedAddresses.length === 0) return []
+    const q = query.toLowerCase()
+    return savedAddresses
+      .filter(
+        (a) =>
+          a.label.toLowerCase().includes(q) || a.address.toLowerCase().includes(q),
+      )
+      .slice(0, SAVED_SUGGEST_LIMIT)
+      .map((a) => ({
+        kind: 'saved' as const,
+        id: a.id,
+        label: a.label,
+        address: a.address,
+        placeId: a.place_id,
+        lat: a.lat,
+        lng: a.lng,
+      }))
+  }, [query, savedAddresses])
+
+  // Debounced Google predictions
+  useEffect(() => {
+    if (readOnly || !isFocused || query.length < 1) {
+      setGooglePredictions([])
+      setPlacesLoading(false)
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+      return
+    }
+
+    setPlacesLoading(true)
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+
+    debounceTimerRef.current = setTimeout(() => {
+      void (async () => {
+        if (!placesReadyRef.current) {
+          await loadGoogleMaps()
+          if (window.google?.maps?.places) {
+            autocompleteServiceRef.current =
+              autocompleteServiceRef.current ??
+              new window.google.maps.places.AutocompleteService()
+            if (!placesServiceRef.current) {
+              const attribution = document.createElement('div')
+              placesServiceRef.current = new window.google.maps.places.PlacesService(
+                attribution,
+              )
+            }
+            placesReadyRef.current = true
+          }
+        }
+
+        const service = autocompleteServiceRef.current
+        if (!service) {
+          setPlacesLoading(false)
+          setGooglePredictions([])
+          return
+        }
+
+        const token = ensureSessionToken()
+        // AutocompleteService forbids mixing establishment + geocode (legacy widget allowed both).
+        // Omit types so predictions cover both establishments and addresses.
+        service.getPlacePredictions(
+          {
+            input: query,
+            componentRestrictions: { country: 'il' },
+            sessionToken: token ?? undefined,
+          },
+          (predictions, status) => {
+            setPlacesLoading(false)
+            if (
+              status !== window.google.maps.places.PlacesServiceStatus.OK ||
+              !predictions
+            ) {
+              setGooglePredictions([])
+              return
+            }
+            setGooglePredictions(
+              predictions.slice(0, GOOGLE_SUGGEST_LIMIT).map((p) => ({
+                kind: 'google' as const,
+                placeId: p.place_id,
+                primary:
+                  p.structured_formatting?.main_text ||
+                  p.description.split(',')[0] ||
+                  p.description,
+                secondary:
+                  p.structured_formatting?.secondary_text ||
+                  p.description.replace(/^[^,]+,\s*/, ''),
+              })),
+            )
+          },
+        )
+      })()
+    }, PLACES_DEBOUNCE_MS)
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+    }
+  }, [query, isFocused, readOnly, ensureSessionToken])
+
+  const suggestions: Suggestion[] = useMemo(
+    () => [...savedSuggestions, ...googlePredictions],
+    [savedSuggestions, googlePredictions],
+  )
+
+  useEffect(() => {
+    setHighlightIndex(-1)
+  }, [suggestions])
+
+  const showDropdown =
+    !readOnly &&
+    isFocused &&
+    query.length >= 1 &&
+    (placesLoading || detailsLoading || suggestions.length > 0 || (!placesLoading && query.length >= 1))
+
+  const emitAddress = useCallback(
+    (addressData: AddressData) => {
+      isSelectingRef.current = true
+      setLocalValue(addressData.address)
+      setIsFocused(false)
+      setGooglePredictions([])
+      setHighlightIndex(-1)
+
+      if (isAddressDataMode) {
+        ;(onChange as (data: AddressData) => void)(addressData)
+      } else {
+        ;(onChange as (value: string) => void)(addressData.address)
+        onAddressDataChange?.({
+          placeId: addressData.placeId,
+          lat: addressData.lat,
+          lng: addressData.lng,
+        })
+      }
+
+      onAddressSelect?.(addressData)
+      maybeAskYardConfirmRef.current(addressData)
+
+      setTimeout(() => {
+        isSelectingRef.current = false
+      }, 100)
+    },
+    [isAddressDataMode, onChange, onAddressDataChange, onAddressSelect],
+  )
+
+  const selectSaved = useCallback(
+    (item: SavedSuggestion) => {
+      resetSessionToken()
+      emitAddress({
+        address: item.address,
+        placeId: item.placeId ?? undefined,
+        lat: item.lat ?? undefined,
+        lng: item.lng ?? undefined,
+      })
+    },
+    [emitAddress, resetSessionToken],
+  )
+
+  const selectGoogle = useCallback(
+    (item: GoogleSuggestion) => {
+      const service = placesServiceRef.current
+      if (!service) return
+
+      setDetailsLoading(true)
+      const token = ensureSessionToken()
+      service.getDetails(
+        {
+          placeId: item.placeId,
+          fields: ['formatted_address', 'name', 'place_id', 'geometry'],
+          sessionToken: token ?? undefined,
+        },
+        (place, status) => {
+          setDetailsLoading(false)
+          resetSessionToken()
+          if (
+            status !== window.google.maps.places.PlacesServiceStatus.OK ||
+            !place
+          ) {
+            return
+          }
+
+          let selectedAddress = place.formatted_address || place.name || item.primary
+          if (
+            place.name &&
+            place.formatted_address &&
+            !place.formatted_address.startsWith(place.name)
+          ) {
+            selectedAddress = `${place.name}, ${place.formatted_address}`
+          }
+
+          emitAddress({
+            address: selectedAddress,
+            placeId: place.place_id ?? item.placeId,
+            lat: place.geometry?.location?.lat(),
+            lng: place.geometry?.location?.lng(),
+          })
+        },
+      )
+    },
+    [emitAddress, ensureSessionToken, resetSessionToken],
+  )
+
+  const selectSuggestionAt = useCallback(
+    (index: number) => {
+      const item = suggestions[index]
+      if (!item) return
+      if (item.kind === 'saved') selectSaved(item)
+      else selectGoogle(item)
+    },
+    [suggestions, selectSaved, selectGoogle],
+  )
 
   const applyResolvedAddress = (address: string, lat: number, lng: number) => {
-    isSelectingRef.current = true
-    setLocalValue(address)
-
-    const addressData: AddressData = {
+    resetSessionToken()
+    emitAddress({
       address,
       lat,
       lng,
       isPinDropped: false,
-    }
-
-    if (isAddressDataMode) {
-      (onChange as (data: AddressData) => void)(addressData)
-    } else {
-      (onChange as (value: string) => void)(address)
-      onAddressDataChange?.({ lat, lng })
-    }
-
-    onAddressSelect?.(addressData)
-    maybeAskYardConfirmRef.current(addressData)
-
-    setTimeout(() => {
-      isSelectingRef.current = false
-    }, 100)
+    })
   }
 
   const handleSubmitLink = async () => {
@@ -315,7 +523,9 @@ export function AddressInput({
     setLinkError(null)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
       const token = session?.access_token
       if (!token) {
         setLinkError(LINK_RESOLVE_ERROR)
@@ -357,14 +567,44 @@ export function AddressInput({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value
     setLocalValue(newValue)
-    
+    setIsFocused(true)
+
     if (isAddressDataMode) {
       // Drop stale coordinates until user picks from autocomplete / pin / link
-      (onChange as (data: AddressData) => void)({
+      ;(onChange as (data: AddressData) => void)({
         address: newValue,
       })
     } else {
-      (onChange as (value: string) => void)(newValue)
+      ;(onChange as (value: string) => void)(newValue)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown && e.key !== 'Escape') return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (suggestions.length === 0) return
+      setHighlightIndex((i) => (i + 1) % suggestions.length)
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (suggestions.length === 0) return
+      setHighlightIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+      return
+    }
+    if (e.key === 'Enter') {
+      if (highlightIndex >= 0 && highlightIndex < suggestions.length) {
+        e.preventDefault()
+        selectSuggestionAt(highlightIndex)
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setIsFocused(false)
+      setHighlightIndex(-1)
     }
   }
 
@@ -396,7 +636,11 @@ export function AddressInput({
         title="הדבק קישור מ-Google Maps או Waze"
         aria-expanded={linkPanelOpen}
       >
-        {linkLoading ? <Loader2 size={actionIconSize} className="animate-spin" /> : <Link2 size={actionIconSize} />}
+        {linkLoading ? (
+          <Loader2 size={actionIconSize} className="animate-spin" />
+        ) : (
+          <Link2 size={actionIconSize} />
+        )}
       </button>
     )
   }
@@ -468,20 +712,123 @@ export function AddressInput({
     )
   }
 
+  const renderSuggestDropdown = () => {
+    if (!showDropdown) return null
+
+    const itemCount =
+      suggestions.length > 0
+        ? suggestions.length
+        : placesLoading || detailsLoading
+          ? 1
+          : 1
+
+    return (
+      <PortalSuggestDropdown
+        anchorRef={anchorRef}
+        open={showDropdown}
+        itemCount={itemCount}
+        rowHeightEstimate={ROW_HEIGHT_ESTIMATE}
+      >
+        {(placesLoading || detailsLoading) && suggestions.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 px-3 py-3 text-xs text-gray-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-gt-brand" />
+            <span>מחפש כתובות...</span>
+          </div>
+        ) : suggestions.length === 0 ? (
+          <div className="px-3 py-3 text-center text-xs text-gray-500">
+            לא נמצאו תוצאות
+          </div>
+        ) : (
+          suggestions.map((item, index) => {
+            const active = index === highlightIndex
+            if (item.kind === 'saved') {
+              return (
+                <button
+                  key={`saved-${item.id}`}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectSaved(item)}
+                  onMouseEnter={() => setHighlightIndex(index)}
+                  className={`flex w-full items-start gap-2 px-3 py-2 text-right transition-colors ${
+                    active ? 'bg-gt-brand-subtle' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <Bookmark
+                    size={14}
+                    className="mt-0.5 shrink-0 text-gt-brand"
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-gt-text-primary">
+                      {item.label}
+                    </span>
+                    <span className="block truncate text-xs text-gt-text-tertiary">
+                      {item.address}
+                    </span>
+                  </span>
+                </button>
+              )
+            }
+
+            return (
+              <button
+                key={`google-${item.placeId}`}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => selectGoogle(item)}
+                onMouseEnter={() => setHighlightIndex(index)}
+                className={`flex w-full flex-col items-stretch gap-0.5 px-3 py-2 text-right transition-colors ${
+                  active ? 'bg-gt-brand-subtle' : 'hover:bg-gray-50'
+                }`}
+              >
+                <span className="truncate text-sm font-medium text-gt-text-primary">
+                  {item.primary}
+                </span>
+                {item.secondary ? (
+                  <span className="truncate text-xs text-gt-text-tertiary">
+                    {item.secondary}
+                  </span>
+                ) : null}
+              </button>
+            )
+          })
+        )}
+        {placesLoading && suggestions.length > 0 ? (
+          <div className="flex items-center justify-end gap-1.5 border-t border-gray-100 px-3 py-1.5 text-[11px] text-gray-400">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            מעדכן...
+          </div>
+        ) : null}
+      </PortalSuggestDropdown>
+    )
+  }
+
   const renderInputRow = (inputClasses: string) => {
     const showActionRow = !!(onPinDropClick || !readOnly || extraActions)
     return (
       <>
-        <input
-          ref={inputRef}
-          type="text"
-          value={localValue}
-          onChange={handleInputChange}
-          onBlur={handleAddressBlur}
-          placeholder={placeholder}
-          readOnly={readOnly}
-          className={`${inputClasses} w-full`}
-        />
+        <div ref={anchorRef} className="relative w-full min-w-0">
+          <input
+            ref={inputRef}
+            type="text"
+            value={localValue}
+            onChange={handleInputChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={handleAddressBlur}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            autoComplete="off"
+            className={`${inputClasses} w-full`}
+            role="combobox"
+            aria-expanded={showDropdown}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              highlightIndex >= 0 ? `address-suggest-${highlightIndex}` : undefined
+            }
+          />
+          {renderSuggestDropdown()}
+        </div>
         {/* Actions on their own row under the field — full-width input above.
             Fixed order (RTL start/right → left): map pin → paste link → save bookmark */}
         {showActionRow && (
@@ -520,7 +867,7 @@ export function AddressInput({
                 }`
               : `flex-1 min-w-0 px-3 py-2.5 border border-gt-border-field rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 ${
                   readOnly ? 'bg-gray-50' : ''
-                }`
+                }`,
         )}
         {yardConfirmDialog}
       </div>

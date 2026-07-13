@@ -966,6 +966,7 @@ export function RouteBuilder({
                           onPinDropClick={
                             isBase ? undefined : () => onPinDropClick?.(point.id)
                           }
+                          savedAddresses={isBase ? undefined : savedCustomerAddresses}
                           extraActions={
                             !isBase &&
                             customerAddressSaveEnabled &&

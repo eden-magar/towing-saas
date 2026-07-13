@@ -514,6 +514,7 @@ export function SingleRoute({
                     extraActions={saveAction}
                     isMobile
                     storageYardConfirm={pickupYardConfirm}
+                    savedAddresses={savedCustomerAddresses}
                   />
                 )}
                 {stop.role === 'dropoff' && (
@@ -528,6 +529,7 @@ export function SingleRoute({
                       extraActions={saveAction}
                       isMobile
                       storageYardConfirm={dropoffYardConfirm}
+                      savedAddresses={savedCustomerAddresses}
                     />
                     {onDropoffToStorageChange && (
                       <DropToStorageToggle
@@ -555,6 +557,7 @@ export function SingleRoute({
                     onPinDropClick={() => onPinDropClick(`routestop:${stop.id}`)}
                     extraActions={saveAction}
                     isMobile
+                    savedAddresses={savedCustomerAddresses}
                   />
                 )}
               </div>
@@ -598,6 +601,7 @@ export function SingleRoute({
                     ) : null
                   }
                   isMobile={isMobileSized}
+                  savedAddresses={savedCustomerAddresses}
                   narrowColumn={isNarrow && !isMobileSized}
                   storageYardConfirm={pickupYardConfirm}
                 />
@@ -634,6 +638,7 @@ export function SingleRoute({
                     ) : null
                   }
                   isMobile={isMobileSized}
+                  savedAddresses={savedCustomerAddresses}
                   narrowColumn={isNarrow && !isMobileSized}
                   storageYardConfirm={dropoffYardConfirm}
                 />
