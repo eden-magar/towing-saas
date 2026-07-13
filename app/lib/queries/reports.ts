@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { getTowRevenueContribution } from '../utils/cancellation-fee'
+import { defectTokensForReport } from '../constants/defects'
 
 // ==================== TYPES ====================
 
@@ -416,14 +417,14 @@ export async function getTowReasonBreakdown(
   if (error) throw error
   if (!vehicles || vehicles.length === 0) return []
 
-  // Count by reason
   const counts: Record<string, number> = {}
   vehicles.forEach(v => {
-    const reason = v.tow_reason || 'אחר'
-    counts[reason] = (counts[reason] || 0) + 1
+    for (const token of defectTokensForReport(v.tow_reason)) {
+      counts[token] = (counts[token] || 0) + 1
+    }
   })
 
-  const total = vehicles.length
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0) || 1
 
   return Object.entries(counts)
     .map(([reason, count]) => ({

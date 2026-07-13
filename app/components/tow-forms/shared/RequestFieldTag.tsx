@@ -1,3 +1,5 @@
+import { hydrateDefectsFromTowReason, serializeDefects } from '@/app/lib/constants/defects'
+
 export type RequestFieldStatus = 'from-request' | 'edited' | null
 
 export type RequestOriginalValues = {
@@ -31,11 +33,7 @@ export type GetRequestFieldStatus = (
 ) => RequestFieldStatus
 
 export function normalizeDefectsForCompare(defects: string[]): string {
-  return [...defects]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .sort()
-    .join('\x1e')
+  return serializeDefects(hydrateDefectsFromTowReason(serializeDefects(defects)))
 }
 
 export function combineRequestFieldStatuses(

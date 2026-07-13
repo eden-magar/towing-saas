@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   type CustomerPortalStoredVehicle,
 } from '@/app/lib/queries/customer-portal'
+import { serializeDefects } from '@/app/lib/constants/defects'
 import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
 import { PortalRequestPageHeader } from '@/app/components/customer-portal/PortalRequestPageHeader'
 import {
@@ -455,7 +456,9 @@ export default function NewCustomerTowRequestPage() {
     const base = {
       plateNumber: plate,
       vehicleCode: vehicleCode.trim() || null,
-      towReason: selectedDefects.join(', ') || undefined,
+      towReason: selectedDefects.length
+        ? serializeDefects(selectedDefects)
+        : undefined,
       isWorking,
       orderIndex: 0,
     }

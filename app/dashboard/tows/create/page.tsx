@@ -81,7 +81,13 @@ import {
 } from '../../../lib/utils/time-surcharge-summary'
 import {
   DEFECT_OPTIONS,
+  OTHER_DEFECT_VALUE,
+  applyOtherText,
   defectOptionClassName,
+  extractOtherText,
+  hydrateDefectsFromTowReason,
+  isOtherSelected,
+  serializeDefects,
 } from '../../../lib/constants/defects'
 import { getTowTypeLabel } from '../../../lib/utils/tow-type-labels'
 import { getTruckTypeLabel } from '../../../lib/utils/truck-type-labels'
@@ -1816,15 +1822,9 @@ function CreateTowForm({
   ] as const
 
   const openDefectsModal = () => {
-    const defectOptionValues = new Set<string>(DEFECT_OPTIONS.map((o) => o.value))
-    const custom = selectedDefects.find((d) => !defectOptionValues.has(d))
-    if (custom) {
-      setOtherDefectText(custom)
-      setSelectedDefects((prev) => {
-        const without = prev.filter((x) => x !== custom)
-        return without.includes('אחר') ? without : [...without, 'אחר']
-      })
-    }
+    const normalized = hydrateDefectsFromTowReason(serializeDefects(selectedDefects))
+    setSelectedDefects(normalized)
+    setOtherDefectText(extractOtherText(normalized))
     setShowDefectsModal(true)
   }
 
@@ -2510,17 +2510,31 @@ function CreateTowForm({
                           <div className="p-4 grid grid-cols-3 gap-3">
                             {DEFECT_OPTIONS.map((defect) => {
                               const Icon = defect.icon
-                              const selected = selectedDefects.includes(defect.value)
+                              const selected =
+                                defect.value === OTHER_DEFECT_VALUE
+                                  ? isOtherSelected(selectedDefects)
+                                  : selectedDefects.includes(defect.value)
                               return (
                               <button
                                 key={defect.value}
                                 type="button"
                                 onClick={() => {
-                                  setSelectedDefects((prev) =>
-                                    prev.includes(defect.value)
+                                  setSelectedDefects((prev) => {
+                                    if (defect.value === OTHER_DEFECT_VALUE) {
+                                      if (isOtherSelected(prev)) {
+                                        setOtherDefectText('')
+                                        return prev.filter(
+                                          (d) =>
+                                            d !== OTHER_DEFECT_VALUE &&
+                                            !d.startsWith('אחר:')
+                                        )
+                                      }
+                                      return [...prev, OTHER_DEFECT_VALUE]
+                                    }
+                                    return prev.includes(defect.value)
                                       ? prev.filter((d) => d !== defect.value)
                                       : [...prev, defect.value]
-                                  )
+                                  })
                                 }}
                                 className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${defectOptionClassName(selected, defect.highlight, 'grid')}`}
                               >
@@ -2530,7 +2544,7 @@ function CreateTowForm({
                               )
                             })}
                           </div>
-                          {selectedDefects.includes('אחר') && (
+                          {isOtherSelected(selectedDefects) && (
                             <div className="mt-3 px-1">
                               <label className="block">תיאור התקלה:</label>
                               <input
@@ -2546,12 +2560,11 @@ function CreateTowForm({
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedDefects((prev) => {
-                                  if (!prev.includes('אחר')) return prev
-                                  const trimmed = otherDefectText.trim()
-                                  if (!trimmed) return prev
-                                  return [...prev.filter((v) => v !== 'אחר'), trimmed]
-                                })
+                                setSelectedDefects((prev) =>
+                                  isOtherSelected(prev)
+                                    ? applyOtherText(prev, otherDefectText)
+                                    : prev
+                                )
                                 setShowDefectsModal(false)
                               }}
                               className="flex-1 py-2.5 bg-gt-brand text-white rounded-xl font-medium text-sm"
@@ -2672,17 +2685,31 @@ function CreateTowForm({
                           <div className="p-4 grid grid-cols-3 gap-3">
                             {DEFECT_OPTIONS.map((defect) => {
                               const Icon = defect.icon
-                              const selected = selectedDefects.includes(defect.value)
+                              const selected =
+                                defect.value === OTHER_DEFECT_VALUE
+                                  ? isOtherSelected(selectedDefects)
+                                  : selectedDefects.includes(defect.value)
                               return (
                               <button
                                 key={defect.value}
                                 type="button"
                                 onClick={() => {
-                                  setSelectedDefects((prev) =>
-                                    prev.includes(defect.value)
+                                  setSelectedDefects((prev) => {
+                                    if (defect.value === OTHER_DEFECT_VALUE) {
+                                      if (isOtherSelected(prev)) {
+                                        setOtherDefectText('')
+                                        return prev.filter(
+                                          (d) =>
+                                            d !== OTHER_DEFECT_VALUE &&
+                                            !d.startsWith('אחר:')
+                                        )
+                                      }
+                                      return [...prev, OTHER_DEFECT_VALUE]
+                                    }
+                                    return prev.includes(defect.value)
                                       ? prev.filter((d) => d !== defect.value)
                                       : [...prev, defect.value]
-                                  )
+                                  })
                                 }}
                                 className={`flex flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 text-sm transition-colors ${defectOptionClassName(selected, defect.highlight, 'grid')}`}
                               >
@@ -2692,7 +2719,7 @@ function CreateTowForm({
                               )
                             })}
                           </div>
-                          {selectedDefects.includes('אחר') && (
+                          {isOtherSelected(selectedDefects) && (
                             <div className="mt-3 px-1">
                               <label className="block">תיאור התקלה:</label>
                               <input
@@ -2708,12 +2735,11 @@ function CreateTowForm({
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedDefects((prev) => {
-                                  if (!prev.includes('אחר')) return prev
-                                  const trimmed = otherDefectText.trim()
-                                  if (!trimmed) return prev
-                                  return [...prev.filter((v) => v !== 'אחר'), trimmed]
-                                })
+                                setSelectedDefects((prev) =>
+                                  isOtherSelected(prev)
+                                    ? applyOtherText(prev, otherDefectText)
+                                    : prev
+                                )
                                 setShowDefectsExchangeModal(false)
                               }}
                               className="flex-1 py-2.5 bg-gt-brand text-white rounded-xl font-medium text-sm"
@@ -3200,7 +3226,14 @@ function CreateTowForm({
                               <div className="flex gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => setShowDefectsExchangeModal(true)}
+                                  onClick={() => {
+                                    const normalized = hydrateDefectsFromTowReason(
+                                      serializeDefects(selectedDefects)
+                                    )
+                                    setSelectedDefects(normalized)
+                                    setOtherDefectText(extractOtherText(normalized))
+                                    setShowDefectsExchangeModal(true)
+                                  }}
                                   className={`flex-1 py-2 rounded-xl border text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
                                     selectedDefects.length > 0
                                       ? 'border-red-300 bg-red-50 text-red-700'

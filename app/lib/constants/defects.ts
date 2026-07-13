@@ -20,6 +20,9 @@ export type DefectOption = {
   readonly highlight?: boolean
 }
 
+export const OTHER_DEFECT_VALUE = 'אחר'
+export const OTHER_DEFECT_PREFIX = 'אחר:'
+
 export const DEFECT_OPTIONS: readonly DefectOption[] = [
   {
     value: 'חום מנוע/נזילת שמן/מים',
@@ -52,7 +55,7 @@ export const DEFECT_OPTIONS: readonly DefectOption[] = [
     icon: OctagonAlert,
     highlight: true,
   },
-  { value: 'אחר', label: 'אחר', icon: MoreHorizontal },
+  { value: OTHER_DEFECT_VALUE, label: 'אחר', icon: MoreHorizontal },
 ]
 
 const CANONICAL_DEFECT_VALUES = new Set<string>(DEFECT_OPTIONS.map((o) => o.value))
@@ -71,8 +74,16 @@ const DEFECT_LABEL_ALIASES: Record<string, string> = {
   'נזילת מים/שמן': 'חום מנוע/נזילת שמן/מים',
 }
 
+function splitDefectTokens(raw: string): string[] {
+  return raw
+    .split(/\s*,\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/** Resolve a single token to a predefined DEFECT_OPTIONS value (excludes אחר). */
 function resolvePredefinedDefectLabel(token: string): string | null {
-  if (CANONICAL_DEFECT_VALUES.has(token) && token !== 'אחר') {
+  if (CANONICAL_DEFECT_VALUES.has(token) && token !== OTHER_DEFECT_VALUE) {
     return token
   }
   const aliased = DEFECT_LABEL_ALIASES[token]
@@ -82,17 +93,59 @@ function resolvePredefinedDefectLabel(token: string): string | null {
   return null
 }
 
+export function isOtherSelected(defects: readonly string[]): boolean {
+  return defects.some(
+    (d) => d === OTHER_DEFECT_VALUE || d.startsWith(OTHER_DEFECT_PREFIX)
+  )
+}
+
+/** Free text from an `אחר: …` token in the chip array (empty for bare אחר). */
+export function extractOtherText(defects: readonly string[]): string {
+  for (const d of defects) {
+    if (d.startsWith(OTHER_DEFECT_PREFIX)) {
+      return d.slice(OTHER_DEFECT_PREFIX.length).trim()
+    }
+  }
+  return ''
+}
+
+/** Toggle אחר on/off. When turning on, uses bare `אחר` (no free text yet). */
+export function toggleOther(defects: readonly string[]): string[] {
+  const withoutOther = defects.filter(
+    (d) => d !== OTHER_DEFECT_VALUE && !d.startsWith(OTHER_DEFECT_PREFIX)
+  )
+  if (isOtherSelected(defects)) {
+    return withoutOther
+  }
+  return [...withoutOther, OTHER_DEFECT_VALUE]
+}
+
+/**
+ * Keep אחר selected and set/clear free text.
+ * Empty text → bare `אחר`; non-empty → `אחר: <trimmed>`.
+ */
+export function applyOtherText(defects: readonly string[], text: string): string[] {
+  const withoutOther = defects.filter(
+    (d) => d !== OTHER_DEFECT_VALUE && !d.startsWith(OTHER_DEFECT_PREFIX)
+  )
+  const trimmed = text.trim()
+  return [...withoutOther, trimmed ? `${OTHER_DEFECT_PREFIX} ${trimmed}` : OTHER_DEFECT_VALUE]
+}
+
 export type ParsedTowReasonDefects = {
-  /** Predefined defect labels (canonical DEFECT_OPTIONS values). */
+  /**
+   * Chip values: predefined DEFECT_OPTIONS values, plus `אחר` when other/custom
+   * is present (never stores unlabeled custom tokens here).
+   */
   defects: string[]
   /** Free-text custom defect(s), without the "אחר:" prefix. */
   otherText: string
 }
 
 /**
- * Parse tow_reason / towReason into dashboard-compatible selectedDefects pieces.
- * Matches post-modal create/page convention: predefined labels + raw custom text token(s).
- * Unknown / legacy tokens that cannot be aliased become otherText (safe display).
+ * Parse tow_reason / stored defects into chip state + free text.
+ * - Predefined + aliases → chip values
+ * - bare `אחר` / `אחר: x` / unknown legacy tokens → chip `אחר` + otherText
  */
 export function parseTowReasonToDefects(towReason: string): ParsedTowReasonDefects {
   if (!towReason.trim()) {
@@ -101,10 +154,16 @@ export function parseTowReasonToDefects(towReason: string): ParsedTowReasonDefec
 
   const predefined: string[] = []
   const otherParts: string[] = []
+  let sawOtherToken = false
 
-  for (const raw of towReason.split(',').map((s) => s.trim()).filter(Boolean)) {
-    if (raw.startsWith('אחר:')) {
-      const text = raw.replace(/^אחר:\s*/, '').trim()
+  for (const raw of splitDefectTokens(towReason)) {
+    if (raw === OTHER_DEFECT_VALUE) {
+      sawOtherToken = true
+      continue
+    }
+    if (raw.startsWith(OTHER_DEFECT_PREFIX)) {
+      sawOtherToken = true
+      const text = raw.slice(OTHER_DEFECT_PREFIX.length).trim()
       if (text) otherParts.push(text)
       continue
     }
@@ -115,14 +174,84 @@ export function parseTowReasonToDefects(towReason: string): ParsedTowReasonDefec
         predefined.push(canonical)
       }
     } else {
+      // Backward compatible: unlabeled custom text → אחר + otherText
+      sawOtherToken = true
       otherParts.push(raw)
     }
   }
 
-  return {
-    defects: predefined,
-    otherText: otherParts.join(', '),
+  const otherText = otherParts.join(', ')
+  if (sawOtherToken || otherText) {
+    predefined.push(OTHER_DEFECT_VALUE)
   }
+
+  return { defects: predefined, otherText }
+}
+
+/**
+ * UI chip array: predefined + `אחר` or `אחר: text` (never unlabeled custom).
+ */
+export function toUiDefects(parsed: ParsedTowReasonDefects): string[] {
+  const predefined = parsed.defects.filter((d) => d !== OTHER_DEFECT_VALUE)
+  if (!parsed.defects.includes(OTHER_DEFECT_VALUE) && !parsed.otherText.trim()) {
+    return predefined
+  }
+  const trimmed = parsed.otherText.trim()
+  return [
+    ...predefined,
+    trimmed ? `${OTHER_DEFECT_PREFIX} ${trimmed}` : OTHER_DEFECT_VALUE,
+  ]
+}
+
+/** Parse a tow_reason (or joined defects) straight into UI chip array. */
+export function hydrateDefectsFromTowReason(towReason: string | null | undefined): string[] {
+  return toUiDefects(parseTowReasonToDefects(towReason ?? ''))
+}
+
+/**
+ * Serialize chip state for DB (`tow_reason` / `defects[]` join).
+ * Optional `otherText` overrides free text extracted from the array.
+ * Always emits `אחר` or `אחר: <text>` — never a raw unlabeled custom token.
+ */
+export function serializeDefects(
+  defects: readonly string[],
+  otherText?: string
+): string {
+  const predefined = defects.filter(
+    (d) => d !== OTHER_DEFECT_VALUE && !d.startsWith(OTHER_DEFECT_PREFIX)
+  )
+  const text =
+    otherText !== undefined ? otherText.trim() : extractOtherText(defects)
+  const parts = [...predefined]
+  if (isOtherSelected(defects)) {
+    parts.push(text ? `${OTHER_DEFECT_PREFIX} ${text}` : OTHER_DEFECT_VALUE)
+  }
+  return parts.join(', ')
+}
+
+/** Token for reports aggregation (aliases + אחר:… → אחר; unknown → אחר). */
+export function normalizeDefectTokenForReport(token: string): string {
+  const trimmed = token.trim()
+  if (!trimmed) return OTHER_DEFECT_VALUE
+  if (trimmed === OTHER_DEFECT_VALUE || trimmed.startsWith(OTHER_DEFECT_PREFIX)) {
+    return OTHER_DEFECT_VALUE
+  }
+  return resolvePredefinedDefectLabel(trimmed) ?? OTHER_DEFECT_VALUE
+}
+
+/** Split a stored tow_reason into report buckets (one count per distinct token). */
+export function defectTokensForReport(towReason: string | null | undefined): string[] {
+  if (!towReason?.trim()) return [OTHER_DEFECT_VALUE]
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of splitDefectTokens(towReason)) {
+    const key = normalizeDefectTokenForReport(raw)
+    if (!seen.has(key)) {
+      seen.add(key)
+      out.push(key)
+    }
+  }
+  return out.length > 0 ? out : [OTHER_DEFECT_VALUE]
 }
 
 /** Shared selected/unselected classes; highlight (brakes) always uses red. */

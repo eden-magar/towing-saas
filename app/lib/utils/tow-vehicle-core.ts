@@ -1,4 +1,5 @@
 import { getVehicleTypeLabel, isKnownVehicleType } from '../vehicle-lookup'
+import { hydrateDefectsFromTowReason } from '../constants/defects'
 
 /** tow_vehicles row shape (snake_case) accepted by {@link toTowVehicleCoreInfo}. */
 export type TowVehicleDbRow = {
@@ -98,11 +99,7 @@ function buildWeightLines(row: TowVehicleDbRow): TowVehicleCoreInfo['weightLines
 }
 
 function parseDefects(towReason: string | null | undefined): string[] {
-  if (!towReason?.trim()) return []
-  return towReason
-    .split(', ')
-    .map((d) => d.trim())
-    .filter(Boolean)
+  return hydrateDefectsFromTowReason(towReason)
 }
 
 function parseOptionalNumber(value: string | number | null | undefined): number | null {

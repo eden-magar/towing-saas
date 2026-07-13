@@ -266,7 +266,6 @@ export default function TowDetailsPage() {
   const [endEditDate, setEndEditDate] = useState('')
   const [endEditTime, setEndEditTime] = useState('')
   const [endEditSaving, setEndEditSaving] = useState(false)
-  const defectOptions = ['תקר', 'מנוע', 'סוללה', 'תאונה', 'נעילה', 'לא מניע', 'אחר']
 
   const [showAllDrivers, setShowAllDrivers] = useState(false)
   const [scheduleDate, setScheduleDate] = useState(new Date())

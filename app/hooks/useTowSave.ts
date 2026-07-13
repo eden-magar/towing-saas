@@ -30,6 +30,7 @@ import { RoutePoint } from '../components/tow-forms/routes'
 import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib/queries/driver-truck-assignments'
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
 import { markCustomerTowRequestConverted } from '../lib/queries/customer-tow-requests'
+import { serializeDefects } from '../lib/constants/defects'
 
 const STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE =
   'גרירת ההמשך כבר שובצה — כדי לבטלה, פתח אותה ישירות'
@@ -42,10 +43,13 @@ function deriveStorageFollowUpCondition(
 ): { isWorking: boolean; towReason: string | null } {
   const isFaulty =
     storageVehicleCondition === 'faulty' || (selectedDefects?.length ?? 0) > 0
+  const serialized = selectedDefects?.length
+    ? serializeDefects(selectedDefects)
+    : ''
   return {
     isWorking: !isFaulty,
-    towReason: selectedDefects?.length
-      ? selectedDefects.join(', ')
+    towReason: serialized
+      ? serialized
       : isFaulty
         ? 'תקול'
         : null,

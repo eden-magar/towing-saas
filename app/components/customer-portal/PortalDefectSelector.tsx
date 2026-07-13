@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react'
 import {
   DEFECT_OPTIONS,
+  OTHER_DEFECT_VALUE,
+  applyOtherText,
   defectOptionClassName,
+  extractOtherText,
+  isOtherSelected,
+  toggleOther,
 } from '@/app/lib/constants/defects'
 import { SelectorModalShell } from '@/app/components/tow-forms/shared/SelectorModalShell'
 import { PORTAL_DEFECTS_TRIGGER_CLASS } from './portalRequestActionStyles'
@@ -28,24 +33,20 @@ export function PortalDefectSelector({
   triggerLabel = 'בחר תקלות',
   triggerClassName = PORTAL_DEFECTS_TRIGGER_CLASS,
 }: PortalDefectSelectorProps) {
-  const [otherText, setOtherText] = useState('')
+  const [otherText, setOtherText] = useState(() => extractOtherText(selectedDefects))
   const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
-    const otherDefect = selectedDefects.find((d) => d.startsWith('אחר:'))
-    if (otherDefect) {
-      setOtherText(otherDefect.replace('אחר: ', ''))
-    }
-  }, [])
+    setOtherText(extractOtherText(selectedDefects))
+  }, [selectedDefects])
 
   const toggleDefect = (defect: string) => {
-    if (defect === 'אחר') {
-      const hasOther = selectedDefects.some((d) => d === 'אחר' || d.startsWith('אחר:'))
-      if (hasOther) {
-        onChange(selectedDefects.filter((d) => d !== 'אחר' && !d.startsWith('אחר:')))
+    if (defect === OTHER_DEFECT_VALUE) {
+      if (isOtherSelected(selectedDefects)) {
         setOtherText('')
-        return
       }
+      onChange(toggleOther(selectedDefects))
+      return
     }
 
     if (selectedDefects.includes(defect)) {
@@ -57,18 +58,11 @@ export function PortalDefectSelector({
 
   const updateOtherText = (text: string) => {
     setOtherText(text)
-    const filtered = selectedDefects.filter((d) => d !== 'אחר' && !d.startsWith('אחר:'))
-    if (text.trim()) {
-      onChange([...filtered, `אחר: ${text}`])
-    } else {
-      onChange([...filtered, 'אחר'])
-    }
+    onChange(applyOtherText(selectedDefects, text))
   }
 
   const isSelected = (defect: string) => {
-    if (defect === 'אחר') {
-      return selectedDefects.some((d) => d === 'אחר' || d.startsWith('אחר:'))
-    }
+    if (defect === OTHER_DEFECT_VALUE) return isOtherSelected(selectedDefects)
     return selectedDefects.includes(defect)
   }
 
@@ -119,7 +113,7 @@ export function PortalDefectSelector({
           })}
         </div>
 
-        {isSelected('אחר') && (
+        {isSelected(OTHER_DEFECT_VALUE) && (
           <div className="px-4 pb-4">
             <input
               type="text"

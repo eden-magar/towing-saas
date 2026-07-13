@@ -40,7 +40,13 @@ import { getCustomersLite, type CustomerListItem } from '../../lib/queries/custo
 import { lookupVehicle } from '../../lib/vehicle-lookup'
 import {
   DEFECT_OPTIONS,
+  OTHER_DEFECT_VALUE,
+  applyOtherText,
   defectOptionClassName,
+  extractOtherText,
+  hydrateDefectsFromTowReason,
+  isOtherSelected,
+  serializeDefects,
 } from '../../lib/constants/defects'
 import { CustomerSearchSelect } from '@/app/components/shared/CustomerSearchSelect'
 
@@ -88,6 +94,7 @@ export default function StoragePage() {
     vehicleCode: '',
     defects: [] as string[],
   })
+  const [otherDefectText, setOtherDefectText] = useState('')
   const [vehicleLookupLoading, setVehicleLookupLoading] = useState(false)
 
   // טעינת נתונים
@@ -153,6 +160,7 @@ export default function StoragePage() {
       vehicleCode: '',
       defects: [],
     })
+    setOtherDefectText('')
     setError('')
   }
 
@@ -166,6 +174,7 @@ export default function StoragePage() {
   const openEditModal = (vehicle: StoredVehicleWithCustomer) => {
     setModalMode('edit')
     setSelectedVehicle(vehicle)
+    const normalized = hydrateDefectsFromTowReason((vehicle.defects || []).join(', '))
     setFormData({
       plateNumber: vehicle.plate_number,
       customerId: vehicle.customer_id || '',
@@ -174,8 +183,9 @@ export default function StoragePage() {
       vehicleData: vehicle.vehicle_data,
       vehicleCondition: vehicle.vehicle_condition || 'operational',
       vehicleCode: vehicle.vehicle_code || '',
-      defects: vehicle.defects || [],
+      defects: normalized,
     })
+    setOtherDefectText(extractOtherText(normalized))
     setShowModal(true)
     setOpenMenuId(null)
   }
@@ -235,6 +245,11 @@ export default function StoragePage() {
     setError('')
 
     try {
+      const defectsSerialized = serializeDefects(formData.defects, otherDefectText)
+      const defectsForDb = defectsSerialized
+        ? defectsSerialized.split(/\s*,\s*/).filter(Boolean)
+        : []
+
       if (modalMode === 'add') {
         await addVehicleToStorage({
           companyId,
@@ -246,7 +261,7 @@ export default function StoragePage() {
           notes: formData.notes || undefined,
           vehicleCondition: formData.vehicleCondition,
           vehicleCode: formData.vehicleCode || undefined,
-          defects: formData.defects.length > 0 ? formData.defects : undefined,
+          defects: defectsForDb.length > 0 ? defectsForDb : undefined,
         })
       } else if (modalMode === 'edit' && selectedVehicle) {
         await updateStoredVehicle({
@@ -256,7 +271,7 @@ export default function StoragePage() {
         notes: formData.notes || null,
         vehicleCondition: formData.vehicleCondition,
         vehicleCode: formData.vehicleCode || null,
-        defects: formData.defects,
+        defects: defectsForDb,
       })
       } else if (modalMode === 'release' && selectedVehicle) {
         await releaseVehicleFromStorage({
@@ -807,13 +822,14 @@ export default function StoragePage() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          setOtherDefectText('')
                           setFormData((prev) => ({
                             ...prev,
                             vehicleCondition: 'operational',
                             defects: [],
                           }))
-                        }
+                        }}
                         className={`flex-1 py-2.5 px-3 rounded-xl text-sm font-medium transition-colors ${
                           formData.vehicleCondition === 'operational'
                             ? 'bg-emerald-500 text-white'
@@ -849,18 +865,40 @@ export default function StoragePage() {
                       <div className="grid grid-cols-3 gap-2">
                         {DEFECT_OPTIONS.map((option) => {
                           const Icon = option.icon
-                          const isSelected = formData.defects.includes(option.value)
+                          const isSelected =
+                            option.value === OTHER_DEFECT_VALUE
+                              ? isOtherSelected(formData.defects)
+                              : formData.defects.includes(option.value)
                           return (
                             <button
                               key={option.value}
                               type="button"
                               onClick={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  defects: isSelected
-                                    ? prev.defects.filter((d) => d !== option.value)
-                                    : [...prev.defects, option.value],
-                                }))
+                                setFormData((prev) => {
+                                  if (option.value === OTHER_DEFECT_VALUE) {
+                                    if (isOtherSelected(prev.defects)) {
+                                      setOtherDefectText('')
+                                      return {
+                                        ...prev,
+                                        defects: prev.defects.filter(
+                                          (d) =>
+                                            d !== OTHER_DEFECT_VALUE &&
+                                            !d.startsWith('אחר:')
+                                        ),
+                                      }
+                                    }
+                                    return {
+                                      ...prev,
+                                      defects: [...prev.defects, OTHER_DEFECT_VALUE],
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    defects: isSelected
+                                      ? prev.defects.filter((d) => d !== option.value)
+                                      : [...prev.defects, option.value],
+                                  }
+                                })
                               }}
                               className={`flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 text-center transition ${
                                 option.highlight
@@ -876,6 +914,27 @@ export default function StoragePage() {
                           )
                         })}
                       </div>
+                      {isOtherSelected(formData.defects) && (
+                        <div className="mt-3">
+                          <label className="block text-sm text-gray-600 mb-1">
+                            תיאור התקלה
+                          </label>
+                          <input
+                            type="text"
+                            value={otherDefectText}
+                            onChange={(e) => {
+                              const text = e.target.value
+                              setOtherDefectText(text)
+                              setFormData((prev) => ({
+                                ...prev,
+                                defects: applyOtherText(prev.defects, text),
+                              }))
+                            }}
+                            placeholder="פרט את התקלה..."
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 

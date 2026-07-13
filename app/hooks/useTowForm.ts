@@ -33,7 +33,7 @@ import {
 } from '../lib/types'
 import { getFullCustomerTowRequest } from '../lib/queries/customer-tow-requests'
 import { lookupVehicle } from '../lib/vehicle-lookup'
-import { parseTowReasonToDefects } from '../lib/constants/defects'
+import { hydrateDefectsFromTowReason, parseTowReasonToDefects } from '../lib/constants/defects'
 import {
   getCustomerStoredVehiclesForDisplay,
   getStoredVehicleById,
@@ -394,11 +394,7 @@ function resolveFullTowVehicleRow(
 }
 
 function parseTowReasonDefects(towReason: string | null | undefined): string[] {
-  if (!towReason?.trim()) return []
-  return towReason
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  return hydrateDefectsFromTowReason(towReason)
 }
 
 function vehicleDataFromTowVehicleRow(row: TowVehicleEditRow) {
@@ -515,12 +511,7 @@ function hydrateSingleTowVehicleFromRow(
 
   setters.setVehiclePlate(firstVehicle.plate_number || '')
   setters.setVehicleCode(firstVehicle.vehicle_code || '')
-  setters.setSelectedDefects(
-    (firstVehicle.tow_reason || '')
-      .split(',')
-      .map((s: string) => s.trim())
-      .filter(Boolean)
-  )
+  setters.setSelectedDefects(hydrateDefectsFromTowReason(firstVehicle.tow_reason))
 
   if (isManualCommercialVehicle(firstVehicle)) {
     setters.setVehicleType('van' as VehicleType)
@@ -735,14 +726,10 @@ function buildRequestOriginalValuesFromRequest(
   const towReason =
     requestVehicle?.tow_reason || request.defect_description || ''
   if (towReason.trim()) {
-    const { defects: parsedDefects, otherText: parsedOtherDefectText } =
-      parseTowReasonToDefects(towReason)
-    original.selectedDefects = [
-      ...parsedDefects,
-      ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
-    ]
-    if (parsedOtherDefectText) {
-      original.fromRequestOtherDefectText = parsedOtherDefectText
+    const parsed = parseTowReasonToDefects(towReason)
+    original.selectedDefects = hydrateDefectsFromTowReason(towReason)
+    if (parsed.otherText) {
+      original.fromRequestOtherDefectText = parsed.otherText
     }
   }
 
@@ -1995,14 +1982,11 @@ export function useTowForm(
           setWorkingVehicleCode((working as any)?.vehicle_code ?? '')
           setDefectiveVehiclePlate(defective?.plate_number ?? '')
           setDefectiveVehicleCode((defective as any)?.vehicle_code ?? '')
-          setSelectedDefects((defective?.tow_reason ?? '').split(', ').filter(Boolean))
+          setSelectedDefects(hydrateDefectsFromTowReason(defective?.tow_reason))
           setDefectiveFaultDescription(defective?.tow_reason ?? '')
 
           if (defective) {
-            const defectList = (defective.tow_reason ?? '')
-              .split(', ')
-              .map((s: string) => s.trim())
-              .filter(Boolean)
+            const defectList = hydrateDefectsFromTowReason(defective.tow_reason)
             const isFaulty = defective.is_working === false || defectList.length > 0
             const defectiveDropoffToStorage = (tow.points ?? []).some(
               (p: {
@@ -2213,12 +2197,7 @@ export function useTowForm(
             setVehiclePlate(firstVehicle.plate_number || '')
             setVehicleCode(firstVehicle.vehicle_code || '')
 
-            setSelectedDefects(
-              (firstVehicle.tow_reason || '')
-                .split(',')
-                .map((s: string) => s.trim())
-                .filter(Boolean)
-            )
+            setSelectedDefects(hydrateDefectsFromTowReason(firstVehicle.tow_reason))
 
             if (isManualCommercialVehicle(firstVehicle)) {
               setVehicleType('van' as VehicleType)
@@ -2262,10 +2241,7 @@ export function useTowForm(
             }
 
             if (tow.dropoff_to_storage && firstVehicle) {
-              const defectList = (firstVehicle.tow_reason || '')
-                .split(',')
-                .map((s: string) => s.trim())
-                .filter(Boolean)
+              const defectList = hydrateDefectsFromTowReason(firstVehicle.tow_reason)
               const isFaulty =
                 firstVehicle.is_working === false || defectList.length > 0
               setStorageVehicleCondition(isFaulty ? 'faulty' : 'operational')
@@ -2583,16 +2559,9 @@ export function useTowForm(
 
             const towReason =
               requestVehicle?.tow_reason || request.defect_description || ''
-            const { defects: parsedDefects, otherText: parsedOtherDefectText } =
-              parseTowReasonToDefects(towReason)
-            // Dashboard post-modal convention (create/page openDefectsModal): predefined
-            // labels plus raw custom text — NOT "אחר:" prefix, NOT bare "אחר".
-            // Edit/duplicate still use naive split on tow_reason — pre-existing; not fixed here.
-            setSelectedDefects([
-              ...parsedDefects,
-              ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
-            ])
-            setFromRequestOtherDefectText(parsedOtherDefectText)
+            const parsed = parseTowReasonToDefects(towReason)
+            setSelectedDefects(hydrateDefectsFromTowReason(towReason))
+            setFromRequestOtherDefectText(parsed.otherText)
 
             const applyManualFallbackFromRequest = () => {
               setVehicleData(null)
@@ -2751,13 +2720,10 @@ export function useTowForm(
           })
 
           const towReason = defectiveRequestVehicle?.tow_reason || ''
-          const { defects: parsedDefects, otherText: parsedOtherDefectText } =
-            parseTowReasonToDefects(towReason)
-          setSelectedDefects([
-            ...parsedDefects,
-            ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
-          ])
-          setFromRequestOtherDefectText(parsedOtherDefectText)
+          const parsed = parseTowReasonToDefects(towReason)
+          const hydratedDefects = hydrateDefectsFromTowReason(towReason)
+          setSelectedDefects(hydratedDefects)
+          setFromRequestOtherDefectText(parsed.otherText)
           setDefectiveFaultDescription(towReason)
 
           const sortedPoints = [...points].sort(
@@ -2830,12 +2796,8 @@ export function useTowForm(
             setDefectiveDestinationContactPhone(p3.contact_phone || '')
             if (p3.is_storage) {
               setDefectiveDestination('storage')
-              const defectList = [
-                ...parsedDefects,
-                ...(parsedOtherDefectText ? [parsedOtherDefectText] : []),
-              ]
               setStorageVehicleCondition(
-                defectList.length > 0 || defectiveRequestVehicle?.is_working === false
+                hydratedDefects.length > 0 || defectiveRequestVehicle?.is_working === false
                   ? 'faulty'
                   : 'operational'
               )

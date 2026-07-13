@@ -1,4 +1,5 @@
 import type { StoredVehicle } from '../queries/storage'
+import { hydrateDefectsFromTowReason } from '../constants/defects'
 
 export type StoredVehicleConditionFields = {
   isFaulty: boolean
@@ -30,7 +31,7 @@ export function storedVehicleToCondition(
 ): StoredVehicleConditionFields {
   return {
     isFaulty: stored.vehicle_condition === 'faulty',
-    defects: stored.defects ?? [],
+    defects: hydrateDefectsFromTowReason((stored.defects ?? []).join(', ')),
   }
 }
 

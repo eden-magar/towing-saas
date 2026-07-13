@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { type CustomerPortalStoredVehicle } from '@/app/lib/queries/customer-portal'
+import { serializeDefects } from '@/app/lib/constants/defects'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
 import { PortalRequestPageHeader } from '@/app/components/customer-portal/PortalRequestPageHeader'
@@ -561,7 +562,9 @@ export default function NewCustomerExchangeRequestPage() {
           buildVehiclePayload(working, { isWorking: true, orderIndex: 0 }),
           buildVehiclePayload(faulty, {
             isWorking: false,
-            towReason: faultyDefects.join(', ') || undefined,
+            towReason: faultyDefects.length
+              ? serializeDefects(faultyDefects)
+              : undefined,
             orderIndex: 1,
           }),
         ],

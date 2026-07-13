@@ -2,7 +2,12 @@
 import { useState, useEffect } from 'react'
 import {
   DEFECT_OPTIONS,
+  OTHER_DEFECT_VALUE,
+  applyOtherText,
   defectOptionClassName,
+  extractOtherText,
+  isOtherSelected,
+  toggleOther,
 } from '../../../lib/constants/defects'
 import { SelectorModalShell } from './SelectorModalShell'
 
@@ -28,24 +33,20 @@ export function DefectSelector({
   triggerClassName,
   isMobile = false,
 }: DefectSelectorProps) {
-  const [otherText, setOtherText] = useState('')
+  const [otherText, setOtherText] = useState(() => extractOtherText(selectedDefects))
   const [showModal, setShowModal] = useState(false)
 
   useEffect(() => {
-    const otherDefect = selectedDefects.find((d) => d.startsWith('אחר:'))
-    if (otherDefect) {
-      setOtherText(otherDefect.replace('אחר: ', ''))
-    }
-  }, [])
+    setOtherText(extractOtherText(selectedDefects))
+  }, [selectedDefects])
 
   const toggleDefect = (defect: string) => {
-    if (defect === 'אחר') {
-      const hasOther = selectedDefects.some((d) => d === 'אחר' || d.startsWith('אחר:'))
-      if (hasOther) {
-        onChange(selectedDefects.filter((d) => d !== 'אחר' && !d.startsWith('אחר:')))
+    if (defect === OTHER_DEFECT_VALUE) {
+      if (isOtherSelected(selectedDefects)) {
         setOtherText('')
-        return
       }
+      onChange(toggleOther(selectedDefects))
+      return
     }
 
     if (selectedDefects.includes(defect)) {
@@ -57,16 +58,11 @@ export function DefectSelector({
 
   const updateOtherText = (text: string) => {
     setOtherText(text)
-    const filtered = selectedDefects.filter((d) => d !== 'אחר' && !d.startsWith('אחר:'))
-    if (text.trim()) {
-      onChange([...filtered, `אחר: ${text}`])
-    } else {
-      onChange([...filtered, 'אחר'])
-    }
+    onChange(applyOtherText(selectedDefects, text))
   }
 
   const isSelected = (defect: string) => {
-    if (defect === 'אחר') return selectedDefects.some((d) => d === 'אחר' || d.startsWith('אחר:'))
+    if (defect === OTHER_DEFECT_VALUE) return isOtherSelected(selectedDefects)
     return selectedDefects.includes(defect)
   }
 
@@ -110,7 +106,7 @@ export function DefectSelector({
     return (
       <div>
         {renderChips({})}
-        {isSelected('אחר') && (
+        {isSelected(OTHER_DEFECT_VALUE) && (
           <div className="mt-3">
             <input
               type="text"
@@ -155,7 +151,7 @@ export function DefectSelector({
         </button>
         <SelectorModalShell open={showModal} onClose={() => setShowModal(false)} title={label}>
           {renderChips({ keyPrefix: 'modal-', minTouch: true, brand: true })}
-          {isSelected('אחר') && (
+          {isSelected(OTHER_DEFECT_VALUE) && (
             <div className="px-4 pb-4">
               <input
                 type="text"
@@ -213,7 +209,7 @@ export function DefectSelector({
         overlayClassName="sm:hidden"
       >
         {renderChips({ keyPrefix: 'modal-', minTouch: true })}
-        {isSelected('אחר') && (
+        {isSelected(OTHER_DEFECT_VALUE) && (
           <div className="px-4 pb-4">
             <input
               type="text"
@@ -251,7 +247,7 @@ export function DefectSelector({
         })}
       </div>
 
-      {!isMobile && isSelected('אחר') && (
+      {!isMobile && isSelected(OTHER_DEFECT_VALUE) && (
         <div className="mt-3">
           <input
             type="text"

@@ -11,6 +11,10 @@ import {
   normalizeTowImagePath,
   withSignedTowImageUrls,
 } from './tow-images-storage'
+import {
+  hydrateDefectsFromTowReason,
+  serializeDefects,
+} from '../constants/defects'
 
 // ==================== טיפוסים ====================
 
@@ -925,9 +929,8 @@ async function handleStorageOnPointCompleted(
         const isFaulty = !!vehicle.tow_reason?.trim()
         const parsedDefects =
           isFaulty && vehicle.tow_reason
-            ? vehicle.tow_reason
-                .split(', ')
-                .map((d) => d.trim())
+            ? serializeDefects(hydrateDefectsFromTowReason(vehicle.tow_reason))
+                .split(/\s*,\s*/)
                 .filter(Boolean)
             : undefined
         await addVehicleToStorage({

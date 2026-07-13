@@ -11,6 +11,7 @@ import { SelectedService } from '../../components/tow-forms/shared'
 import { calculateTowPrice, extractBasePrices, mergePriceLists, priceListForTowCalc, resolveDeadheadRate, resolveVehicleBasePrice } from './price-calculator'
 import { VehicleType, VehicleLookupResult } from '../types'
 import { normalizePlate } from './plate-number'
+import { serializeDefects } from '../constants/defects'
 import {
   assignExistingPointIds,
   assignExistingVehicleIds,
@@ -813,7 +814,9 @@ export function collectVehiclesFromRoutePoints(routePoints: RoutePoint[]): Prepa
     vehicleCode: v.vehicleCode || undefined,
     color: v.vehicleData?.color || v.manualColor || undefined,
     isWorking: v.isWorking,
-    towReason: v.isWorking ? undefined : (v.defects?.filter(Boolean).join(', ') || 'לא נוסע'),
+    towReason: v.isWorking
+      ? undefined
+      : serializeDefects(v.defects?.filter(Boolean) ?? []) || 'לא נוסע',
     registrySource: resolveRouteVehicleRegistrySource(v),
     driveType: v.vehicleData?.driveType,
     fuelType: v.vehicleData?.fuelType,
@@ -1488,7 +1491,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       year: input.vehicleData?.data?.year,
       color: input.vehicleData?.data?.color || input.manualColor,
       isWorking: !(input.selectedDefects?.length),
-      towReason: input.selectedDefects?.join(', ') || undefined,
+      towReason: input.selectedDefects?.length
+        ? serializeDefects(input.selectedDefects)
+        : undefined,
       driveType: input.vehicleData?.data?.driveType,
       fuelType: input.vehicleData?.data?.fuelType,
       totalWeight: input.vehicleData?.data?.totalWeight || (input.manualWeight ? Number(input.manualWeight) : undefined),
@@ -1699,7 +1704,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       color:
         input.defectiveVehicleData?.data?.color || input.defectiveManualColor || undefined,
       isWorking: false,
-      towReason: input.selectedDefects?.join(', ') || undefined,
+      towReason: input.selectedDefects?.length
+        ? serializeDefects(input.selectedDefects)
+        : undefined,
       driveType: input.defectiveVehicleData?.data?.driveType,
       fuelType: input.defectiveVehicleData?.data?.fuelType,
       totalWeight: input.defectiveVehicleData?.data?.totalWeight ?? (input.defectiveManualWeight ? Number(input.defectiveManualWeight) : undefined),

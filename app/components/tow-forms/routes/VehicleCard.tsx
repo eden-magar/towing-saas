@@ -10,7 +10,13 @@ import { normalizePlate } from '../../../lib/utils/plate-number'
 import { shouldTriggerPlateLookupOnBlur } from '../../../lib/utils/plate-lookup-blur'
 import {
   DEFECT_OPTIONS,
+  OTHER_DEFECT_VALUE,
+  applyOtherText,
   defectOptionClassName,
+  extractOtherText,
+  hydrateDefectsFromTowReason,
+  isOtherSelected,
+  serializeDefects,
 } from '../../../lib/constants/defects'
 
 // ==================== Types ====================
@@ -62,16 +68,11 @@ export function VehicleCard({
   const [otherDefectText, setOtherDefectText] = useState('')
 
   const openDefectsModal = () => {
-    const defectOptionValues = new Set<string>(DEFECT_OPTIONS.map((o) => o.value))
-    const custom = (vehicle.defects || []).find((d) => !defectOptionValues.has(d))
-    if (custom) {
-      setOtherDefectText(custom)
-      const without = (vehicle.defects || []).filter((x) => x !== custom)
-      const next = without.includes('אחר') ? without : [...without, 'אחר']
-      onChange({ ...vehicle, defects: next })
-    } else {
-      setOtherDefectText('')
-    }
+    const normalized = hydrateDefectsFromTowReason(
+      serializeDefects(vehicle.defects || [])
+    )
+    setOtherDefectText(extractOtherText(normalized))
+    onChange({ ...vehicle, defects: normalized })
     setShowDefectsModal(true)
   }
 
@@ -470,13 +471,36 @@ export function VehicleCard({
                   <div className="p-4 grid grid-cols-3 gap-3">
                     {DEFECT_OPTIONS.map((defect) => {
                       const Icon = defect.icon
-                      const selected = (vehicle.defects || []).includes(defect.value)
+                      const defects = vehicle.defects || []
+                      const selected =
+                        defect.value === OTHER_DEFECT_VALUE
+                          ? isOtherSelected(defects)
+                          : defects.includes(defect.value)
                       return (
                       <button
                         key={defect.value}
                         type="button"
                         onClick={() => {
                           const prev = vehicle.defects || []
+                          if (defect.value === OTHER_DEFECT_VALUE) {
+                            if (isOtherSelected(prev)) {
+                              setOtherDefectText('')
+                              onChange({
+                                ...vehicle,
+                                defects: prev.filter(
+                                  (d) =>
+                                    d !== OTHER_DEFECT_VALUE &&
+                                    !d.startsWith('אחר:')
+                                ),
+                              })
+                              return
+                            }
+                            onChange({
+                              ...vehicle,
+                              defects: [...prev, OTHER_DEFECT_VALUE],
+                            })
+                            return
+                          }
                           onChange({
                             ...vehicle,
                             defects: prev.includes(defect.value)
@@ -492,7 +516,7 @@ export function VehicleCard({
                       )
                     })}
                   </div>
-                  {(vehicle.defects || []).includes('אחר') && (
+                  {isOtherSelected(vehicle.defects || []) && (
                     <div className="mt-3 px-4">
                       <label className="block text-sm">תיאור התקלה:</label>
                       <input
@@ -509,19 +533,11 @@ export function VehicleCard({
                       type="button"
                       onClick={() => {
                         const prev = vehicle.defects || []
-                        if (!prev.includes('אחר')) {
-                          setShowDefectsModal(false)
-                          return
-                        }
-                        const trimmed = otherDefectText.trim()
-                        if (!trimmed) {
-                          onChange({ ...vehicle, defects: prev })
-                          setShowDefectsModal(false)
-                          return
-                        }
                         onChange({
                           ...vehicle,
-                          defects: [...prev.filter((v) => v !== 'אחר'), trimmed],
+                          defects: isOtherSelected(prev)
+                            ? applyOtherText(prev, otherDefectText)
+                            : prev,
                         })
                         setShowDefectsModal(false)
                       }}
