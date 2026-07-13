@@ -3,7 +3,14 @@
 import { useState, useEffect, useMemo, useRef, useCallback, type CSSProperties, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../lib/AuthContext'
-import { getWeekTows, updateTowSchedule, searchTows, type CalendarTowSearchHit } from '../../lib/queries/calendar'
+import {
+  getWeekTows,
+  updateTowSchedule,
+  searchTows,
+  getCalendarTowRoutePoints,
+  type CalendarTowSearchHit,
+  type CalendarTowRoutePoint,
+} from '../../lib/queries/calendar'
 import { getWeekEvents } from '../../lib/queries/events'
 import { getEventTimeBounds } from '../../lib/utils/event-time-bounds'
 import { getDrivers } from '../../lib/queries/drivers'
@@ -200,6 +207,55 @@ function TowDetailRow({ label, children }: { label: string; children: ReactNode 
       <div className="text-sm text-gray-800 text-left flex-1 min-w-0">{children}</div>
     </div>
   )
+}
+
+function calendarRoutePointLabel(point: CalendarTowRoutePoint): string {
+  switch (point.point_type) {
+    case 'pickup':
+      return 'מוצא'
+    case 'dropoff':
+      return 'יעד'
+    case 'exchange':
+      return 'נקודת החלפה'
+    case 'stop':
+      if (point.stop_subtype === 'key') return 'עצירה · מפתח'
+      if (point.stop_subtype === 'customer_pickup') return 'עצירה · איסוף לקוח'
+      if (point.stop_subtype === 'customer_dropoff') return 'עצירה · הורדת לקוח'
+      return 'עצירה'
+    default:
+      return 'עצירה'
+  }
+}
+
+/** Ordered route rows for calendar popups (all tow_points, not just first/last). */
+function TowRoutePointRows({
+  points,
+  loading,
+  fallback,
+}: {
+  points: CalendarTowRoutePoint[]
+  loading: boolean
+  fallback?: ReactNode
+}) {
+  if (loading) {
+    return (
+      <TowDetailRow label="מסלול">
+        <span className="text-gray-400">טוען…</span>
+      </TowDetailRow>
+    )
+  }
+  if (points.length > 0) {
+    return (
+      <>
+        {points.map((point) => (
+          <TowDetailRow key={point.id} label={calendarRoutePointLabel(point)}>
+            <span className="font-medium">{point.address?.trim() || '—'}</span>
+          </TowDetailRow>
+        ))}
+      </>
+    )
+  }
+  return <>{fallback ?? null}</>
 }
 
 const HEBREW_MONTHS = [
@@ -567,6 +623,8 @@ export default function CalendarPage() {
   const [globalSearchError, setGlobalSearchError] = useState('')
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
   const [searchHitPopover, setSearchHitPopover] = useState<CalendarTowSearchHit | null>(null)
+  const [popupRoutePoints, setPopupRoutePoints] = useState<CalendarTowRoutePoint[]>([])
+  const [popupRoutePointsLoading, setPopupRoutePointsLoading] = useState(false)
 
   const dayLayoutRef = useRef<HTMLDivElement>(null)
   const globalSearchWrapRef = useRef<HTMLDivElement>(null)
@@ -576,6 +634,36 @@ export default function CalendarPage() {
     const interval = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(interval)
   }, [])
+
+  // Fetch full route points only when a popup opens (keep week grid query lean).
+  const popupRouteTowId = searchHitPopover?.id ?? selectedTow?.id ?? null
+  useEffect(() => {
+    if (!popupRouteTowId) {
+      setPopupRoutePoints([])
+      setPopupRoutePointsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setPopupRoutePoints([])
+    setPopupRoutePointsLoading(true)
+
+    getCalendarTowRoutePoints(popupRouteTowId)
+      .then((points) => {
+        if (!cancelled) setPopupRoutePoints(points)
+      })
+      .catch((err) => {
+        console.error('Failed to load calendar tow route points:', err)
+        if (!cancelled) setPopupRoutePoints([])
+      })
+      .finally(() => {
+        if (!cancelled) setPopupRoutePointsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [popupRouteTowId])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -2042,16 +2130,24 @@ const handleSkipPriceUpdate = () => {
                   </span>
                 </TowDetailRow>
               )}
-              {searchHitPopover.pickup_address && (
-                <TowDetailRow label="מוצא">
-                  <span className="font-medium">{searchHitPopover.pickup_address}</span>
-                </TowDetailRow>
-              )}
-              {searchHitPopover.dropoff_address && (
-                <TowDetailRow label="יעד">
-                  <span className="font-medium">{searchHitPopover.dropoff_address}</span>
-                </TowDetailRow>
-              )}
+              <TowRoutePointRows
+                points={popupRoutePoints}
+                loading={popupRoutePointsLoading}
+                fallback={
+                  <>
+                    {searchHitPopover.pickup_address && (
+                      <TowDetailRow label="מוצא">
+                        <span className="font-medium">{searchHitPopover.pickup_address}</span>
+                      </TowDetailRow>
+                    )}
+                    {searchHitPopover.dropoff_address && (
+                      <TowDetailRow label="יעד">
+                        <span className="font-medium">{searchHitPopover.dropoff_address}</span>
+                      </TowDetailRow>
+                    )}
+                  </>
+                }
+              />
               <TowDetailRow label="לוחית">
                 <span className="font-mono font-medium">{searchHitPopover.plate || '—'}</span>
               </TowDetailRow>
@@ -2195,11 +2291,17 @@ const handleSkipPriceUpdate = () => {
                 )}
               </TowDetailRow>
 
-              <TowDetailRow label="מסלול">
-                <span className="font-medium">
-                  {route.from} → {route.to}
-                </span>
-              </TowDetailRow>
+              <TowRoutePointRows
+                points={popupRoutePoints}
+                loading={popupRoutePointsLoading}
+                fallback={
+                  <TowDetailRow label="מסלול">
+                    <span className="font-medium">
+                      {route.from} → {route.to}
+                    </span>
+                  </TowDetailRow>
+                }
+              />
 
               <TowDetailRow label="נהג">
                 <div className="flex items-center gap-2">

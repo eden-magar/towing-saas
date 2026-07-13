@@ -176,11 +176,45 @@ export interface CalendarTowSearchHit {
   status: string
   order_number: string | null
   customer_order_number: string | null
+  /** Legacy first/last leg addresses from search RPC — prefer tow_points for full route. */
   pickup_address: string | null
   dropoff_address: string | null
   time_range_label: string
   /** Local calendar day for navigation (midnight). */
   scheduled_date: Date
+}
+
+/** Slim tow_points row for calendar popups (fetched on open, not in the week grid query). */
+export type CalendarTowRoutePoint = {
+  id: string
+  point_order: number
+  point_type: string
+  address: string | null
+  stop_subtype: string | null
+}
+
+/** Load ordered route points for a single tow — use when a calendar popup opens. */
+export async function getCalendarTowRoutePoints(
+  towId: string
+): Promise<CalendarTowRoutePoint[]> {
+  const { data, error } = await supabase
+    .from('tow_points')
+    .select('id, point_order, point_type, address, stop_subtype')
+    .eq('tow_id', towId)
+    .order('point_order', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching calendar tow route points:', error)
+    throw error
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    point_order: row.point_order,
+    point_type: row.point_type,
+    address: row.address ?? null,
+    stop_subtype: row.stop_subtype ?? null,
+  }))
 }
 
 function formatSearchTimeRange(tow: TowTimeBoundsInput, now: number): string {
