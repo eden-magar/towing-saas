@@ -25,6 +25,7 @@ import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-
 import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 import { persistVehicleCodesToCache } from '../vehicle-lookup'
 import { withSignedTowImageUrls } from './tow-images-storage'
+import { applyDiscountPercent } from '../utils/price-calculator'
 
 // ==================== טיפוסים ====================
 
@@ -2614,12 +2615,14 @@ export async function recalculateTowPrice(
 
   // חישוב סופי
   const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
-  const discountAmount = Math.round(beforeDiscount * breakdown.discount_percent / 100)
-  const beforeVat = beforeDiscount - discountAmount
+  const { discountAmount, afterDiscount: beforeVat } = applyDiscountPercent(
+    beforeDiscount,
+    breakdown.discount_percent
+  )
   const companySettings = await getCompanySettings(companyId)
   const vatRate = (companySettings?.default_vat_percent ?? 18) / 100
-  const vatAmount = Math.round(beforeVat * vatRate)
-  const newTotal = beforeVat + vatAmount
+  const vatAmount = Math.max(0, beforeVat * vatRate)
+  const newTotal = Math.max(0, beforeVat + vatAmount)
 
   // שמירת רק התוספת הגבוהה ביותר ב-breakdown
   const highestSurcharge = newTimeSurcharges.length > 0 

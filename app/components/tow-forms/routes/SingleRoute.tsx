@@ -674,7 +674,7 @@ export function SingleRoute({
             </span>
           ) : totalDistance ? (
             <>
-              מרחק {totalDistance.distanceKm} ק״מ
+              מרחק {Number(totalDistance.distanceKm).toFixed(1)} ק״מ
               <span className="mx-1.5 text-gt-text-tertiary">•</span>
               {totalDistance.durationMinutes} דק׳
             </>

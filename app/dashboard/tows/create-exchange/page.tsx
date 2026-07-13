@@ -31,7 +31,6 @@ import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
 import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
-  ServiceSurchargeSelector,
   SurchargesSection,
   DefectSelector,
   TowTruckTypeSelector,
@@ -135,6 +134,10 @@ function CreateExchangeTowForm({
     setSelectedCustomerPricing,
     locationSurchargesData,
     serviceSurchargesData,
+    towServiceSurcharges,
+    setTowServiceSurcharges,
+    manualSurcharges,
+    setManualSurcharges,
     selectedLocationSurcharges,
     setSelectedLocationSurcharges,
     isHoliday,
@@ -342,8 +345,6 @@ function CreateExchangeTowForm({
   const openedTruckPickerFromUrlRef = useRef(false)
   const [plateStorageWarning, setPlateStorageWarning] = useState<string | null>(null)
   const [showDefectsExchangeModal, setShowDefectsExchangeModal] = useState(false)
-  const [showWorkingServicesModal, setShowWorkingServicesModal] = useState(false)
-  const [showDefectiveServicesModal, setShowDefectiveServicesModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
   const [saveWorkingSourceContactToCustomer, setSaveWorkingSourceContactToCustomer] =
@@ -1439,48 +1440,6 @@ function CreateExchangeTowForm({
                       </div>
                     )}
 
-                    {showWorkingServicesModal && (
-                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
-                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקין</h3>
-                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                          </div>
-                          <div className="p-4">
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={workingSelectedServices}
-                              onChange={setWorkingSelectedServices}
-                            />
-                          </div>
-                          <div className="px-4 pb-4">
-                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="w-full py-2.5 bg-blue-500 text-white rounded-xl text-sm font-medium">אישור</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {showDefectiveServicesModal && (
-                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
-                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקול</h3>
-                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-                          </div>
-                          <div className="p-4">
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={defectiveSelectedServices}
-                              onChange={setDefectiveSelectedServices}
-                            />
-                          </div>
-                          <div className="px-4 pb-4">
-                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className="w-full py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium">אישור</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
                       <FormSubcard title="רכב תקין" className="mb-0">
                         <div className="flex flex-col gap-4">
@@ -1654,23 +1613,6 @@ function CreateExchangeTowForm({
                             )}
                           </div>
                             </div>
-                          </div>
-
-                          <div className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">שירותים נוספים</div>
-                            {serviceSurchargesData.length > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowWorkingServicesModal(true)}
-                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors w-full justify-center ${
-                                    workingSelectedServices.length > 0
-                                      ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  ⚙️ {workingSelectedServices.length > 0 ? `שירותים (${workingSelectedServices.length})` : 'שירותים נוספים'}
-                                </button>
-                            ) : null}
                           </div>
 
                           <div className="flex flex-col gap-2">
@@ -1913,23 +1855,6 @@ function CreateExchangeTowForm({
                           </div>
 
                           <div className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">שירותים נוספים</div>
-                            {serviceSurchargesData.length > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowDefectiveServicesModal(true)}
-                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors w-full justify-center ${
-                                    defectiveSelectedServices.length > 0
-                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  ⚙️ {defectiveSelectedServices.length > 0 ? `שירותים (${defectiveSelectedServices.length})` : 'שירותים נוספים'}
-                                </button>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-col gap-2">
                             <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">מסלול</div>
                             <div className="space-y-3">
                               <div>
@@ -2148,9 +2073,11 @@ function CreateExchangeTowForm({
                         locationSurchargesData={locationSurchargesData}
                         selectedLocationSurcharges={selectedLocationSurcharges}
                         onLocationSurchargesChange={setSelectedLocationSurcharges}
-                        services={[]}
-                        selectedServices={[]}
-                        onSelectedServicesChange={() => {}}
+                        services={serviceSurchargesData}
+                        selectedServices={towServiceSurcharges}
+                        onSelectedServicesChange={setTowServiceSurcharges}
+                        manualSurcharges={manualSurcharges}
+                        onManualSurchargesChange={setManualSurcharges}
                       />
                     </div>
               </div>
@@ -2281,7 +2208,7 @@ function CreateExchangeTowForm({
                     {priceResult ? (
                       <>
                         {priceResult.breakdown
-                          .filter(item => item.amount !== 0)
+                          .filter(item => item.amount !== 0 || item.bold)
                           .map((item, idx) => (
                             <p key={idx} className={item.bold ? 'font-bold text-base text-gray-900' : 'text-gray-500'}>
                               {item.label}: ₪{item.amount.toFixed(2)}
@@ -2333,7 +2260,16 @@ function CreateExchangeTowForm({
                         min="0"
                         max="100"
                         value={manualAdjustmentPercent}
-                        onChange={(e) => setManualAdjustmentPercent(e.target.value)}
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          if (raw === '') {
+                            setManualAdjustmentPercent('')
+                            return
+                          }
+                          const n = Number(raw)
+                          if (!Number.isFinite(n)) return
+                          setManualAdjustmentPercent(String(Math.min(100, Math.max(0, n))))
+                        }}
                         placeholder="%"
                         className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
                       />
@@ -2384,7 +2320,7 @@ function CreateExchangeTowForm({
                       הצעת מחיר — אישור טלפוני
                     </h3>
                     <p className="text-3xl font-bold text-amber-900 mb-2">
-                      ₪{finalPrice}
+                      ₪{finalPrice.toFixed(2)}
                     </p>
                     <p className="text-sm text-amber-800 mb-4">
                       {getTowTypeLabel('exchange')} • {(exchangeTotalDistance?.distanceKm ?? 0).toFixed(1)} ק״מ
@@ -2689,7 +2625,7 @@ function CreateExchangeTowForm({
                         defectiveVehicleData?.data?.model ||
                         ''}
                     </p>
-                    <p className="font-bold mt-2">₪{finalPrice}</p>
+                    <p className="font-bold mt-2">₪{finalPrice.toFixed(2)}</p>
                   </div>
                   <button
                     type="button"
@@ -2712,7 +2648,7 @@ function CreateExchangeTowForm({
           <aside className="hidden lg:block w-[200px] flex-shrink-0 sticky top-24 self-start">
             <div className="bg-white rounded-xl border border-gray-300 p-4 shadow-sm">
               <p className="text-xs text-gray-500 mb-1">מחיר</p>
-              <p className="text-xl font-bold">₪{finalPrice}</p>
+              <p className="text-xl font-bold">₪{finalPrice.toFixed(2)}</p>
               <p className="text-sm text-gray-600 mt-2">{customerName}</p>
               <p className="text-xs text-gray-500">
                 {towDate} {towTime}
@@ -2940,7 +2876,7 @@ function CreateExchangeTowForm({
                 הגרירה נשמרה בהצלחה!
               </h2>
               <p className="text-gray-500 mb-2">
-                מחיר: <span className="font-bold">₪{finalPrice}</span>
+                מחיר: <span className="font-bold">₪{finalPrice.toFixed(2)}</span>
               </p>
               <p className="text-gray-600">האם לשבץ נהג עכשיו?</p>
             </div>

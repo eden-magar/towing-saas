@@ -94,7 +94,7 @@ export function PriceSelector({
               </div>
             </div>
             <span className={`text-xl font-bold ${priceMode === 'recommended' ? 'text-[#33d4ff]' : 'text-gray-800'}`}>
-              ₪{recommendedPrice}
+              ₪{Number(recommendedPrice).toFixed(2)}
             </span>
           </div>
         </button>
@@ -127,7 +127,7 @@ export function PriceSelector({
               </div>
             </div>
             <span className={`text-xl font-bold ${priceMode === 'recommended_customer' ? 'text-purple-700' : 'text-gray-800'}`}>
-              ₪{recommendedPrice}
+              ₪{Number(recommendedPrice).toFixed(2)}
             </span>
           </div>
         </button>

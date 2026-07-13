@@ -112,17 +112,17 @@ export function ServiceSurchargeSelector({
     
     if (service.price_type === 'manual') {
       if (selected && selected.manualPrice) {
-        return `₪${selected.manualPrice}`
+        return `₪${Number(selected.manualPrice).toFixed(2)}`
       }
       return 'להזנה'
     }
     
     if (service.price_type === 'per_unit' && selected) {
       const qty = selected.quantity || 1
-      return `₪${service.price * qty}`
+      return `₪${(service.price * qty).toFixed(2)}`
     }
     
-    return `₪${service.price}`
+    return `₪${Number(service.price).toFixed(2)}`
   }
 
   if (variant === 'triggerOnly') {
@@ -224,7 +224,7 @@ export function ServiceSurchargeSelector({
                             </button>
                           </div>
                           <span className="w-14 text-left text-sm font-bold">
-                            ₪{service.price * (getSelected(service.id)?.quantity || 1)}
+                            ₪{(service.price * (getSelected(service.id)?.quantity || 1)).toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -350,7 +350,7 @@ export function ServiceSurchargeSelector({
                         <Plus size={14} />
                       </button>
                     </div>
-                    <span className="text-sm font-bold w-14 text-left">₪{service.price * (getSelected(service.id)?.quantity || 1)}</span>
+                    <span className="text-sm font-bold w-14 text-left">₪{(service.price * (getSelected(service.id)?.quantity || 1)).toFixed(2)}</span>
                   </div>
                 </div>
               )}

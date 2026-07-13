@@ -61,6 +61,7 @@ import {
 import {
   extractTowLevelServices,
   excludeTowLevelServices,
+  mergeExchangeVehicleServicesIntoTowLevel,
 } from '../lib/utils/tow-service-surcharge'
 import { RoutePoint, type VehicleOnTruck } from '../components/tow-forms/routes'
 import {
@@ -1009,6 +1010,8 @@ export function useTowForm(
   const [exchangeContactPhone, setExchangeContactPhone] = useState('')
   const [workingDestinationContact, setWorkingDestinationContact] = useState('')
   const [workingDestinationContactPhone, setWorkingDestinationContactPhone] = useState('')
+  /** Opt-in four-point UI. Default collapsed (hub). Edit/fromRequest opens split when layout is four_point. */
+  const [exchangePointSplit, setExchangePointSplit] = useState(false)
   
   const [defectiveVehiclePlate, setDefectiveVehiclePlate] = useState('')
   const [defectiveVehicleData, setDefectiveVehicleData] = useState<VehicleLookupResult | null>(null)
@@ -2127,6 +2130,9 @@ export function useTowForm(
             }
           }
 
+          // Hub → collapsed 3-point UI; four_point → split so neither address is lost.
+          setExchangePointSplit(exchangeRouteLayout === 'four_point')
+
           if (editTowId) {
             editExchangeRouteLayoutRef.current = exchangeRouteLayout
             editExchangeRouteBaselineRef.current = exchangeRouteDistanceSignatureFromAddresses(
@@ -2152,30 +2158,13 @@ export function useTowForm(
             }
           }
 
-          const mapExchangeService = (s: {
-            id: string
-            price: number
-            units?: number
-            amount: number
-            vehicle_role?: string
-          }) => ({
-            id: s.id,
-            quantity: s.units,
-            manualPrice: s.units === undefined && s.amount !== s.price ? s.amount : undefined,
-          })
-          const serviceSurcharges = (tow.price_breakdown?.service_surcharges ?? []).filter(
-            (s: { is_ad_hoc?: boolean }) => s.is_ad_hoc !== true
+          // Unified footer is the only catalog UI; fold legacy vehicle_role lines into
+          // towServiceSurcharges so they still display and price. Clear per-vehicle lists.
+          setTowServiceSurcharges(
+            mergeExchangeVehicleServicesIntoTowLevel(tow.price_breakdown?.service_surcharges)
           )
-          setWorkingSelectedServices(
-            serviceSurcharges
-              .filter((s: any) => s.vehicle_role === 'working')
-              .map(mapExchangeService)
-          )
-          setDefectiveSelectedServices(
-            serviceSurcharges
-              .filter((s: any) => s.vehicle_role === 'defective')
-              .map(mapExchangeService)
-          )
+          setWorkingSelectedServices([])
+          setDefectiveSelectedServices([])
           setSelectedServices([])
           // Ad-hoc lines carry no vehicle_role; keep them as order-level manual add-ons.
           setManualSurcharges(extractManualSurcharges(tow.price_breakdown?.service_surcharges))
@@ -2803,6 +2792,9 @@ export function useTowForm(
               )
             }
           }
+
+          // Portal always submits 4 points — open in split so both addresses stay visible.
+          setExchangePointSplit(true)
 
           setRequestOriginalValues(
             buildRequestOriginalValuesFromRequest(request, vehicles, points, null),
@@ -3487,6 +3479,7 @@ export function useTowForm(
       setExchangeContactPhone('')
       setWorkingDestinationContact('')
       setWorkingDestinationContactPhone('')
+      setExchangePointSplit(false)
       setDefectiveVehiclePlate('')
       setDefectiveVehicleData(null)
       setDefectiveVehicleType('')
@@ -3977,6 +3970,7 @@ export function useTowForm(
     defectiveVehicleType,
     workingVehicleSourceAddress: workingVehicleAddress,
     workingVehicleDestinationAddress,
+    exchangePointSplit,
     workingVehicleContactName: workingVehicleContact,
     workingVehicleContactPhone,
     defectiveVehiclePlate,
@@ -4139,6 +4133,7 @@ export function useTowForm(
     exchangeContactPhone, setExchangeContactPhone,
     workingDestinationContact, setWorkingDestinationContact,
     workingDestinationContactPhone, setWorkingDestinationContactPhone,
+    exchangePointSplit, setExchangePointSplit,
     defectiveVehiclePlate, setDefectiveVehiclePlate,
     defectiveVehicleData, setDefectiveVehicleData,
     defectiveVehicleType, setDefectiveVehicleType,

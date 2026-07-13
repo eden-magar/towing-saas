@@ -833,10 +833,14 @@ export default function TowDetailsPage() {
       const servicesAmount = newServiceSurcharges.reduce((sum, s) => sum + s.amount, 0)
 
       const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
-      const discountAmount = Math.round(beforeDiscount * newPriceBreakdown.discount_percent / 100)
-      const beforeVat = beforeDiscount - discountAmount
-      const vatAmount = Math.round(beforeVat * 0.18)
-      const total = beforeVat + vatAmount
+      const discountPct = Math.min(100, Math.max(0, newPriceBreakdown.discount_percent || 0))
+      const discountAmount = Math.min(
+        beforeDiscount,
+        beforeDiscount * (discountPct / 100)
+      )
+      const beforeVat = Math.max(0, beforeDiscount - discountAmount)
+      const vatAmount = Math.max(0, beforeVat * 0.18)
+      const total = Math.max(0, beforeVat + vatAmount)
 
       newPriceBreakdown.subtotal = beforeDiscount
       newPriceBreakdown.discount_amount = discountAmount
@@ -2518,7 +2522,7 @@ export default function TowDetailsPage() {
                             >
                               {s.label}
                               {s.units && s.units > 1 && ` (×${s.units})`}
-                              {' - '}₪{s.amount}
+                              {' - '}₪{Number(s.amount).toFixed(2)}
                             </span>
                           ))}
                         </div>
@@ -2762,7 +2766,7 @@ export default function TowDetailsPage() {
                       </div>
                       <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200 mt-2">
                         <span>סה"כ כולל מע"מ</span>
-                        <span className="text-gray-800">₪{tow.final_price ?? 0}</span>
+                        <span className="text-gray-800">₪{(tow.final_price ?? 0).toFixed(2)}</span>
                       </div>
                       {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
                         <div className="pt-2 border-t border-amber-200 mt-2 bg-amber-50 -mx-4 px-4 py-2 rounded-lg">
@@ -3799,11 +3803,11 @@ export default function TowDetailsPage() {
             <div className="p-5 space-y-4">
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                 <span className="text-sm text-gray-500">מחיר ישן</span>
-                <span className="font-bold text-gray-400 line-through">₪{priceChangeModal.oldPrice}</span>
+                <span className="font-bold text-gray-400 line-through">₪{Number(priceChangeModal.oldPrice).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl border border-amber-200">
                 <span className="text-sm text-amber-700">מחיר חדש</span>
-                <span className="font-bold text-amber-700 text-lg">₪{priceChangeModal.newPrice}</span>
+                <span className="font-bold text-amber-700 text-lg">₪{Number(priceChangeModal.newPrice).toFixed(2)}</span>
               </div>
               <div className="text-sm space-y-1 text-gray-600">
                 {priceChangeModal.newBreakdown.filter(i => i.amount !== 0).map((item, idx) => (

@@ -164,6 +164,8 @@ interface UseTowSaveParams {
   defectiveVehicleType?: VehicleType | ''
   workingVehicleSourceAddress?: AddressData
   workingVehicleDestinationAddress?: AddressData
+  /** When false (default collapsed hub UI), force working dest = exchange so save stays hub. */
+  exchangePointSplit?: boolean
   workingVehicleContactName?: string
   workingVehicleContactPhone?: string
   defectiveVehiclePlate?: string
@@ -302,6 +304,7 @@ export function useTowSave(params: UseTowSaveParams) {
     defectiveVehicleType,
     workingVehicleSourceAddress,
     workingVehicleDestinationAddress,
+    exchangePointSplit = false,
     workingVehicleContactName,
     workingVehicleContactPhone,
     defectiveVehiclePlate,
@@ -525,7 +528,12 @@ export function useTowSave(params: UseTowSaveParams) {
       workingVehicleType: towType === 'exchange' ? workingVehicleType : undefined,
       defectiveVehicleType: towType === 'exchange' ? defectiveVehicleType || undefined : undefined,
       workingVehicleSourceAddress: towType === 'exchange' ? workingVehicleSourceAddress : undefined,
-      workingVehicleDestinationAddress: towType === 'exchange' ? workingVehicleDestinationAddress : undefined,
+      workingVehicleDestinationAddress:
+        towType === 'exchange'
+          ? exchangePointSplit
+            ? workingVehicleDestinationAddress
+            : exchangePointAddress
+          : undefined,
       workingVehicleContactName: towType === 'exchange' ? workingVehicleContactName : undefined,
       workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
       defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
@@ -534,14 +542,22 @@ export function useTowSave(params: UseTowSaveParams) {
       exchangePointAddress: towType === 'exchange' ? exchangePointAddress : undefined,
       exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
       exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
-      workingDestinationContactName: towType === 'exchange' ? workingDestinationContactName : undefined,
-      workingDestinationContactPhone: towType === 'exchange' ? workingDestinationContactPhone : undefined,
+      workingDestinationContactName:
+        towType === 'exchange' && exchangePointSplit
+          ? workingDestinationContactName
+          : undefined,
+      workingDestinationContactPhone:
+        towType === 'exchange' && exchangePointSplit
+          ? workingDestinationContactPhone
+          : undefined,
       defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
       defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContactName : undefined,
       defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
       workingVehicleSource: towType === 'exchange' ? workingVehicleSource : undefined,
       workingVehicleDestinationIsStorage:
-        towType === 'exchange' ? workingVehicleDestinationIsStorage : undefined,
+        towType === 'exchange' && exchangePointSplit
+          ? workingVehicleDestinationIsStorage
+          : undefined,
       defectiveDestination: towType === 'exchange' ? defectiveDestination : undefined,
       workingSelectedServices: towType === 'exchange' ? workingSelectedServices : undefined,
       defectiveSelectedServices: towType === 'exchange' ? defectiveSelectedServices : undefined,

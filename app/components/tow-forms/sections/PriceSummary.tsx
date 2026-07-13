@@ -390,7 +390,7 @@ export function PriceSummary({
         {priceMode === 'custom' && customPrice && (
           <div className="flex justify-between">
             <span className="text-gray-500">מחיר ידני</span>
-            <span className="text-gray-700">₪{customPrice}</span>
+            <span className="text-gray-700">₪{Number(customPrice).toFixed(2)}</span>
           </div>
         )}
       </div>

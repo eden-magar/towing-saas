@@ -581,7 +581,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                 <Check size={32} className="text-emerald-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">הגרירה נשמרה בהצלחה!</h2>
-              <p className="text-gray-500 mb-2">מחיר: <span className="font-bold">₪{finalPrice}</span></p>
+              <p className="text-gray-500 mb-2">מחיר: <span className="font-bold">₪{finalPrice.toFixed(2)}</span></p>
               <p className="text-gray-600">האם לשבץ נהג עכשיו?</p>
             </div>
             

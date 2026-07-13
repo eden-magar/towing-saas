@@ -55,7 +55,6 @@ import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
   VehicleLookup,
-  ServiceSurchargeSelector,
   SurchargesSection,
   VehicleCoreLookupChips,
   DefectSelector,
@@ -373,6 +372,8 @@ function CreateTowForm({
     setWorkingDestinationContact,
     workingDestinationContactPhone,
     setWorkingDestinationContactPhone,
+    exchangePointSplit,
+    setExchangePointSplit,
     workingVehicleContact,
     setWorkingVehicleContact,
     workingVehicleContactPhone,
@@ -1193,8 +1194,6 @@ function CreateTowForm({
   const [showTruckModal, setShowTruckModal] = useState(false)
   const [showDefectsModal, setShowDefectsModal] = useState(false)
   const [showDefectsExchangeModal, setShowDefectsExchangeModal] = useState(false)
-  const [showWorkingServicesModal, setShowWorkingServicesModal] = useState(false)
-  const [showDefectiveServicesModal, setShowDefectiveServicesModal] = useState(false)
   const [showStorageModal, setShowStorageModal] = useState(false)
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
@@ -1202,6 +1201,46 @@ function CreateTowForm({
     if (!fromRequestOtherDefectText) return
     setOtherDefectText(fromRequestOtherDefectText)
   }, [fromRequestOtherDefectText])
+
+  const splitExchangePoint = () => {
+    if (!workingVehicleDestinationAddress?.address?.trim() && exchangeAddress?.address) {
+      setWorkingVehicleDestinationAddress(exchangeAddress)
+    }
+    if (!workingDestinationContact.trim() && exchangeContactName.trim()) {
+      setWorkingDestinationContact(exchangeContactName)
+      setWorkingDestinationContactPhone(exchangeContactPhone)
+    }
+    setExchangePointSplit(true)
+  }
+
+  const collapseExchangePoint = () => {
+    // Keep the first of the split pair (יעד התקין) as the hub exchange point.
+    const keepAddress = workingVehicleDestinationAddress?.address?.trim()
+      ? workingVehicleDestinationAddress
+      : exchangeAddress
+    const keepContactName = workingDestinationContact.trim()
+      ? workingDestinationContact
+      : exchangeContactName
+    const keepContactPhone = workingDestinationContact.trim()
+      ? workingDestinationContactPhone
+      : exchangeContactPhone
+    setExchangeAddress(keepAddress)
+    setWorkingVehicleDestinationAddress(keepAddress)
+    setExchangeContactName(keepContactName)
+    setExchangeContactPhone(keepContactPhone)
+    setWorkingDestinationContact('')
+    setWorkingDestinationContactPhone('')
+    setWorkingVehicleDestinationIsStorage(false)
+    setExchangePointSplit(false)
+  }
+
+  const setExchangeHubAddress = (data: AddressData) => {
+    setExchangeAddress(data)
+    // Collapsed: keep dest synced so save stays on the hub path.
+    if (!exchangePointSplit) {
+      setWorkingVehicleDestinationAddress(data)
+    }
+  }
   const [stopContactModalId, setStopContactModalId] = useState<string | null>(null)
   const [stopContactDraft, setStopContactDraft] = useState({ name: '', phone: '' })
   const [expandedStopNotesIds, setExpandedStopNotesIds] = useState<Set<string>>(
@@ -1879,7 +1918,12 @@ function CreateTowForm({
         defectiveVehicleType:
           towType === 'exchange' ? defectiveVehicleType || undefined : undefined,
         workingVehicleSourceAddress: towType === 'exchange' ? workingVehicleAddress : undefined,
-        workingVehicleDestinationAddress: towType === 'exchange' ? workingVehicleDestinationAddress : undefined,
+        workingVehicleDestinationAddress:
+          towType === 'exchange'
+            ? exchangePointSplit
+              ? workingVehicleDestinationAddress
+              : exchangeAddress
+            : undefined,
         workingVehicleContactName: towType === 'exchange' ? workingVehicleContact : undefined,
         workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
         defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
@@ -1888,14 +1932,22 @@ function CreateTowForm({
         exchangePointAddress: towType === 'exchange' ? exchangeAddress : undefined,
         exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
         exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
-        workingDestinationContactName: towType === 'exchange' ? workingDestinationContact : undefined,
-        workingDestinationContactPhone: towType === 'exchange' ? workingDestinationContactPhone : undefined,
+        workingDestinationContactName:
+          towType === 'exchange' && exchangePointSplit
+            ? workingDestinationContact
+            : undefined,
+        workingDestinationContactPhone:
+          towType === 'exchange' && exchangePointSplit
+            ? workingDestinationContactPhone
+            : undefined,
         defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
         defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContact : undefined,
         defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
         workingVehicleSource: towType === 'exchange' ? workingVehicleSource : undefined,
         workingVehicleDestinationIsStorage:
-          towType === 'exchange' ? workingVehicleDestinationIsStorage : undefined,
+          towType === 'exchange' && exchangePointSplit
+            ? workingVehicleDestinationIsStorage
+            : undefined,
         defectiveDestination: towType === 'exchange' ? defectiveDestination : undefined,
         workingSelectedServices:
           towType === 'exchange' ? workingSelectedServices : undefined,
@@ -2050,6 +2102,7 @@ function CreateTowForm({
     defectiveDestination,
     defectiveVehicleCode,
     editTowId,
+    exchangePointSplit,
     editTowSnapshot,
     stopsBeforeExchange,
     stopsAfterExchange,
@@ -3153,48 +3206,6 @@ function CreateTowForm({
                       </div>
                     )}
 
-                    {showWorkingServicesModal && (
-                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
-                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקין</h3>
-                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className={`text-gray-400 hover:text-gray-600 text-xl${isMobile ? ' p-2 -m-2' : ''}`}>✕</button>
-                          </div>
-                          <div className="p-4">
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={workingSelectedServices}
-                              onChange={setWorkingSelectedServices}
-                            />
-                          </div>
-                          <div className="px-4 pb-4">
-                            <button type="button" onClick={() => setShowWorkingServicesModal(false)} className="w-full py-2.5 bg-gt-brand text-white rounded-xl text-sm font-medium">אישור</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {showDefectiveServicesModal && (
-                      <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto overflow-hidden">
-                          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-800 text-base">שירותים נוספים — תקול</h3>
-                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className={`text-gray-400 hover:text-gray-600 text-xl${isMobile ? ' p-2 -m-2' : ''}`}>✕</button>
-                          </div>
-                          <div className="p-4">
-                            <ServiceSurchargeSelector
-                              services={serviceSurchargesData}
-                              selectedServices={defectiveSelectedServices}
-                              onChange={setDefectiveSelectedServices}
-                            />
-                          </div>
-                          <div className="px-4 pb-4">
-                            <button type="button" onClick={() => setShowDefectiveServicesModal(false)} className="w-full py-2.5 bg-orange-500 text-white rounded-xl text-sm font-medium">אישור</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
                       <FormSubcard title="רכב תקין" className="mb-0">
                         <div className="flex flex-col gap-4">
@@ -3391,23 +3402,6 @@ function CreateTowForm({
                           </div>
 
                           <div className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">שירותים נוספים</div>
-                            {serviceSurchargesData.length > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowWorkingServicesModal(true)}
-                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors w-full justify-center ${
-                                    workingSelectedServices.length > 0
-                                      ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  ⚙️ {workingSelectedServices.length > 0 ? `שירותים (${workingSelectedServices.length})` : 'שירותים נוספים'}
-                                </button>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-col gap-2">
                             <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">מסלול</div>
                             <div className="space-y-3">
                               <div>
@@ -3454,6 +3448,7 @@ function CreateTowForm({
                                   מהחניון למוצא
                                 </button>
                               </div>
+                              {exchangePointSplit && (
                               <div className="border-t border-gray-100 pt-3">
                                 <label className="block text-xs font-medium text-gray-500 mb-1">יעד הרכב התקין</label>
                                 <AddressInput
@@ -3490,6 +3485,7 @@ function CreateTowForm({
                                   </div>
                                 )}
                               </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -3667,30 +3663,34 @@ function CreateTowForm({
                           </div>
 
                           <div className="flex flex-col gap-2">
-                            <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">שירותים נוספים</div>
-                            {serviceSurchargesData.length > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setShowDefectiveServicesModal(true)}
-                                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-colors w-full justify-center ${
-                                    defectiveSelectedServices.length > 0
-                                      ? 'border-orange-300 bg-orange-50 text-orange-700'
-                                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                                  }`}
-                                >
-                                  ⚙️ {defectiveSelectedServices.length > 0 ? `שירותים (${defectiveSelectedServices.length})` : 'שירותים נוספים'}
-                                </button>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-col gap-2">
                             <div className="text-xs font-semibold text-gt-text-secondary pb-1 border-b border-dashed border-gt-border-subtle">מסלול</div>
                             <div className="space-y-3">
                               <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">מוצא הרכב התקול</label>
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <label className="block text-xs font-medium text-gray-500">
+                                    {exchangePointSplit ? 'מוצא הרכב התקול' : 'נקודת החלפה'}
+                                  </label>
+                                  {exchangePointSplit ? (
+                                    <button
+                                      type="button"
+                                      onClick={collapseExchangePoint}
+                                      className="px-2 py-0.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:border-gt-brand hover:text-gt-brand"
+                                    >
+                                      אחד נקודת החלפה
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={splitExchangePoint}
+                                      className="px-2 py-0.5 text-xs font-medium rounded-lg border border-gt-brand-subtle-border bg-gt-brand-subtle text-gt-brand-text hover:bg-gt-surface-hover"
+                                    >
+                                      פצל נקודת החלפה
+                                    </button>
+                                  )}
+                                </div>
                                 <AddressInput
                                   value={exchangeAddress}
-                                  onChange={(d: AddressData) => setExchangeAddress(d)}
+                                  onChange={setExchangeHubAddress}
                                   label=""
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('exchange')}
@@ -3706,6 +3706,7 @@ function CreateTowForm({
                                     />
                                   }
                                 />
+                                {exchangePointSplit && (
                                 <button
                                   type="button"
                                   onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
@@ -3714,6 +3715,7 @@ function CreateTowForm({
                                 >
                                   זהה ליעד התקין
                                 </button>
+                                )}
                               </div>
                               <div className="border-t border-gray-100 pt-3">
                                 <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">יעד הרכב התקול</label>
@@ -4019,7 +4021,7 @@ function CreateTowForm({
                     {priceResult ? (
                       <>
                         {priceResult.breakdown
-                          .filter(item => item.amount !== 0)
+                          .filter(item => item.amount !== 0 || item.bold)
                           .map((item, idx) => {
                             const label =
                               item.type === 'time' && priceResult.maxTimeSurchargePercent > 0
@@ -4083,7 +4085,16 @@ function CreateTowForm({
                         min="0"
                         max="100"
                         value={manualAdjustmentPercent}
-                        onChange={(e) => setManualAdjustmentPercent(e.target.value)}
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          if (raw === '') {
+                            setManualAdjustmentPercent('')
+                            return
+                          }
+                          const n = Number(raw)
+                          if (!Number.isFinite(n)) return
+                          setManualAdjustmentPercent(String(Math.min(100, Math.max(0, n))))
+                        }}
                         placeholder="%"
                         className="w-16 px-2 py-1 border border-gray-300 rounded-lg text-sm text-center"
                       />
@@ -4135,7 +4146,7 @@ function CreateTowForm({
                       הצעת מחיר — אישור טלפוני
                     </h3>
                     <p className="text-3xl font-bold text-amber-900 mb-2">
-                      ₪{finalPrice}
+                      ₪{finalPrice.toFixed(2)}
                     </p>
                     <p className="text-sm text-amber-800 mb-4">
                       {getTowTypeLabel(towType)} • {(towType === 'exchange' ? (exchangeTotalDistance?.distanceKm ?? 0) : totalDistanceKm).toFixed(1)} ק״מ
@@ -4267,6 +4278,7 @@ function CreateTowForm({
                         }
                       />
 
+                      {exchangePointSplit && (
                       <CustomerContactFields
                         name={workingDestinationContact}
                         phone={workingDestinationContactPhone}
@@ -4292,6 +4304,7 @@ function CreateTowForm({
                           </div>
                         }
                       />
+                      )}
 
                       <div>
                         <CustomerContactFields
@@ -4310,7 +4323,11 @@ function CreateTowForm({
                           onSelectContact={() => setSaveExchangePickupContactToCustomer(false)}
                           header={
                             <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                              <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקול</label>
+                              <label className="text-sm font-medium text-gray-700">
+                                {exchangePointSplit
+                                  ? 'איש קשר במוצא — רכב תקול'
+                                  : 'איש קשר בנקודת החלפה'}
+                              </label>
                               {!selectedCustomerId && (
                                 <button
                                   type="button"
@@ -4323,7 +4340,7 @@ function CreateTowForm({
                             </div>
                           }
                         />
-                        {workingDestinationContact && (
+                        {exchangePointSplit && workingDestinationContact && (
                           <button
                             type="button"
                             onClick={() => {
@@ -4582,7 +4599,7 @@ function CreateTowForm({
           <aside className="hidden lg:block w-[200px] flex-shrink-0 sticky top-4 self-start">
             <div className="bg-white rounded-xl border border-gray-300 p-4 shadow-sm">
               <p className="text-xs text-gray-500 mb-1">מחיר</p>
-              <p className="text-2xl font-bold text-gray-900">₪{finalPrice}</p>
+              <p className="text-2xl font-bold text-gray-900">₪{finalPrice.toFixed(2)}</p>
               <p className="text-sm text-gray-600 mt-2">{customerName}</p>
               <p className="text-xs text-gray-500">
                 {towDate} {towTime}
@@ -4877,7 +4894,7 @@ function CreateTowForm({
                 הגרירה נשמרה בהצלחה!
               </h2>
               <p className="text-gray-500 mb-2">
-                מחיר: <span className="font-bold">₪{finalPrice}</span>
+                מחיר: <span className="font-bold">₪{finalPrice.toFixed(2)}</span>
               </p>
               <p className="text-gray-600">האם לשבץ נהג עכשיו?</p>
             </div>

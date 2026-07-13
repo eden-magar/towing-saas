@@ -45,13 +45,13 @@ function servicePriceLabel(
   selected?: SelectedService,
 ): string {
   if (service.price_type === 'manual') {
-    if (selected?.manualPrice) return `₪${selected.manualPrice}`
+    if (selected?.manualPrice) return `₪${Number(selected.manualPrice).toFixed(2)}`
     return 'להזנה'
   }
   if (service.price_type === 'per_unit' && selected) {
-    return `₪${service.price * (selected.quantity || 1)}`
+    return `₪${(service.price * (selected.quantity || 1)).toFixed(2)}`
   }
-  return `₪${service.price}`
+  return `₪${Number(service.price).toFixed(2)}`
 }
 
 export interface SurchargesSectionProps {
@@ -368,7 +368,7 @@ export function SurchargesSection({
                       </button>
                     </div>
                     <span className="w-14 text-left text-sm font-bold tabular-nums">
-                      ₪{service.price * (sel?.quantity || 1)}
+                      ₪{(service.price * (sel?.quantity || 1)).toFixed(2)}
                     </span>
                   </div>
                 </div>

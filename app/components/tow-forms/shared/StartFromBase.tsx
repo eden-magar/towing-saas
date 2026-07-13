@@ -59,7 +59,7 @@ export function StartFromBase({
           ) : baseToPickupDistance ? (
             <div className="flex items-center justify-between text-sm">
               <span className="text-emerald-700">מרחק בסיס → מוצא:</span>
-              <span className="font-bold text-emerald-700">{baseToPickupDistance.distanceKm} ק״מ</span>
+              <span className="font-bold text-emerald-700">{Number(baseToPickupDistance.distanceKm).toFixed(1)} ק״מ</span>
             </div>
           ) : hasPickupAddress ? (
             <p className="text-xs text-amber-600">לא ניתן לחשב מרחק</p>

@@ -498,7 +498,7 @@ export default function CustomerTowDetail() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h2 className="text-sm font-bold text-gray-900 mb-2">מחיר</h2>
           <p className="text-2xl font-bold text-gray-900">
-            ₪{tow.final_price.toLocaleString('he-IL')}
+            ₪{Number(tow.final_price).toFixed(2)}
           </p>
           <p className="text-xs text-gray-400 mt-1">כולל מע״מ</p>
         </div>

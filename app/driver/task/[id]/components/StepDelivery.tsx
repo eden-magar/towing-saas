@@ -165,7 +165,7 @@ export default function StepDelivery({
           <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-4">
             {finalPrice != null && (
               <div className="flex items-center justify-between mb-3 pb-3 border-b border-amber-200">
-                <span className="text-amber-700 font-bold text-lg">₪{finalPrice}</span>
+                <span className="text-amber-700 font-bold text-lg">₪{Number(finalPrice).toFixed(2)}</span>
                 <span className="text-sm text-gray-600">מחיר הגרירה</span>
               </div>
             )}

@@ -58,7 +58,7 @@ export default function DistanceDisplay({
           {/* מרחק */}
           <div className="text-center">
             <div className="text-2xl font-bold text-gray-800">
-              {distance.distanceKm}
+              {Number(distance.distanceKm).toFixed(1)}
               <span className="text-sm font-normal text-gray-500 mr-1">ק״מ</span>
             </div>
             <div className="text-xs text-gray-500">מרחק</div>
@@ -76,7 +76,7 @@ export default function DistanceDisplay({
           {/* מחיר משוער */}
           <div className="text-center">
             <div className="text-2xl font-bold text-emerald-600">
-              ₪{estimatedPrice}
+              ₪{Number(estimatedPrice).toFixed(2)}
             </div>
             <div className="text-xs text-gray-500">מחיר משוער</div>
           </div>
@@ -86,15 +86,15 @@ export default function DistanceDisplay({
         <div className="text-xs text-gray-500 bg-white/50 rounded-lg p-2 space-y-1">
           <div className="flex justify-between">
             <span>מחיר בסיס:</span>
-            <span>₪{basePrice}</span>
+            <span>₪{Number(basePrice).toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
-            <span>מרחק ({distance.distanceKm} ק״מ × ₪{pricePerKm}):</span>
-            <span>₪{distancePrice}</span>
+            <span>מרחק ({Number(distance.distanceKm).toFixed(1)} ק״מ × ₪{Number(pricePerKm).toFixed(2)}):</span>
+            <span>₪{Number(distancePrice).toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-medium text-gray-700 pt-1 border-t border-gray-200">
             <span>סה״כ משוער:</span>
-            <span>₪{estimatedPrice}</span>
+            <span>₪{Number(estimatedPrice).toFixed(2)}</span>
           </div>
         </div>
 

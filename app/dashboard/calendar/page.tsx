@@ -2598,7 +2598,7 @@ const handleSkipPriceUpdate = () => {
                     <div className="flex items-center justify-center gap-4">
                       <div className="text-center">
                         <p className="text-sm text-gray-500">מחיר קודם</p>
-                        <p className="text-xl font-bold text-gray-400 line-through">₪{priceUpdateInfo.oldPrice}</p>
+                        <p className="text-xl font-bold text-gray-400 line-through">₪{Number(priceUpdateInfo.oldPrice).toFixed(2)}</p>
                       </div>
                       <div className="text-2xl text-gray-400">←</div>
                       <div className="text-center">
@@ -2610,41 +2610,41 @@ const handleSkipPriceUpdate = () => {
                     {priceUpdateInfo.newBreakdown && (
                       <div className="border border-gray-100 rounded-xl p-3 space-y-1.5 text-xs bg-gray-50 text-right">
                         <div className="flex justify-between">
-                          <span className="font-medium text-gray-800">₪{priceUpdateInfo.newBreakdown.base_price}</span>
+                          <span className="font-medium text-gray-800">₪{Number(priceUpdateInfo.newBreakdown.base_price).toFixed(2)}</span>
                           <span className="text-gray-500">מחיר בסיס</span>
                         </div>
                         {priceUpdateInfo.newBreakdown.distance_km > 0 && (
                           <div className="flex justify-between">
-                            <span className="font-medium text-gray-800">₪{priceUpdateInfo.newBreakdown.distance_price}</span>
-                            <span className="text-gray-500">מרחק ({priceUpdateInfo.newBreakdown.distance_km} ק״מ)</span>
+                            <span className="font-medium text-gray-800">₪{Number(priceUpdateInfo.newBreakdown.distance_price).toFixed(2)}</span>
+                            <span className="text-gray-500">מרחק ({Number(priceUpdateInfo.newBreakdown.distance_km).toFixed(1)} ק״מ)</span>
                           </div>
                         )}
                         {priceUpdateInfo.newBreakdown.time_surcharges?.filter((s: any) => s.amount > 0).map((s: any, idx: number) => (
                           <div key={s.id || idx} className="flex justify-between text-amber-600">
-                            <span className="font-medium">₪{s.amount}</span>
+                            <span className="font-medium">₪{Number(s.amount).toFixed(2)}</span>
                             <span>{s.label} (+{s.percent}%)</span>
                           </div>
                         ))}
                         {priceUpdateInfo.newBreakdown.location_surcharges?.map((s: any, idx: number) => (
                           <div key={s.id || idx} className="flex justify-between text-blue-600">
-                            <span className="font-medium">₪{s.amount}</span>
+                            <span className="font-medium">₪{Number(s.amount).toFixed(2)}</span>
                             <span>{s.label} (+{s.percent}%)</span>
                           </div>
                         ))}
                         {priceUpdateInfo.newBreakdown.service_surcharges?.map((s: any, idx: number) => (
                           <div key={s.id || idx} className="flex justify-between text-purple-600">
-                            <span className="font-medium">₪{s.amount}</span>
+                            <span className="font-medium">₪{Number(s.amount).toFixed(2)}</span>
                             <span>{s.label}</span>
                           </div>
                         ))}
                         {priceUpdateInfo.newBreakdown.discount_amount > 0 && (
                           <div className="flex justify-between text-green-600">
-                            <span className="font-medium">-₪{priceUpdateInfo.newBreakdown.discount_amount}</span>
+                            <span className="font-medium">-₪{Number(priceUpdateInfo.newBreakdown.discount_amount).toFixed(2)}</span>
                             <span>הנחה ({priceUpdateInfo.newBreakdown.discount_percent}%)</span>
                           </div>
                         )}
                         <div className="flex justify-between text-gray-500">
-                          <span className="font-medium">₪{priceUpdateInfo.newBreakdown.vat_amount}</span>
+                          <span className="font-medium">₪{Number(priceUpdateInfo.newBreakdown.vat_amount).toFixed(2)}</span>
                           <span>מע״מ (18%)</span>
                         </div>
                       </div>
@@ -2681,7 +2681,7 @@ const handleSkipPriceUpdate = () => {
                   {/* מחיר ידני/קבוע/לקוח - התראה */}
                   <div className="text-center">
                     <p className="text-gray-600 mb-4">המועד השתנה. האם לעדכן את המחיר?</p>
-                    <p className="text-lg font-bold text-gray-800 mb-4">מחיר נוכחי: ₪{priceUpdateInfo.oldPrice}</p>
+                    <p className="text-lg font-bold text-gray-800 mb-4">מחיר נוכחי: ₪{Number(priceUpdateInfo.oldPrice).toFixed(2)}</p>
                     
                     <div className="text-right">
                       <p className="text-sm text-gray-500 mb-2">הזן מחיר חדש:</p>
@@ -2714,7 +2714,7 @@ const handleSkipPriceUpdate = () => {
                   disabled={updatingPrice}
                   className="flex-1 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors font-medium disabled:bg-gray-300"
                 >
-                  {updatingPrice ? 'מעדכן...' : `עדכן ל-₪${priceUpdateInfo.newPrice}`}
+                  {updatingPrice ? 'מעדכן...' : `עדכן ל-₪${Number(priceUpdateInfo.newPrice).toFixed(2)}`}
                 </button>
               ) : (
                 <button

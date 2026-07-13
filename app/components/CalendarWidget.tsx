@@ -1275,22 +1275,22 @@ const handleSkipPriceUpdate = () => {
                     <div className="flex items-center justify-center gap-4">
                       <div className="text-center">
                         <p className="text-sm text-gray-500">מחיר קודם</p>
-                        <p className="text-xl font-bold text-gray-400 line-through">₪{priceUpdateInfo.oldPrice}</p>
+                        <p className="text-xl font-bold text-gray-400 line-through">₪{Number(priceUpdateInfo.oldPrice).toFixed(2)}</p>
                       </div>
                       <div className="text-2xl text-gray-400">→</div>
                       <div className="text-center">
                         <p className="text-sm text-gray-500">מחיר חדש</p>
-                        <p className="text-2xl font-bold text-amber-600">₪{priceUpdateInfo.newPrice}</p>
+                        <p className="text-2xl font-bold text-amber-600">₪{Number(priceUpdateInfo.newPrice).toFixed(2)}</p>
                       </div>
                     </div>
                     
                     {priceUpdateInfo.newPrice > priceUpdateInfo.oldPrice ? (
                       <p className="text-sm text-amber-600 mt-3">
-                        +₪{priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice} (תוספת זמן)
+                        +₪{(priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice).toFixed(2)} (תוספת זמן)
                       </p>
                     ) : (
                       <p className="text-sm text-green-600 mt-3">
-                        -₪{priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice} (ללא תוספת זמן)
+                        -₪{(priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice).toFixed(2)} (ללא תוספת זמן)
                       </p>
                     )}
                   </div>
@@ -1315,7 +1315,7 @@ const handleSkipPriceUpdate = () => {
                   {/* מחיר ידני/קבוע/לקוח - התראה */}
                   <div className="text-center">
                     <p className="text-gray-600 mb-4">המועד השתנה. האם לעדכן את המחיר?</p>
-                    <p className="text-lg font-bold text-gray-800 mb-4">מחיר נוכחי: ₪{priceUpdateInfo.oldPrice}</p>
+                    <p className="text-lg font-bold text-gray-800 mb-4">מחיר נוכחי: ₪{Number(priceUpdateInfo.oldPrice).toFixed(2)}</p>
                     
                     <div className="text-right">
                       <p className="text-sm text-gray-500 mb-2">הזן מחיר חדש:</p>
@@ -1348,7 +1348,7 @@ const handleSkipPriceUpdate = () => {
                   disabled={updatingPrice}
                   className="flex-1 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors font-medium disabled:bg-gray-300"
                 >
-                  {updatingPrice ? 'מעדכן...' : `עדכן ל-₪${priceUpdateInfo.newPrice}`}
+                  {updatingPrice ? 'מעדכן...' : `עדכן ל-₪${Number(priceUpdateInfo.newPrice).toFixed(2)}`}
                 </button>
               ) : (
                 <button

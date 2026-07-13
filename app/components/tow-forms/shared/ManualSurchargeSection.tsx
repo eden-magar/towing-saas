@@ -83,7 +83,7 @@ export function ManualSurchargeSection({
           return (
             <div key={line.id} className={`flex items-center gap-3 px-3 bg-white ${isMobile ? 'min-h-[48px] py-2' : 'py-2.5'}`}>
               <span className="flex-1 min-w-0 text-sm text-gray-700 truncate">{line.label}</span>
-              <span className="shrink-0 text-sm font-medium text-gray-800">₪{line.amount}</span>
+              <span className="shrink-0 text-sm font-medium text-gray-800">₪{Number(line.amount).toFixed(2)}</span>
               <div className="shrink-0 flex items-center gap-0.5">
                 <button
                   type="button"

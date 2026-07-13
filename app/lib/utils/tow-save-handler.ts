@@ -321,6 +321,12 @@ function manualAdjustmentBreakdownFields(input: SaveTowInput): {
   return { manual_adjustment_percent: Math.abs(signed), manual_adjustment_type: 'discount' }
 }
 
+/** Never persist a negative tow total (defense in depth vs discount float/round bugs). */
+function clampNonNegativePrice(value: number | undefined | null): number | undefined {
+  if (value == null || !Number.isFinite(value)) return undefined
+  return Math.max(0, value)
+}
+
 /** Stable signature of exchange inputs that affect recommended/custom price calculation. */
 export function buildExchangePriceAffectingSignature(
   fields: ExchangePriceAffectingFields
@@ -1544,7 +1550,9 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       scheduledAt,
       scheduledEndAt,
       notes: input.notes || undefined,
-      finalPrice: resolvedSingleFinalPrice ?? (input.finalPrice || undefined),
+      finalPrice: clampNonNegativePrice(
+        resolvedSingleFinalPrice ?? (input.finalPrice || undefined)
+      ),
       priceMode: input.priceMode,
       priceBreakdown,
       vehicles,
@@ -1599,7 +1607,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       scheduledAt,
       scheduledEndAt,
       notes: input.notes || undefined,
-      finalPrice: input.finalPrice || undefined,
+      finalPrice: clampNonNegativePrice(input.finalPrice || undefined),
       priceMode: input.priceMode,
       priceBreakdown,
       vehicles,
@@ -1921,10 +1929,11 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     scheduledAt,
     scheduledEndAt,
     notes: input.notes || undefined,
-    finalPrice:
+    finalPrice: clampNonNegativePrice(
       resolvedExchangeFinalPrice != null
         ? resolvedExchangeFinalPrice
-        : input.finalPrice || undefined,
+        : input.finalPrice || undefined
+    ),
     priceMode: input.priceMode,
     priceBreakdown,
     vehicles: vehiclesWithIds,
