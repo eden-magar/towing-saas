@@ -832,7 +832,7 @@ export function AddressInput({
         {/* Actions on their own row under the field — full-width input above.
             Fixed order (RTL start/right → left): map pin → paste link → save bookmark */}
         {showActionRow && (
-          <div className="mt-1.5 flex items-center justify-start gap-2">
+          <div className="mt-1.5 flex flex-wrap items-center justify-start gap-2">
             {onPinDropClick && (
               <button
                 type="button"

@@ -5,7 +5,7 @@ import { Check, PenLine } from 'lucide-react'
 import type { VehicleType } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
 import { SelectorModalShell } from './SelectorModalShell'
-import { vehicleActionTriggerClass } from './VehicleCardActions'
+import { vehicleActionTriggerClass, useVehicleActionsCompact } from './VehicleCardActions'
 
 export type ManualVehicleEntryValues = {
   plateNumber: string
@@ -188,20 +188,24 @@ export function ManualVehicleEntryTrigger({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  const compact = useVehicleActionsCompact()
+  const iconClass = compact ? 'h-3.5 w-3.5 shrink-0' : 'h-4 w-4 shrink-0'
   return (
     <>
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen(true)}
-        className={className ?? vehicleActionTriggerClass(active)}
+        title="פרטי רכב ידנית"
+        aria-label="פרטי רכב ידנית"
+        className={className ?? vehicleActionTriggerClass(active, '', compact)}
       >
         {active ? (
-          <Check className="h-4 w-4 shrink-0" aria-hidden />
+          <Check className={iconClass} aria-hidden />
         ) : (
-          <PenLine className="h-4 w-4 shrink-0" aria-hidden />
+          <PenLine className={iconClass} aria-hidden />
         )}
-        <span className="shrink-0">פרטי רכב ידנית</span>
+        <span className="shrink-0">{compact ? 'ידני' : 'פרטי רכב ידנית'}</span>
       </button>
       <ManualVehicleEntryModal
         open={open}

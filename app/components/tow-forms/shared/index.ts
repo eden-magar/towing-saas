@@ -13,7 +13,7 @@ export {
   REQUIRED_TRUCK_TYPE_MESSAGE,
   isRequiredTruckTypeError,
 } from './RequiredTruckTypeMissingModal'
-export { VehicleCardActions, vehicleActionTriggerClass } from './VehicleCardActions'
+export { VehicleCardActions, vehicleActionTriggerClass, useVehicleActionsCompact } from './VehicleCardActions'
 export { ServiceSurchargeSelector, type SelectedService } from './ServiceSurchargeSelector'
 export { LocationSurchargeSelector } from './LocationSurchargeSelector'
 export { ManualSurchargeSection } from './ManualSurchargeSection'

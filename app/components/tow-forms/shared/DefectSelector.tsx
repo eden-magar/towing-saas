@@ -11,7 +11,7 @@ import {
   toggleOther,
 } from '../../../lib/constants/defects'
 import { SelectorModalShell } from './SelectorModalShell'
-import { vehicleActionTriggerClass } from './VehicleCardActions'
+import { vehicleActionTriggerClass, useVehicleActionsCompact } from './VehicleCardActions'
 
 /** Short label for a defect value (first segment before `/`, or אחר text). */
 function shortDefectLabel(raw: string): string {
@@ -72,6 +72,7 @@ export function DefectSelector({
 }: DefectSelectorProps) {
   const [otherText, setOtherText] = useState(() => extractOtherText(selectedDefects))
   const [showModal, setShowModal] = useState(false)
+  const compact = useVehicleActionsCompact()
 
   useEffect(() => {
     setOtherText(extractOtherText(selectedDefects))
@@ -159,21 +160,30 @@ export function DefectSelector({
       triggerLabel,
     )
     return (
-      <div className="max-w-full shrink-0">
+      <div className="max-w-full shrink-0 min-w-0">
         <button
           type="button"
           onClick={() => setShowModal(true)}
           title={summary}
           aria-label={summary}
           className={
-            triggerClassName ?? vehicleActionTriggerClass(selectedDefects.length > 0)
+            triggerClassName ??
+            vehicleActionTriggerClass(selectedDefects.length > 0, '', compact)
           }
         >
-          <span aria-hidden>🔧</span>
+          <span aria-hidden className={compact ? 'text-xs' : undefined}>
+            🔧
+          </span>
           <span className="inline-flex min-w-0 max-w-full items-center">
             <span className="shrink-0">{baseLabel}</span>
             {valueSuffix ? (
-              <span className="min-w-0 max-w-[8rem] truncate sm:max-w-[10rem]">
+              <span
+                className={
+                  compact
+                    ? 'min-w-0 max-w-[6.5rem] truncate'
+                    : 'min-w-0 max-w-[8rem] truncate sm:max-w-[10rem]'
+                }
+              >
                 {' · '}
                 {valueSuffix}
               </span>

@@ -160,9 +160,11 @@ export function RouteAddressesFooter({
   startFromBase,
   onStartFromBaseChange,
   showStartFromBase = false,
+  startFromBaseLabel = 'מהחניון',
   chargeDeadheadReturn,
   onChargeDeadheadReturnChange,
   showDeadhead = false,
+  deadheadReturnLabel = 'לחניון',
   deadheadHints,
   bleed = false,
 }: {
@@ -172,9 +174,13 @@ export function RouteAddressesFooter({
   startFromBase?: boolean
   onStartFromBaseChange?: (next: boolean) => void
   showStartFromBase?: boolean
+  /** Label only — does not change startFromBase / pricing. */
+  startFromBaseLabel?: string
   chargeDeadheadReturn?: boolean
   onChargeDeadheadReturnChange?: (next: boolean) => void
   showDeadhead?: boolean
+  /** Label only — does not change chargeDeadheadReturn / pricing. */
+  deadheadReturnLabel?: string
   deadheadHints?: ReactNode
   bleed?: boolean
 }) {
@@ -202,7 +208,7 @@ export function RouteAddressesFooter({
               <EmptyLegToggleButton
                 active={!!startFromBase}
                 onClick={() => onStartFromBaseChange(!startFromBase)}
-                label="מהחניון"
+                label={startFromBaseLabel}
               />
             ) : null}
             {showDeadhead && onChargeDeadheadReturnChange ? (
@@ -211,7 +217,7 @@ export function RouteAddressesFooter({
                 onClick={() =>
                   onChargeDeadheadReturnChange(!chargeDeadheadReturn)
                 }
-                label="לחניון"
+                label={deadheadReturnLabel}
               />
             ) : null}
             {deadheadHints}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { SelectorModalShell } from './SelectorModalShell'
-import { vehicleActionTriggerClass } from './VehicleCardActions'
+import { vehicleActionTriggerClass, useVehicleActionsCompact } from './VehicleCardActions'
 
 interface TowTruckTypeSelectorProps {
   selectedTypes: string[]
@@ -77,6 +77,7 @@ export function TowTruckTypeSelector({
 }: TowTruckTypeSelectorProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const showModal = openProp ?? internalOpen
+  const compact = useVehicleActionsCompact()
   const setShowModal = (next: boolean) => {
     onOpenChange?.(next)
     if (openProp === undefined) setInternalOpen(next)
@@ -128,20 +129,28 @@ export function TowTruckTypeSelector({
       triggerLabel,
     )
     return (
-      <div className="max-w-full shrink-0">
+      <div className="max-w-full shrink-0 min-w-0">
         {!hideTrigger && (
           <button
             type="button"
             onClick={() => setShowModal(true)}
             title={summary}
             aria-label={summary}
-            className={vehicleActionTriggerClass(selectedTypes.length > 0)}
+            className={vehicleActionTriggerClass(selectedTypes.length > 0, '', compact)}
           >
-            <span aria-hidden>🚚</span>
+            <span aria-hidden className={compact ? 'text-xs' : undefined}>
+              🚚
+            </span>
             <span className="inline-flex min-w-0 max-w-full items-center">
               <span className="shrink-0">{baseLabel}</span>
               {valueSuffix ? (
-                <span className="min-w-0 max-w-[8rem] truncate sm:max-w-[10rem]">
+                <span
+                  className={
+                    compact
+                      ? 'min-w-0 max-w-[6.5rem] truncate'
+                      : 'min-w-0 max-w-[8rem] truncate sm:max-w-[10rem]'
+                  }
+                >
                   {' · '}
                   {valueSuffix}
                 </span>
