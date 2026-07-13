@@ -295,11 +295,29 @@ export function PriceSummary({
           </>
         )}
 
-        {priceMode === 'fixed' && selectedPriceItem && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">{selectedPriceItem.label}</span>
-            <span className="text-gray-700">₪{selectedPriceItem.price.toFixed(2)}</span>
-          </div>
+        {priceMode === 'fixed' && (
+          selectedPriceItem ? (
+            <>
+              <div className="flex justify-between">
+                <span className="text-gray-500">{selectedPriceItem.label}</span>
+                <span className="text-gray-700">₪{selectedPriceItem.price.toFixed(2)}</span>
+              </div>
+              {(selectedCustomerPricing?.discount_percent ?? 0) > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>הנחת לקוח ({selectedCustomerPricing!.discount_percent}%)</span>
+                  <span>
+                    -₪
+                    {(
+                      selectedPriceItem.price *
+                      (Math.min(100, selectedCustomerPricing!.discount_percent) / 100)
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-2 text-gray-400 text-sm">בחר פריט כדי לראות מחיר</div>
+          )
         )}
 
         {priceMode === 'customer' && selectedPriceItem && (
@@ -317,14 +335,26 @@ export function PriceSummary({
         )}
       </div>
 
-      <div className="border-t border-gray-200 pt-3">
-        <div className="flex justify-between items-center">
-          <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
-          <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-            ₪{((priceMode === 'recommended' || priceMode === 'recommended_customer') ? (hasDataForCalculation ? total : 0) : finalPrice).toFixed(2)}
-          </span>
+      {(priceMode === 'recommended' ||
+        priceMode === 'recommended_customer' ||
+        (priceMode === 'fixed' && selectedPriceItem) ||
+        (priceMode === 'customer' && selectedPriceItem) ||
+        (priceMode === 'custom' && !!customPrice)) && (
+        <div className="border-t border-gray-200 pt-3">
+          <div className="flex justify-between items-center">
+            <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>
+            <span className={`font-bold text-gray-800 ${isMobile ? 'text-xl' : 'text-2xl'}`}>
+              ₪{(
+                priceMode === 'recommended' || priceMode === 'recommended_customer'
+                  ? hasDataForCalculation
+                    ? total
+                    : 0
+                  : finalPrice
+              ).toFixed(2)}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       <button 
         onClick={onSave}

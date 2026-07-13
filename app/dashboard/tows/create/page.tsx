@@ -4039,31 +4039,55 @@ function CreateTowForm({
                   </button>
                 </div>
                 {priceMode === 'fixed' && (
-                  <select
-                    value={selectedPriceItem?.id || ''}
-                    onChange={(e) => {
-                      const item = fixedPriceItems.find(
-                        (i) => i.id === e.target.value
-                      )
-                      setSelectedPriceItem(
-                        item
-                          ? {
-                              id: item.id,
-                              label: item.label,
-                              price: item.price,
-                            }
-                          : null
-                      )
-                    }}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl"
-                  >
-                    <option value="">בחר פריט</option>
-                    {fixedPriceItems.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.label} — ₪{i.price}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-3">
+                    <select
+                      value={selectedPriceItem?.id || ''}
+                      onChange={(e) => {
+                        const item = fixedPriceItems.find(
+                          (i) => i.id === e.target.value
+                        )
+                        setSelectedPriceItem(
+                          item
+                            ? {
+                                id: item.id,
+                                label: item.label,
+                                price: item.price,
+                              }
+                            : null
+                        )
+                      }}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-xl"
+                    >
+                      <option value="">בחר פריט</option>
+                      {fixedPriceItems.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.label} — ₪{i.price}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedPriceItem ? (
+                      <div className="text-sm space-y-1">
+                        <p className="text-gray-500">
+                          {selectedPriceItem.label}: ₪
+                          {selectedPriceItem.price.toFixed(2)}
+                        </p>
+                        {(priceResult?.discountAmount ?? 0) > 0 && (
+                          <p className="text-emerald-600">
+                            הנחת לקוח
+                            {selectedCustomerPricing?.discount_percent
+                              ? ` (${selectedCustomerPricing.discount_percent}%)`
+                              : ''}
+                            : -₪{(priceResult?.discountAmount ?? 0).toFixed(2)}
+                          </p>
+                        )}
+                        <p className="text-2xl font-bold text-gray-900">
+                          סה״כ: ₪{finalPrice.toFixed(2)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">בחר פריט כדי לראות מחיר</p>
+                    )}
+                  </div>
                 )}
                 {priceMode === 'custom' && (
                   <div className="flex gap-2 items-center">
@@ -4087,9 +4111,7 @@ function CreateTowForm({
                   </div>
                 )}
                 {(priceMode === 'recommended' ||
-                  priceMode === 'recommended_customer' ||
-                  priceMode === 'fixed' ||
-                  priceMode === 'custom') && (
+                  priceMode === 'recommended_customer') && (
                   <div className="text-sm space-y-1">
                     {priceResult ? (
                       <>

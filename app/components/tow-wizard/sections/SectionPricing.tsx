@@ -226,24 +226,23 @@ export function SectionPricing({
     (opt) => !opt.showWhen || opt.showWhen(form)
   )
 
-  const showPriceDetails =
-    form.priceMode === 'recommended' ||
-    form.priceMode === 'recommended_customer' ||
-    form.priceMode === 'fixed' ||
-    form.priceMode === 'custom'
+  const showRecommendedBreakdown =
+    form.priceMode === 'recommended' || form.priceMode === 'recommended_customer'
 
   return (
     <FormCard icon={Wallet} title="מחיר" className={isCompact ? 'mb-0' : undefined}>
       <div className={isCompact ? 'space-y-2' : 'space-y-4'}>
-        <TimeSurchargesSection
-          compact={isCompact}
-          timeSurchargesData={displayTimeSurcharges}
-          isHoliday={form.isHoliday}
-          setIsHoliday={form.setIsHoliday}
-          activeTimeSurchargesList={form.activeTimeSurchargesList}
-          setActiveTimeSurchargesList={form.setActiveTimeSurchargesList}
-          setHasManualTimeSurchargeOverride={form.setHasManualTimeSurchargeOverride}
-        />
+        {showRecommendedBreakdown && (
+          <TimeSurchargesSection
+            compact={isCompact}
+            timeSurchargesData={displayTimeSurcharges}
+            isHoliday={form.isHoliday}
+            setIsHoliday={form.setIsHoliday}
+            activeTimeSurchargesList={form.activeTimeSurchargesList}
+            setActiveTimeSurchargesList={form.setActiveTimeSurchargesList}
+            setHasManualTimeSurchargeOverride={form.setHasManualTimeSurchargeOverride}
+          />
+        )}
 
         <div>
           <p className={isCompact ? 'text-sm font-semibold text-gray-700 mb-1' : 'text-sm font-semibold text-gray-700 mb-2'}>
@@ -279,33 +278,80 @@ export function SectionPricing({
         </div>
 
         {form.priceMode === 'fixed' && (
-          <select
-            value={form.selectedPriceItem?.id || ''}
-            onChange={(e) => {
-              const item = form.fixedPriceItems.find((i) => i.id === e.target.value)
-              form.setSelectedPriceItem(
-                item
-                  ? {
-                      id: item.id,
-                      label: item.label,
-                      price: item.price,
+          <div className={isCompact ? 'space-y-2' : 'space-y-3'}>
+            <select
+              value={form.selectedPriceItem?.id || ''}
+              onChange={(e) => {
+                const item = form.fixedPriceItems.find((i) => i.id === e.target.value)
+                form.setSelectedPriceItem(
+                  item
+                    ? {
+                        id: item.id,
+                        label: item.label,
+                        price: item.price,
+                      }
+                    : null
+                )
+              }}
+              className={
+                isCompact
+                  ? 'w-full px-2.5 h-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand/15 focus:border-gt-brand bg-white'
+                  : 'w-full px-3 h-12 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white'
+              }
+            >
+              <option value="">בחר פריט</option>
+              {form.fixedPriceItems.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.label} — ₪{i.price}
+                </option>
+              ))}
+            </select>
+            {form.selectedPriceItem ? (
+              <div className={isCompact ? 'text-xs space-y-1' : 'text-sm space-y-1'}>
+                <p className="text-gray-500">
+                  {form.selectedPriceItem.label}: ₪
+                  {form.selectedPriceItem.price.toFixed(2)}
+                </p>
+                {(form.priceResult?.discountAmount ?? 0) > 0 && (
+                  <p className="text-emerald-600">
+                    הנחת לקוח
+                    {form.selectedCustomerPricing?.discount_percent
+                      ? ` (${form.selectedCustomerPricing.discount_percent}%)`
+                      : ''}
+                    : -₪{(form.priceResult?.discountAmount ?? 0).toFixed(2)}
+                  </p>
+                )}
+                <div
+                  className={
+                    isCompact
+                      ? 'flex items-baseline justify-between gap-2 pt-1.5 mt-0.5 border-t border-gray-200'
+                      : 'flex items-baseline justify-between pt-2 mt-1 border-t border-gray-200'
+                  }
+                >
+                  <span
+                    className={
+                      isCompact ? 'text-xs font-medium text-gray-500' : 'text-sm font-medium text-gray-500'
                     }
-                  : null
-              )
-            }}
-            className={
-              isCompact
-                ? 'w-full px-2.5 h-9 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gt-brand/15 focus:border-gt-brand bg-white'
-                : 'w-full px-3 h-12 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff] bg-white'
-            }
-          >
-            <option value="">בחר פריט</option>
-            {form.fixedPriceItems.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.label} — ₪{i.price}
-              </option>
-            ))}
-          </select>
+                  >
+                    סה״כ
+                  </span>
+                  <span
+                    className={
+                      isCompact
+                        ? 'text-lg font-bold text-gray-900 tabular-nums shrink-0'
+                        : 'text-2xl font-bold text-gray-900'
+                    }
+                  >
+                    ₪{form.finalPrice.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className={isCompact ? 'text-xs text-gray-400' : 'text-sm text-gray-400'}>
+                בחר פריט כדי לראות מחיר
+              </p>
+            )}
+          </div>
         )}
 
         {form.priceMode === 'custom' && (
@@ -341,7 +387,7 @@ export function SectionPricing({
           </div>
         )}
 
-        {showPriceDetails && (
+        {showRecommendedBreakdown && (
           <div className={isCompact ? 'text-xs space-y-1' : 'text-sm space-y-2'}>
             {form.priceResult ? (
               (() => {
