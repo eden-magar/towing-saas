@@ -210,7 +210,11 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
         workingVehicleSourceAddress:
           towType === 'exchange' ? form.workingVehicleAddress : undefined,
         workingVehicleDestinationAddress:
-          towType === 'exchange' ? form.workingVehicleDestinationAddress : undefined,
+          towType === 'exchange'
+            ? form.exchangePointSplit
+              ? form.workingVehicleDestinationAddress
+              : form.exchangeAddress
+            : undefined,
         workingVehicleContactName:
           towType === 'exchange' ? form.workingVehicleContact : undefined,
         workingVehicleContactPhone:
@@ -225,9 +229,13 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
         exchangeContactName: towType === 'exchange' ? form.exchangeContactName : undefined,
         exchangeContactPhone: towType === 'exchange' ? form.exchangeContactPhone : undefined,
         workingDestinationContactName:
-          towType === 'exchange' ? form.workingDestinationContact : undefined,
+          towType === 'exchange' && form.exchangePointSplit
+            ? form.workingDestinationContact
+            : undefined,
         workingDestinationContactPhone:
-          towType === 'exchange' ? form.workingDestinationContactPhone : undefined,
+          towType === 'exchange' && form.exchangePointSplit
+            ? form.workingDestinationContactPhone
+            : undefined,
         defectiveDestinationAddress:
           towType === 'exchange' ? form.defectiveDestinationAddress : undefined,
         defectiveDestinationContactName:
@@ -236,7 +244,9 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
           towType === 'exchange' ? form.defectiveDestinationContactPhone : undefined,
         workingVehicleSource: towType === 'exchange' ? form.workingVehicleSource : undefined,
         workingVehicleDestinationIsStorage:
-          towType === 'exchange' ? form.workingVehicleDestinationIsStorage : undefined,
+          towType === 'exchange' && form.exchangePointSplit
+            ? form.workingVehicleDestinationIsStorage
+            : undefined,
         defectiveDestination: towType === 'exchange' ? form.defectiveDestination : undefined,
         workingSelectedServices:
           towType === 'exchange' ? form.workingSelectedServices : undefined,

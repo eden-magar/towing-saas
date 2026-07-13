@@ -1246,6 +1246,12 @@ function CreateTowForm({
   const [showWorkingStorageModal, setShowWorkingStorageModal] = useState(false)
   const [otherDefectText, setOtherDefectText] = useState('')
   const [truckTypePickerOpen, setTruckTypePickerOpen] = useState(false)
+  /** Same-session stash: מוצא התקול + contact lost on un-split, restored on re-split. */
+  const defectiveOriginStashRef = useRef<{
+    address: AddressData
+    contactName: string
+    contactPhone: string
+  } | null>(null)
   useEffect(() => {
     if (!fromRequestOtherDefectText) return
     setOtherDefectText(fromRequestOtherDefectText)
@@ -1253,7 +1259,8 @@ function CreateTowForm({
 
   const splitExchangePoint = () => {
     // Hub value lives on exchangeAddress while collapsed (dest is synced).
-    // Four-point: יעד התקין = workingDest (keep hub); מוצא התקול = exchange (empty).
+    // Four-point: יעד התקין = workingDest (keep hub); מוצא התקול = exchange
+    // (restore same-session stash if any, else empty).
     const hub = exchangeAddress?.address?.trim()
       ? exchangeAddress
       : workingVehicleDestinationAddress
@@ -1262,9 +1269,17 @@ function CreateTowForm({
       setWorkingDestinationContact(exchangeContactName)
       setWorkingDestinationContactPhone(exchangeContactPhone)
     }
-    setExchangeAddress({ address: '' })
-    setExchangeContactName('')
-    setExchangeContactPhone('')
+    const stash = defectiveOriginStashRef.current
+    if (stash?.address?.address?.trim()) {
+      setExchangeAddress(stash.address)
+      setExchangeContactName(stash.contactName)
+      setExchangeContactPhone(stash.contactPhone)
+      defectiveOriginStashRef.current = null
+    } else {
+      setExchangeAddress({ address: '' })
+      setExchangeContactName('')
+      setExchangeContactPhone('')
+    }
     setExchangePointSplit(true)
   }
 
@@ -1279,6 +1294,29 @@ function CreateTowForm({
     const keepContactPhone = workingDestinationContact.trim()
       ? workingDestinationContactPhone
       : exchangeContactPhone
+
+    const defectiveOriginAddress = exchangeAddress?.address?.trim() || ''
+    const defectiveOriginContact = exchangeContactName.trim()
+    const keepAddrNorm = keepAddress?.address?.trim() || ''
+    const wouldLoseDefectiveOrigin =
+      (!!defectiveOriginAddress && defectiveOriginAddress !== keepAddrNorm) ||
+      (!!defectiveOriginContact &&
+        defectiveOriginContact !== keepContactName.trim())
+
+    if (wouldLoseDefectiveOrigin) {
+      const ok = window.confirm(
+        'איבוד כתובת מוצא התקול — להמשיך?\n(פיצול מחדש באותו מסך ישחזר את הכתובת)',
+      )
+      if (!ok) return
+      defectiveOriginStashRef.current = {
+        address: exchangeAddress,
+        contactName: exchangeContactName,
+        contactPhone: exchangeContactPhone,
+      }
+    } else {
+      defectiveOriginStashRef.current = null
+    }
+
     setExchangeAddress(keepAddress)
     setWorkingVehicleDestinationAddress(keepAddress)
     setExchangeContactName(keepContactName)
@@ -1684,7 +1722,11 @@ function CreateTowForm({
 
   const handlePinDropConfirmWrapped = (data: AddressData) => {
     const field = pinDropModal.field
-    if (field === 'exchange') setExchangeAddress(data)
+    if (field === 'exchange') {
+      // Hub typing uses setExchangeHubAddress so dest stays synced when collapsed.
+      if (exchangePointSplit) setExchangeAddress(data)
+      else setExchangeHubAddress(data)
+    }
     else if (field === 'workingVehicle') setWorkingVehicleAddress(data)
     else if (field === 'workingDestination') setWorkingVehicleDestinationAddress(data)
     else if (field === 'defectiveDestination') setDefectiveDestinationAddress(data)
@@ -1999,43 +2041,27 @@ function CreateTowForm({
               ? workingVehicleDestinationAddress
               : exchangeAddress
             : undefined,
-        workingVehicleContactName:
-          towType === 'exchange' && showWorkingOriginContact
-            ? workingVehicleContact
-            : undefined,
-        workingVehicleContactPhone:
-          towType === 'exchange' && showWorkingOriginContact
-            ? workingVehicleContactPhone
-            : undefined,
+        workingVehicleContactName: towType === 'exchange' ? workingVehicleContact : undefined,
+        workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
         defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
         defectiveVehicleCode: towType === 'exchange' ? defectiveVehicleCode : undefined,
         defectiveVehicleData: towType === 'exchange' ? defectiveVehicleData : undefined,
         exchangePointAddress: towType === 'exchange' ? exchangeAddress : undefined,
-        exchangeContactName:
-          towType === 'exchange' && showExchangePointContact
-            ? exchangeContactName
-            : undefined,
-        exchangeContactPhone:
-          towType === 'exchange' && showExchangePointContact
-            ? exchangeContactPhone
-            : undefined,
+        exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
+        exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
         workingDestinationContactName:
-          towType === 'exchange' && showWorkingDestinationContact
+          towType === 'exchange' && exchangePointSplit
             ? workingDestinationContact
             : undefined,
         workingDestinationContactPhone:
-          towType === 'exchange' && showWorkingDestinationContact
+          towType === 'exchange' && exchangePointSplit
             ? workingDestinationContactPhone
             : undefined,
         defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
         defectiveDestinationContactName:
-          towType === 'exchange' && showDefectiveDestinationContact
-            ? defectiveDestinationContact
-            : undefined,
+          towType === 'exchange' ? defectiveDestinationContact : undefined,
         defectiveDestinationContactPhone:
-          towType === 'exchange' && showDefectiveDestinationContact
-            ? defectiveDestinationContactPhone
-            : undefined,
+          towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
         workingVehicleSource: towType === 'exchange' ? workingVehicleSource : undefined,
         workingVehicleDestinationIsStorage:
           towType === 'exchange' && exchangePointSplit
@@ -2209,10 +2235,7 @@ function CreateTowForm({
     persistTowCustomerContacts,
     persistTowCustomerAddresses,
     setAddressNotice,
-    showWorkingOriginContact,
-    showWorkingDestinationContact,
-    showExchangePointContact,
-    showDefectiveDestinationContact,
+    exchangePointSplit,
   ])
 
   const totalDistanceKm =

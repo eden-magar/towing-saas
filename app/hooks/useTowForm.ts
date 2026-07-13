@@ -47,7 +47,6 @@ import {
   buildExchangePriceAffectingSignature,
   buildSinglePriceAffectingSignature,
 } from '../lib/utils/tow-save-handler'
-import { matchesStorageYard, yardFromBasePriceList } from '../lib/utils/storage-yard-match'
 import { normalizePlate } from '../lib/utils/plate-number'
 import {
   STORAGE_OTHER_CUSTOMER_MESSAGE,
@@ -290,7 +289,6 @@ function commercialTypeUsesWeightBrackets(type: string): boolean {
 
 function buildExchangeDistanceWaypoints(
   layout: 'four_point' | 'hub' | null,
-  editMode: boolean,
   working: AddressData,
   workingDest: AddressData,
   exchange: AddressData,
@@ -301,7 +299,9 @@ function buildExchangeDistanceWaypoints(
   const workingDestDistinct =
     !!workingDest.address.trim() && workingDest.address !== exchange.address
 
-  if (editMode && layout === 'four_point' && workingDestDistinct) {
+  // Split (create and edit): continuous drive path
+  // מוצא תקין → יעד תקין → מוצא תקול → יעד תקול
+  if (layout === 'four_point' && workingDestDistinct) {
     return [
       working,
       ...stopsBefore.map((s) => s.address),
@@ -312,20 +312,8 @@ function buildExchangeDistanceWaypoints(
     ]
   }
 
-  if (editMode && layout === 'hub') {
-    const chain: AddressData[] = [
-      working,
-      ...stopsBefore.map((s) => s.address),
-      exchange,
-      ...stopsAfter.map((s) => s.address),
-      defective,
-    ]
-    if (workingDestDistinct) {
-      chain.push(workingDest)
-    }
-    return chain
-  }
-
+  // Hub — verified against Google; must not change.
+  // מוצא תקין → נקודת החלפה → יעד תקול  (dest ≡ exchange; never append a distinct workingDest)
   return [
     working,
     ...stopsBefore.map((s) => s.address),
@@ -1550,12 +1538,15 @@ export function useTowForm(
       return
     }
 
+    const liveLayout: 'four_point' | 'hub' = exchangePointSplit
+      ? 'four_point'
+      : 'hub'
     const signatureAtStart = exchangeRouteDistanceSignatureFromAddresses(
       workingVehicleAddress,
       workingVehicleDestinationAddress,
       exchangeAddress,
       defectiveDestinationAddress,
-      editTowId ? editExchangeRouteLayoutRef.current : null
+      liveLayout
     )
     const preserveSeededOnFailure = () =>
       !!(
@@ -1570,8 +1561,7 @@ export function useTowForm(
       try {
         await loadGoogleMaps()
         const waypoints = buildExchangeDistanceWaypoints(
-          editTowId ? editExchangeRouteLayoutRef.current : null,
-          !!editTowId,
+          liveLayout,
           workingVehicleAddress,
           workingVehicleDestinationAddress,
           exchangeAddress,
@@ -1620,6 +1610,7 @@ export function useTowForm(
     defectiveDestinationAddress.lng,
     stopsBeforeExchange,
     stopsAfterExchange,
+    exchangePointSplit,
   ])
 
   // Empty-leg dropoff key (מהיעד לחניון). Primitive so useEffect deps stay fixed-length.
@@ -3895,19 +3886,6 @@ export function useTowForm(
     [isFromRequestLoad, requestOriginalValues],
   )
 
-  const exchangeYard = yardFromBasePriceList(basePriceList)
-  const saveWorkingOriginContact =
-    workingVehicleSource !== 'storage' &&
-    !matchesStorageYard(workingVehicleAddress, exchangeYard)
-  const saveWorkingDestinationContact =
-    exchangePointSplit &&
-    !workingVehicleDestinationIsStorage &&
-    !matchesStorageYard(workingVehicleDestinationAddress, exchangeYard)
-  const saveExchangePointContact = !matchesStorageYard(exchangeAddress, exchangeYard)
-  const saveDefectiveDestinationContact =
-    defectiveDestination !== 'storage' &&
-    !matchesStorageYard(defectiveDestinationAddress, exchangeYard)
-
   const { handleSave } = useTowSave({
     companyId,
     user,
@@ -4003,31 +3981,25 @@ export function useTowForm(
       ? workingVehicleDestinationAddress
       : exchangeAddress,
     exchangePointSplit,
-    workingVehicleContactName: saveWorkingOriginContact
-      ? workingVehicleContact
-      : undefined,
-    workingVehicleContactPhone: saveWorkingOriginContact
-      ? workingVehicleContactPhone
-      : undefined,
+    // Always persist contacts from form state. The yard rule only HIDES the UI —
+    // it must not wipe a contact the dispatcher already entered / hydrated.
+    workingVehicleContactName: workingVehicleContact,
+    workingVehicleContactPhone,
     defectiveVehiclePlate,
     defectiveVehicleCode,
     defectiveVehicleData,
     exchangePointAddress: exchangeAddress,
-    exchangeContactName: saveExchangePointContact ? exchangeContactName : undefined,
-    exchangeContactPhone: saveExchangePointContact ? exchangeContactPhone : undefined,
-    workingDestinationContactName: saveWorkingDestinationContact
+    exchangeContactName,
+    exchangeContactPhone,
+    workingDestinationContactName: exchangePointSplit
       ? workingDestinationContact
       : undefined,
-    workingDestinationContactPhone: saveWorkingDestinationContact
+    workingDestinationContactPhone: exchangePointSplit
       ? workingDestinationContactPhone
       : undefined,
     defectiveDestinationAddress: defectiveDestinationAddress,
-    defectiveDestinationContactName: saveDefectiveDestinationContact
-      ? defectiveDestinationContact
-      : undefined,
-    defectiveDestinationContactPhone: saveDefectiveDestinationContact
-      ? defectiveDestinationContactPhone
-      : undefined,
+    defectiveDestinationContactName: defectiveDestinationContact,
+    defectiveDestinationContactPhone,
     selectedStoredVehicleId,
     workingVehicleSource,
     selectedWorkingVehicleId,
