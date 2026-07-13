@@ -22,6 +22,7 @@ export type QuoteGate = ReturnType<typeof useQuoteGate>
 
 type QuoteGateOptions = {
   persistTowCustomerContacts?: () => Promise<void>
+  persistTowCustomerAddresses?: () => Promise<number>
 }
 
 /**
@@ -109,6 +110,7 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
     form.setError('')
     try {
       await options?.persistTowCustomerContacts?.()
+      await options?.persistTowCustomerAddresses?.()
 
       let finalCustomerId = form.selectedCustomerId
       if (!form.selectedCustomerId && form.customerName.trim()) {
@@ -334,7 +336,7 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
     } finally {
       form.setSaving(false)
     }
-  }, [editTowId, form, options?.persistTowCustomerContacts])
+  }, [editTowId, form, options?.persistTowCustomerContacts, options?.persistTowCustomerAddresses])
 
   return {
     quoteApproved,

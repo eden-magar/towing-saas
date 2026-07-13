@@ -1,6 +1,7 @@
 'use client'
 
 import { useTowForm } from '../../../hooks/useTowForm'
+import type { AddressesSave } from '../../../hooks/useAddressesSave'
 import { SingleRoute } from '../../tow-forms/routes/SingleRoute'
 import { PinDropModal } from '../../tow-forms/shared'
 import type { AddressData } from '../../tow-forms/routes/AddressInput'
@@ -11,7 +12,13 @@ type Form = ReturnType<typeof useTowForm>
  * Vehicle + route section for single tows on the mobile scroll page.
  * Mirrors new/page.tsx SingleRoute prop wiring and PinDropModal host logic.
  */
-export function SectionSingleRoute({ form }: { form: Form }) {
+export function SectionSingleRoute({
+  form,
+  addressesSave,
+}: {
+  form: Form
+  addressesSave: AddressesSave
+}) {
   const handlePinDropConfirm = (data: AddressData) => {
     const field = form.pinDropModal.field
     if (field === 'pickup') {
@@ -88,6 +95,20 @@ export function SectionSingleRoute({ form }: { form: Form }) {
         dropoffToStorage={form.dropoffToStorage}
         onDropoffToStorageChange={form.setDropoffToStorage}
         storageAddress={form.basePriceList?.base_address || ''}
+        selectedCustomerId={form.selectedCustomerId}
+        savedCustomerAddresses={addressesSave.savedAddresses}
+        pendingPickupAddress={addressesSave.pendingPickupAddress}
+        onConfirmPendingPickupAddress={addressesSave.setPendingPickupAddress}
+        onClearPendingPickupAddress={() => addressesSave.setPendingPickupAddress(null)}
+        pendingDropoffAddress={addressesSave.pendingDropoffAddress}
+        onConfirmPendingDropoffAddress={addressesSave.setPendingDropoffAddress}
+        onClearPendingDropoffAddress={() => addressesSave.setPendingDropoffAddress(null)}
+        pendingStopAddresses={addressesSave.pendingStopAddresses}
+        onConfirmPendingStopAddress={(stopId, draft) =>
+          addressesSave.setPendingStopAddress(stopId, draft)
+        }
+        onClearPendingStopAddress={(stopId) => addressesSave.setPendingStopAddress(stopId, null)}
+        saveAddressDisabled={form.saving}
       />
 
       <PinDropModal

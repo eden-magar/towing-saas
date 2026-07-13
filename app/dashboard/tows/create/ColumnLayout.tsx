@@ -25,6 +25,9 @@ import {
 import { useTowForm } from '../../../hooks/useTowForm'
 import { useQuoteGate } from '../../../hooks/useQuoteGate'
 import { useContactsSave } from '../../../hooks/useContactsSave'
+import { useAddressesSave } from '../../../hooks/useAddressesSave'
+import { SaveCustomerAddressControl } from '../../../components/customer-addresses/SaveCustomerAddressControl'
+import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
 import { useCustomerOrderers } from '../../../hooks/useCustomerOrderers'
 import { shouldOfferSaveCustomerOrderer } from '../../../lib/utils/customer-orderer-save-ui'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
@@ -83,11 +86,14 @@ export function ColumnLayout({
   form,
   onExitColumnLayout,
   persistContactsRef,
+  persistAddressesRef,
 }: {
   form: Form
   onExitColumnLayout: () => void
   /** Wired to create/page.tsx beforeSaveTow so contact-save pills persist on save. */
   persistContactsRef?: React.MutableRefObject<() => Promise<void>>
+  /** Wired to create/page.tsx beforeSaveTow so address-save pills persist on save. */
+  persistAddressesRef?: React.MutableRefObject<() => Promise<number>>
 }) {
   const router = useRouter()
   const [customerTab, setCustomerTab] = useState<CreateCustomerTab>('existing')
@@ -103,8 +109,10 @@ export function ColumnLayout({
   const [pendingPickerTruckId, setPendingPickerTruckId] = useState<string | null>(null)
 
   const contactsSave = useContactsSave(form)
+  const addressesSave = useAddressesSave(form)
   const quoteGate = useQuoteGate(form, {
     persistTowCustomerContacts: contactsSave.persistTowCustomerContacts,
+    persistTowCustomerAddresses: addressesSave.persistTowCustomerAddresses,
   })
 
   useEffect(() => {
@@ -112,6 +120,12 @@ export function ColumnLayout({
       persistContactsRef.current = contactsSave.persistTowCustomerContacts
     }
   }, [persistContactsRef, contactsSave.persistTowCustomerContacts])
+
+  useEffect(() => {
+    if (persistAddressesRef) {
+      persistAddressesRef.current = addressesSave.persistTowCustomerAddresses
+    }
+  }, [persistAddressesRef, addressesSave.persistTowCustomerAddresses])
 
   const handleTowTypeSelect = (kind: TowEntryKind) => {
     setEntryKind(kind)
@@ -723,52 +737,93 @@ export function ColumnLayout({
                                   </div>
                                 </div>
                                 {stop.role === 'pickup' && (
-                                  <AddressInput
-                                    hideLabel
-                                    value={form.pickupAddress}
-                                    onChange={form.setPickupAddress}
-                                    placeholder="הזן כתובת איסוף..."
-                                    required
-                                    onPinDropClick={() =>
-                                      form.setPinDropModal({ isOpen: true, field: 'pickup' })
-                                    }
-                                    isMobile={false}
-                                    narrowColumn
-                                    storageYardConfirm={pickupYardConfirm}
-                                  />
+                                  <>
+                                    <AddressInput
+                                      hideLabel
+                                      value={form.pickupAddress}
+                                      onChange={form.setPickupAddress}
+                                      placeholder="הזן כתובת איסוף..."
+                                      required
+                                      onPinDropClick={() =>
+                                        form.setPinDropModal({ isOpen: true, field: 'pickup' })
+                                      }
+                                      isMobile={false}
+                                      narrowColumn
+                                      storageYardConfirm={pickupYardConfirm}
+                                    />
+                                    <SaveCustomerAddressControl
+                                      className="mt-1.5"
+                                      visible={addressesSave.showSavePickupAddressOption}
+                                      address={form.pickupAddress.address}
+                                      pending={addressesSave.pendingPickupAddress}
+                                      onConfirm={addressesSave.setPendingPickupAddress}
+                                      onClear={() => addressesSave.setPendingPickupAddress(null)}
+                                      disabled={form.saving}
+                                    />
+                                  </>
                                 )}
                                 {stop.role === 'dropoff' && (
-                                  <AddressInput
-                                    hideLabel
-                                    value={form.dropoffAddress}
-                                    onChange={form.setDropoffAddress}
-                                    placeholder="הזן כתובת יעד..."
-                                    required
-                                    onPinDropClick={() =>
-                                      form.setPinDropModal({ isOpen: true, field: 'dropoff' })
-                                    }
-                                    isMobile={false}
-                                    narrowColumn
-                                    storageYardConfirm={dropoffYardConfirm}
-                                  />
+                                  <>
+                                    <AddressInput
+                                      hideLabel
+                                      value={form.dropoffAddress}
+                                      onChange={form.setDropoffAddress}
+                                      placeholder="הזן כתובת יעד..."
+                                      required
+                                      onPinDropClick={() =>
+                                        form.setPinDropModal({ isOpen: true, field: 'dropoff' })
+                                      }
+                                      isMobile={false}
+                                      narrowColumn
+                                      storageYardConfirm={dropoffYardConfirm}
+                                    />
+                                    <SaveCustomerAddressControl
+                                      className="mt-1.5"
+                                      visible={addressesSave.showSaveDropoffAddressOption}
+                                      address={form.dropoffAddress.address}
+                                      pending={addressesSave.pendingDropoffAddress}
+                                      onConfirm={addressesSave.setPendingDropoffAddress}
+                                      onClear={() => addressesSave.setPendingDropoffAddress(null)}
+                                      disabled={form.saving}
+                                    />
+                                  </>
                                 )}
                                 {stop.role === 'stop' && (
-                                  <AddressInput
-                                    hideLabel
-                                    value={stop.address}
-                                    onChange={(addr: AddressData) =>
-                                      form.updateStop(stop.id, { address: addr })
-                                    }
-                                    placeholder="הזן כתובת עצירה..."
-                                    onPinDropClick={() =>
-                                      form.setPinDropModal({
-                                        isOpen: true,
-                                        field: `routestop:${stop.id}`,
-                                      })
-                                    }
-                                    isMobile={false}
-                                    narrowColumn
-                                  />
+                                  <>
+                                    <AddressInput
+                                      hideLabel
+                                      value={stop.address}
+                                      onChange={(addr: AddressData) =>
+                                        form.updateStop(stop.id, { address: addr })
+                                      }
+                                      placeholder="הזן כתובת עצירה..."
+                                      onPinDropClick={() =>
+                                        form.setPinDropModal({
+                                          isOpen: true,
+                                          field: `routestop:${stop.id}`,
+                                        })
+                                      }
+                                      isMobile={false}
+                                      narrowColumn
+                                    />
+                                    <SaveCustomerAddressControl
+                                      className="mt-1.5"
+                                      visible={shouldOfferSaveCustomerAddress(
+                                        form.selectedCustomerId,
+                                        stop.address?.address ?? '',
+                                        addressesSave.savedAddresses
+                                      )}
+                                      address={stop.address?.address ?? ''}
+                                      pending={addressesSave.pendingStopAddresses[stop.id] ?? null}
+                                      onConfirm={(draft) =>
+                                        addressesSave.setPendingStopAddress(stop.id, draft)
+                                      }
+                                      onClear={() =>
+                                        addressesSave.setPendingStopAddress(stop.id, null)
+                                      }
+                                      disabled={form.saving}
+                                    />
+                                  </>
                                 )}
                               </div>
                             )

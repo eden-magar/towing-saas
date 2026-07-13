@@ -4,6 +4,10 @@ import type { Dispatch, SetStateAction } from 'react'
 import Link from 'next/link'
 import { AddressInput } from './routes/AddressInput'
 import { PhoneInput } from '../ui/PhoneInput'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../customer-addresses/SaveCustomerAddressControl'
 import type { AddressData } from '../../lib/google-maps'
 
 const FOLLOW_UP_STATUS_LABELS: Record<string, string> = {
@@ -33,6 +37,11 @@ export type StorageFollowUpSectionProps = {
   followUpChildStatus: string | null
   onPinDropOpen: () => void
   variant?: 'compact' | 'labeled'
+  showSaveAddressOption?: boolean
+  pendingAddress?: CustomerAddressPendingDraft | null
+  onConfirmPendingAddress?: (draft: CustomerAddressPendingDraft) => void
+  onClearPendingAddress?: () => void
+  saveAddressDisabled?: boolean
 }
 
 function clearFollowUpFields(
@@ -64,6 +73,11 @@ export function StorageFollowUpSection({
   followUpChildStatus,
   onPinDropOpen,
   variant = 'compact',
+  showSaveAddressOption = false,
+  pendingAddress = null,
+  onConfirmPendingAddress,
+  onClearPendingAddress,
+  saveAddressDisabled = false,
 }: StorageFollowUpSectionProps) {
   const showSection = storageEligible || (!!editTowId && !!followUpChildTowId)
   if (!showSection) return null
@@ -156,6 +170,16 @@ export function StorageFollowUpSection({
               placeholder="כתובת היעד של הגרירה הבאה"
               onPinDropClick={childIsLive ? undefined : onPinDropOpen}
               readOnly={childIsLive}
+            />
+          )}
+          {onConfirmPendingAddress && onClearPendingAddress && (
+            <SaveCustomerAddressControl
+              visible={showSaveAddressOption}
+              address={followUpAddress.address}
+              pending={pendingAddress}
+              onConfirm={onConfirmPendingAddress}
+              onClear={onClearPendingAddress}
+              disabled={saveAddressDisabled || childIsLive}
             />
           )}
 

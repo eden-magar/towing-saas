@@ -22,7 +22,12 @@ import { TowTruckTypeSelector, ServiceSurchargeSelector, type SelectedService } 
 import { PhoneInput } from '../../ui/PhoneInput'
 import { ContactNameAutocomplete } from '../../customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../customer-contacts/SaveCustomerContactPill'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../../customer-addresses/SaveCustomerAddressControl'
 import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
 import {
   STORAGE_OTHER_CUSTOMER_MESSAGE,
   STORAGE_TAKE_OUT_CANCELLED_MESSAGE,
@@ -30,7 +35,7 @@ import {
 } from '../../../lib/utils/storage-vehicle'
 import { StorageTakeOutConfirmModal } from '../StorageTakeOutConfirmModal'
 import { buildVehicleOnTruckFromStorage } from './build-vehicle-from-storage'
-import type { CustomerContact } from '../../../lib/types'
+import type { CustomerAddress, CustomerContact } from '../../../lib/types'
 
 
 // ==================== Types ====================
@@ -85,6 +90,12 @@ export interface RouteBuilderProps {
   saveContactByPointId?: Record<string, boolean>
   onSaveContactToggle?: (pointId: string) => void
   onContactSelected?: (pointId: string) => void
+  /** Saved customer addresses — save control only (Phase 1.5); suggestions are Phase 2. */
+  savedCustomerAddresses?: CustomerAddress[]
+  customerAddressesLoading?: boolean
+  pendingAddressByPointId?: Record<string, CustomerAddressPendingDraft>
+  onConfirmPendingAddress?: (pointId: string, draft: CustomerAddressPendingDraft) => void
+  onClearPendingAddress?: (pointId: string) => void
   /** Mobile flag from parent (JS viewport check). Defaults false → desktop render path. */
   isMobile?: boolean
 }
@@ -135,9 +146,15 @@ export function RouteBuilder({
   saveContactByPointId = {},
   onSaveContactToggle,
   onContactSelected,
+  savedCustomerAddresses,
+  customerAddressesLoading = false,
+  pendingAddressByPointId = {},
+  onConfirmPendingAddress,
+  onClearPendingAddress,
   isMobile = false,
 }: RouteBuilderProps) {
   const customerContactPickerEnabled = savedCustomerContacts !== undefined
+  const customerAddressSaveEnabled = savedCustomerAddresses !== undefined
   const [points, setPoints] = useState<RoutePoint[]>(() =>
     initialPoints?.length ? initialPoints.map((p) => ({ ...p })) : []
   )
@@ -953,6 +970,24 @@ export function RouteBuilder({
                         </button>
                       </div>
                     </div>
+                    {!isBase &&
+                      customerAddressSaveEnabled &&
+                      onConfirmPendingAddress &&
+                      onClearPendingAddress && (
+                        <div className="px-3 pb-2">
+                          <SaveCustomerAddressControl
+                            visible={shouldOfferSaveCustomerAddress(
+                              customerId,
+                              point.address,
+                              savedCustomerAddresses
+                            )}
+                            address={point.address}
+                            pending={pendingAddressByPointId[point.id] ?? null}
+                            onConfirm={(draft) => onConfirmPendingAddress(point.id, draft)}
+                            onClear={() => onClearPendingAddress(point.id)}
+                          />
+                        </div>
+                      )}
 
                     {/* 2 — איש קשר */}
                     {!isBase && (

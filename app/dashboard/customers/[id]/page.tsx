@@ -46,12 +46,23 @@ import {
   deleteCustomerContact,
 } from '@/app/lib/queries/customer-contacts'
 import {
+  getCustomerAddresses,
+  insertCustomerAddress,
+  updateCustomerAddress,
+  deleteCustomerAddress,
+} from '@/app/lib/queries/customer-addresses'
+import {
   getCustomerOrderers,
   insertCustomerOrderer,
   updateCustomerOrderer,
   deleteCustomerOrderer,
 } from '@/app/lib/queries/customer-orderers'
-import type { CustomerContact, CustomerOrderer, CustomerUserWithDetails } from '@/app/lib/types'
+import type {
+  CustomerAddress,
+  CustomerContact,
+  CustomerOrderer,
+  CustomerUserWithDetails,
+} from '@/app/lib/types'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
 
 interface CustomerDetail {
@@ -89,9 +100,12 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [customerUsers, setCustomerUsers] = useState<CustomerUserWithDetails[]>([])
   const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
+  const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([])
   const [customerOrderers, setCustomerOrderers] = useState<CustomerOrderer[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'contacts' | 'orderers' | 'users' | 'settings'>('info')
+  const [activeTab, setActiveTab] = useState<
+    'info' | 'contacts' | 'addresses' | 'orderers' | 'users' | 'settings'
+  >('info')
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
 
   // Modal states
@@ -100,6 +114,9 @@ export default function CustomerDetailPage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [editingContactId, setEditingContactId] = useState<string | null>(null)
   const [showDeleteContactConfirm, setShowDeleteContactConfirm] = useState<string | null>(null)
+  const [showAddressModal, setShowAddressModal] = useState(false)
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null)
+  const [showDeleteAddressConfirm, setShowDeleteAddressConfirm] = useState<string | null>(null)
   const [showOrdererModal, setShowOrdererModal] = useState(false)
   const [editingOrdererId, setEditingOrdererId] = useState<string | null>(null)
   const [showDeleteOrdererConfirm, setShowDeleteOrdererConfirm] = useState<string | null>(null)
@@ -117,6 +134,9 @@ export default function CustomerDetailPage() {
 
   const emptyContactForm = { name: '', phone: '', role_or_title: '', notes: '' }
   const [contactForm, setContactForm] = useState(emptyContactForm)
+
+  const emptyAddressForm = { label: '', address: '', notes: '' }
+  const [addressForm, setAddressForm] = useState(emptyAddressForm)
 
   const emptyOrdererForm = { department: '', name: '' }
   const [ordererForm, setOrdererForm] = useState(emptyOrdererForm)
@@ -162,11 +182,13 @@ export default function CustomerDetailPage() {
       setCustomerUsers(users)
 
       if (companyId) {
-        const [contacts, orderers] = await Promise.all([
+        const [contacts, addresses, orderers] = await Promise.all([
           getCustomerContacts(companyId, customerId),
+          getCustomerAddresses(companyId, customerId),
           getCustomerOrderers(companyId, customerId),
         ])
         setCustomerContacts(contacts)
+        setCustomerAddresses(addresses)
         setCustomerOrderers(orderers)
       }
     } catch (err) {
@@ -290,6 +312,67 @@ export default function CustomerDetailPage() {
       await loadData()
     } catch (err) {
       console.error('Error deleting contact:', err)
+    }
+  }
+
+  const openAddAddressModal = () => {
+    setEditingAddressId(null)
+    setAddressForm(emptyAddressForm)
+    setError('')
+    setShowAddressModal(true)
+  }
+
+  const openEditAddressModal = (row: CustomerAddress) => {
+    setEditingAddressId(row.id)
+    setAddressForm({
+      label: row.label,
+      address: row.address,
+      notes: row.notes || '',
+    })
+    setError('')
+    setShowAddressModal(true)
+  }
+
+  const handleSaveAddress = async () => {
+    if (!companyId || !addressForm.label.trim() || !addressForm.address.trim()) return
+
+    setSaving(true)
+    setError('')
+
+    try {
+      const payload = {
+        label: addressForm.label,
+        address: addressForm.address,
+        notes: addressForm.notes || null,
+      }
+
+      if (editingAddressId) {
+        await updateCustomerAddress(companyId, editingAddressId, payload)
+      } else {
+        await insertCustomerAddress(companyId, customerId, payload)
+      }
+
+      setShowAddressModal(false)
+      setEditingAddressId(null)
+      setAddressForm(emptyAddressForm)
+      await loadData()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'שגיאה בשמירת הכתובת'
+      setError(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteAddress = async (addressId: string) => {
+    if (!companyId) return
+
+    try {
+      await deleteCustomerAddress(companyId, addressId)
+      setShowDeleteAddressConfirm(null)
+      await loadData()
+    } catch (err) {
+      console.error('Error deleting address:', err)
     }
   }
 
@@ -444,6 +527,24 @@ export default function CustomerDetailPage() {
               activeTab === 'contacts' ? 'bg-white/20' : 'bg-gray-200'
             }`}>
               {customerContacts.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('addresses')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'addresses'
+              ? 'bg-[#33d4ff] text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <MapPin size={16} />
+          כתובות קבועות
+          {customerAddresses.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+              activeTab === 'addresses' ? 'bg-white/20' : 'bg-gray-200'
+            }`}>
+              {customerAddresses.length}
             </span>
           )}
         </button>
@@ -673,6 +774,76 @@ export default function CustomerDetailPage() {
                         </button>
                         <button
                           onClick={() => setShowDeleteContactConfirm(contact.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="מחיקה"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Addresses Tab */}
+      {activeTab === 'addresses' && (
+        <div className="space-y-4 max-w-2xl w-full">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-gray-500">
+              כתובות קבועות ללקוח — יוצעו בטופס גרירה בעת בחירת הלקוח
+            </p>
+            <button
+              onClick={openAddAddressModal}
+              className="flex items-center gap-2 bg-[#33d4ff] text-white px-4 py-2.5 rounded-xl hover:bg-[#21b8e6] transition-colors font-medium text-sm"
+            >
+              <Plus size={18} />
+              הוסף כתובת
+            </button>
+          </div>
+
+          {customerAddresses.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <MapPin size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 mb-1">אין כתובות שמורות</p>
+              <p className="text-sm text-gray-400">הוסף כתובות שחוזרות על עצמן בגרירות מול לקוח זה</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="divide-y divide-gray-100">
+                {customerAddresses.map((row) => (
+                  <div key={row.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex w-full items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                          <MapPin size={20} className="text-emerald-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-medium text-gray-800">{row.label}</span>
+                          <p className="text-sm text-gray-500 mt-0.5 truncate" title={row.address}>
+                            {row.address}
+                          </p>
+                          {row.notes && (
+                            <p className="text-sm text-gray-400 mt-0.5 truncate" title={row.notes}>
+                              {row.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => openEditAddressModal(row)}
+                          className="p-2 text-gray-400 hover:text-[#33d4ff] hover:bg-blue-50 rounded-lg transition-colors"
+                          title="עריכה"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteAddressConfirm(row.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="מחיקה"
                         >
@@ -1122,6 +1293,91 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
+      {/* Add / Edit Address Modal */}
+      {showAddressModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
+          <div className="bg-white w-full lg:max-w-md lg:rounded-2xl lg:mx-4 overflow-hidden rounded-t-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white">
+              <h2 className="font-bold text-lg">
+                {editingAddressId ? 'עריכת כתובת' : 'הוספת כתובת'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAddressModal(false)
+                  setEditingAddressId(null)
+                }}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">תווית *</label>
+                <input
+                  type="text"
+                  value={addressForm.label}
+                  onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })}
+                  placeholder='לדוגמה: מגרש רמלה'
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">כתובת מלאה *</label>
+                <textarea
+                  value={addressForm.address}
+                  onChange={(e) => setAddressForm({ ...addressForm, address: e.target.value })}
+                  rows={2}
+                  placeholder="רחוב, עיר..."
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">הערות</label>
+                <textarea
+                  value={addressForm.notes}
+                  onChange={(e) => setAddressForm({ ...addressForm, notes: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff] resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    setShowAddressModal(false)
+                    setEditingAddressId(null)
+                  }}
+                  className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
+                >
+                  ביטול
+                </button>
+                <button
+                  onClick={handleSaveAddress}
+                  disabled={!addressForm.label.trim() || !addressForm.address.trim() || saving}
+                  className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 transition-colors font-medium"
+                >
+                  {saving ? (
+                    <Loader2 size={18} className="animate-spin mx-auto" />
+                  ) : (
+                    'שמור'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add / Edit Orderer Modal */}
       {showOrdererModal && (
         <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
@@ -1245,6 +1501,35 @@ export default function CustomerDetailPage() {
               </button>
               <button
                 onClick={() => handleDeleteContact(showDeleteContactConfirm)}
+                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+              >
+                מחק
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Address Confirm Modal */}
+      {showDeleteAddressConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">מחיקת כתובת</h2>
+              <p className="text-gray-600">הכתובת תוסר מרשימת הכתובות הקבועות של הלקוח. להמשיך?</p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setShowDeleteAddressConfirm(null)}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={() => handleDeleteAddress(showDeleteAddressConfirm)}
                 className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
               >
                 מחק

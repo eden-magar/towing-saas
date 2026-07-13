@@ -18,11 +18,22 @@ import {
   insertPendingCustomerContacts,
   findMatchingCustomerContact,
 } from '../../lib/queries/customer-contacts'
+import {
+  insertPendingCustomerAddresses,
+  pendingAddressFromFields,
+} from '../../lib/queries/customer-addresses'
 import { useCustomerContacts } from '../../hooks/useCustomerContacts'
+import { useCustomerAddresses } from '../../hooks/useCustomerAddresses'
 import { calculateEventPrice } from '../../lib/utils/event-pricing'
 import type { DriverWithDetails } from '../../lib/types'
 import { ContactNameAutocomplete } from '../customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../customer-contacts/SaveCustomerContactPill'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../customer-addresses/SaveCustomerAddressControl'
+import { shouldOfferSaveCustomerAddress } from '../../lib/utils/customer-address-save-ui'
+import { FlashNotice, useFlashNotice } from '../ui/FlashNotice'
 
 function formatMoney(value: number): string {
   return `₪${value.toFixed(2)}`
@@ -69,7 +80,10 @@ export function EventTowSection({
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const { savedContacts, contactsLoading } = useCustomerContacts(companyId, selectedCustomerId)
+  const { savedAddresses } = useCustomerAddresses(companyId, selectedCustomerId)
   const [saveContactToCustomer, setSaveContactToCustomer] = useState(false)
+  const [pendingAddress, setPendingAddress] = useState<CustomerAddressPendingDraft | null>(null)
+  const { notice, setNotice } = useFlashNotice()
   const [details, setDetails] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
   const [driverPickerOpen, setDriverPickerOpen] = useState(false)
@@ -175,6 +189,7 @@ export function EventTowSection({
     setContactName('')
     setContactPhone('')
     setSaveContactToCustomer(false)
+    setPendingAddress(null)
   }, [selectedCustomerId, isDuplicateEventLoad])
 
   useEffect(() => {
@@ -234,11 +249,23 @@ export function EventTowSection({
     contactName.trim().length > 0 &&
     !matchingSavedContact
 
+  const showSaveAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    location.address,
+    savedAddresses
+  )
+
   useEffect(() => {
     if (!showSaveContactOption) {
       setSaveContactToCustomer(false)
     }
   }, [showSaveContactOption])
+
+  useEffect(() => {
+    if (!showSaveAddressOption) {
+      setPendingAddress(null)
+    }
+  }, [showSaveAddressOption])
 
   const handleSelectSavedContact = (contact: { name: string; phone: string | null }) => {
     setContactName(contact.name)
@@ -324,6 +351,19 @@ export function EventTowSection({
         ])
       }
 
+      if (pendingAddress && finalCustomerId && companyId) {
+        const pending = pendingAddressFromFields(pendingAddress.label, location.address, {
+          placeId: location.placeId,
+          lat: location.lat,
+          lng: location.lng,
+          notes: pendingAddress.notes || null,
+        })
+        if (pending) {
+          await insertPendingCustomerAddresses(companyId, finalCustomerId, [pending])
+          setNotice('הכתובת נשמרה ללקוח')
+        }
+      }
+
       const result = await createEvent({
         companyId,
         createdBy: user.id,
@@ -348,6 +388,9 @@ export function EventTowSection({
         void syncEventToLegacyCalendar(result.id)
       }
 
+      if (pendingAddress) {
+        await new Promise((resolve) => window.setTimeout(resolve, 400))
+      }
       router.push(`/dashboard/events/${result.id}`)
     } catch {
       setError('שגיאה בשמירת האירוע, נסה שוב')
@@ -363,6 +406,8 @@ export function EventTowSection({
       description="מיקום, איש קשר ופרטים נוספים"
     >
       <div className="p-3 sm:p-4 space-y-3" dir="rtl">
+        <FlashNotice message={notice} />
+
         {duplicateLoading && (
           <div className="flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800">
             <Loader2 size={16} className="animate-spin shrink-0" />
@@ -384,6 +429,15 @@ export function EventTowSection({
             placeholder="הזן כתובת או הדבק קישור..."
             onPinDropClick={() => setPinOpen(true)}
             readOnly={saving}
+          />
+          <SaveCustomerAddressControl
+            className="mt-2"
+            visible={showSaveAddressOption}
+            address={location.address}
+            pending={pendingAddress}
+            onConfirm={setPendingAddress}
+            onClear={() => setPendingAddress(null)}
+            disabled={saving}
           />
         </FormSubcard>
 

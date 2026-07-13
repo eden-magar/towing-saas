@@ -14,6 +14,12 @@ import {
 import { TimeInStoragePill } from '../../storage/TimeInStoragePill'
 import { FormCard } from '../../ui'
 import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../../customer-addresses/SaveCustomerAddressControl'
+import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
+import type { CustomerAddress } from '../../../lib/types'
 
 interface DistanceResult {
   distanceKm: number
@@ -107,6 +113,20 @@ interface SingleRouteProps {
    * (linear form) and mobile callers exactly.
    */
   renderSection?: 'vehicle' | 'route' | 'both'
+
+  /** Phase 1.5 — save address control (optional; omit = no control). */
+  selectedCustomerId?: string | null
+  savedCustomerAddresses?: CustomerAddress[]
+  pendingPickupAddress?: CustomerAddressPendingDraft | null
+  onConfirmPendingPickupAddress?: (draft: CustomerAddressPendingDraft) => void
+  onClearPendingPickupAddress?: () => void
+  pendingDropoffAddress?: CustomerAddressPendingDraft | null
+  onConfirmPendingDropoffAddress?: (draft: CustomerAddressPendingDraft) => void
+  onClearPendingDropoffAddress?: () => void
+  pendingStopAddresses?: Record<string, CustomerAddressPendingDraft>
+  onConfirmPendingStopAddress?: (stopId: string, draft: CustomerAddressPendingDraft) => void
+  onClearPendingStopAddress?: (stopId: string) => void
+  saveAddressDisabled?: boolean
 }
 
 export function SingleRoute({
@@ -187,7 +207,20 @@ export function SingleRoute({
   isMobile = false,
   narrowColumn = false,
   renderSection = 'both',
+  selectedCustomerId = null,
+  savedCustomerAddresses,
+  pendingPickupAddress = null,
+  onConfirmPendingPickupAddress,
+  onClearPendingPickupAddress,
+  pendingDropoffAddress = null,
+  onConfirmPendingDropoffAddress,
+  onClearPendingDropoffAddress,
+  pendingStopAddresses = {},
+  onConfirmPendingStopAddress,
+  onClearPendingStopAddress,
+  saveAddressDisabled = false,
 }: SingleRouteProps) {
+  const addressSaveEnabled = savedCustomerAddresses !== undefined
   const isNarrow = narrowColumn ?? false
   const isMobileSized = isMobile ?? false
   const storageYard = yardFromBasePriceList(basePriceList)
@@ -500,38 +533,91 @@ export function SingleRoute({
                   </div>
                 </div>
                 {stop.role === 'pickup' && (
-                  <AddressInput
-                    hideLabel
-                    value={pickupAddress}
-                    onChange={onPickupAddressChange}
-                    placeholder="הזן כתובת איסוף..."
-                    required
-                    onPinDropClick={() => onPinDropClick('pickup')}
-                    isMobile
-                    storageYardConfirm={pickupYardConfirm}
-                  />
+                  <>
+                    <AddressInput
+                      hideLabel
+                      value={pickupAddress}
+                      onChange={onPickupAddressChange}
+                      placeholder="הזן כתובת איסוף..."
+                      required
+                      onPinDropClick={() => onPinDropClick('pickup')}
+                      isMobile
+                      storageYardConfirm={pickupYardConfirm}
+                    />
+                    {addressSaveEnabled && onConfirmPendingPickupAddress && onClearPendingPickupAddress && (
+                      <SaveCustomerAddressControl
+                        className="mt-1.5"
+                        visible={shouldOfferSaveCustomerAddress(
+                          selectedCustomerId,
+                          pickupAddress.address,
+                          savedCustomerAddresses
+                        )}
+                        address={pickupAddress.address}
+                        pending={pendingPickupAddress}
+                        onConfirm={onConfirmPendingPickupAddress}
+                        onClear={onClearPendingPickupAddress}
+                        disabled={saveAddressDisabled}
+                      />
+                    )}
+                  </>
                 )}
                 {stop.role === 'dropoff' && (
-                  <AddressInput
-                    hideLabel
-                    value={dropoffAddress}
-                    onChange={onDropoffAddressChange}
-                    placeholder="הזן כתובת יעד..."
-                    required
-                    onPinDropClick={() => onPinDropClick('dropoff')}
-                    isMobile
-                    storageYardConfirm={dropoffYardConfirm}
-                  />
+                  <>
+                    <AddressInput
+                      hideLabel
+                      value={dropoffAddress}
+                      onChange={onDropoffAddressChange}
+                      placeholder="הזן כתובת יעד..."
+                      required
+                      onPinDropClick={() => onPinDropClick('dropoff')}
+                      isMobile
+                      storageYardConfirm={dropoffYardConfirm}
+                    />
+                    {addressSaveEnabled && onConfirmPendingDropoffAddress && onClearPendingDropoffAddress && (
+                      <SaveCustomerAddressControl
+                        className="mt-1.5"
+                        visible={shouldOfferSaveCustomerAddress(
+                          selectedCustomerId,
+                          dropoffAddress.address,
+                          savedCustomerAddresses
+                        )}
+                        address={dropoffAddress.address}
+                        pending={pendingDropoffAddress}
+                        onConfirm={onConfirmPendingDropoffAddress}
+                        onClear={onClearPendingDropoffAddress}
+                        disabled={saveAddressDisabled}
+                      />
+                    )}
+                  </>
                 )}
                 {stop.role === 'stop' && (
-                  <AddressInput
-                    hideLabel
-                    value={stop.address}
-                    onChange={(addr: AddressData) => updateStop(stop.id, { address: addr })}
-                    placeholder="הזן כתובת עצירה..."
-                    onPinDropClick={() => onPinDropClick(`routestop:${stop.id}`)}
-                    isMobile
-                  />
+                  <>
+                    <AddressInput
+                      hideLabel
+                      value={stop.address}
+                      onChange={(addr: AddressData) => updateStop(stop.id, { address: addr })}
+                      placeholder="הזן כתובת עצירה..."
+                      onPinDropClick={() => onPinDropClick(`routestop:${stop.id}`)}
+                      isMobile
+                    />
+                    {addressSaveEnabled &&
+                      onConfirmPendingStopAddress &&
+                      onClearPendingStopAddress && (
+                        <SaveCustomerAddressControl
+                          className="mt-1.5"
+                          visible={shouldOfferSaveCustomerAddress(
+                            selectedCustomerId,
+                            stop.address?.address ?? '',
+                            savedCustomerAddresses
+                          )}
+                          address={stop.address?.address ?? ''}
+                          pending={pendingStopAddresses[stop.id] ?? null}
+                          onConfirm={(draft) => onConfirmPendingStopAddress(stop.id, draft)}
+                          onClear={() => onClearPendingStopAddress(stop.id)}
+                          disabled={saveAddressDisabled}
+                        />
+                      )}
+                  </>
                 )}
               </div>
             )
@@ -563,6 +649,21 @@ export function SingleRoute({
                 narrowColumn={isNarrow && !isMobileSized}
                 storageYardConfirm={pickupYardConfirm}
               />
+              {addressSaveEnabled && onConfirmPendingPickupAddress && onClearPendingPickupAddress && (
+                <SaveCustomerAddressControl
+                  className="mt-1.5"
+                  visible={shouldOfferSaveCustomerAddress(
+                    selectedCustomerId,
+                    pickupAddress.address,
+                    savedCustomerAddresses
+                  )}
+                  address={pickupAddress.address}
+                  pending={pendingPickupAddress}
+                  onConfirm={onConfirmPendingPickupAddress}
+                  onClear={onClearPendingPickupAddress}
+                  disabled={saveAddressDisabled}
+                />
+              )}
             </div>
           </div>
           <div className="flex items-start gap-2">
@@ -579,6 +680,21 @@ export function SingleRoute({
                 narrowColumn={isNarrow && !isMobileSized}
                 storageYardConfirm={dropoffYardConfirm}
               />
+              {addressSaveEnabled && onConfirmPendingDropoffAddress && onClearPendingDropoffAddress && (
+                <SaveCustomerAddressControl
+                  className="mt-1.5"
+                  visible={shouldOfferSaveCustomerAddress(
+                    selectedCustomerId,
+                    dropoffAddress.address,
+                    savedCustomerAddresses
+                  )}
+                  address={dropoffAddress.address}
+                  pending={pendingDropoffAddress}
+                  onConfirm={onConfirmPendingDropoffAddress}
+                  onClear={onClearPendingDropoffAddress}
+                  disabled={saveAddressDisabled}
+                />
+              )}
             </div>
           </div>
         </div>

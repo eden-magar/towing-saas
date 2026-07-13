@@ -6,7 +6,9 @@ import { ArrowRight, Check, Truck } from 'lucide-react'
 import { useTowForm } from '../../hooks/useTowForm'
 import { useQuoteGate } from '../../hooks/useQuoteGate'
 import { useContactsSave } from '../../hooks/useContactsSave'
+import { useAddressesSave } from '../../hooks/useAddressesSave'
 import { FormCard } from '../ui'
+import { FlashNotice, useFlashNotice } from '../ui/FlashNotice'
 import { SectionTowType } from './sections/SectionTowType'
 import { SectionCustomer } from './sections/SectionCustomer'
 import { SectionSingleRoute } from './sections/SectionSingleRoute'
@@ -25,17 +27,41 @@ import { SectionPayment } from './sections/SectionPayment'
 export function TowCreateWizard() {
   const router = useRouter()
   const persistContactsRef = useRef<() => Promise<void>>(async () => {})
+  const persistAddressesRef = useRef<() => Promise<number>>(async () => 0)
+  const lastPersistedAddressCountRef = useRef(0)
+  const { notice, setNotice } = useFlashNotice()
   const form = useTowForm(undefined, {
-    beforeSaveTow: () => persistContactsRef.current(),
+    beforeSaveTow: async () => {
+      await persistContactsRef.current()
+      await persistAddressesRef.current()
+    },
   })
   const contactsSave = useContactsSave(form)
+  const addressesSave = useAddressesSave(form)
   const quoteGate = useQuoteGate(form, {
     persistTowCustomerContacts: contactsSave.persistTowCustomerContacts,
+    persistTowCustomerAddresses: addressesSave.persistTowCustomerAddresses,
   })
 
   useEffect(() => {
     persistContactsRef.current = contactsSave.persistTowCustomerContacts
   }, [contactsSave.persistTowCustomerContacts])
+
+  useEffect(() => {
+    persistAddressesRef.current = async () => {
+      const count = await addressesSave.persistTowCustomerAddresses()
+      lastPersistedAddressCountRef.current = count
+      return count
+    }
+  }, [addressesSave.persistTowCustomerAddresses])
+
+  useEffect(() => {
+    if (!form.showAssignNowModal) return
+    const count = lastPersistedAddressCountRef.current
+    if (count > 0) {
+      setNotice(count === 1 ? 'הכתובת נשמרה ללקוח' : 'הכתובות נשמרו ללקוח')
+    }
+  }, [form.showAssignNowModal, setNotice])
 
   return (
     <div dir="rtl" className="max-w-2xl mx-auto pb-6">
@@ -52,6 +78,8 @@ export function TowCreateWizard() {
         <h1 className="text-xl font-bold text-gray-900">גרירה חדשה</h1>
       </div>
 
+      <FlashNotice message={notice} />
+
       {form.error && (
         <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
           {form.error}
@@ -65,8 +93,9 @@ export function TowCreateWizard() {
         <SectionTowType form={form} />
       </FormCard>
 
-      {form.towType === 'single' && <SectionSingleRoute form={form} />}
-
+      {form.towType === 'single' && (
+        <SectionSingleRoute form={form} addressesSave={addressesSave} />
+      )}
       {form.towType === 'single' && <SectionPricing form={form} />}
 
       {form.towType === 'single' && !quoteGate.isEditingClosedTow && (

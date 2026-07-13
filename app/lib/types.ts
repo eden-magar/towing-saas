@@ -149,6 +149,29 @@ export interface CustomerContactInput {
   notes?: string | null
 }
 
+export interface CustomerAddress {
+  id: string
+  company_id: string
+  customer_id: string
+  label: string
+  address: string
+  place_id: string | null
+  lat: number | null
+  lng: number | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerAddressInput {
+  label: string
+  address: string
+  place_id?: string | null
+  lat?: number | null
+  lng?: number | null
+  notes?: string | null
+}
+
 export interface CustomerOrderer {
   id: string
   company_id: string

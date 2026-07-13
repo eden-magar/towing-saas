@@ -12,7 +12,7 @@ import {
   SelectedService,
   StartFromBase
 } from '../shared'
-import { VehicleType, VehicleLookupResult } from '../../../lib/types'
+import { VehicleType, VehicleLookupResult, CustomerAddress } from '../../../lib/types'
 import {
   isPickableStoredVehicle,
   StoredVehicleWithCustomer,
@@ -20,6 +20,11 @@ import {
 import { TimeInStoragePill } from '../../storage/TimeInStoragePill'
 import { LocationSurcharge, ServiceSurcharge, TimeSurcharge } from '../../../lib/queries/price-lists'
 import { PhoneInput } from '../../ui/PhoneInput'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../../customer-addresses/SaveCustomerAddressControl'
+import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
 
 interface RouteStop {
   id: string
@@ -125,6 +130,23 @@ interface ExchangeRouteProps {
   
   // Storage address
   storageAddress: string
+
+  /** Phase 1.5 — save address control (optional; omit = no control). */
+  selectedCustomerId?: string | null
+  savedCustomerAddresses?: CustomerAddress[]
+  pendingWorkingSourceAddress?: CustomerAddressPendingDraft | null
+  onConfirmPendingWorkingSourceAddress?: (draft: CustomerAddressPendingDraft) => void
+  onClearPendingWorkingSourceAddress?: () => void
+  pendingExchangePickupAddress?: CustomerAddressPendingDraft | null
+  onConfirmPendingExchangePickupAddress?: (draft: CustomerAddressPendingDraft) => void
+  onClearPendingExchangePickupAddress?: () => void
+  pendingDefectiveDestinationAddress?: CustomerAddressPendingDraft | null
+  onConfirmPendingDefectiveDestinationAddress?: (draft: CustomerAddressPendingDraft) => void
+  onClearPendingDefectiveDestinationAddress?: () => void
+  pendingStopAddresses?: Record<string, CustomerAddressPendingDraft>
+  onConfirmPendingStopAddress?: (stopId: string, draft: CustomerAddressPendingDraft) => void
+  onClearPendingStopAddress?: (stopId: string) => void
+  saveAddressDisabled?: boolean
 }
 
 export function ExchangeRoute({
@@ -198,8 +220,24 @@ export function ExchangeRoute({
   selectedLocationSurcharges,
   onLocationSurchargesChange,
   onPinDropClick,
-  storageAddress
+  storageAddress,
+  selectedCustomerId = null,
+  savedCustomerAddresses,
+  pendingWorkingSourceAddress = null,
+  onConfirmPendingWorkingSourceAddress,
+  onClearPendingWorkingSourceAddress,
+  pendingExchangePickupAddress = null,
+  onConfirmPendingExchangePickupAddress,
+  onClearPendingExchangePickupAddress,
+  pendingDefectiveDestinationAddress = null,
+  onConfirmPendingDefectiveDestinationAddress,
+  onClearPendingDefectiveDestinationAddress,
+  pendingStopAddresses = {},
+  onConfirmPendingStopAddress,
+  onClearPendingStopAddress,
+  saveAddressDisabled = false,
 }: ExchangeRouteProps) {
+  const addressSaveEnabled = savedCustomerAddresses !== undefined
   const storageYard = yardFromBasePriceList(basePriceList)
   const workingPickupYardConfirm = storageYard
     ? {
@@ -421,6 +459,22 @@ export function ExchangeRoute({
                     onPinDropClick={() => onPinDropClick('workingVehicleAddress')}
                     storageYardConfirm={workingPickupYardConfirm}
                   />
+                  {addressSaveEnabled &&
+                    onConfirmPendingWorkingSourceAddress &&
+                    onClearPendingWorkingSourceAddress && (
+                      <SaveCustomerAddressControl
+                        visible={shouldOfferSaveCustomerAddress(
+                          selectedCustomerId,
+                          workingVehicleAddress.address,
+                          savedCustomerAddresses
+                        )}
+                        address={workingVehicleAddress.address}
+                        pending={pendingWorkingSourceAddress}
+                        onConfirm={onConfirmPendingWorkingSourceAddress}
+                        onClear={onClearPendingWorkingSourceAddress}
+                        disabled={saveAddressDisabled}
+                      />
+                    )}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-sm font-medium text-gray-700">איש קשר</label>
@@ -540,6 +594,22 @@ export function ExchangeRoute({
                     onPinDropClick={() => onPinDropClick('defectiveDestinationAddress')}
                     storageYardConfirm={defectiveDropoffYardConfirm}
                   />
+                  {addressSaveEnabled &&
+                    onConfirmPendingDefectiveDestinationAddress &&
+                    onClearPendingDefectiveDestinationAddress && (
+                      <SaveCustomerAddressControl
+                        visible={shouldOfferSaveCustomerAddress(
+                          selectedCustomerId,
+                          defectiveDestinationAddress.address,
+                          savedCustomerAddresses
+                        )}
+                        address={defectiveDestinationAddress.address}
+                        pending={pendingDefectiveDestinationAddress}
+                        onConfirm={onConfirmPendingDefectiveDestinationAddress}
+                        onClear={onClearPendingDefectiveDestinationAddress}
+                        disabled={saveAddressDisabled}
+                      />
+                    )}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-sm font-medium text-gray-700">איש קשר</label>
@@ -669,6 +739,22 @@ export function ExchangeRoute({
                     placeholder="כתובת..."
                     onPinDropClick={() => onPinDropClick(`stop-before-${stop.id}`)}
                   />
+                  {addressSaveEnabled &&
+                    onConfirmPendingStopAddress &&
+                    onClearPendingStopAddress && (
+                      <SaveCustomerAddressControl
+                        visible={shouldOfferSaveCustomerAddress(
+                          selectedCustomerId,
+                          stop.address?.address ?? '',
+                          savedCustomerAddresses
+                        )}
+                        address={stop.address?.address ?? ''}
+                        pending={pendingStopAddresses[stop.id] ?? null}
+                        onConfirm={(draft) => onConfirmPendingStopAddress(stop.id, draft)}
+                        onClear={() => onClearPendingStopAddress(stop.id)}
+                        disabled={saveAddressDisabled}
+                      />
+                    )}
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -711,6 +797,23 @@ export function ExchangeRoute({
                 placeholder="הזן כתובת..."
                 onPinDropClick={() => onPinDropClick('exchangeAddress')}
               />
+              {addressSaveEnabled &&
+                onConfirmPendingExchangePickupAddress &&
+                onClearPendingExchangePickupAddress && (
+                  <SaveCustomerAddressControl
+                    className="mt-2"
+                    visible={shouldOfferSaveCustomerAddress(
+                      selectedCustomerId,
+                      exchangeAddress.address,
+                      savedCustomerAddresses
+                    )}
+                    address={exchangeAddress.address}
+                    pending={pendingExchangePickupAddress}
+                    onConfirm={onConfirmPendingExchangePickupAddress}
+                    onClear={onClearPendingExchangePickupAddress}
+                    disabled={saveAddressDisabled}
+                  />
+                )}
               <div className="mt-2">
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm text-gray-600">איש קשר</label>
@@ -784,6 +887,22 @@ export function ExchangeRoute({
                     placeholder="כתובת..."
                     onPinDropClick={() => onPinDropClick(`stop-after-${stop.id}`)}
                   />
+                  {addressSaveEnabled &&
+                    onConfirmPendingStopAddress &&
+                    onClearPendingStopAddress && (
+                      <SaveCustomerAddressControl
+                        visible={shouldOfferSaveCustomerAddress(
+                          selectedCustomerId,
+                          stop.address?.address ?? '',
+                          savedCustomerAddresses
+                        )}
+                        address={stop.address?.address ?? ''}
+                        pending={pendingStopAddresses[stop.id] ?? null}
+                        onConfirm={(draft) => onConfirmPendingStopAddress(stop.id, draft)}
+                        onClear={() => onClearPendingStopAddress(stop.id)}
+                        disabled={saveAddressDisabled}
+                      />
+                    )}
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"

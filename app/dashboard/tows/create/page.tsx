@@ -122,15 +122,26 @@ import {
 import { EventTowSection } from '../../../components/event-forms/EventTowSection'
 import { ContactNameAutocomplete } from '../../../components/customer-contacts/ContactNameAutocomplete'
 import { SaveCustomerContactPill } from '../../../components/customer-contacts/SaveCustomerContactPill'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../../../components/customer-addresses/SaveCustomerAddressControl'
+import { FlashNotice, useFlashNotice } from '../../../components/ui/FlashNotice'
 import { CustomerContactFields } from '../../../components/customer-contacts/CustomerContactFields'
 import { useCustomerContacts } from '../../../hooks/useCustomerContacts'
+import { useCustomerAddresses } from '../../../hooks/useCustomerAddresses'
 import { useCustomerOrderers } from '../../../hooks/useCustomerOrderers'
 import {
   findMatchingCustomerContact,
   insertPendingCustomerContacts,
 } from '../../../lib/queries/customer-contacts'
+import {
+  insertPendingCustomerAddresses,
+  pendingAddressFromFields,
+} from '../../../lib/queries/customer-addresses'
 import { insertPendingCustomerOrderers } from '../../../lib/queries/customer-orderers'
 import { shouldOfferSaveCustomerContact } from '../../../lib/utils/customer-contact-save-ui'
+import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
 import { shouldOfferSaveCustomerOrderer } from '../../../lib/utils/customer-orderer-save-ui'
 
 type TowEntryKind = 'single' | 'exchange' | 'custom' | 'events' | null
@@ -185,10 +196,12 @@ function CreateTowForm({
   const { user } = useAuth()
   const storedVehicleParam = searchParams.get('storedVehicle')
   const persistCustomerContactsRef = useRef<() => Promise<void>>(async () => {})
+  const persistCustomerAddressesRef = useRef<() => Promise<number>>(async () => 0)
   const persistCustomerOrderersRef = useRef<() => Promise<void>>(async () => {})
   const form = useTowForm(editTowId, {
     beforeSaveTow: async () => {
       await persistCustomerContactsRef.current()
+      await persistCustomerAddressesRef.current()
       await persistCustomerOrderersRef.current()
     },
     duplicateFromTowId: duplicateFromId,
@@ -551,7 +564,58 @@ function CreateTowForm({
     {}
   )
 
+  const [pendingPickupAddress, setPendingPickupAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingDropoffAddress, setPendingDropoffAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingStopAddresses, setPendingStopAddresses] = useState<
+    Record<string, CustomerAddressPendingDraft>
+  >({})
+  const [pendingWorkingSourceAddress, setPendingWorkingSourceAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingWorkingDestinationAddress, setPendingWorkingDestinationAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingExchangePickupAddress, setPendingExchangePickupAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingDefectiveDestinationAddress, setPendingDefectiveDestinationAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingFollowUpAddress, setPendingFollowUpAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const [pendingCustomPointAddresses, setPendingCustomPointAddresses] = useState<
+    Record<string, CustomerAddressPendingDraft>
+  >({})
+  const setPendingStopAddress = useCallback(
+    (stopId: string, draft: CustomerAddressPendingDraft | null) => {
+      setPendingStopAddresses((prev) => {
+        if (!draft) {
+          const { [stopId]: _removed, ...rest } = prev
+          return rest
+        }
+        return { ...prev, [stopId]: draft }
+      })
+    },
+    []
+  )
+  const setPendingCustomPointAddress = useCallback(
+    (pointId: string, draft: CustomerAddressPendingDraft | null) => {
+      setPendingCustomPointAddresses((prev) => {
+        if (!draft) {
+          const { [pointId]: _removed, ...rest } = prev
+          return rest
+        }
+        return { ...prev, [pointId]: draft }
+      })
+    },
+    []
+  )
+  const { notice: addressNotice, setNotice: setAddressNotice } = useFlashNotice()
+
   const { savedContacts, contactsLoading } = useCustomerContacts(
+    companyId,
+    selectedCustomerId
+  )
+
+  const { savedAddresses, addressesLoading } = useCustomerAddresses(
     companyId,
     selectedCustomerId
   )
@@ -634,6 +698,46 @@ function CreateTowForm({
     savedContacts
   )
 
+  const pickupAddressText = pickupStop?.address?.address ?? ''
+  const dropoffAddressText = dropoffStop?.address?.address ?? ''
+
+  const showSavePickupAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    pickupAddressText,
+    savedAddresses
+  )
+  const showSaveDropoffAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    dropoffAddressText,
+    savedAddresses
+  )
+
+  const showSaveWorkingSourceAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    workingVehicleAddress?.address ?? '',
+    savedAddresses
+  )
+  const showSaveWorkingDestinationAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    workingVehicleDestinationAddress?.address ?? '',
+    savedAddresses
+  )
+  const showSaveExchangePickupAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    exchangeAddress?.address ?? '',
+    savedAddresses
+  )
+  const showSaveDefectiveDestinationAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    defectiveDestinationAddress?.address ?? '',
+    savedAddresses
+  )
+  const showSaveFollowUpAddressOption = shouldOfferSaveCustomerAddress(
+    selectedCustomerId,
+    followUpAddress?.address ?? '',
+    savedAddresses
+  )
+
   useEffect(() => {
     setSavePickupContactToCustomer(false)
     setSaveDropoffContactToCustomer(false)
@@ -643,6 +747,15 @@ function CreateTowForm({
     setSaveDefectiveDestinationContactToCustomer(false)
     setSaveCustomPointContacts({})
     setSaveOrdererToCustomer(false)
+    setPendingPickupAddress(null)
+    setPendingDropoffAddress(null)
+    setPendingStopAddresses({})
+    setPendingWorkingSourceAddress(null)
+    setPendingWorkingDestinationAddress(null)
+    setPendingExchangePickupAddress(null)
+    setPendingDefectiveDestinationAddress(null)
+    setPendingFollowUpAddress(null)
+    setPendingCustomPointAddresses({})
   }, [selectedCustomerId])
 
   useEffect(() => {
@@ -686,6 +799,34 @@ function CreateTowForm({
       setSaveDefectiveDestinationContactToCustomer(false)
     }
   }, [showSaveDefectiveDestinationContactOption])
+
+  useEffect(() => {
+    if (!showSavePickupAddressOption) setPendingPickupAddress(null)
+  }, [showSavePickupAddressOption])
+
+  useEffect(() => {
+    if (!showSaveDropoffAddressOption) setPendingDropoffAddress(null)
+  }, [showSaveDropoffAddressOption])
+
+  useEffect(() => {
+    if (!showSaveWorkingSourceAddressOption) setPendingWorkingSourceAddress(null)
+  }, [showSaveWorkingSourceAddressOption])
+
+  useEffect(() => {
+    if (!showSaveWorkingDestinationAddressOption) setPendingWorkingDestinationAddress(null)
+  }, [showSaveWorkingDestinationAddressOption])
+
+  useEffect(() => {
+    if (!showSaveExchangePickupAddressOption) setPendingExchangePickupAddress(null)
+  }, [showSaveExchangePickupAddressOption])
+
+  useEffect(() => {
+    if (!showSaveDefectiveDestinationAddressOption) setPendingDefectiveDestinationAddress(null)
+  }, [showSaveDefectiveDestinationAddressOption])
+
+  useEffect(() => {
+    if (!showSaveFollowUpAddressOption) setPendingFollowUpAddress(null)
+  }, [showSaveFollowUpAddressOption])
 
   const toggleCustomPointSaveContact = useCallback((pointId: string) => {
     setSaveCustomPointContacts((prev) => ({
@@ -791,6 +932,201 @@ function CreateTowForm({
   useEffect(() => {
     persistCustomerContactsRef.current = persistTowCustomerContacts
   }, [persistTowCustomerContacts])
+
+  const persistTowCustomerAddresses = useCallback(async () => {
+    if (!companyId || !selectedCustomerId) return 0
+
+    const pending = [] as NonNullable<ReturnType<typeof pendingAddressFromFields>>[]
+
+    if (towType === 'single') {
+      if (pendingPickupAddress && pickupStop) {
+        const item = pendingAddressFromFields(
+          pendingPickupAddress.label,
+          pickupStop.address?.address ?? '',
+          {
+            placeId: pickupStop.address?.placeId,
+            lat: pickupStop.address?.lat,
+            lng: pickupStop.address?.lng,
+            notes: pendingPickupAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      if (pendingDropoffAddress && dropoffStop) {
+        const item = pendingAddressFromFields(
+          pendingDropoffAddress.label,
+          dropoffStop.address?.address ?? '',
+          {
+            placeId: dropoffStop.address?.placeId,
+            lat: dropoffStop.address?.lat,
+            lng: dropoffStop.address?.lng,
+            notes: pendingDropoffAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      for (const stop of routeStops) {
+        if (stop.role !== 'stop') continue
+        const draft = pendingStopAddresses[stop.id]
+        if (!draft) continue
+        const item = pendingAddressFromFields(
+          draft.label,
+          stop.address?.address ?? '',
+          {
+            placeId: stop.address?.placeId,
+            lat: stop.address?.lat,
+            lng: stop.address?.lng,
+            notes: draft.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      if (pendingFollowUpAddress) {
+        const item = pendingAddressFromFields(
+          pendingFollowUpAddress.label,
+          followUpAddress?.address ?? '',
+          {
+            placeId: followUpAddress?.placeId,
+            lat: followUpAddress?.lat,
+            lng: followUpAddress?.lng,
+            notes: pendingFollowUpAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+    }
+
+    if (towType === 'exchange') {
+      if (pendingWorkingSourceAddress) {
+        const item = pendingAddressFromFields(
+          pendingWorkingSourceAddress.label,
+          workingVehicleAddress?.address ?? '',
+          {
+            placeId: workingVehicleAddress?.placeId,
+            lat: workingVehicleAddress?.lat,
+            lng: workingVehicleAddress?.lng,
+            notes: pendingWorkingSourceAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      if (pendingWorkingDestinationAddress) {
+        const item = pendingAddressFromFields(
+          pendingWorkingDestinationAddress.label,
+          workingVehicleDestinationAddress?.address ?? '',
+          {
+            placeId: workingVehicleDestinationAddress?.placeId,
+            lat: workingVehicleDestinationAddress?.lat,
+            lng: workingVehicleDestinationAddress?.lng,
+            notes: pendingWorkingDestinationAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      if (pendingExchangePickupAddress) {
+        const item = pendingAddressFromFields(
+          pendingExchangePickupAddress.label,
+          exchangeAddress?.address ?? '',
+          {
+            placeId: exchangeAddress?.placeId,
+            lat: exchangeAddress?.lat,
+            lng: exchangeAddress?.lng,
+            notes: pendingExchangePickupAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      if (pendingDefectiveDestinationAddress) {
+        const item = pendingAddressFromFields(
+          pendingDefectiveDestinationAddress.label,
+          defectiveDestinationAddress?.address ?? '',
+          {
+            placeId: defectiveDestinationAddress?.placeId,
+            lat: defectiveDestinationAddress?.lat,
+            lng: defectiveDestinationAddress?.lng,
+            notes: pendingDefectiveDestinationAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+      if (pendingFollowUpAddress) {
+        const item = pendingAddressFromFields(
+          pendingFollowUpAddress.label,
+          followUpAddress?.address ?? '',
+          {
+            placeId: followUpAddress?.placeId,
+            lat: followUpAddress?.lat,
+            lng: followUpAddress?.lng,
+            notes: pendingFollowUpAddress.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+    }
+
+    if (towType === 'custom') {
+      for (const point of routePoints) {
+        if (point.type === 'base') continue
+        const draft = pendingCustomPointAddresses[point.id]
+        if (!draft) continue
+        const item = pendingAddressFromFields(
+          draft.label,
+          point.address ?? '',
+          {
+            placeId: point.addressData?.placeId,
+            lat: point.addressData?.lat,
+            lng: point.addressData?.lng,
+            notes: draft.notes || null,
+          }
+        )
+        if (item) pending.push(item)
+      }
+    }
+
+    if (pending.length === 0) return 0
+    await insertPendingCustomerAddresses(companyId, selectedCustomerId, pending)
+    return pending.length
+  }, [
+    companyId,
+    selectedCustomerId,
+    towType,
+    pendingPickupAddress,
+    pendingDropoffAddress,
+    pickupStop,
+    dropoffStop,
+    routeStops,
+    pendingStopAddresses,
+    pendingWorkingSourceAddress,
+    pendingWorkingDestinationAddress,
+    pendingExchangePickupAddress,
+    pendingDefectiveDestinationAddress,
+    pendingFollowUpAddress,
+    workingVehicleAddress,
+    workingVehicleDestinationAddress,
+    exchangeAddress,
+    defectiveDestinationAddress,
+    followUpAddress,
+    routePoints,
+    pendingCustomPointAddresses,
+  ])
+
+  const lastPersistedAddressCountRef = useRef(0)
+
+  useEffect(() => {
+    persistCustomerAddressesRef.current = async () => {
+      const count = await persistTowCustomerAddresses()
+      lastPersistedAddressCountRef.current = count
+      return count
+    }
+  }, [persistTowCustomerAddresses])
+
+  useEffect(() => {
+    if (!showAssignNowModal) return
+    const count = lastPersistedAddressCountRef.current
+    if (count > 0) {
+      setAddressNotice(count === 1 ? 'הכתובת נשמרה ללקוח' : 'הכתובות נשמרו ללקוח')
+    }
+  }, [showAssignNowModal, setAddressNotice])
 
   const persistTowCustomerOrderers = useCallback(async () => {
     if (!companyId || !selectedCustomerId || !isBusinessCustomer) return
@@ -959,6 +1295,40 @@ function CreateTowForm({
                 : null
           }
         />
+        {stop.role === 'pickup' && (
+          <SaveCustomerAddressControl
+            visible={showSavePickupAddressOption}
+            address={stop.address?.address ?? ''}
+            pending={pendingPickupAddress}
+            onConfirm={setPendingPickupAddress}
+            onClear={() => setPendingPickupAddress(null)}
+            disabled={saving}
+          />
+        )}
+        {stop.role === 'dropoff' && (
+          <SaveCustomerAddressControl
+            visible={showSaveDropoffAddressOption}
+            address={stop.address?.address ?? ''}
+            pending={pendingDropoffAddress}
+            onConfirm={setPendingDropoffAddress}
+            onClear={() => setPendingDropoffAddress(null)}
+            disabled={saving}
+          />
+        )}
+        {stop.role === 'stop' && (
+          <SaveCustomerAddressControl
+            visible={shouldOfferSaveCustomerAddress(
+              selectedCustomerId,
+              stop.address?.address ?? '',
+              savedAddresses
+            )}
+            address={stop.address?.address ?? ''}
+            pending={pendingStopAddresses[stop.id] ?? null}
+            onConfirm={(draft) => setPendingStopAddress(stop.id, draft)}
+            onClear={() => setPendingStopAddress(stop.id, null)}
+            disabled={saving}
+          />
+        )}
 
         {stop.role === 'stop' && (
           <div className="space-y-2">
@@ -1107,6 +1477,11 @@ function CreateTowForm({
               followUpChildStatus={followUpChildStatus}
               onPinDropOpen={() => handlePinDropOpen('followUp')}
               variant="compact"
+              showSaveAddressOption={showSaveFollowUpAddressOption}
+              pendingAddress={pendingFollowUpAddress}
+              onConfirmPendingAddress={setPendingFollowUpAddress}
+              onClearPendingAddress={() => setPendingFollowUpAddress(null)}
+              saveAddressDisabled={saving}
             />
           </div>
         )}
@@ -1406,6 +1781,7 @@ function CreateTowForm({
     setError('')
     try {
       await persistTowCustomerContacts()
+      const savedAddressCount = await persistTowCustomerAddresses()
 
       let finalCustomerId = selectedCustomerId
       if (!selectedCustomerId && customerName.trim()) {
@@ -1604,7 +1980,14 @@ function CreateTowForm({
           }
         }
       }
-      router.push('/dashboard')
+      if (savedAddressCount > 0) {
+        setAddressNotice(
+          savedAddressCount === 1 ? 'הכתובת נשמרה ללקוח' : 'הכתובות נשמרו ללקוח'
+        )
+        setTimeout(() => router.push('/dashboard'), 400)
+      } else {
+        router.push('/dashboard')
+      }
     } catch (err) {
       console.error(err)
       setError('שגיאה בשמירת ההצעה')
@@ -1674,6 +2057,8 @@ function CreateTowForm({
     priceMode,
     loadedTowStatus,
     persistTowCustomerContacts,
+    persistTowCustomerAddresses,
+    setAddressNotice,
   ])
 
   const totalDistanceKm =
@@ -1900,6 +2285,7 @@ function CreateTowForm({
         form={form}
         onExitColumnLayout={() => setUseColumnLayout(false)}
         persistContactsRef={persistCustomerContactsRef}
+        persistAddressesRef={persistCustomerAddressesRef}
       />
     )
   }
@@ -1916,6 +2302,8 @@ function CreateTowForm({
           {saveWarning}
         </div>
       )}
+
+      <FlashNotice message={addressNotice} />
 
       <header className="bg-white border-b border-gray-300">
         <div className="max-w-5xl mx-auto">
@@ -3043,6 +3431,17 @@ function CreateTowForm({
                                     storageYardConfirm={workingPickupYardConfirm}
                                   />
                                 )}
+                                {workingVehicleSource !== 'storage' && (
+                                  <SaveCustomerAddressControl
+                                    className="mt-1.5"
+                                    visible={showSaveWorkingSourceAddressOption}
+                                    address={workingVehicleAddress?.address ?? ''}
+                                    pending={pendingWorkingSourceAddress}
+                                    onConfirm={setPendingWorkingSourceAddress}
+                                    onClear={() => setPendingWorkingSourceAddress(null)}
+                                    disabled={saving}
+                                  />
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => setStartFromBase(!startFromBase)}
@@ -3064,6 +3463,15 @@ function CreateTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('workingDestination')}
                                   storageYardConfirm={workingDropoffYardConfirm}
+                                />
+                                <SaveCustomerAddressControl
+                                  className="mt-1.5"
+                                  visible={showSaveWorkingDestinationAddressOption}
+                                  address={workingVehicleDestinationAddress?.address ?? ''}
+                                  pending={pendingWorkingDestinationAddress}
+                                  onConfirm={setPendingWorkingDestinationAddress}
+                                  onClear={() => setPendingWorkingDestinationAddress(null)}
+                                  disabled={saving}
                                 />
                                 {!workingVehicleDestinationIsStorage ? (
                                   <button
@@ -3304,6 +3712,15 @@ function CreateTowForm({
                                   hideLabel
                                   onPinDropClick={() => handlePinDropOpen('exchange')}
                                 />
+                                <SaveCustomerAddressControl
+                                  className="mt-1.5"
+                                  visible={showSaveExchangePickupAddressOption}
+                                  address={exchangeAddress?.address ?? ''}
+                                  pending={pendingExchangePickupAddress}
+                                  onConfirm={setPendingExchangePickupAddress}
+                                  onClear={() => setPendingExchangePickupAddress(null)}
+                                  disabled={saving}
+                                />
                                 <button
                                   type="button"
                                   onClick={() => setExchangeAddress(workingVehicleDestinationAddress)}
@@ -3326,6 +3743,15 @@ function CreateTowForm({
                                       ? defectiveDropoffYardConfirm
                                       : null
                                   }
+                                />
+                                <SaveCustomerAddressControl
+                                  className="mt-1.5"
+                                  visible={showSaveDefectiveDestinationAddressOption}
+                                  address={defectiveDestinationAddress?.address ?? ''}
+                                  pending={pendingDefectiveDestinationAddress}
+                                  onConfirm={setPendingDefectiveDestinationAddress}
+                                  onClear={() => setPendingDefectiveDestinationAddress(null)}
+                                  disabled={saving}
                                 />
                                 <div className="flex flex-wrap items-start gap-2">
                                 {defectiveDestination !== 'storage' ? (
@@ -3377,6 +3803,11 @@ function CreateTowForm({
                                   followUpChildStatus={followUpChildStatus}
                                   onPinDropOpen={() => handlePinDropOpen('followUp')}
                                   variant="labeled"
+                                  showSaveAddressOption={showSaveFollowUpAddressOption}
+                                  pendingAddress={pendingFollowUpAddress}
+                                  onConfirmPendingAddress={setPendingFollowUpAddress}
+                                  onClearPendingAddress={() => setPendingFollowUpAddress(null)}
+                                  saveAddressDisabled={saving}
                                 />
                               </div>
                             </div>
@@ -3454,6 +3885,13 @@ function CreateTowForm({
                       saveContactByPointId={saveCustomPointContacts}
                       onSaveContactToggle={toggleCustomPointSaveContact}
                       onContactSelected={clearCustomPointSaveContact}
+                      savedCustomerAddresses={savedAddresses}
+                      customerAddressesLoading={addressesLoading}
+                      pendingAddressByPointId={pendingCustomPointAddresses}
+                      onConfirmPendingAddress={setPendingCustomPointAddress}
+                      onClearPendingAddress={(pointId) =>
+                        setPendingCustomPointAddress(pointId, null)
+                      }
                     />
                     <FormSubcard title="תוספות זמן">
                       <TimeSurchargesSection

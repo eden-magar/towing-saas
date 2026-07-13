@@ -54,6 +54,17 @@ import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { EventPriceEditor } from '../../../components/event-forms/EventPriceEditor'
 import { AddressInput, type AddressData } from '../../../components/tow-forms/routes/AddressInput'
 import { PinDropModal } from '../../../components/tow-forms/shared/PinDropModal'
+import {
+  SaveCustomerAddressControl,
+  type CustomerAddressPendingDraft,
+} from '../../../components/customer-addresses/SaveCustomerAddressControl'
+import { useCustomerAddresses } from '../../../hooks/useCustomerAddresses'
+import {
+  insertPendingCustomerAddresses,
+  pendingAddressFromFields,
+} from '../../../lib/queries/customer-addresses'
+import { shouldOfferSaveCustomerAddress } from '../../../lib/utils/customer-address-save-ui'
+import { FlashNotice, useFlashNotice } from '../../../components/ui/FlashNotice'
 import { DateInput, TimeInput, Input } from '../../../components/ui'
 import { PhoneInput } from '../../../components/ui/PhoneInput'
 import type { DriverWithDetails } from '../../../lib/types'
@@ -578,6 +589,26 @@ export default function EventDetailsPage() {
   const [locationPinOpen, setLocationPinOpen] = useState(false)
   const [locationSaving, setLocationSaving] = useState(false)
   const [locationError, setLocationError] = useState('')
+  const [pendingLocationAddress, setPendingLocationAddress] =
+    useState<CustomerAddressPendingDraft | null>(null)
+  const { notice: locationNotice, setNotice: setLocationNotice } = useFlashNotice()
+
+  const { savedAddresses } = useCustomerAddresses(
+    companyId,
+    event?.customer_id ?? null
+  )
+
+  const showSaveLocationAddressOption = shouldOfferSaveCustomerAddress(
+    event?.customer_id,
+    locationDraft.address,
+    savedAddresses
+  )
+
+  useEffect(() => {
+    if (!showSaveLocationAddressOption) {
+      setPendingLocationAddress(null)
+    }
+  }, [showSaveLocationAddressOption])
 
   const [isEditingSchedule, setIsEditingSchedule] = useState(false)
   const [scheduleDateDraft, setScheduleDateDraft] = useState('')
@@ -1060,6 +1091,27 @@ export default function EventDetailsPage() {
     setLocationSaving(true)
     setLocationError('')
     try {
+      if (
+        pendingLocationAddress &&
+        companyId &&
+        event.customer_id
+      ) {
+        const pending = pendingAddressFromFields(
+          pendingLocationAddress.label,
+          locationDraft.address,
+          {
+            placeId: locationDraft.placeId,
+            lat: locationDraft.lat,
+            lng: locationDraft.lng,
+            notes: pendingLocationAddress.notes || null,
+          }
+        )
+        if (pending) {
+          await insertPendingCustomerAddresses(companyId, event.customer_id, [pending])
+          setLocationNotice('הכתובת נשמרה ללקוח')
+        }
+      }
+
       await updateEvent(eventId, {
         locationAddress: locationDraft.address.trim(),
         locationLat: locationDraft.lat ?? null,
@@ -1068,6 +1120,7 @@ export default function EventDetailsPage() {
       await loadEvent(true)
       setIsEditingLocation(false)
       setLocationPinOpen(false)
+      setPendingLocationAddress(null)
     } catch (err) {
       console.error('Error saving event location:', err)
       setLocationError('שגיאה בשמירת המיקום')
@@ -1813,6 +1866,8 @@ export default function EventDetailsPage() {
                 </InfoPanel>
               )}
 
+              <FlashNotice message={locationNotice} />
+
               <InfoPanel
                 icon={MapPin}
                 title="מיקום"
@@ -1827,6 +1882,7 @@ export default function EventDetailsPage() {
                           lat: event.location_lat ?? undefined,
                           lng: event.location_lng ?? undefined,
                         })
+                        setPendingLocationAddress(null)
                         setIsEditingLocation(true)
                       }}
                       className="flex items-center gap-1 text-xs text-[#21b8e6] hover:text-[#1a9bc7] font-medium shrink-0"
@@ -1850,6 +1906,14 @@ export default function EventDetailsPage() {
                       onPinDropClick={() => setLocationPinOpen(true)}
                       readOnly={locationSaving}
                     />
+                    <SaveCustomerAddressControl
+                      visible={showSaveLocationAddressOption}
+                      address={locationDraft.address}
+                      pending={pendingLocationAddress}
+                      onConfirm={setPendingLocationAddress}
+                      onClear={() => setPendingLocationAddress(null)}
+                      disabled={locationSaving}
+                    />
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -1857,6 +1921,7 @@ export default function EventDetailsPage() {
                           setLocationError('')
                           setIsEditingLocation(false)
                           setLocationPinOpen(false)
+                          setPendingLocationAddress(null)
                         }}
                         disabled={locationSaving}
                         className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
