@@ -62,6 +62,8 @@ export interface ServiceSurcharge {
   price_type: 'fixed' | 'per_unit' | 'manual'
   unit_label?: string
   is_active: boolean
+  /** When true, line is added after VAT and is not taxed or customer-discounted. */
+  is_vat_exempt?: boolean
 }
 
 export interface CustomerPriceItem {
@@ -336,7 +338,10 @@ export async function getServiceSurcharges(companyId: string): Promise<ServiceSu
     .eq('company_id', companyId)
     .is('price_list_id', null)
   if (error) throw error
-  return data || []
+  return (data || []).map((s) => ({
+    ...s,
+    is_vat_exempt: s.is_vat_exempt === true,
+  }))
 }
 
 export async function saveServiceSurcharges(companyId: string, surcharges: Omit<ServiceSurcharge, 'id' | 'company_id'>[]) {

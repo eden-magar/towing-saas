@@ -10,6 +10,8 @@ export interface InvoiceItem {
   tow_id: string | null
   description: string
   amount: number
+  /** When true, amount is added outside VAT (not taxed). */
+  is_vat_exempt?: boolean
 }
 
 export interface Invoice {
@@ -199,15 +201,25 @@ export async function createInvoice(data: {
   customerId?: string
   towId?: string
   invoiceNumber?: string
-  amount: number
+  /** Taxable amount before VAT. If omitted, derived from non-exempt items. */
+  amount?: number
   vatPercent?: number
   dueDate?: string
-  items: { description: string; amount: number; towId?: string }[]
+  items: { description: string; amount: number; towId?: string; isVatExempt?: boolean }[]
 }): Promise<Invoice> {
   const invoiceNumber = data.invoiceNumber || await generateInvoiceNumber(data.companyId)
   const vatPercent = data.vatPercent ?? 17
-  const vatAmount = data.amount * (vatPercent / 100)
-  const totalAmount = data.amount + vatAmount
+
+  const taxableFromItems = data.items
+    .filter((item) => !item.isVatExempt)
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const exemptFromItems = data.items
+    .filter((item) => item.isVatExempt)
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+
+  const amount = data.amount ?? taxableFromItems
+  const vatAmount = amount * (vatPercent / 100)
+  const totalAmount = amount + vatAmount + exemptFromItems
 
   const { data: invoice, error } = await supabase
     .from('invoices')
@@ -216,7 +228,7 @@ export async function createInvoice(data: {
       customer_id: data.customerId || null,
       tow_id: data.towId || null,
       invoice_number: invoiceNumber,
-      amount: data.amount,
+      amount,
       vat_amount: vatAmount,
       total_amount: totalAmount,
       status: 'draft',
@@ -230,14 +242,17 @@ export async function createInvoice(data: {
     throw error
   }
 
-  // הוספת פריטים
   if (data.items.length > 0) {
     const { error: itemsError } = await supabase
       .from('invoice_items')
       .insert(data.items.map(item => ({
         invoice_id: invoice.id,
         tow_id: item.towId || null,
-        description: item.description,
+        description: item.isVatExempt
+          ? (item.description.includes('פטור')
+              ? item.description
+              : `${item.description} (פטור ממע״מ)`)
+          : item.description,
         amount: item.amount
       })))
 
@@ -257,14 +272,30 @@ export async function createInvoiceFromTow(
   towId: string,
   customerId: string | null,
   amount: number,
-  description: string
+  description: string,
+  options?: {
+    vatPercent?: number
+    vatExemptItems?: { description: string; amount: number }[]
+  }
 ): Promise<Invoice> {
+  const vatExemptItems = (options?.vatExemptItems ?? []).filter(
+    (item) => (Number(item.amount) || 0) > 0,
+  )
   return createInvoice({
     companyId,
     customerId: customerId || undefined,
     towId,
     amount,
-    items: [{ description, amount, towId }]
+    vatPercent: options?.vatPercent,
+    items: [
+      { description, amount, towId },
+      ...vatExemptItems.map((item) => ({
+        description: item.description,
+        amount: item.amount,
+        towId,
+        isVatExempt: true as const,
+      })),
+    ],
   })
 }
 

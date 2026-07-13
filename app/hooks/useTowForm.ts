@@ -1972,7 +1972,12 @@ export function useTowForm(
             }))
           )
           setTowServiceSurcharges(extractTowLevelServices(tow.price_breakdown.service_surcharges))
-          setManualSurcharges(extractManualSurcharges(tow.price_breakdown.service_surcharges))
+          setManualSurcharges(
+            extractManualSurcharges(
+              tow.price_breakdown.service_surcharges,
+              tow.price_breakdown.vat_exempt_surcharges,
+            ),
+          )
         } else {
           setSelectedServices([])
           setTowServiceSurcharges([])
@@ -2175,7 +2180,12 @@ export function useTowForm(
           setDefectiveSelectedServices([])
           setSelectedServices([])
           // Ad-hoc lines carry no vehicle_role; keep them as order-level manual add-ons.
-          setManualSurcharges(extractManualSurcharges(tow.price_breakdown?.service_surcharges))
+          setManualSurcharges(
+            extractManualSurcharges(
+              tow.price_breakdown?.service_surcharges,
+              tow.price_breakdown?.vat_exempt_surcharges,
+            ),
+          )
         } else {
           // Single tow - vehicle (tow_vehicles row wins over point junction for full columns)
           const vehicleFromPoints = tow.points

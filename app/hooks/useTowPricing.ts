@@ -92,17 +92,32 @@ interface UseTowPricingParams {
 function servicesToCalcInput(
   services: SelectedService[],
   serviceSurchargesData: ServiceSurcharge[],
-): { amount: number; label?: string }[] {
+): { amount: number; label?: string; vatExempt?: boolean }[] {
   return services
     .map((selected) => {
       const surcharge = serviceSurchargesData.find((s) => s.id === selected.id)
       if (!surcharge) return { amount: 0 }
-      if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0, label: surcharge.label }
+      const vatExempt = surcharge.is_vat_exempt === true
+      if (surcharge.price_type === 'manual') {
+        return {
+          amount: selected.manualPrice || 0,
+          label: surcharge.label,
+          ...(vatExempt ? { vatExempt: true as const } : {}),
+        }
+      }
       if (surcharge.price_type === 'per_unit') {
         const qty = selected.quantity || 1
-        return { amount: surcharge.price * qty, label: `${surcharge.label} (×${qty})` }
+        return {
+          amount: surcharge.price * qty,
+          label: `${surcharge.label} (×${qty})`,
+          ...(vatExempt ? { vatExempt: true as const } : {}),
+        }
       }
-      return { amount: surcharge.price, label: surcharge.label }
+      return {
+        amount: surcharge.price,
+        label: surcharge.label,
+        ...(vatExempt ? { vatExempt: true as const } : {}),
+      }
     })
     .filter((s) => s.amount > 0)
 }
@@ -277,19 +292,38 @@ export function useTowPricing(params: UseTowPricingParams) {
       const locSurcharges = selectedLocationSurcharges
         .map(id => locationSurchargesData.find(l => l.id === id))
         .filter(Boolean)
-        .map(s => ({ percent: s!.surcharge_percent }))
+        .map(s => ({
+          percent: s!.surcharge_percent,
+          label: s!.label,
+          id: s!.id,
+        }))
       const routeServices = aggregateRouteServices(customRouteData.services)
       const svcSurcharges = [
         ...routeServices
           .map((selected) => {
             const s = serviceSurchargesData.find((x) => x.id === selected.id)
             if (!s) return { amount: 0 }
-            if (s.price_type === 'manual') return { amount: selected.manualPrice || 0, label: s.label }
+            const vatExempt = s.is_vat_exempt === true
+            if (s.price_type === 'manual') {
+              return {
+                amount: selected.manualPrice || 0,
+                label: s.label,
+                ...(vatExempt ? { vatExempt: true as const } : {}),
+              }
+            }
             if (s.price_type === 'per_unit') {
               const qty = selected.quantity || 1
-              return { amount: s.price * qty, label: `${s.label} (×${qty})` }
+              return {
+                amount: s.price * qty,
+                label: `${s.label} (×${qty})`,
+                ...(vatExempt ? { vatExempt: true as const } : {}),
+              }
             }
-            return { amount: s.price, label: s.label }
+            return {
+              amount: s.price,
+              label: s.label,
+              ...(vatExempt ? { vatExempt: true as const } : {}),
+            }
           })
           .filter((x) => x.amount > 0),
         ...servicesToCalcInput(towServiceSurcharges, serviceSurchargesData),
@@ -329,18 +363,37 @@ export function useTowPricing(params: UseTowPricingParams) {
     const locationSurcharges = selectedLocationSurcharges
       .map(id => locationSurchargesData.find(l => l.id === id))
       .filter(Boolean)
-      .map(s => ({ percent: s!.surcharge_percent }))
+      .map(s => ({
+        percent: s!.surcharge_percent,
+        label: s!.label,
+        id: s!.id,
+      }))
 
     const serviceSurcharges = [
       ...selectedServices.map(selected => {
         const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
         if (!surcharge) return { amount: 0 }
-        if (surcharge.price_type === 'manual') return { amount: selected.manualPrice || 0, label: surcharge.label }
+        const vatExempt = surcharge.is_vat_exempt === true
+        if (surcharge.price_type === 'manual') {
+          return {
+            amount: selected.manualPrice || 0,
+            label: surcharge.label,
+            ...(vatExempt ? { vatExempt: true as const } : {}),
+          }
+        }
         if (surcharge.price_type === 'per_unit') {
           const qty = selected.quantity || 1
-          return { amount: surcharge.price * qty, label: `${surcharge.label} (×${qty})` }
+          return {
+            amount: surcharge.price * qty,
+            label: `${surcharge.label} (×${qty})`,
+            ...(vatExempt ? { vatExempt: true as const } : {}),
+          }
         }
-        return { amount: surcharge.price, label: surcharge.label }
+        return {
+          amount: surcharge.price,
+          label: surcharge.label,
+          ...(vatExempt ? { vatExempt: true as const } : {}),
+        }
       }).filter(s => s.amount > 0),
       ...servicesToCalcInput(towServiceSurcharges, serviceSurchargesData),
       ...manualSurchargesToCalcInput(manualSurcharges),

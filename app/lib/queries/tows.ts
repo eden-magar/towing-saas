@@ -25,7 +25,7 @@ import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-
 import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 import { persistVehicleCodesToCache } from '../vehicle-lookup'
 import { withSignedTowImageUrls } from './tow-images-storage'
-import { applyDiscountPercent } from '../utils/price-calculator'
+import { calculateTowPrice } from '../utils/price-calculator'
 
 // ==================== טיפוסים ====================
 
@@ -50,6 +50,21 @@ export interface PriceBreakdown {
     /** Manual ad-hoc line added directly on this order (not from the service_surcharges catalog). */
     is_ad_hoc?: boolean
     /** Catalog line chosen at the whole-tow level (exchange/custom), not per-leg or per-point. */
+    is_tow_level?: boolean
+    /** Taxable catalog/ad-hoc line; false/undefined means taxed inside the multiplier stack. */
+    is_vat_exempt?: boolean
+  }[]
+  /**
+   * VAT-exempt fixed ₪ lines — added after VAT, customer discount, and manual adjustment.
+   * Not taxed and not discounted.
+   */
+  vat_exempt_surcharges?: {
+    id: string
+    label: string
+    price: number
+    units?: number
+    amount: number
+    is_ad_hoc?: boolean
     is_tow_level?: boolean
   }[]
   subtotal: number
@@ -2514,14 +2529,12 @@ export async function recalculateTowPrice(
   newScheduledAt: Date,
   companyId: string
 ): Promise<{ oldPrice: number; newPrice: number; newBreakdown: PriceBreakdown } | null> {
-  // שליפת הגרירה
   const tow = await getTow(towId)
   if (!tow || !tow.price_breakdown) return null
 
   const oldPrice = tow.final_price || 0
-  const breakdown = { ...tow.price_breakdown }
+  const breakdown = tow.price_breakdown
 
-  // שליפת תוספות זמן
   const { data: timeSurcharges } = await supabase
     .from('time_surcharges')
     .select('*')
@@ -2530,118 +2543,119 @@ export async function recalculateTowPrice(
 
   if (!timeSurcharges) return null
 
-  // חישוב תוספות זמן חדשות
-  const hour = newScheduledAt.getHours()
-  const minute = newScheduledAt.getMinutes()
-  const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-  const dayOfWeek = newScheduledAt.getDay() // 0 = Sunday, 6 = Saturday
+  const newDate = newScheduledAt.toISOString().split('T')[0]
+  const newTime = `${String(newScheduledAt.getHours()).padStart(2, '0')}:${String(newScheduledAt.getMinutes()).padStart(2, '0')}`
 
-  const isSaturdayDay = dayOfWeek === 6
-  const isFridayDay = dayOfWeek === 5
-
-  let activeTimeSurcharges: typeof timeSurcharges = []
-
-  // שבת - רק תוספת שבת (ללא בדיקת שעות)
-  if (isSaturdayDay) {
-    activeTimeSurcharges = timeSurcharges.filter(s => s.day_type === 'saturday')
-  }
-  // שישי - בדיקה אם עברנו את השעה שהוגדרה
-  else if (isFridayDay) {
-    const fridaySurcharge = timeSurcharges.find(s => s.day_type === 'friday')
-    
-    if (fridaySurcharge) {
-      if (fridaySurcharge.time_start) {
-        const [startHours, startMinutes] = fridaySurcharge.time_start.split(':').map(Number)
-        const timeValue = hour * 60 + minute
-        const startValue = startHours * 60 + startMinutes
-        
-        if (timeValue >= startValue) {
-          activeTimeSurcharges = [fridaySurcharge]
-        }
-        // אחרת - ללא תוספות (מערך ריק)
-      } else {
-        // שישי כל היום
-        activeTimeSurcharges = [fridaySurcharge]
-      }
-    }
-    // אין תוספת שישי מוגדרת = ללא תוספות
-  }
-  // ראשון-חמישי - בדיקת תוספות ערב/לילה לפי שעות
-  else {
-    activeTimeSurcharges = timeSurcharges.filter(surcharge => {
-      // לא כולל תוספות של שבת/שישי/חג
-      if (surcharge.day_type === 'saturday' || surcharge.day_type === 'friday' || surcharge.day_type === 'holiday') {
-        return false
-      }
-      
-      // בדיקת שעות
-      if (surcharge.time_start && surcharge.time_end) {
-        const start = surcharge.time_start
-        const end = surcharge.time_end
-
-        if (start < end) {
-          // טווח רגיל (למשל 15:00-19:00)
-          if (timeStr < start || timeStr >= end) return false
-        } else {
-          // טווח שחוצה חצות (למשל 19:00-07:00)
-          if (timeStr < start && timeStr >= end) return false
-        }
-      } else {
-        // אין טווח שעות מוגדר = לא מחזירים
-        return false
-      }
-
-      return true
-    })
-  }
-
-  // חישוב הסכום הבסיסי (בלי תוספות זמן)
-  const baseSubtotal = breakdown.base_price + breakdown.distance_price
-
-  // חישוב תוספות זמן חדשות
-  const newTimeSurcharges = activeTimeSurcharges.map(s => ({
-    id: s.id,
-    label: s.label,
-    percent: s.surcharge_percent,
-    amount: Math.round(baseSubtotal * s.surcharge_percent / 100)
-  }))
-  
-  // לוקחים רק את התוספת הגבוהה ביותר
-  const timeAmount = newTimeSurcharges.reduce((max, s) => Math.max(max, s.amount), 0)
-
-  // תוספות מיקום ושירותים נשארות כמו שהיו
-  const locationAmount = (breakdown.location_surcharges ?? []).reduce((sum, s) => sum + s.amount, 0)
-  const servicesAmount = (breakdown.service_surcharges ?? []).reduce((sum, s) => sum + s.amount, 0)
-
-  // חישוב סופי
-  const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
-  const { discountAmount, afterDiscount: beforeVat } = applyDiscountPercent(
-    beforeDiscount,
-    breakdown.discount_percent
-  )
   const companySettings = await getCompanySettings(companyId)
   const vatRate = (companySettings?.default_vat_percent ?? 18) / 100
-  const vatAmount = Math.max(0, beforeVat * vatRate)
-  const newTotal = Math.max(0, beforeVat + vatAmount)
 
-  // שמירת רק התוספת הגבוהה ביותר ב-breakdown
-  const highestSurcharge = newTimeSurcharges.length > 0 
-    ? [newTimeSurcharges.reduce((max, s) => s.amount > max.amount ? s : max, newTimeSurcharges[0])]
-    : []
+  const { data: priceList } = await supabase
+    .from('price_lists')
+    .select('*')
+    .eq('company_id', companyId)
+    .is('customer_company_id', null)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+
+  const locationSurcharges = (breakdown.location_surcharges || []).map((s) => ({
+    id: s.id,
+    label: s.label,
+    percent: s.percent,
+  }))
+  const serviceSurcharges = [
+    ...(breakdown.service_surcharges || []).map((s) => ({
+      amount: s.amount,
+      label: s.label,
+    })),
+    ...(breakdown.vat_exempt_surcharges || []).map((s) => ({
+      amount: s.amount,
+      label: s.label,
+      vatExempt: true as const,
+    })),
+  ]
+
+  const manualSigned =
+    (breakdown.manual_adjustment_percent ?? 0) > 0
+      ? breakdown.manual_adjustment_type === 'markup'
+        ? breakdown.manual_adjustment_percent!
+        : -(breakdown.manual_adjustment_percent!)
+      : 0
+
+  const result = calculateTowPrice({
+    priceList: {
+      base_prices: {
+        private: priceList?.base_price_private ?? breakdown.base_price ?? 0,
+        motorcycle: priceList?.base_price_motorcycle ?? 0,
+        heavy: priceList?.base_price_heavy ?? 0,
+        machinery: priceList?.base_price_machinery ?? 0,
+        personal_import: priceList?.base_price_private ?? breakdown.base_price ?? 0,
+      },
+      price_per_km: priceList?.price_per_km ?? 12,
+      minimum_price: priceList?.minimum_price ?? 0,
+    },
+    vehicleType: (breakdown.vehicle_type as any) || 'private',
+    distanceKm: breakdown.distance_km || 0,
+    deadheadKm: breakdown.deadhead_km || 0,
+    deadheadRate:
+      (breakdown.deadhead_km || 0) > 0 && (breakdown.deadhead_price || 0) > 0
+        ? (breakdown.deadhead_price || 0) / (breakdown.deadhead_km || 1)
+        : (priceList as any)?.price_per_km_deadhead ?? 0,
+    basePriceOverride: breakdown.base_price,
+    timeSurcharges: timeSurcharges as any,
+    towDate: newDate,
+    towTime: newTime,
+    isHoliday: false,
+    locationSurcharges,
+    serviceSurcharges,
+    priceMode: 'recommended',
+    discountPercent: breakdown.discount_percent || 0,
+    manualAdjustmentPercent: manualSigned,
+    vatPercent: vatRate,
+  })
+
+  const timeSurchargesBreakdown =
+    result.maxTimeSurchargePercent > 0
+      ? [
+          {
+            id: '',
+            label: result.maxTimeSurchargeLabel || `תוספת זמן`,
+            percent: result.maxTimeSurchargePercent,
+            amount: result.timeSurchargeAmount,
+          },
+        ]
+      : []
+
+  const locationSurchargesBreakdown = result.locationSurchargeLines.map((line) => {
+    const existing = (breakdown.location_surcharges || []).find(
+      (s) => s.id === line.id || s.percent === line.percent,
+    )
+    return {
+      id: line.id || existing?.id || '',
+      label: line.label || existing?.label || `תוספת מיקום (${line.percent}%)`,
+      percent: line.percent,
+      amount: line.amount,
+    }
+  })
 
   const newBreakdown: PriceBreakdown = {
     ...breakdown,
-    time_surcharges: highestSurcharge,
-    subtotal: beforeDiscount,
-    discount_amount: discountAmount,
-    vat_amount: vatAmount,
-    total: newTotal
+    base_price: result.basePrice,
+    distance_price: result.distancePrice,
+    deadhead_km: result.deadheadKm,
+    deadhead_price: result.deadheadPrice,
+    time_surcharges: timeSurchargesBreakdown,
+    location_surcharges: locationSurchargesBreakdown,
+    subtotal: result.beforeVat,
+    discount_amount: result.discountAmount,
+    vat_amount: result.vatAmount,
+    total: result.total,
   }
 
   return {
     oldPrice,
-    newPrice: newTotal,
-    newBreakdown
+    newPrice: result.total,
+    newBreakdown,
   }
 }
 

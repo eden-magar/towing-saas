@@ -2,12 +2,26 @@
  * Unified tow price calculator.
  * Single source of truth for all price calculations (UI, save, breakdown).
  *
- * Formula (client-confirmed):
- *   subtotal = base_price + (km × price_per_km)
- *   before_vat = subtotal × (1 + max(time surcharge %)) + sum(location % of subtotal) + sum(service ₪)
- *   before_discount = before_vat × (1 + vat_percent)
- *   final_price = before_discount × (1 - discount_percent/100)
- *   total = max(pre_manual_total, minimum_price); manual adjustment applies after that floor and is not re-capped
+ * Recommended / recommended_customer formula (execution order):
+ *   1. base (by vehicle type)
+ *   2. + km × rate          (distanceKm includes מהחניון→מוצא; deadhead מיעד→חניון added at its rate)
+ *   3. + fixed-₪ services   (taxable catalog + ad-hoc only — VAT-exempt held aside)
+ *   ─────────────────────
+ *   4. × each location %    (compounded: Π (1 + pᵢ/100))
+ *   5. × time surcharge     (separate multiplier: × (1 + maxTime%/100))
+ *   ─────────────────────
+ *   6. + VAT
+ *   7. − customer discount  (on VAT-INCLUSIVE total from step 6)
+ *   8. ± manual adjustment  (on step-7 result)
+ *   9. + VAT-exempt ₪       (untaxed, undiscounted)
+ *  10. minimum price floor  (on the FINAL total)
+ *   = total
+ *
+ * No mid-calculation rounding — callers round only for display/storage.
+ * A 100% customer discount yields exactly ₪0 on the discounted portion (never negative).
+ *
+ * Fixed / customer / custom modes bypass this stack (unchanged aside from optional
+ * vatExemptSurcharges appended before the minimum floor when provided).
  */
 
 import { VehicleType } from '../types'
@@ -60,41 +74,49 @@ export interface TowPriceListInput {
   price_per_km_machinery?: number | null
 }
 
+export interface ServiceSurchargeCalcInput {
+  amount: number
+  label?: string
+  /** When true, held until after VAT/discount/manual — not taxed or discounted. */
+  vatExempt?: boolean
+  /** Alias accepted from stored/DB-shaped lines (same meaning as vatExempt). */
+  is_vat_exempt?: boolean
+}
+
+export interface LocationSurchargeCalcInput {
+  percent: number
+  label?: string
+  id?: string
+}
+
 export interface TowPriceInput {
-  // base pricing
   priceList: TowPriceListInput
   vehicleType: VehicleType
   distanceKm: number
-  /** Override base price (e.g. for custom route with multiple vehicles) */
   basePriceOverride?: number
 
-  // deadhead (נסיעת סרק) — return leg priced at its own rate, kept separate from distanceKm
   deadheadKm?: number
   deadheadRate?: number
 
-  // surcharges
   timeSurcharges: TimeSurcharge[]
-  towDate: string // YYYY-MM-DD
-  towTime: string // HH:MM
+  towDate: string
+  towTime: string
   isHoliday: boolean
-  activeTimeSurchargeIds?: string[] // IDs manually toggled by dispatcher (override)
+  activeTimeSurchargeIds?: string[]
   hasManualTimeSurchargeOverride?: boolean
 
-  locationSurcharges: { percent: number }[]
-  serviceSurcharges: { amount: number; label?: string }[]
+  locationSurcharges: LocationSurchargeCalcInput[]
+  serviceSurcharges: ServiceSurchargeCalcInput[]
 
-  // price mode
   priceMode: 'recommended' | 'recommended_customer' | 'fixed' | 'customer' | 'custom'
   fixedPrice?: number
   customPrice?: number
   customPriceIncludesVat?: boolean
 
-  // discount
   discountPercent: number
   manualAdjustmentPercent?: number
 
-  // vat
-  vatPercent?: number // default 0.18
+  vatPercent?: number
 }
 
 // ==================== Output ====================
@@ -102,8 +124,23 @@ export interface TowPriceInput {
 export interface PriceBreakdownItem {
   label: string
   amount: number
-  type: 'base' | 'distance' | 'time' | 'location' | 'service' | 'discount' | 'vat'
+  type:
+    | 'base'
+    | 'distance'
+    | 'time'
+    | 'location'
+    | 'service'
+    | 'discount'
+    | 'vat'
+    | 'vat_exempt'
   bold?: boolean
+}
+
+export interface LocationSurchargeResultLine {
+  id?: string
+  label: string
+  percent: number
+  amount: number
 }
 
 export interface TowPriceResult {
@@ -111,28 +148,99 @@ export interface TowPriceResult {
   distancePrice: number
   deadheadKm: number
   deadheadPrice: number
+  /** Taxable fixed-₪ services (inside multipliers). */
+  serviceSurchargeAmount: number
+  /** VAT-exempt fixed-₪ services (after everything, before min floor). */
+  vatExemptSurchargeAmount: number
+  /** base + distance + deadhead + taxable services (pre-multipliers). */
   subtotal: number
   maxTimeSurchargePercent: number
   maxTimeSurchargeLabel: string
+  timeSurchargeAmount: number
   locationSurchargePercent: number
   locationSurchargeAmount: number
-  serviceSurchargeAmount: number
+  locationSurchargeLines: LocationSurchargeResultLine[]
+  /** Amount after location × time multipliers, before VAT. */
   beforeVat: number
   vatAmount: number
+  /** VAT-inclusive total after step 6 (before customer discount). */
+  afterVat: number
   beforeDiscount: number
   discountAmount: number
+  afterDiscount: number
+  manualAdjustmentAmount: number
   finalPrice: number
   minimumApplied: boolean
   total: number
   breakdown: PriceBreakdownItem[]
 }
 
+// ==================== Helpers ====================
+
+function splitServices(services: ServiceSurchargeCalcInput[]): {
+  taxable: ServiceSurchargeCalcInput[]
+  exempt: ServiceSurchargeCalcInput[]
+} {
+  const taxable: ServiceSurchargeCalcInput[] = []
+  const exempt: ServiceSurchargeCalcInput[] = []
+  for (const s of services) {
+    if (!s.amount || s.amount <= 0) continue
+    if (s.vatExempt === true || s.is_vat_exempt === true) exempt.push(s)
+    else taxable.push(s)
+  }
+  return { taxable, exempt }
+}
+
+function appendVatExemptLines(
+  breakdown: PriceBreakdownItem[],
+  exempt: ServiceSurchargeCalcInput[],
+): number {
+  let sum = 0
+  for (const s of exempt) {
+    sum += s.amount
+    breakdown.push({
+      label: `ללא מע״מ: ${s.label || 'שירות'}`,
+      amount: s.amount,
+      type: 'vat_exempt',
+    })
+  }
+  return sum
+}
+
+function applyMinimumFloor(total: number, minimumPrice: number): {
+  total: number
+  minimumApplied: boolean
+} {
+  if (total < minimumPrice) return { total: minimumPrice, minimumApplied: true }
+  return { total, minimumApplied: false }
+}
+
 // ==================== Main function ====================
 
 export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
   const vatRate = input.vatPercent ?? 0.18
+  const { taxable: taxableServices, exempt: exemptServices } = splitServices(
+    input.serviceSurcharges || [],
+  )
+  const emptyLocationLines: LocationSurchargeResultLine[] = []
 
-  // Fixed / customer / custom modes
+  const emptyRecommendedFields = {
+    deadheadKm: 0,
+    deadheadPrice: 0,
+    serviceSurchargeAmount: 0,
+    vatExemptSurchargeAmount: 0,
+    maxTimeSurchargePercent: 0,
+    maxTimeSurchargeLabel: '',
+    timeSurchargeAmount: 0,
+    locationSurchargePercent: 0,
+    locationSurchargeAmount: 0,
+    locationSurchargeLines: emptyLocationLines,
+    afterVat: 0,
+    afterDiscount: 0,
+    manualAdjustmentAmount: 0,
+  }
+
+  // ---------- Fixed / customer / custom (bypass recommended stack) ----------
   if (input.priceMode === 'fixed' && input.fixedPrice != null) {
     const { discountAmount, afterDiscount: total } = applyDiscountPercent(
       input.fixedPrice,
@@ -140,28 +248,32 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     )
     const vatAmount = Math.max(0, total - total / (1 + vatRate))
     const beforeVat = total - vatAmount
+    const breakdown: PriceBreakdownItem[] = [
+      { label: 'לפני מע״מ', amount: beforeVat, type: 'base' },
+      { label: `מע"מ ${Math.round(vatRate * 100)}%`, amount: vatAmount, type: 'vat' },
+    ]
+    const exemptSum = appendVatExemptLines(breakdown, exemptServices)
+    const withExempt = total + exemptSum
+    const floored = applyMinimumFloor(withExempt, input.priceList.minimum_price)
+    if (floored.minimumApplied) {
+      breakdown.push({ label: 'מחיר מינימום', amount: floored.total, type: 'base', bold: true })
+    } else {
+      breakdown.push({ label: 'סה״כ', amount: floored.total, type: 'base', bold: true })
+    }
     return {
       basePrice: 0,
       distancePrice: 0,
-      deadheadKm: 0,
-      deadheadPrice: 0,
+      ...emptyRecommendedFields,
+      vatExemptSurchargeAmount: exemptSum,
       subtotal: 0,
-      maxTimeSurchargePercent: 0,
-      maxTimeSurchargeLabel: '',
-      locationSurchargePercent: 0,
-      locationSurchargeAmount: 0,
-      serviceSurchargeAmount: 0,
       beforeVat,
       vatAmount,
       beforeDiscount: total,
       discountAmount,
-      finalPrice: total,
-      minimumApplied: false,
-      total,
-      breakdown: [
-        { label: 'לפני מע״מ', amount: beforeVat, type: 'base' },
-        { label: `מע"מ ${Math.round(vatRate * 100)}%`, amount: vatAmount, type: 'vat' },
-      ]
+      finalPrice: floored.total,
+      minimumApplied: floored.minimumApplied,
+      total: floored.total,
+      breakdown,
     }
   }
 
@@ -172,26 +284,29 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     )
     const vatAmount = Math.max(0, beforeDiscount * vatRate)
     const rawTotal = beforeDiscount + vatAmount
-    const total = Math.max(rawTotal, input.priceList.minimum_price)
+    const breakdown: PriceBreakdownItem[] = [
+      { label: 'מחיר לקוח', amount: input.fixedPrice, type: 'base' },
+    ]
+    const exemptSum = appendVatExemptLines(breakdown, exemptServices)
+    const withExempt = rawTotal + exemptSum
+    const floored = applyMinimumFloor(withExempt, input.priceList.minimum_price)
+    breakdown.push({ label: 'סה״כ', amount: floored.total, type: 'base', bold: true })
     return {
       basePrice: 0,
       distancePrice: 0,
-      deadheadKm: 0,
-      deadheadPrice: 0,
+      ...emptyRecommendedFields,
+      vatExemptSurchargeAmount: exemptSum,
       subtotal: 0,
-      maxTimeSurchargePercent: 0,
-      maxTimeSurchargeLabel: '',
-      locationSurchargePercent: 0,
-      locationSurchargeAmount: 0,
-      serviceSurchargeAmount: 0,
       beforeVat: beforeDiscount,
       vatAmount,
+      afterVat: rawTotal,
       beforeDiscount: rawTotal,
       discountAmount,
-      finalPrice: rawTotal,
-      minimumApplied: total > rawTotal,
-      total,
-      breakdown: [{ label: 'מחיר לקוח', amount: input.fixedPrice, type: 'base' }]
+      afterDiscount: rawTotal,
+      finalPrice: floored.total,
+      minimumApplied: floored.minimumApplied,
+      total: floored.total,
+      breakdown,
     }
   }
 
@@ -200,51 +315,54 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     const beforeVat = input.customPriceIncludesVat ? price / (1 + vatRate) : price
     const vatAmount = input.customPriceIncludesVat ? price - beforeVat : price * vatRate
     const total = input.customPriceIncludesVat ? price : price + vatAmount
+    const breakdown: PriceBreakdownItem[] = [
+      { label: 'לפני מע״מ', amount: beforeVat, type: 'base' },
+      { label: `מע"מ ${Math.round(vatRate * 100)}%`, amount: vatAmount, type: 'vat' },
+    ]
+    const exemptSum = appendVatExemptLines(breakdown, exemptServices)
+    const withExempt = total + exemptSum
+    const floored = applyMinimumFloor(withExempt, input.priceList.minimum_price)
+    breakdown.push({ label: 'סה״כ', amount: floored.total, type: 'base', bold: true })
     return {
       basePrice: 0,
       distancePrice: 0,
-      deadheadKm: 0,
-      deadheadPrice: 0,
+      ...emptyRecommendedFields,
+      vatExemptSurchargeAmount: exemptSum,
       subtotal: 0,
-      maxTimeSurchargePercent: 0,
-      maxTimeSurchargeLabel: '',
-      locationSurchargePercent: 0,
-      locationSurchargeAmount: 0,
-      serviceSurchargeAmount: 0,
       beforeVat,
       vatAmount,
+      afterVat: total,
       beforeDiscount: total,
       discountAmount: 0,
-      finalPrice: total,
-      minimumApplied: false,
-      total,
-      breakdown: [
-        { label: 'לפני מע״מ', amount: beforeVat, type: 'base' },
-        { label: `מע"מ ${Math.round(vatRate * 100)}%`, amount: vatAmount, type: 'vat' },
-      ]
+      afterDiscount: total,
+      finalPrice: floored.total,
+      minimumApplied: floored.minimumApplied,
+      total: floored.total,
+      breakdown,
     }
   }
 
-  // Recommended mode
+  // ---------- Recommended ----------
   const basePrice = input.basePriceOverride ?? (input.priceList.base_prices[input.vehicleType] ?? 0)
   const pricePerKm = resolvePricePerKm(input.vehicleType, input.priceList)
   const minimumPrice = input.priceList.minimum_price
 
   const distancePrice = input.distanceKm * pricePerKm
 
-  // Deadhead (נסיעת סרק): return leg priced at its own rate, kept separate from distanceKm.
-  // If the rate is null/0 it is simply not charged.
   const deadheadKm = input.deadheadKm ?? 0
   const deadheadRate = input.deadheadRate ?? 0
   const deadheadPrice = deadheadKm > 0 && deadheadRate > 0 ? deadheadKm * deadheadRate : 0
 
-  const subtotal = basePrice + distancePrice + deadheadPrice
+  const serviceAmount = taxableServices.reduce((sum, s) => sum + s.amount, 0)
 
-  // Time surcharge: max of active ones (or use override IDs)
+  // Steps 1–3
+  const stack = basePrice + distancePrice + deadheadPrice + serviceAmount
+
+  // Time
   let activeTime: TimeSurcharge[] = []
   if (input.hasManualTimeSurchargeOverride) {
     activeTime = input.activeTimeSurchargeIds
-      ? input.timeSurcharges.filter(s => input.activeTimeSurchargeIds!.includes(s.id))
+      ? input.timeSurcharges.filter((s) => input.activeTimeSurchargeIds!.includes(s.id))
       : []
   } else {
     activeTime = getActiveTimeSurcharges(
@@ -254,143 +372,210 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
       input.isHoliday
     )
   }
-  const maxTimePercent = activeTime.length > 0
-    ? Math.max(...activeTime.map(s => s.surcharge_percent), 0)
-    : 0
-  const maxTimeLabel = activeTime.length > 0
-    ? activeTime.reduce((max, s) => (s.surcharge_percent > max.surcharge_percent ? s : max), activeTime[0]).label
-    : ''
+  const maxTimePercent =
+    activeTime.length > 0 ? Math.max(...activeTime.map((s) => s.surcharge_percent), 0) : 0
+  const maxTimeLabel =
+    activeTime.length > 0
+      ? activeTime.reduce(
+          (max, s) => (s.surcharge_percent > max.surcharge_percent ? s : max),
+          activeTime[0],
+        ).label
+      : ''
 
-  // Location surcharges stack
-  const locationPercent = input.locationSurcharges.reduce((sum, s) => sum + s.percent, 0)
-  const locationAmount = subtotal * (locationPercent / 100)
+  // Step 4 — compound location %
+  const locationLines: LocationSurchargeResultLine[] = []
+  let afterLocation = stack
+  let locationTotalAmount = 0
+  let locationPercentSum = 0
+  for (const loc of input.locationSurcharges) {
+    if (!(loc.percent > 0)) continue
+    locationPercentSum += loc.percent
+    const before = afterLocation
+    afterLocation = afterLocation * (1 + loc.percent / 100)
+    const amount = afterLocation - before
+    locationTotalAmount += amount
+    locationLines.push({
+      id: loc.id,
+      label: loc.label || `תוספת מיקום (${loc.percent}%)`,
+      percent: loc.percent,
+      amount,
+    })
+  }
 
-  // Service surcharges in ₪
-  const serviceAmount = input.serviceSurcharges.reduce((sum, s) => sum + s.amount, 0)
+  // Step 5 — time multiplier
+  const beforeTime = afterLocation
+  const afterTime = afterLocation * (1 + maxTimePercent / 100)
+  const timeAmount = afterTime - beforeTime
 
-  // before_vat = subtotal × (1 + max time %) + location + services
-  const preVatSubtotal = subtotal * (1 + maxTimePercent / 100) + locationAmount + serviceAmount
+  // Step 6 — VAT
+  const beforeVat = afterTime
+  const vatAmount = Math.max(0, beforeVat * vatRate)
+  const afterVat = beforeVat + vatAmount
 
-  const beforeDiscount = preVatSubtotal
-  const { discountAmount, afterDiscount: beforeVat } = applyDiscountPercent(
-    beforeDiscount,
+  // Step 7 — customer discount on VAT-inclusive
+  const { discountAmount, afterDiscount } = applyDiscountPercent(
+    afterVat,
     input.discountPercent
   )
 
-  const vatAmount = Math.max(0, beforeVat * vatRate)
-  const totalBeforeManualRaw = beforeVat + vatAmount
-  const roundedPreManual = Math.round(totalBeforeManualRaw)
-  const minimumApplied = roundedPreManual < minimumPrice
-  const totalBeforeManual = minimumApplied ? minimumPrice : totalBeforeManualRaw
-
+  // Step 8 — manual adjustment
   const manualAdjBase = input.manualAdjustmentPercent ?? 0
-  const { amount: manualAdjAmountCalc, result: totalAfterManual } =
-    applyPercentAdjustment(totalBeforeManual, manualAdjBase)
+  const { amount: manualAdjAmount, result: afterManual } = applyPercentAdjustment(
+    afterDiscount,
+    manualAdjBase
+  )
 
-  // Minimum floor applies to pre-manual total only; post-manual amount is final as-is (floored at 0).
-  const total =
-    manualAdjBase !== 0 ? totalAfterManual : Math.max(roundedPreManual, minimumPrice)
+  // Step 9 — VAT-exempt
+  const vatExemptSum = exemptServices.reduce((sum, s) => sum + s.amount, 0)
+  const beforeMin = afterManual + vatExemptSum
 
-  const totalBeforeVat = total > 0 ? total / (1 + vatRate) : 0
-  const finalVatAmount = Math.max(0, total - totalBeforeVat)
+  // Step 10 — minimum on FINAL total
+  const { total, minimumApplied } = applyMinimumFloor(beforeMin, minimumPrice)
 
-  const finalPrice = total
-
-  const breakdown: PriceBreakdownItem[] = [
-    { label: 'מחיר בסיס', amount: basePrice, type: 'base' },
-    { label: `מרחק (${input.distanceKm} ק״מ)`, amount: distancePrice, type: 'distance' }
-  ]
+  const breakdown: PriceBreakdownItem[] = []
+  if (basePrice !== 0) {
+    breakdown.push({ label: 'מחיר בסיס', amount: basePrice, type: 'base' })
+  }
+  if (distancePrice !== 0) {
+    breakdown.push({
+      label: `מרחק (${input.distanceKm} ק״מ)`,
+      amount: distancePrice,
+      type: 'distance',
+    })
+  }
   if (deadheadPrice > 0) {
-    breakdown.push({ label: `מרחק סרק (${deadheadKm} ק״מ)`, amount: deadheadPrice, type: 'distance' })
-  }
-  if (maxTimePercent > 0) {
     breakdown.push({
-      label: maxTimeLabel,
-      amount: subtotal * (maxTimePercent / 100),
-      type: 'time'
+      label: `מרחק סרק (${deadheadKm} ק״מ)`,
+      amount: deadheadPrice,
+      type: 'distance',
     })
   }
-  input.locationSurcharges.forEach(s => {
-    if (s.percent > 0) {
-      breakdown.push({
-        label: `תוספת מיקום (${s.percent}%)`,
-        amount: subtotal * (s.percent / 100),
-        type: 'location'
-      })
-    }
-  })
-  input.serviceSurcharges.forEach(s => {
-    if (s.amount > 0) {
-      breakdown.push({ label: s.label || 'שירות', amount: s.amount, type: 'service' })
-    }
-  })
-  if (input.discountPercent > 0) {
+  for (const s of taxableServices) {
+    breakdown.push({ label: s.label || 'שירות', amount: s.amount, type: 'service' })
+  }
+  for (const line of locationLines) {
+    if (line.amount === 0) continue
     breakdown.push({
-      label: `הנחה (${input.discountPercent}%)`,
+      label: line.label.includes('%') ? line.label : `${line.label} (${line.percent}%)`,
+      amount: line.amount,
+      type: 'location',
+    })
+  }
+  if (maxTimePercent > 0 && timeAmount !== 0) {
+    breakdown.push({
+      label: maxTimeLabel
+        ? `תוספת ${maxTimeLabel} (${maxTimePercent}%)`
+        : `תוספת זמן (${maxTimePercent}%)`,
+      amount: timeAmount,
+      type: 'time',
+    })
+  }
+  if (beforeVat !== 0) {
+    breakdown.push({ label: 'סה״כ לפני מע״מ', amount: beforeVat, type: 'base' })
+  }
+  if (vatAmount !== 0) {
+    breakdown.push({
+      label: `מע״מ (${Math.round(vatRate * 100)}%)`,
+      amount: vatAmount,
+      type: 'vat',
+    })
+  }
+  if (input.discountPercent > 0 && discountAmount !== 0) {
+    breakdown.push({
+      label: `הנחת לקוח (${input.discountPercent}%)`,
       amount: -discountAmount,
-      type: 'discount'
+      type: 'discount',
     })
   }
-  // subtotal before VAT
-  breakdown.push({ label: 'סה״כ לפני מע״מ', amount: beforeVat, type: 'base' })
-  // VAT on original total
-  breakdown.push({ label: `מע״מ (${Math.round(vatRate * 100)}%)`, amount: vatAmount, type: 'vat' })
-  // total before manual adjustment (bold marker — amount = totalBeforeManual)
-  breakdown.push({ label: 'סה״כ', amount: totalBeforeManual, type: 'base', bold: true })
-
-  // manual adjustment
-  const manualAdj = input.manualAdjustmentPercent ?? 0
-  if (manualAdj !== 0) {
+  if (manualAdjBase !== 0 && manualAdjAmount !== 0) {
     breakdown.push({
-      label: manualAdj > 0 ? `תוספת (${manualAdj}%)` : `הנחה ידנית (${Math.abs(manualAdj)}%)`,
-      amount: manualAdj > 0 ? manualAdjAmountCalc : -manualAdjAmountCalc,
-      type: manualAdj > 0 ? 'service' : 'discount'
+      label:
+        manualAdjBase > 0
+          ? `תוספת (${manualAdjBase}%)`
+          : `הנחה ידנית (${Math.abs(manualAdjBase)}%)`,
+      amount: manualAdjBase > 0 ? manualAdjAmount : -manualAdjAmount,
+      type: manualAdjBase > 0 ? 'service' : 'discount',
     })
-    // breakdown after manual adj
-    breakdown.push({ label: 'לפני מע״מ', amount: totalBeforeVat, type: 'base' })
-    breakdown.push({ label: `מע״מ (${Math.round(vatRate * 100)}%)`, amount: finalVatAmount, type: 'vat' })
-    breakdown.push({ label: manualAdj > 0 ? 'סך הכל אחרי תוספת' : 'סך הכל אחרי הנחה', amount: total, type: 'base', bold: true })
   }
+  appendVatExemptLines(breakdown, exemptServices)
+  breakdown.push({
+    label: minimumApplied ? 'מחיר מינימום' : 'סה״כ',
+    amount: total,
+    type: 'base',
+    bold: true,
+  })
 
   return {
     basePrice,
     distancePrice,
     deadheadKm,
     deadheadPrice,
-    subtotal,
+    serviceSurchargeAmount: serviceAmount,
+    vatExemptSurchargeAmount: vatExemptSum,
+    subtotal: stack,
     maxTimeSurchargePercent: maxTimePercent,
     maxTimeSurchargeLabel: maxTimeLabel,
-    locationSurchargePercent: locationPercent,
-    locationSurchargeAmount: locationAmount,
-    serviceSurchargeAmount: serviceAmount,
+    timeSurchargeAmount: timeAmount,
+    locationSurchargePercent: locationPercentSum,
+    locationSurchargeAmount: locationTotalAmount,
+    locationSurchargeLines: locationLines,
     beforeVat,
     vatAmount,
-    beforeDiscount,
+    afterVat,
+    beforeDiscount: afterVat,
     discountAmount,
-    finalPrice,
+    afterDiscount,
+    manualAdjustmentAmount: manualAdjAmount,
+    finalPrice: total,
     minimumApplied,
     total,
-    breakdown
+    breakdown,
   }
 }
 
-/** Inputs persisted on tows.price_breakdown (subtotal = beforeVat, vat_amount = pre-manual VAT). */
+/** Treat '' as unset; preserve 0 as an explicit value. */
+function normalizeNullableNumber(value: unknown): number | null {
+  if (value === '' || value === null || value === undefined) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
+export { normalizeNullableNumber }
+
+function normalizeNullableString(value: unknown): string | null {
+  if (value === '' || value === null || value === undefined) return null
+  return String(value)
+}
+
+/** Inputs persisted on tows.price_breakdown. Prefer stored `total` as source of truth. */
 export type StoredPriceBreakdownForTotals = {
   subtotal: number
   vat_amount: number
   manual_adjustment_percent?: number | null
   manual_adjustment_type?: 'discount' | 'markup' | null
   total?: number
+  discount_amount?: number
+  vat_exempt_surcharges?: { amount: number }[]
 }
 
-/** Display totals from stored breakdown — mirrors manual-adjustment steps in calculateTowPrice (lines 236-243). */
+/**
+ * Display totals from a stored breakdown (new formula).
+ * Prefer `breakdown.total` as the final charged price.
+ * Manual adjustment applies after VAT+discount; VAT-exempt is after that.
+ */
 export function computeStoredPriceBreakdownTotals(
   breakdown: StoredPriceBreakdownForTotals,
-  vatRate: number
+  _vatRate: number
 ): {
   beforeVat: number
   preManualVat: number
   totalBeforeManual: number
+  afterDiscount: number
+  vatExemptAmount: number
   manualAdjustment: {
     percent: number
     type: 'discount' | 'markup'
@@ -402,62 +587,47 @@ export function computeStoredPriceBreakdownTotals(
 } {
   const beforeVat = breakdown.subtotal
   const preManualVat = breakdown.vat_amount
-  const totalBeforeManual = beforeVat + preManualVat
+  const afterVat = beforeVat + preManualVat
+  const discountAmount = Math.max(0, breakdown.discount_amount ?? 0)
+  const afterDiscount = Math.max(0, afterVat - discountAmount)
+  const vatExemptAmount = (breakdown.vat_exempt_surcharges ?? []).reduce(
+    (sum, x) => sum + (Number(x.amount) || 0),
+    0,
+  )
 
   const percent = breakdown.manual_adjustment_percent ?? 0
-  if (percent <= 0) {
-    const finalTotal = Math.max(0, breakdown.total ?? totalBeforeManual)
-    const postManualBeforeVat = finalTotal > 0 ? finalTotal / (1 + vatRate) : 0
-    const postManualVat = Math.max(0, finalTotal - postManualBeforeVat)
-    return {
-      beforeVat,
-      preManualVat,
-      totalBeforeManual,
-      manualAdjustment: null,
-      finalTotal,
-      postManualBeforeVat,
-      postManualVat,
-    }
+  let manualAdjustment: {
+    percent: number
+    type: 'discount' | 'markup'
+    amount: number
+  } | null = null
+  let afterManual = afterDiscount
+  if (percent > 0) {
+    const type = breakdown.manual_adjustment_type === 'markup' ? 'markup' : 'discount'
+    const signed = type === 'markup' ? percent : -percent
+    const { amount, result } = applyPercentAdjustment(afterDiscount, signed)
+    manualAdjustment = { percent, type, amount }
+    afterManual = result
   }
 
-  const type = breakdown.manual_adjustment_type === 'markup' ? 'markup' : 'discount'
-  const manualAdjBase = type === 'markup' ? percent : -percent
-  const { amount: manualAdjAmountCalc, result: finalTotal } = applyPercentAdjustment(
-    totalBeforeManual,
-    manualAdjBase
+  const finalTotal = Math.max(
+    0,
+    breakdown.total ?? afterManual + vatExemptAmount,
   )
-  const postManualBeforeVat = finalTotal > 0 ? finalTotal / (1 + vatRate) : 0
-  const postManualVat = Math.max(0, finalTotal - postManualBeforeVat)
 
   return {
     beforeVat,
     preManualVat,
-    totalBeforeManual,
-    manualAdjustment: { percent, type, amount: manualAdjAmountCalc },
+    /** VAT-inclusive total before customer discount / manual / exempt (step 6). */
+    totalBeforeManual: afterVat,
+    afterDiscount,
+    vatExemptAmount,
+    manualAdjustment,
     finalTotal,
-    postManualBeforeVat,
-    postManualVat,
+    // Legacy fields: VAT is fixed at step 6; do not backsolve from final total.
+    postManualBeforeVat: beforeVat,
+    postManualVat: preManualVat,
   }
-}
-
-// ==================== Helpers for callers ====================
-
-export type MergeablePriceList = Record<string, any> | object | null | undefined
-
-/** Treat '' as unset; preserve 0 as an explicit value. */
-export function normalizeNullableNumber(value: unknown): number | null {
-  if (value === '' || value === null || value === undefined) return null
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string' && value.trim() !== '') {
-    const n = Number(value)
-    return Number.isFinite(n) ? n : null
-  }
-  return null
-}
-
-function normalizeNullableString(value: unknown): string | null {
-  if (value === '' || value === null || value === undefined) return null
-  return String(value)
 }
 
 const MERGE_NUMERIC_FIELDS = [
@@ -476,10 +646,12 @@ const MERGE_NUMERIC_FIELDS = [
   'base_lng',
 ] as const
 
+type MergeablePriceList = Record<string, any> | null | undefined
+
 const PER_TYPE_KM_TYPES = ['private', 'motorcycle', 'heavy', 'machinery'] as const
 type PerTypeKmVehicleType = (typeof PER_TYPE_KM_TYPES)[number]
 
-/** Per-type km when set (private/motorcycle/heavy/machinery only); else global price_per_km; else 12. */
+/** Per-type km when set; else global price_per_km; else 12. */
 export function resolvePricePerKm(
   vehicleType: string,
   priceList: Pick<
@@ -501,10 +673,6 @@ export function resolvePricePerKm(
   return 12
 }
 
-/**
- * Resolve the deadhead (נסיעת סרק) per-km rate from a merged/active price list.
- * Returns 0 when not configured (null/0), meaning deadhead is not charged.
- */
 export function resolveDeadheadRate(
   priceList: { price_per_km_deadhead?: number | null } | null | undefined
 ): number {
@@ -528,10 +696,6 @@ export function priceListForTowCalc(
   }
 }
 
-/**
- * Per-field merge: customer value when set (including 0), else company.
- * Does not merge surcharges — base list scalars only.
- */
 export function mergePriceLists(
   company: MergeablePriceList,
   customer: MergeablePriceList
@@ -557,9 +721,6 @@ export function mergePriceLists(
   return merged
 }
 
-/**
- * Build base_prices from a price list (DB format).
- */
 export function extractBasePrices(priceList: Record<string, any> | null): Record<VehicleType, number> {
   if (!priceList) {
     return { private: 180, motorcycle: 100, heavy: 350, machinery: 500, personal_import: 180 }
@@ -598,7 +759,13 @@ export function resolveVehicleBasePrice(
   if (type === 'van' && weightKg != null && weightKg > 0) {
     return resolveWeightBracketBase(weightKg, brackets) ?? 0
   }
-  if (type === 'private' || type === 'motorcycle' || type === 'heavy' || type === 'machinery' || type === 'personal_import') {
+  if (
+    type === 'private' ||
+    type === 'motorcycle' ||
+    type === 'heavy' ||
+    type === 'machinery' ||
+    type === 'personal_import'
+  ) {
     return flatPrices[type] ?? flatPrices.private ?? 0
   }
   return flatPrices.private ?? 0

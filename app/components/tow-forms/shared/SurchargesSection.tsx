@@ -100,6 +100,7 @@ export function SurchargesSection({
   const [search, setSearch] = useState('')
   const [oneOffLabel, setOneOffLabel] = useState('')
   const [oneOffAmount, setOneOffAmount] = useState('')
+  const [oneOffVatExempt, setOneOffVatExempt] = useState(false)
 
   const showModal = openProp ?? internalOpen
   const setShowModal = (next: boolean) => {
@@ -207,10 +208,16 @@ export function SurchargesSection({
     if (!label || amount <= 0) return
     onManualSurchargesChange([
       ...manualSurcharges,
-      { id: newManualSurchargeId(), label, amount },
+      {
+        id: newManualSurchargeId(),
+        label,
+        amount,
+        ...(oneOffVatExempt ? { isVatExempt: true as const } : {}),
+      },
     ])
     setOneOffLabel('')
     setOneOffAmount('')
+    setOneOffVatExempt(false)
   }
 
   const openModal = () => {
@@ -223,6 +230,7 @@ export function SurchargesSection({
     setSearch('')
     setOneOffLabel('')
     setOneOffAmount('')
+    setOneOffVatExempt(false)
   }
 
   const canAddOneOff =
@@ -333,6 +341,11 @@ export function SurchargesSection({
                     <Check size={16} className="shrink-0 text-gt-brand" />
                   ) : null}
                   {service.label}
+                  {service.is_vat_exempt ? (
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                      פטור ממע״מ
+                    </span>
+                  ) : null}
                 </span>
                 <span className="tabular-nums text-gt-text-secondary">
                   {servicePriceLabel(service, sel)}
@@ -412,6 +425,11 @@ export function SurchargesSection({
                 <span className="flex items-center gap-2 font-medium text-gt-brand-text">
                   <Check size={16} className="shrink-0 text-gt-brand" />
                   {m.label}
+                  {m.isVatExempt ? (
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                      פטור ממע״מ
+                    </span>
+                  ) : null}
                 </span>
                 <span className="tabular-nums text-gt-text-secondary">{m.amount} ₪</span>
               </button>
@@ -461,6 +479,15 @@ export function SurchargesSection({
               הוסף
             </button>
           </div>
+          <label className="flex items-center gap-2 text-xs text-gt-text-secondary">
+            <input
+              type="checkbox"
+              checked={oneOffVatExempt}
+              onChange={(e) => setOneOffVatExempt(e.target.checked)}
+              className="rounded accent-[#33d4ff]"
+            />
+            פטור ממע״מ (לא ממוסה / לא מונחה)
+          </label>
         </div>
       )}
     </div>

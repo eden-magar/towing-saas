@@ -103,6 +103,7 @@ interface ServiceSurcharge {
   price_type: 'fixed' | 'per_unit' | 'manual'
   unit_label?: string
   is_active: boolean
+  is_vat_exempt?: boolean
 }
 
 interface FixedPriceItem {
@@ -307,7 +308,8 @@ export default function PriceListsPage() {
           price: s.price,
           price_type: (s as any).price_type || 'fixed',
           unit_label: (s as any).unit_label || '',
-          is_active: s.is_active
+          is_active: s.is_active,
+          is_vat_exempt: (s as any).is_vat_exempt === true,
         })))
       }
 
@@ -441,7 +443,8 @@ export default function PriceListsPage() {
         price: s.price,
         price_type: s.price_type,
         unit_label: s.unit_label,
-        is_active: s.is_active
+        is_active: s.is_active,
+        is_vat_exempt: s.is_vat_exempt === true,
       })))
 
       setHasChanges(false)
@@ -570,7 +573,8 @@ export default function PriceListsPage() {
       price: 0,
       price_type: 'fixed',
       unit_label: '',
-      is_active: true
+      is_active: true,
+      is_vat_exempt: false,
     }])
     markChanged()
   }
@@ -775,6 +779,7 @@ export default function PriceListsPage() {
             price_type: s.price_type,
             unit_label: s.unit_label,
             is_active: s.is_active,
+            is_vat_exempt: s.is_vat_exempt === true,
           })),
         })
       }
@@ -1129,7 +1134,7 @@ export default function PriceListsPage() {
                     onClick={() => setEditingCustomer({
                       ...editingCustomer,
                       customer_service_surcharges: [...(editingCustomer.customer_service_surcharges || []), {
-                        id: `new_${Date.now()}`, label: '', price: 0, price_type: 'fixed', unit_label: '', is_active: true
+                        id: `new_${Date.now()}`, label: '', price: 0, price_type: 'fixed', unit_label: '', is_active: true, is_vat_exempt: false
                       }]
                     })}
                     className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
@@ -1164,6 +1169,22 @@ export default function PriceListsPage() {
                         <option value="per_unit">ליחידה</option>
                         <option value="manual">ידני</option>
                       </select>
+                      <label
+                        className="flex items-center gap-1 text-[10px] text-gray-500 shrink-0"
+                        title="לא נכלל במע״מ ולא בהנחת לקוח"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={s.is_vat_exempt === true}
+                          onChange={(e) => {
+                            const updated = [...(editingCustomer.customer_service_surcharges || [])]
+                            updated[i] = { ...updated[i], is_vat_exempt: e.target.checked }
+                            setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
+                          }}
+                          className="rounded accent-[#33d4ff]"
+                        />
+                        פטור
+                      </label>
                       <div className="relative w-24">
                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
                         <input

@@ -755,7 +755,12 @@ export default function TowDetailsPage() {
         setEditTowLevelLines(
           tow.price_breakdown.service_surcharges.filter((s: any) => s.is_tow_level === true)
         )
-        setEditManualSurcharges(extractManualSurcharges(tow.price_breakdown.service_surcharges))
+        setEditManualSurcharges(
+          extractManualSurcharges(
+            tow.price_breakdown.service_surcharges,
+            tow.price_breakdown.vat_exempt_surcharges,
+          ),
+        )
       } else {
         setEditSelectedServices([])
         setEditTowLevelLines([])
@@ -927,13 +932,34 @@ export default function TowDetailsPage() {
       const newDate = scheduleDate.toISOString().split('T')[0]
       const newTime = scheduleDate.toTimeString().slice(0, 5)
       const activeSurcharges = getActiveTimeSurcharges(pricing.timeSurcharges, newTime, newDate, false)
-      const locationSurcharges = (tow.price_breakdown.location_surcharges || []).map((s: any) => ({ percent: s.percent }))
-      const serviceSurcharges = (tow.price_breakdown.service_surcharges || []).map((s: any) => ({ amount: s.amount }))
+      const locationSurcharges = (tow.price_breakdown.location_surcharges || []).map((s: any) => ({
+        percent: s.percent,
+        label: s.label,
+        id: s.id,
+      }))
+      const serviceSurcharges = [
+        ...(tow.price_breakdown.service_surcharges || []).map((s: any) => ({
+          amount: s.amount,
+          label: s.label,
+        })),
+        ...(tow.price_breakdown.vat_exempt_surcharges || []).map((s: any) => ({
+          amount: s.amount,
+          label: s.label,
+          vatExempt: true as const,
+        })),
+      ]
 
       const basePriceOverride =
         tow.tow_type === 'exchange'
           ? (tow.price_breakdown?.base_price ?? undefined)
           : undefined
+
+      const manualSigned =
+        (tow.price_breakdown.manual_adjustment_percent ?? 0) > 0
+          ? tow.price_breakdown.manual_adjustment_type === 'markup'
+            ? tow.price_breakdown.manual_adjustment_percent!
+            : -tow.price_breakdown.manual_adjustment_percent!
+          : 0
 
       const newResult = calculateTowPrice({
         priceList: {
@@ -949,6 +975,11 @@ export default function TowDetailsPage() {
         },
         vehicleType: (tow.price_breakdown.vehicle_type as any) || 'private',
         distanceKm: tow.price_breakdown.distance_km || 0,
+        deadheadKm: tow.price_breakdown.deadhead_km || 0,
+        deadheadRate:
+          (tow.price_breakdown.deadhead_km || 0) > 0 && (tow.price_breakdown.deadhead_price || 0) > 0
+            ? (tow.price_breakdown.deadhead_price || 0) / (tow.price_breakdown.deadhead_km || 1)
+            : 0,
         timeSurcharges: pricing.timeSurcharges,
         towDate: newDate,
         towTime: newTime,
@@ -959,6 +990,7 @@ export default function TowDetailsPage() {
         serviceSurcharges,
         priceMode: 'recommended',
         discountPercent: tow.price_breakdown.discount_percent || 0,
+        manualAdjustmentPercent: manualSigned,
         vatPercent: 0.18,
         ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       })
@@ -1005,15 +1037,28 @@ export default function TowDetailsPage() {
             ...tow.price_breakdown,
             base_price: priceChangeModal.newResult.basePrice,
             distance_price: priceChangeModal.newResult.distancePrice,
-            subtotal: priceChangeModal.newResult.subtotal,
+            deadhead_km: priceChangeModal.newResult.deadheadKm,
+            deadhead_price: priceChangeModal.newResult.deadheadPrice,
+            subtotal: priceChangeModal.newResult.beforeVat,
             time_surcharges: priceChangeModal.activeSurcharges
               .filter(s => s.surcharge_percent === priceChangeModal.newResult.maxTimeSurchargePercent)
               .map(s => ({
                 id: s.id,
                 label: s.label,
                 percent: s.surcharge_percent,
-                amount: priceChangeModal.newResult.subtotal * (s.surcharge_percent / 100),
+                amount: priceChangeModal.newResult.timeSurchargeAmount,
               })),
+            location_surcharges: priceChangeModal.newResult.locationSurchargeLines.map((line) => {
+              const existing = (tow.price_breakdown?.location_surcharges || []).find(
+                (s: any) => s.id === line.id || s.percent === line.percent,
+              )
+              return {
+                id: line.id || existing?.id || '',
+                label: line.label || existing?.label || `תוספת מיקום (${line.percent}%)`,
+                percent: line.percent,
+                amount: line.amount,
+              }
+            }),
             vat_amount: priceChangeModal.newResult.vatAmount,
             discount_amount: priceChangeModal.newResult.discountAmount,
             total: priceChangeModal.newResult.total,
@@ -1329,9 +1374,21 @@ export default function TowDetailsPage() {
   
   const openInvoiceModal = () => {
     if (!tow) return
+    const bd = tow.price_breakdown
+    const exemptSum = (bd?.vat_exempt_surcharges ?? []).reduce(
+      (sum, s) => sum + (Number(s.amount) || 0),
+      0,
+    )
+    const finalPrice = Number(tow.final_price) || 0
+    // Taxed portion is VAT-inclusive after discount/manual; back out pre-VAT for the invoice field.
+    const taxedInclusive = Math.max(0, finalPrice - exemptSum)
+    const taxableBeforeVat =
+      bd?.subtotal != null && exemptSum === 0 && !(bd.discount_amount > 0) && !(bd.manual_adjustment_percent)
+        ? bd.subtotal
+        : taxedInclusive / (1 + vatRate)
     setInvoiceData({
       description: `גרירה - ${getFromAddress()} → ${getToAddress()}`,
-      amount: tow.final_price?.toString() || ''
+      amount: taxableBeforeVat > 0 ? taxableBeforeVat.toFixed(2) : '',
     })
     setShowInvoiceModal(true)
   }
@@ -1340,12 +1397,22 @@ export default function TowDetailsPage() {
     if (!tow || !companyId || !invoiceData.amount) return
     setCreatingInvoice(true)
     try {
+      const vatExemptItems = (tow.price_breakdown?.vat_exempt_surcharges ?? [])
+        .filter((s) => (Number(s.amount) || 0) > 0)
+        .map((s) => ({
+          description: s.label,
+          amount: Number(s.amount) || 0,
+        }))
       await createInvoiceFromTow(
         companyId,
         tow.id,
         tow.customer_id,
         parseFloat(invoiceData.amount),
-        invoiceData.description || `גרירה - ${getFromAddress()} → ${getToAddress()}`
+        invoiceData.description || `גרירה - ${getFromAddress()} → ${getToAddress()}`,
+        {
+          vatPercent: vatPercentLabel,
+          vatExemptItems,
+        },
       )
       setHasInvoice(true)
       setShowInvoiceModal(false)
@@ -2638,13 +2705,15 @@ export default function TowDetailsPage() {
                       return (
                     <div className="space-y-2 text-sm">
                       {/* מחיר בסיס */}
+                      {bd.base_price !== 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">מחיר בסיס ({isKnownVehicleType(bd.vehicle_type) ? getVehicleTypeLabel(bd.vehicle_type) : '—'})</span>
                         <span className="font-medium text-gray-800">₪{bd.base_price.toFixed(2)}</span>
                       </div>
+                      )}
                       
                       {/* מרחק */}
-                      {bd.distance_km > 0 && (
+                      {bd.distance_km > 0 && bd.distance_price !== 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">מרחק ({bd.distance_km.toFixed(1)} ק״מ)</span>
                           <span className="font-medium text-gray-800">₪{bd.distance_price.toFixed(2)}</span>
@@ -2657,7 +2726,27 @@ export default function TowDetailsPage() {
                           <span className="font-medium text-gray-800">₪{bd.deadhead_price!.toFixed(2)}</span>
                         </div>
                       )}
+
+                      {/* תוספות שירותים (taxable — inside multipliers) */}
+                      {bd.service_surcharges?.filter((s: any) => s.amount > 0).map((surcharge: any, idx: number) => (
+                        <div key={surcharge.id || idx} className="flex justify-between text-purple-600">
+                          <span>
+                            {surcharge.label}
+                            {surcharge.units ? ` (×${surcharge.units})` : ''}
+                            {surcharge.is_ad_hoc ? ' (שירות אחר)' : ''}
+                          </span>
+                          <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
                       
+                      {/* תוספות מיקום */}
+                      {bd.location_surcharges?.filter((s: any) => s.amount > 0).map((surcharge: any, idx: number) => (
+                        <div key={surcharge.id || idx} className="flex justify-between text-blue-600">
+                          <span>{surcharge.label} (+{surcharge.percent}%)</span>
+                          <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+
                       {/* תוספות זמן */}
                       {bd.time_surcharges?.filter((s: any) => s.amount > 0).map((surcharge: any, idx: number) => (
                         <div key={surcharge.id || idx} className="flex justify-between text-amber-600">
@@ -2665,48 +2754,28 @@ export default function TowDetailsPage() {
                           <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
                         </div>
                       ))}
-                      
-                      {/* תוספות מיקום */}
-                      {bd.location_surcharges?.map((surcharge: any, idx: number) => (
-                        <div key={surcharge.id || idx} className="flex justify-between text-blue-600">
-                          <span>{surcharge.label} (+{surcharge.percent}%)</span>
-                          <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
-                        </div>
-                      ))}
-                      
-                      {/* תוספות שירותים */}
-                      {bd.service_surcharges?.map((surcharge: any, idx: number) => (
-                        <div key={surcharge.id || idx} className="flex justify-between text-purple-600">
-                          <span>{surcharge.label}{surcharge.units ? ` (×${surcharge.units})` : ''}</span>
-                          <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
-                        </div>
-                      ))}
-                      
-                      {/* הנחת לקוח */}
-                      {bd.discount_amount > 0 && (
-                        <div className="flex justify-between text-green-600">
-                          <span>הנחה ({bd.discount_percent}%)</span>
-                          <span className="font-medium">-₪{bd.discount_amount.toFixed(2)}</span>
-                        </div>
-                      )}
 
                       <div className="flex justify-between text-gray-600">
                         <span>סה״כ לפני מע״מ</span>
                         <span className="font-medium text-gray-800">₪{priceTotals.beforeVat.toFixed(2)}</span>
                       </div>
 
+                      {priceTotals.preManualVat !== 0 && (
                       <div className="flex justify-between text-gray-500">
                         <span>מע״מ ({vatPercentLabel}%)</span>
                         <span className="font-medium">₪{priceTotals.preManualVat.toFixed(2)}</span>
                       </div>
-
-                      <div className="flex justify-between font-semibold text-gray-800">
-                        <span>סה״כ</span>
-                        <span>₪{priceTotals.totalBeforeManual.toFixed(2)}</span>
-                      </div>
+                      )}
+                      
+                      {/* הנחת לקוח — after VAT */}
+                      {bd.discount_amount > 0 && (
+                        <div className="flex justify-between text-green-600">
+                          <span>הנחת לקוח ({bd.discount_percent}%)</span>
+                          <span className="font-medium">-₪{bd.discount_amount.toFixed(2)}</span>
+                        </div>
+                      )}
 
                       {manualAdjustment && (
-                        <>
                           <div
                             className={`flex justify-between ${
                               manualAdjustment.type === 'discount' ? 'text-green-600' : 'text-gray-800'
@@ -2722,23 +2791,21 @@ export default function TowDetailsPage() {
                               ₪{manualAdjustment.amount.toFixed(2)}
                             </span>
                           </div>
-                          <div className="flex justify-between text-gray-600">
-                            <span>לפני מע״מ</span>
-                            <span className="font-medium text-gray-800">
-                              ₪{priceTotals.postManualBeforeVat.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-gray-500">
-                            <span>מע״מ ({vatPercentLabel}%)</span>
-                            <span className="font-medium">₪{priceTotals.postManualVat.toFixed(2)}</span>
-                          </div>
-                        </>
                       )}
+
+                      {bd.vat_exempt_surcharges?.filter((s: any) => s.amount > 0).map((surcharge: any, idx: number) => (
+                        <div key={`exempt-${surcharge.id || idx}`} className="flex justify-between text-slate-600">
+                          <span>
+                            {surcharge.label}
+                            {surcharge.is_ad_hoc ? ' (שירות אחר)' : ''}
+                            {' '}(פטור ממע״מ)
+                          </span>
+                          <span className="font-medium">₪{surcharge.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
                       
                       <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200 mt-2">
-                        <span>
-                          {manualAdjustment ? 'סך הכל אחרי הנחה' : 'סה״כ כולל מע״מ'}
-                        </span>
+                        <span>סה״כ כולל מע״מ</span>
                         <span className="text-gray-800">₪{priceTotals.finalTotal.toFixed(2)}</span>
                       </div>
                       {storedCancellationFeeDisplay && storedCancellationFeeDisplay.feeTotal > 0 && (
@@ -3685,12 +3752,30 @@ export default function TowDetailsPage() {
                     <span>₪{parseFloat(invoiceData.amount).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">מע״מ (18%)</span>
-                    <span>₪{(parseFloat(invoiceData.amount) * 0.18).toLocaleString()}</span>
+                    <span className="text-gray-600">מע״מ ({vatPercentLabel}%)</span>
+                    <span>
+                      ₪{(parseFloat(invoiceData.amount) * (vatPercentLabel / 100)).toLocaleString()}
+                    </span>
                   </div>
+                  {(tow.price_breakdown?.vat_exempt_surcharges ?? [])
+                    .filter((s) => (Number(s.amount) || 0) > 0)
+                    .map((s, idx) => (
+                      <div key={s.id || idx} className="flex justify-between text-sm text-slate-600">
+                        <span>{s.label} (פטור ממע״מ)</span>
+                        <span>₪{(Number(s.amount) || 0).toLocaleString()}</span>
+                      </div>
+                    ))}
                   <div className="flex justify-between font-bold border-t border-emerald-200 pt-2">
                     <span>סה״כ</span>
-                    <span className="text-emerald-700">₪{(parseFloat(invoiceData.amount) * 1.18).toLocaleString()}</span>
+                    <span className="text-emerald-700">
+                      ₪{(
+                        parseFloat(invoiceData.amount) * (1 + vatPercentLabel / 100) +
+                        (tow.price_breakdown?.vat_exempt_surcharges ?? []).reduce(
+                          (sum, s) => sum + (Number(s.amount) || 0),
+                          0,
+                        )
+                      ).toLocaleString()}
+                    </span>
                   </div>
                 </div>
               )}

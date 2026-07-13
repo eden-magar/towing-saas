@@ -4107,7 +4107,9 @@ function CreateTowForm({
                                 className={
                                   item.bold
                                     ? 'text-2xl font-bold text-gray-900'
-                                    : 'text-gray-500'
+                                    : item.type === 'vat_exempt'
+                                      ? 'text-slate-700 font-medium'
+                                      : 'text-gray-500'
                                 }
                               >
                                 {label}: ₪{item.amount.toFixed(2)}

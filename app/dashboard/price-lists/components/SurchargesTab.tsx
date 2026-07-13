@@ -16,6 +16,7 @@ interface ServiceSurcharge {
   price_type: 'fixed' | 'per_unit' | 'manual'
   unit_label?: string
   is_active: boolean
+  is_vat_exempt?: boolean
 }
 interface SurchargesTabProps {
   timeSurcharges: TimeSurcharge[]
@@ -191,15 +192,16 @@ export function SurchargesTab({
           <p className="text-center py-8 text-gray-400 text-sm">אין שירותים נוספים</p>
         ) : (
           <>
-            <div className="grid grid-cols-[1fr_140px_120px_auto] gap-0 text-xs font-medium text-gray-400 px-5 py-2.5 bg-gray-50/50 border-b border-gray-100">
+            <div className="grid grid-cols-[1fr_140px_120px_auto_auto] gap-0 text-xs font-medium text-gray-400 px-5 py-2.5 bg-gray-50/50 border-b border-gray-100">
               <div>שם השירות</div>
               <div>סוג תמחור</div>
               <div className="text-center">מחיר</div>
+              <div className="text-center">פטור ממע״מ</div>
               <div className="w-8" />
             </div>
             <div className="divide-y divide-gray-50">
               {serviceSurcharges.map((item) => (
-                <div key={item.id} className="grid grid-cols-[1fr_140px_120px_auto] gap-3 items-center px-5 py-3 hover:bg-gray-50/30 transition-colors">
+                <div key={item.id} className="grid grid-cols-[1fr_140px_120px_auto_auto] gap-3 items-center px-5 py-3 hover:bg-gray-50/30 transition-colors">
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -227,6 +229,16 @@ export function SurchargesTab({
                     <PriceInput
                       value={item.price}
                       onChange={(v) => onServiceSurchargeUpdate(item.id, { price: v })}
+                    />
+                  </div>
+                  <div className="flex justify-center" title="לא נכלל במע״מ ולא בהנחת לקוח">
+                    <input
+                      type="checkbox"
+                      checked={item.is_vat_exempt === true}
+                      onChange={(e) =>
+                        onServiceSurchargeUpdate(item.id, { is_vat_exempt: e.target.checked })
+                      }
+                      className="rounded accent-[#33d4ff]"
                     />
                   </div>
                   <RemoveButton onClick={() => onServiceSurchargeRemove(item.id)} />

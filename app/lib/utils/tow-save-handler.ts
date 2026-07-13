@@ -1111,17 +1111,32 @@ function buildExchangeServiceSurchargesBreakdown(
 function buildCatalogServiceCalcInput(
   selected: SelectedService[],
   serviceSurchargesData: ServiceSurcharge[] | undefined,
-): { amount: number; label?: string }[] {
+): { amount: number; label?: string; vatExempt?: boolean }[] {
   return selected
     .map((sel) => {
       const s = serviceSurchargesData?.find((x) => x.id === sel.id)
       if (!s) return { amount: 0 }
-      if (s.price_type === 'manual') return { amount: sel.manualPrice || 0, label: s.label }
+      const vatExempt = s.is_vat_exempt === true
+      if (s.price_type === 'manual') {
+        return {
+          amount: sel.manualPrice || 0,
+          label: s.label,
+          ...(vatExempt ? { vatExempt: true as const } : {}),
+        }
+      }
       if (s.price_type === 'per_unit') {
         const qty = sel.quantity || 1
-        return { amount: s.price * qty, label: `${s.label} (×${qty})` }
+        return {
+          amount: s.price * qty,
+          label: `${s.label} (×${qty})`,
+          ...(vatExempt ? { vatExempt: true as const } : {}),
+        }
       }
-      return { amount: s.price, label: s.label }
+      return {
+        amount: s.price,
+        label: s.label,
+        ...(vatExempt ? { vatExempt: true as const } : {}),
+      }
     })
     .filter((x) => x.amount > 0)
 }
@@ -1130,7 +1145,14 @@ function buildCatalogServiceCalcInput(
 function buildCatalogServiceBreakdown(
   selected: SelectedService[] | undefined,
   serviceSurchargesData: ServiceSurcharge[] | undefined,
-): { id: string; label: string; price: number; units?: number; amount: number }[] {
+): {
+  id: string
+  label: string
+  price: number
+  units?: number
+  amount: number
+  is_vat_exempt?: true
+}[] {
   return (selected || [])
     .map((sel) => {
       const surcharge = serviceSurchargesData?.find((s) => s.id === sel.id)
@@ -1145,7 +1167,14 @@ function buildCatalogServiceBreakdown(
       } else {
         amount = surcharge.price
       }
-      return { id: surcharge.id, label: surcharge.label, price: surcharge.price, units, amount }
+      return {
+        id: surcharge.id,
+        label: surcharge.label,
+        price: surcharge.price,
+        units,
+        amount,
+        ...(surcharge.is_vat_exempt ? { is_vat_exempt: true as const } : {}),
+      }
     })
     .filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
 }
@@ -1161,27 +1190,50 @@ function buildTowLevelServiceBreakdown(
   }))
 }
 
-function buildServiceSurchargesBreakdown(input: SaveTowInput): PriceBreakdown['service_surcharges'] {
-  return [
+function buildServiceSurchargesBreakdown(input: SaveTowInput): {
+  taxable: PriceBreakdown['service_surcharges']
+  exempt: NonNullable<PriceBreakdown['vat_exempt_surcharges']>
+} {
+  const all = [
     ...buildCatalogServiceBreakdown(input.selectedServices, input.serviceSurchargesData),
     ...buildTowLevelServiceBreakdown(input.towServiceSurcharges, input.serviceSurchargesData),
     ...manualSurchargesToBreakdown(input.manualSurcharges),
   ]
+  const taxable: PriceBreakdown['service_surcharges'] = []
+  const exempt: NonNullable<PriceBreakdown['vat_exempt_surcharges']> = []
+  for (const line of all) {
+    if (line.is_vat_exempt) {
+      exempt.push({
+        id: line.id,
+        label: line.label,
+        price: line.price,
+        amount: line.amount,
+        ...('units' in line && line.units != null ? { units: line.units } : {}),
+        ...('is_ad_hoc' in line && line.is_ad_hoc ? { is_ad_hoc: true as const } : {}),
+        ...('is_tow_level' in line && line.is_tow_level ? { is_tow_level: true as const } : {}),
+      })
+    } else {
+      taxable.push(line)
+    }
+  }
+  return { taxable, exempt }
 }
 
   function buildLocationSurchargesBreakdown(
     input: SaveTowInput,
-    subtotalForLocation: number
+    locationLines: { id?: string; label: string; percent: number; amount: number }[]
   ): PriceBreakdown['location_surcharges'] {
-    return (input.selectedLocationSurcharges || [])
-      .map(id => input.locationSurchargesData?.find(l => l.id === id))
-      .filter(Boolean)
-      .map(s => ({
-        id: s!.id,
-        label: s!.label,
-        percent: s!.surcharge_percent,
-        amount: round2(subtotalForLocation * s!.surcharge_percent / 100)
-      }))
+    return locationLines.map((line) => {
+      const fromInput = (input.selectedLocationSurcharges || [])
+        .map((id) => input.locationSurchargesData?.find((l) => l.id === id))
+        .find((s) => s && (s.id === line.id || s.surcharge_percent === line.percent))
+      return {
+        id: line.id || fromInput?.id || '',
+        label: line.label || fromInput?.label || `תוספת מיקום (${line.percent}%)`,
+        percent: line.percent,
+        amount: round2(line.amount),
+      }
+    })
   }
 
 /**
@@ -1205,7 +1257,11 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
   const locationSurcharges = (input.selectedLocationSurcharges || [])
     .map(id => input.locationSurchargesData?.find(l => l.id === id))
     .filter(Boolean)
-    .map(s => ({ percent: s!.surcharge_percent }))
+    .map(s => ({
+      percent: s!.surcharge_percent,
+      label: s!.label,
+      id: s!.id,
+    }))
 
   const serviceSurcharges = [
     ...buildCatalogServiceCalcInput(input.selectedServices || [], input.serviceSurchargesData),
@@ -1262,22 +1318,18 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
           id: maxS?.id ?? '',
           label: result.maxTimeSurchargeLabel || (maxS?.label ?? ''),
           percent: result.maxTimeSurchargePercent,
-          amount: round2(result.subtotal * result.maxTimeSurchargePercent / 100)
+          amount: round2(result.timeSurchargeAmount)
         }]
       })()
     : []
 
-  const locationSurchargesBreakdown = (input.selectedLocationSurcharges || [])
-    .map(id => input.locationSurchargesData?.find(l => l.id === id))
-    .filter(Boolean)
-    .map(s => ({
-      id: s!.id,
-      label: s!.label,
-      percent: s!.surcharge_percent,
-      amount: round2(result.subtotal * s!.surcharge_percent / 100)
-    }))
+  const locationSurchargesBreakdown = buildLocationSurchargesBreakdown(
+    input,
+    result.locationSurchargeLines,
+  )
 
-  const serviceSurchargesBreakdown = buildServiceSurchargesBreakdown(input)
+  const { taxable: serviceSurchargesBreakdown, exempt: vatExemptBreakdown } =
+    buildServiceSurchargesBreakdown(input)
 
   return {
     base_price: round2(result.basePrice),
@@ -1289,6 +1341,7 @@ export function buildSingleTowPriceBreakdown(input: SaveTowInput): PriceBreakdow
     time_surcharges: timeSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     location_surcharges: locationSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    vat_exempt_surcharges: vatExemptBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     subtotal: round2(result.beforeVat),
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
     discount_amount: round2(result.discountAmount),
@@ -1348,7 +1401,11 @@ export function buildCustomTowPriceBreakdown(
   const locationSurcharges = (input.selectedLocationSurcharges || [])
     .map((id) => input.locationSurchargesData?.find((l) => l.id === id))
     .filter(Boolean)
-    .map((s) => ({ percent: s!.surcharge_percent }))
+    .map((s) => ({
+      percent: s!.surcharge_percent,
+      label: s!.label,
+      id: s!.id,
+    }))
 
   const serviceSurcharges = [
     ...buildCatalogServiceCalcInput(routeServices, input.serviceSurchargesData),
@@ -1390,26 +1447,22 @@ export function buildCustomTowPriceBreakdown(
               id: maxS?.id ?? '',
               label: result.maxTimeSurchargeLabel || maxS?.label || '',
               percent: result.maxTimeSurchargePercent,
-              amount: round2(result.subtotal * result.maxTimeSurchargePercent / 100),
+              amount: round2(result.timeSurchargeAmount),
             },
           ]
         })()
       : []
 
-  const locationSurchargesBreakdown = (input.selectedLocationSurcharges || [])
-    .map((id) => input.locationSurchargesData?.find((l) => l.id === id))
-    .filter(Boolean)
-    .map((s) => ({
-      id: s!.id,
-      label: s!.label,
-      percent: s!.surcharge_percent,
-      amount: round2(result.subtotal * s!.surcharge_percent / 100),
-    }))
+  const locationSurchargesBreakdown = buildLocationSurchargesBreakdown(
+    input,
+    result.locationSurchargeLines,
+  )
 
-  const serviceSurchargesBreakdown = buildServiceSurchargesBreakdown({
-    ...input,
-    selectedServices: routeServices,
-  })
+  const { taxable: serviceSurchargesBreakdown, exempt: vatExemptBreakdown } =
+    buildServiceSurchargesBreakdown({
+      ...input,
+      selectedServices: routeServices,
+    })
 
   return {
     base_price: round2(result.basePrice),
@@ -1420,6 +1473,7 @@ export function buildCustomTowPriceBreakdown(
     time_surcharges: timeSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     location_surcharges: locationSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     service_surcharges: serviceSurchargesBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
+    vat_exempt_surcharges: vatExemptBreakdown.map((s) => ({ ...s, amount: round2(s.amount) })),
     subtotal: round2(result.beforeVat),
     discount_percent: input.selectedCustomerPricing?.discount_percent ?? 0,
     discount_amount: round2(result.discountAmount),
@@ -1571,14 +1625,16 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       ? (input.existingPriceBreakdown
           ? {
               ...input.existingPriceBreakdown,
-              location_surcharges: buildLocationSurchargesBreakdown(
-                input,
-                input.existingPriceBreakdown.base_price + input.existingPriceBreakdown.distance_price
-              ),
-              service_surcharges: buildServiceSurchargesBreakdown({
-                ...input,
-                selectedServices: aggregateRouteServices(input.customRouteData?.services),
-              }),
+              ...(() => {
+                const built = buildServiceSurchargesBreakdown({
+                  ...input,
+                  selectedServices: aggregateRouteServices(input.customRouteData?.services),
+                })
+                return {
+                  service_surcharges: built.taxable,
+                  vat_exempt_surcharges: built.exempt,
+                }
+              })(),
             }
           : null)
       : buildCustomTowPriceBreakdown(input, input.routePoints)

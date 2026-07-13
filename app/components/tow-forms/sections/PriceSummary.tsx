@@ -153,7 +153,6 @@ export function PriceSummary({
     : hasVehicleType
 
   const effectiveVatPercent = vatPercent ?? 0.18
-  const vatPercentLabel = Math.round(effectiveVatPercent * 100)
 
   let priceResult: ReturnType<typeof calculateTowPrice> | null = null
   if ((priceMode === 'recommended' || priceMode === 'recommended_customer') && hasDataForCalculation) {
@@ -181,7 +180,11 @@ export function PriceSummary({
     const locationSurcharges = selectedLocationSurcharges
       .map(id => locationSurchargesData.find(l => l.id === id))
       .filter(Boolean)
-      .map(s => ({ percent: s!.surcharge_percent }))
+      .map(s => ({
+        percent: s!.surcharge_percent,
+        label: s!.label,
+        id: s!.id,
+      }))
     const routeServicesForPrice =
       isCustomRoute && customRouteData
         ? aggregateRouteServices(customRouteData.services ?? [])
@@ -190,9 +193,26 @@ export function PriceSummary({
       ...[...routeServicesForPrice, ...towServiceSurcharges].map(selected => {
         const s = serviceSurchargesData.find(x => x.id === selected.id)
         if (!s) return { amount: 0 }
-        if (s.price_type === 'manual') return { amount: selected.manualPrice || 0 }
-        if (s.price_type === 'per_unit') return { amount: s.price * (selected.quantity || 1) }
-        return { amount: s.price }
+        const vatExempt = s.is_vat_exempt === true
+        if (s.price_type === 'manual') {
+          return {
+            amount: selected.manualPrice || 0,
+            label: s.label,
+            ...(vatExempt ? { vatExempt: true as const } : {}),
+          }
+        }
+        if (s.price_type === 'per_unit') {
+          return {
+            amount: s.price * (selected.quantity || 1),
+            label: `${s.label} (×${selected.quantity || 1})`,
+            ...(vatExempt ? { vatExempt: true as const } : {}),
+          }
+        }
+        return {
+          amount: s.price,
+          label: s.label,
+          ...(vatExempt ? { vatExempt: true as const } : {}),
+        }
       }).filter(x => x.amount > 0),
       ...manualSurchargesToCalcInput(manualSurcharges),
     ]
@@ -221,64 +241,7 @@ export function PriceSummary({
     })
   }
 
-  const basePrice = priceResult?.basePrice ?? 0
-  const distancePrice = priceResult?.distancePrice ?? 0
-  const deadheadKmDisplay = priceResult?.deadheadKm ?? 0
-  const deadheadPrice = priceResult?.deadheadPrice ?? 0
-  const subtotal = priceResult?.subtotal ?? 0
-  const beforeVat = priceResult?.beforeVat ?? 0
-  const pricePerKm = activePriceList?.price_per_km || 12
-  const totalDistanceKm = (distance?.distanceKm ?? 0) + ((!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm) || 0)
-  const timePercent = priceResult?.maxTimeSurchargePercent ?? 0
-  const timeLabel = priceResult?.maxTimeSurchargeLabel ?? ''
-  const timeAmount = priceResult ? Math.round(priceResult.subtotal * (timePercent / 100)) : 0
-  const activeLocationSurcharges = selectedLocationSurcharges
-    .map(id => locationSurchargesData.find(l => l.id === id))
-    .filter(Boolean) as LocationSurcharge[]
-  const locationAmount = priceResult?.locationSurchargeAmount ?? 0
-  const servicesForDisplay = [
-    ...(isCustomRoute && customRouteData
-      ? aggregateRouteServices(customRouteData.services ?? [])
-      : selectedServices),
-    ...towServiceSurcharges,
-  ]
-  const activeServices: { label: string; amount: number }[] = []
-  servicesForDisplay.forEach(selected => {
-    const surcharge = serviceSurchargesData.find(s => s.id === selected.id)
-    if (surcharge) {
-      let amount = 0
-      let label = surcharge.label
-      if (surcharge.price_type === 'manual') amount = selected.manualPrice || 0
-      else if (surcharge.price_type === 'per_unit') {
-        const qty = selected.quantity || 1
-        amount = surcharge.price * qty
-        label = `${surcharge.label} (×${qty})`
-      } else amount = surcharge.price
-      if (amount > 0) {
-        activeServices.push({ label, amount })
-      }
-    }
-  })
-  manualSurcharges.forEach((m) => {
-    const label = (m.label ?? '').trim()
-    const amount = Number(m.amount) || 0
-    if (label && amount > 0) {
-      activeServices.push({ label, amount })
-    }
-  })
-  const discountAmount = priceResult?.discountAmount ?? 0
-  const vatAmount = priceResult?.vatAmount ?? 0
   const total = priceResult?.total ?? 0
-
-  const getVehicleTypeLabel = (type: string) => {
-    switch (type) {
-      case 'private': return 'פרטי'
-      case 'motorcycle': return 'דו גלגלי'
-      case 'heavy': return 'כבד'
-      case 'machinery': return 'צמ"ה'
-      default: return ''
-    }
-  }
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -294,80 +257,36 @@ export function PriceSummary({
               </div>
             ) : (
               <>
-                {/* מחיר בסיס */}
-                <div className="flex justify-between">
-                  <span className="text-gray-500">
-                    {isCustomRoute 
-                      ? `מחיר בסיס (${customRouteData?.vehicles.length ?? customRouteVehicleCount} רכבים)`
-                      : `מחיר בסיס (${getVehicleTypeLabel(vehicleType)})`
-                    }
-                  </span>
-                  <span className="text-gray-700">₪{basePrice.toFixed(2)}</span>
-                </div>
-                
-                {/* מרחק */}
-                {totalDistanceKm > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">
-                      מרחק ({totalDistanceKm.toFixed(1)} ק״מ × ₪{pricePerKm})
-                    </span>
-                    <span className="text-gray-700">₪{distancePrice.toFixed(2)}</span>
-                  </div>
-                )}
-                {/* יציאה מהחניון */}
-                {!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm && (
+                {priceResult?.breakdown
+                  .filter((item) => item.amount !== 0 || item.bold)
+                  .map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex justify-between ${
+                        item.bold
+                          ? 'font-bold text-gray-800 border-t border-gray-100 pt-2'
+                          : item.type === 'discount'
+                            ? 'text-emerald-600'
+                            : item.type === 'vat_exempt'
+                              ? 'text-slate-600'
+                              : item.type === 'time' || item.type === 'location'
+                                ? 'text-orange-600'
+                                : item.type === 'service'
+                                  ? 'text-blue-600'
+                                  : 'text-gray-700'
+                      }`}
+                    >
+                      <span className={item.bold ? undefined : 'text-gray-500'}>{item.label}</span>
+                      <span>₪{item.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                {!isCustomRoute && startFromBase && baseToPickupDistance?.distanceKm ? (
                   <div className="flex justify-between text-sm text-gray-400">
-                    <span>מתוכם יציאה מהחניון ({baseToPickupDistance.distanceKm.toFixed(1)} ק״מ)</span>
+                    <span>
+                      מתוכם יציאה מהחניון ({baseToPickupDistance.distanceKm.toFixed(1)} ק״מ)
+                    </span>
                   </div>
-                )}
-
-                {/* נסיעת סרק (חזרה לאחסנה) */}
-                {!isCustomRoute && deadheadPrice > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">מרחק סרק ({deadheadKmDisplay.toFixed(1)} ק״מ)</span>
-                    <span className="text-gray-700">₪{deadheadPrice.toFixed(2)}</span>
-                  </div>
-                )}
-                
-                {/* תוספת זמן */}
-                {timeAmount > 0 && (
-                  <div className="flex justify-between text-orange-600">
-                    <span>{timeLabel} (+{timePercent}%)</span>
-                    <span>₪{timeAmount.toFixed(2)}</span>
-                  </div>
-                )}
-                
-                {/* תוספות מיקום */}
-                {activeLocationSurcharges.map(s => (
-                  <div key={s.id} className="flex justify-between text-amber-600">
-                    <span>{s.label} (+{s.surcharge_percent}%)</span>
-                    <span>₪{(Math.round(subtotal * s.surcharge_percent / 100)).toFixed(2)}</span>
-                  </div>
-                ))}
-                
-                {/* תוספות שירותים */}
-                {activeServices.map((s, i) => (
-                  <div key={i} className="flex justify-between text-blue-600">
-                    <span>{s.label}</span>
-                    <span>₪{s.amount.toFixed(2)}</span>
-                  </div>
-                ))}
-                
-                {/* הנחת לקוח */}
-                {discountAmount > 0 && (
-                  <div className="flex justify-between text-emerald-600">
-                    <span>הנחת לקוח (-{selectedCustomerPricing?.discount_percent}%)</span>
-                    <span>-₪{discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-                
-                {/* מע"מ */}
-                {beforeVat > 0 && (
-                  <div className="flex justify-between border-t border-gray-100 pt-2">
-                    <span className="text-gray-500">מע״מ ({vatPercentLabel}%)</span>
-                    <span className="text-gray-700">₪{vatAmount.toFixed(2)}</span>
-                  </div>
-                )}
+                ) : null}
               </>
             )}
           </>
