@@ -20,3 +20,4 @@ export {
   EmptyLegToggleButton,
   DropToStorageToggle,
 } from './RouteAddressesSection'
+export { StorageAddressToggleButton } from './StorageAddressToggleButton'

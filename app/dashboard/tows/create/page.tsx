@@ -35,6 +35,7 @@ import {
   Coins,
   Wallet,
   LayoutGrid,
+  Split,
 } from 'lucide-react'
 import {
   useTowForm,
@@ -51,7 +52,8 @@ import {
   RouteAddressesFooter,
   RouteOriginDestGrid,
 } from '../../../components/tow-forms/routes/RouteAddressesSection'
-import { yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
+import { StorageAddressToggleButton } from '../../../components/tow-forms/routes/StorageAddressToggleButton'
+import { matchesStorageYard, yardFromBasePriceList } from '../../../lib/utils/storage-yard-match'
 import {
   PinDropModal,
   VehicleLookup,
@@ -884,25 +886,54 @@ function CreateTowForm({
     }
 
     if (towType === 'exchange') {
-      if (saveWorkingSourceContactToCustomer && workingVehicleContact.trim()) {
+      const yard = yardFromBasePriceList(basePriceList)
+      const persistWorkingOrigin =
+        workingVehicleSource !== 'storage' &&
+        !matchesStorageYard(workingVehicleAddress, yard)
+      const persistWorkingDest =
+        exchangePointSplit &&
+        !workingVehicleDestinationIsStorage &&
+        !matchesStorageYard(workingVehicleDestinationAddress, yard)
+      const persistExchangePoint = !matchesStorageYard(exchangeAddress, yard)
+      const persistDefectiveDest =
+        defectiveDestination !== 'storage' &&
+        !matchesStorageYard(defectiveDestinationAddress, yard)
+
+      if (
+        persistWorkingOrigin &&
+        saveWorkingSourceContactToCustomer &&
+        workingVehicleContact.trim()
+      ) {
         pending.push({
           name: workingVehicleContact.trim(),
           phone: workingVehicleContactPhone.trim() || null,
         })
       }
-      if (saveWorkingDestinationContactToCustomer && workingDestinationContact.trim()) {
+      if (
+        persistWorkingDest &&
+        saveWorkingDestinationContactToCustomer &&
+        workingDestinationContact.trim()
+      ) {
         pending.push({
           name: workingDestinationContact.trim(),
           phone: workingDestinationContactPhone.trim() || null,
         })
       }
-      if (saveExchangePickupContactToCustomer && exchangeContactName.trim()) {
+      if (
+        persistExchangePoint &&
+        saveExchangePickupContactToCustomer &&
+        exchangeContactName.trim()
+      ) {
         pending.push({
           name: exchangeContactName.trim(),
           phone: exchangeContactPhone.trim() || null,
         })
       }
-      if (saveDefectiveDestinationContactToCustomer && defectiveDestinationContact.trim()) {
+      if (
+        persistDefectiveDest &&
+        saveDefectiveDestinationContactToCustomer &&
+        defectiveDestinationContact.trim()
+      ) {
         pending.push({
           name: defectiveDestinationContact.trim(),
           phone: defectiveDestinationContactPhone.trim() || null,
@@ -946,6 +977,15 @@ function CreateTowForm({
     exchangeContactPhone,
     defectiveDestinationContact,
     defectiveDestinationContactPhone,
+    workingVehicleSource,
+    workingVehicleAddress,
+    workingVehicleDestinationIsStorage,
+    workingVehicleDestinationAddress,
+    exchangeAddress,
+    exchangePointSplit,
+    defectiveDestination,
+    defectiveDestinationAddress,
+    basePriceList,
     routePoints,
     saveCustomPointContacts,
   ])
@@ -1212,18 +1252,24 @@ function CreateTowForm({
   }, [fromRequestOtherDefectText])
 
   const splitExchangePoint = () => {
-    if (!workingVehicleDestinationAddress?.address?.trim() && exchangeAddress?.address) {
-      setWorkingVehicleDestinationAddress(exchangeAddress)
-    }
+    // Hub value lives on exchangeAddress while collapsed (dest is synced).
+    // Four-point: יעד התקין = workingDest (keep hub); מוצא התקול = exchange (empty).
+    const hub = exchangeAddress?.address?.trim()
+      ? exchangeAddress
+      : workingVehicleDestinationAddress
+    setWorkingVehicleDestinationAddress(hub ?? { address: '' })
     if (!workingDestinationContact.trim() && exchangeContactName.trim()) {
       setWorkingDestinationContact(exchangeContactName)
       setWorkingDestinationContactPhone(exchangeContactPhone)
     }
+    setExchangeAddress({ address: '' })
+    setExchangeContactName('')
+    setExchangeContactPhone('')
     setExchangePointSplit(true)
   }
 
   const collapseExchangePoint = () => {
-    // Keep the first of the split pair (יעד התקין) as the hub exchange point.
+    // Keep יעד התקין (workingDest) as the hub exchange point.
     const keepAddress = workingVehicleDestinationAddress?.address?.trim()
       ? workingVehicleDestinationAddress
       : exchangeAddress
@@ -1808,6 +1854,26 @@ function CreateTowForm({
   }, [workingVehiclePlate, workingVehicleCode, setWorkingVehicleCode])
 
   // Custom save for quote declined
+  const storageAddress = basePriceList?.base_address || ''
+  const storageYard = yardFromBasePriceList(basePriceList)
+
+  // Exchange contacts: omit when the point IS the company yard (nothing to call).
+  const showWorkingOriginContact =
+    towType === 'exchange' &&
+    workingVehicleSource !== 'storage' &&
+    !matchesStorageYard(workingVehicleAddress, storageYard)
+  const showWorkingDestinationContact =
+    towType === 'exchange' &&
+    exchangePointSplit &&
+    !workingVehicleDestinationIsStorage &&
+    !matchesStorageYard(workingVehicleDestinationAddress, storageYard)
+  const showExchangePointContact =
+    towType === 'exchange' && !matchesStorageYard(exchangeAddress, storageYard)
+  const showDefectiveDestinationContact =
+    towType === 'exchange' &&
+    defectiveDestination !== 'storage' &&
+    !matchesStorageYard(defectiveDestinationAddress, storageYard)
+
   const handleSaveAsQuote = useCallback(async () => {
     if (editTowId && isClosedTowStatus(loadedTowStatus)) return
     if (!companyId || !user || !towType) return
@@ -1933,25 +1999,43 @@ function CreateTowForm({
               ? workingVehicleDestinationAddress
               : exchangeAddress
             : undefined,
-        workingVehicleContactName: towType === 'exchange' ? workingVehicleContact : undefined,
-        workingVehicleContactPhone: towType === 'exchange' ? workingVehicleContactPhone : undefined,
+        workingVehicleContactName:
+          towType === 'exchange' && showWorkingOriginContact
+            ? workingVehicleContact
+            : undefined,
+        workingVehicleContactPhone:
+          towType === 'exchange' && showWorkingOriginContact
+            ? workingVehicleContactPhone
+            : undefined,
         defectiveVehiclePlate: towType === 'exchange' ? defectiveVehiclePlate : undefined,
         defectiveVehicleCode: towType === 'exchange' ? defectiveVehicleCode : undefined,
         defectiveVehicleData: towType === 'exchange' ? defectiveVehicleData : undefined,
         exchangePointAddress: towType === 'exchange' ? exchangeAddress : undefined,
-        exchangeContactName: towType === 'exchange' ? exchangeContactName : undefined,
-        exchangeContactPhone: towType === 'exchange' ? exchangeContactPhone : undefined,
+        exchangeContactName:
+          towType === 'exchange' && showExchangePointContact
+            ? exchangeContactName
+            : undefined,
+        exchangeContactPhone:
+          towType === 'exchange' && showExchangePointContact
+            ? exchangeContactPhone
+            : undefined,
         workingDestinationContactName:
-          towType === 'exchange' && exchangePointSplit
+          towType === 'exchange' && showWorkingDestinationContact
             ? workingDestinationContact
             : undefined,
         workingDestinationContactPhone:
-          towType === 'exchange' && exchangePointSplit
+          towType === 'exchange' && showWorkingDestinationContact
             ? workingDestinationContactPhone
             : undefined,
         defectiveDestinationAddress: towType === 'exchange' ? defectiveDestinationAddress : undefined,
-        defectiveDestinationContactName: towType === 'exchange' ? defectiveDestinationContact : undefined,
-        defectiveDestinationContactPhone: towType === 'exchange' ? defectiveDestinationContactPhone : undefined,
+        defectiveDestinationContactName:
+          towType === 'exchange' && showDefectiveDestinationContact
+            ? defectiveDestinationContact
+            : undefined,
+        defectiveDestinationContactPhone:
+          towType === 'exchange' && showDefectiveDestinationContact
+            ? defectiveDestinationContactPhone
+            : undefined,
         workingVehicleSource: towType === 'exchange' ? workingVehicleSource : undefined,
         workingVehicleDestinationIsStorage:
           towType === 'exchange' && exchangePointSplit
@@ -2125,6 +2209,10 @@ function CreateTowForm({
     persistTowCustomerContacts,
     persistTowCustomerAddresses,
     setAddressNotice,
+    showWorkingOriginContact,
+    showWorkingDestinationContact,
+    showExchangePointContact,
+    showDefectiveDestinationContact,
   ])
 
   const totalDistanceKm =
@@ -2133,8 +2221,6 @@ function CreateTowForm({
       : (distance?.distanceKm ?? 0) +
         (startFromBase && baseToPickupDistance ? baseToPickupDistance.distanceKm : 0)
 
-  const storageAddress = basePriceList?.base_address || ''
-  const storageYard = yardFromBasePriceList(basePriceList)
   const pickupYardConfirm = storageYard
     ? {
         role: 'pickup' as const,
@@ -3178,10 +3264,19 @@ function CreateTowForm({
                       </div>
                     )}
 
-                    {/* RTL: first column sits on the right = רכב תקין */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-                      <FormSubcard title="רכב תקין" className="mb-0">
-                        <div className="flex flex-col gap-4">
+                    {/* RTL: first column sits on the right = רכב תקין.
+                        lg subgrid aligns address rows across columns (מוצא↔מוצא, יעד/החלפה↔יעד). */}
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-x-4 lg:gap-y-0 lg:[grid-template-rows:auto_auto_auto_auto]">
+                      <div
+                        className="border border-gt-border-subtle rounded-lg overflow-hidden bg-white flex flex-col lg:row-span-4 lg:grid lg:grid-rows-subgrid"
+                        dir="rtl"
+                      >
+                        <div className="px-3.5 py-2.5 sm:py-2 bg-gt-surface-subtle border-b border-gt-border-subtle">
+                          <h4 className="text-xs font-semibold text-gt-text-secondary">
+                            רכב תקין
+                          </h4>
+                        </div>
+                        <div className="p-3.5 sm:p-3 flex flex-col gap-4">
                           {storagePickupEditLocked && (
                             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                               לא ניתן לשנות פרטי איסוף מאחסנה — הגרירה כבר התחילה
@@ -3343,69 +3438,72 @@ function CreateTowForm({
                             </div>
                           )}
 
-                          <div className="space-y-3 border-t border-gt-border-subtle pt-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gt-text-secondary mb-1">
-                                מוצא התקין
-                              </label>
-                              {workingVehicleSource === 'storage' ? (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-gt-surface-subtle border border-gt-border-subtle rounded-xl text-sm text-gt-text">
-                                  <span>
-                                    {workingVehicleAddress?.address ||
-                                      storageAddress ||
-                                      'כתובת האחסנה'}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setWorkingVehicleSource('address')
-                                      setSelectedWorkingVehicleId(null)
-                                      setWorkingVehicleAddress({ address: '' })
-                                    }}
-                                    className="mr-auto text-gt-text-tertiary hover:text-red-500"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              ) : (
-                                <AddressInput
-                                  value={workingVehicleAddress}
-                                  onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
-                                  label=""
-                                  hideLabel
-                                  onPinDropClick={() => handlePinDropOpen('workingVehicle')}
-                                  storageYardConfirm={workingPickupYardConfirm}
-                                  savedAddresses={savedAddresses}
-                                  extraActions={
-                                    <SaveCustomerAddressControl
-                                      visible={showSaveWorkingSourceAddressOption}
-                                      address={workingVehicleAddress?.address ?? ''}
-                                      pending={pendingWorkingSourceAddress}
-                                      onConfirm={setPendingWorkingSourceAddress}
-                                      onClear={() => setPendingWorkingSourceAddress(null)}
-                                      disabled={saving}
-                                    />
-                                  }
-                                />
-                              )}
-                            </div>
+                        </div>
 
-                            {exchangePointSplit && (
-                              <div>
-                                <label className="block text-xs font-medium text-gt-text-secondary mb-1">
-                                  יעד הרכב התקין
-                                </label>
-                                <AddressInput
-                                  value={workingVehicleDestinationAddress}
-                                  onChange={(d: AddressData) =>
-                                    setWorkingVehicleDestinationAddress(d)
-                                  }
-                                  label=""
-                                  hideLabel
-                                  onPinDropClick={() => handlePinDropOpen('workingDestination')}
-                                  storageYardConfirm={workingDropoffYardConfirm}
-                                  savedAddresses={savedAddresses}
-                                  extraActions={
+                        <div className="px-3.5 sm:px-3 pt-3 border-t border-gt-border-subtle bg-white">
+                          <label className="block text-xs font-medium text-gt-text-secondary mb-1">
+                            מוצא התקין
+                          </label>
+                          {workingVehicleSource === 'storage' ? (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-gt-surface-subtle border border-gt-border-subtle rounded-xl text-sm text-gt-text">
+                              <span>
+                                {workingVehicleAddress?.address ||
+                                  storageAddress ||
+                                  'כתובת האחסנה'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWorkingVehicleSource('address')
+                                  setSelectedWorkingVehicleId(null)
+                                  setWorkingVehicleAddress({ address: '' })
+                                }}
+                                className="mr-auto text-gt-text-tertiary hover:text-red-500"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <AddressInput
+                              value={workingVehicleAddress}
+                              onChange={(d: AddressData) => setWorkingVehicleAddress(d)}
+                              label=""
+                              hideLabel
+                              onPinDropClick={() => handlePinDropOpen('workingVehicle')}
+                              storageYardConfirm={workingPickupYardConfirm}
+                              savedAddresses={savedAddresses}
+                              extraActions={
+                                <SaveCustomerAddressControl
+                                  visible={showSaveWorkingSourceAddressOption}
+                                  address={workingVehicleAddress?.address ?? ''}
+                                  pending={pendingWorkingSourceAddress}
+                                  onConfirm={setPendingWorkingSourceAddress}
+                                  onClear={() => setPendingWorkingSourceAddress(null)}
+                                  disabled={saving}
+                                />
+                              }
+                            />
+                          )}
+                        </div>
+
+                        <div className="px-3.5 sm:px-3 pt-3 pb-3.5 sm:pb-3 bg-white">
+                          {exchangePointSplit ? (
+                            <>
+                              <label className="block text-xs font-medium text-gt-text-secondary mb-1">
+                                יעד התקין
+                              </label>
+                              <AddressInput
+                                value={workingVehicleDestinationAddress}
+                                onChange={(d: AddressData) =>
+                                  setWorkingVehicleDestinationAddress(d)
+                                }
+                                label=""
+                                hideLabel
+                                onPinDropClick={() => handlePinDropOpen('workingDestination')}
+                                storageYardConfirm={workingDropoffYardConfirm}
+                                savedAddresses={savedAddresses}
+                                extraActions={
+                                  <>
                                     <SaveCustomerAddressControl
                                       visible={showSaveWorkingDestinationAddressOption}
                                       address={
@@ -3416,66 +3514,35 @@ function CreateTowForm({
                                       onClear={() => setPendingWorkingDestinationAddress(null)}
                                       disabled={saving}
                                     />
-                                  }
-                                />
-                                {!workingVehicleDestinationIsStorage ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setWorkingVehicleDestinationIsStorage(true)
-                                      if (storageAddress) {
-                                        setWorkingVehicleDestinationAddress({
-                                          address: storageAddress,
-                                          lat: basePriceList?.base_lat,
-                                          lng: basePriceList?.base_lng,
-                                        })
-                                      }
-                                    }}
-                                    className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 border border-gt-border-subtle rounded-lg text-xs text-gt-text-secondary hover:border-gt-border-strong w-fit"
-                                  >
-                                    שמור באחסנה
-                                  </button>
-                                ) : (
-                                  <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1 bg-gt-surface-subtle border border-gt-border-subtle rounded-lg w-fit">
-                                    <span className="text-xs text-gt-text-secondary">לאחסנה</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
+                                    <StorageAddressToggleButton
+                                      active={workingVehicleDestinationIsStorage}
+                                      disabled={saving}
+                                      activateTitle="שמור באחסנה"
+                                      clearTitle="בטל לאחסנה"
+                                      onActivate={() => {
+                                        setWorkingVehicleDestinationIsStorage(true)
+                                        if (storageAddress) {
+                                          setWorkingVehicleDestinationAddress({
+                                            address: storageAddress,
+                                            lat: basePriceList?.base_lat,
+                                            lng: basePriceList?.base_lng,
+                                          })
+                                        }
+                                      }}
+                                      onClear={() => {
                                         setWorkingVehicleDestinationIsStorage(false)
                                         setWorkingVehicleDestinationAddress({ address: '' })
                                       }}
-                                      className="text-gt-text-tertiary hover:text-red-500 text-xs"
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            <div>
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <label className="block text-xs font-medium text-gt-text-secondary">
-                                  נקודת החלפה
-                                </label>
-                                {exchangePointSplit ? (
-                                  <button
-                                    type="button"
-                                    onClick={collapseExchangePoint}
-                                    className="px-2 py-0.5 text-xs font-medium rounded-lg border border-gt-border-subtle text-gt-text-secondary hover:border-gt-brand hover:text-gt-brand"
-                                  >
-                                    אחד נקודת החלפה
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={splitExchangePoint}
-                                    className="px-2 py-0.5 text-xs font-medium rounded-lg border border-gt-border-subtle text-gt-text-secondary hover:border-gt-brand hover:text-gt-brand"
-                                  >
-                                    פצל נקודת החלפה
-                                  </button>
-                                )}
-                              </div>
+                                    />
+                                  </>
+                                }
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <label className="block text-xs font-medium text-gt-text-secondary mb-1">
+                                נקודת החלפה
+                              </label>
                               <AddressInput
                                 value={exchangeAddress}
                                 onChange={setExchangeHubAddress}
@@ -3497,25 +3564,36 @@ function CreateTowForm({
                               <p className="mt-1 text-[11px] text-gt-text-tertiary">
                                 התקין יורד כאן · התקול נאסף כאן
                               </p>
-                              {exchangePointSplit && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExchangeAddress(workingVehicleDestinationAddress)
-                                  }
-                                  disabled={!workingVehicleDestinationAddress?.address}
-                                  className="mt-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-gt-border-subtle text-gt-text-secondary hover:border-gt-brand hover:text-gt-brand disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                  זהה ליעד התקין
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                            </>
+                          )}
                         </div>
-                      </FormSubcard>
+                      </div>
 
-                      <FormSubcard title="רכב תקול" className="mb-0">
-                        <div className="flex flex-col gap-4">
+                      <div
+                        className="border border-gt-border-subtle rounded-lg overflow-hidden bg-white flex flex-col lg:row-span-4 lg:grid lg:grid-rows-subgrid"
+                        dir="rtl"
+                      >
+                        <div className="px-3.5 py-2.5 sm:py-2 bg-gt-surface-subtle border-b border-gt-border-subtle flex items-center justify-between gap-2">
+                          <h4 className="text-xs font-semibold text-gt-text-secondary min-w-0">
+                            רכב תקול
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={
+                              exchangePointSplit ? collapseExchangePoint : splitExchangePoint
+                            }
+                            aria-pressed={exchangePointSplit}
+                            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                              exchangePointSplit
+                                ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+                                : 'border-gt-brand/60 bg-white text-gt-brand-text hover:bg-gt-brand-subtle hover:border-gt-brand'
+                            }`}
+                          >
+                            <Split className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            {exchangePointSplit ? 'אחד נקודת החלפה' : 'פצל נקודת החלפה'}
+                          </button>
+                        </div>
+                        <div className="p-3.5 sm:p-3 flex flex-col gap-4">
                           <div className="grid grid-cols-[2fr_1fr] gap-2">
                             <Input
                               type="text"
@@ -3579,27 +3657,14 @@ function CreateTowForm({
                               />
                               <button
                                 type="button"
-                                onClick={() => setHasSecondTruck(!hasSecondTruck)}
-                                className={vehicleActionTriggerClass(hasSecondTruck, '', true)}
-                                title="סוג גרר נוסף לרכב התקול"
+                                disabled
+                                aria-disabled
+                                title="בקרוב"
+                                className={`${vehicleActionTriggerClass(false, '', true)} cursor-not-allowed opacity-40`}
                               >
-                                <span className="shrink-0">
-                                  {hasSecondTruck ? '✓ גרר נוסף' : 'גרר נוסף'}
-                                </span>
+                                <span className="shrink-0">גרר נוסף</span>
                               </button>
                             </VehicleCardActions>
-                            {hasSecondTruck && (
-                              <div className="p-3 border border-gt-border-subtle rounded-xl bg-gt-surface-subtle/50">
-                                <p className="mb-2 text-xs font-medium text-gt-text-secondary">
-                                  סוג גרר לרכב התקול
-                                </p>
-                                <TowTruckTypeSelector
-                                  variant="gridOnly"
-                                  selectedTypes={defectiveTruckTypes}
-                                  onChange={setDefectiveTruckTypes}
-                                />
-                              </div>
-                            )}
                           </div>
 
                           {defectiveVehicleData?.found && defectiveVehicleData.data && (
@@ -3632,104 +3697,119 @@ function CreateTowForm({
                             </div>
                           )}
 
-                          <div className="space-y-3 border-t border-gt-border-subtle pt-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gt-text-secondary mb-1">
-                                יעד התקול
-                              </label>
-                              <AddressInput
-                                value={defectiveDestinationAddress}
-                                onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
-                                label=""
-                                hideLabel
-                                onPinDropClick={() =>
-                                  handlePinDropOpen('defectiveDestination')
-                                }
-                                storageYardConfirm={
-                                  defectiveDestination === 'address'
-                                    ? defectiveDropoffYardConfirm
-                                    : null
-                                }
-                                savedAddresses={savedAddresses}
-                                extraActions={
-                                  <>
-                                    <SaveCustomerAddressControl
-                                      visible={showSaveDefectiveDestinationAddressOption}
-                                      address={defectiveDestinationAddress?.address ?? ''}
-                                      pending={pendingDefectiveDestinationAddress}
-                                      onConfirm={setPendingDefectiveDestinationAddress}
-                                      onClear={() => setPendingDefectiveDestinationAddress(null)}
-                                      disabled={saving}
-                                    />
-                                    {defectiveDestination !== 'storage' ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setDefectiveDestination('storage')
-                                          if (storageAddress) {
-                                            setDefectiveDestinationAddress({
-                                              address: storageAddress,
-                                              lat: basePriceList?.base_lat,
-                                              lng: basePriceList?.base_lng,
-                                            })
-                                          }
-                                        }}
-                                        className="inline-flex items-center gap-1 px-2.5 min-h-[48px] rounded-lg border border-gt-border-field text-xs font-medium text-gt-text-secondary hover:border-gt-border-strong hover:bg-gt-surface-subtle"
-                                        title="סמן יעד כאחסנה"
-                                      >
-                                        לאחסנה
-                                      </button>
-                                    ) : (
-                                      <div className="inline-flex items-center gap-1 px-2.5 min-h-[48px] rounded-lg border border-gt-border bg-gt-surface-subtle text-xs font-medium text-gt-text-secondary">
-                                        <span>לאחסנה</span>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setDefectiveDestination('address')
-                                            setDefectiveDestinationAddress({ address: '' })
-                                            setHasStorageFollowUp(false)
-                                            setFollowUpAddress({ address: '' })
-                                            setFollowUpContactName('')
-                                            setFollowUpContactPhone('')
-                                          }}
-                                          className="text-gt-text-tertiary hover:text-red-500"
-                                          aria-label="בטל לאחסנה"
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                    )}
-                                  </>
-                                }
-                              />
-                              <StorageFollowUpSection
-                                editTowId={editTowId}
-                                storageEligible={defectiveDestination === 'storage'}
-                                hasStorageFollowUp={hasStorageFollowUp}
-                                setHasStorageFollowUp={setHasStorageFollowUp}
-                                followUpAddress={followUpAddress}
-                                setFollowUpAddress={setFollowUpAddress}
-                                followUpContactName={followUpContactName}
-                                setFollowUpContactName={setFollowUpContactName}
-                                followUpContactPhone={followUpContactPhone}
-                                setFollowUpContactPhone={setFollowUpContactPhone}
-                                inheritCustomerOrderNumber={inheritCustomerOrderNumber}
-                                setInheritCustomerOrderNumber={setInheritCustomerOrderNumber}
-                                followUpChildTowId={followUpChildTowId}
-                                followUpChildStatus={followUpChildStatus}
-                                onPinDropOpen={() => handlePinDropOpen('followUp')}
-                                variant="labeled"
-                                showSaveAddressOption={showSaveFollowUpAddressOption}
-                                pendingAddress={pendingFollowUpAddress}
-                                onConfirmPendingAddress={setPendingFollowUpAddress}
-                                onClearPendingAddress={() => setPendingFollowUpAddress(null)}
-                                saveAddressDisabled={saving}
-                                savedAddresses={savedAddresses}
-                              />
-                            </div>
-                          </div>
                         </div>
-                      </FormSubcard>
+
+                        {exchangePointSplit ? (
+                          <div className="px-3.5 sm:px-3 pt-3 border-t border-gt-border-subtle bg-white">
+                            <label className="block text-xs font-medium text-gt-text-secondary mb-1">
+                              מוצא התקול
+                            </label>
+                            <AddressInput
+                              value={exchangeAddress}
+                              onChange={setExchangeAddress}
+                              label=""
+                              hideLabel
+                              onPinDropClick={() => handlePinDropOpen('exchange')}
+                              savedAddresses={savedAddresses}
+                              extraActions={
+                                <SaveCustomerAddressControl
+                                  visible={showSaveExchangePickupAddressOption}
+                                  address={exchangeAddress?.address ?? ''}
+                                  pending={pendingExchangePickupAddress}
+                                  onConfirm={setPendingExchangePickupAddress}
+                                  onClear={() => setPendingExchangePickupAddress(null)}
+                                  disabled={saving}
+                                />
+                              }
+                            />
+                          </div>
+                        ) : (
+                          /* Empty row shares height with מוצא התקין so יעד aligns with נקודת החלפה */
+                          <div
+                            className="px-3.5 sm:px-3 pt-3 border-t border-gt-border-subtle bg-white"
+                            aria-hidden
+                          />
+                        )}
+
+                        <div className="px-3.5 sm:px-3 pt-3 pb-3.5 sm:pb-3 bg-white">
+                          <label className="block text-xs font-medium text-gt-text-secondary mb-1">
+                            יעד התקול
+                          </label>
+                          <AddressInput
+                            value={defectiveDestinationAddress}
+                            onChange={(d: AddressData) => setDefectiveDestinationAddress(d)}
+                            label=""
+                            hideLabel
+                            onPinDropClick={() => handlePinDropOpen('defectiveDestination')}
+                            storageYardConfirm={
+                              defectiveDestination === 'address'
+                                ? defectiveDropoffYardConfirm
+                                : null
+                            }
+                            savedAddresses={savedAddresses}
+                            extraActions={
+                              <>
+                                <SaveCustomerAddressControl
+                                  visible={showSaveDefectiveDestinationAddressOption}
+                                  address={defectiveDestinationAddress?.address ?? ''}
+                                  pending={pendingDefectiveDestinationAddress}
+                                  onConfirm={setPendingDefectiveDestinationAddress}
+                                  onClear={() => setPendingDefectiveDestinationAddress(null)}
+                                  disabled={saving}
+                                />
+                                <StorageAddressToggleButton
+                                  active={defectiveDestination === 'storage'}
+                                  disabled={saving}
+                                  activateTitle="לאחסנה"
+                                  clearTitle="בטל לאחסנה"
+                                  onActivate={() => {
+                                    setDefectiveDestination('storage')
+                                    if (storageAddress) {
+                                      setDefectiveDestinationAddress({
+                                        address: storageAddress,
+                                        lat: basePriceList?.base_lat,
+                                        lng: basePriceList?.base_lng,
+                                      })
+                                    }
+                                  }}
+                                  onClear={() => {
+                                    setDefectiveDestination('address')
+                                    setDefectiveDestinationAddress({ address: '' })
+                                    setHasStorageFollowUp(false)
+                                    setFollowUpAddress({ address: '' })
+                                    setFollowUpContactName('')
+                                    setFollowUpContactPhone('')
+                                  }}
+                                />
+                              </>
+                            }
+                          />
+                          <StorageFollowUpSection
+                            editTowId={editTowId}
+                            storageEligible={defectiveDestination === 'storage'}
+                            hasStorageFollowUp={hasStorageFollowUp}
+                            setHasStorageFollowUp={setHasStorageFollowUp}
+                            followUpAddress={followUpAddress}
+                            setFollowUpAddress={setFollowUpAddress}
+                            followUpContactName={followUpContactName}
+                            setFollowUpContactName={setFollowUpContactName}
+                            followUpContactPhone={followUpContactPhone}
+                            setFollowUpContactPhone={setFollowUpContactPhone}
+                            inheritCustomerOrderNumber={inheritCustomerOrderNumber}
+                            setInheritCustomerOrderNumber={setInheritCustomerOrderNumber}
+                            followUpChildTowId={followUpChildTowId}
+                            followUpChildStatus={followUpChildStatus}
+                            onPinDropOpen={() => handlePinDropOpen('followUp')}
+                            variant="labeled"
+                            showSaveAddressOption={showSaveFollowUpAddressOption}
+                            pendingAddress={pendingFollowUpAddress}
+                            onConfirmPendingAddress={setPendingFollowUpAddress}
+                            onClearPendingAddress={() => setPendingFollowUpAddress(null)}
+                            saveAddressDisabled={saving}
+                            savedAddresses={savedAddresses}
+                          />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="rounded-xl border border-gt-border-subtle overflow-hidden bg-white">
@@ -4221,133 +4301,181 @@ function CreateTowForm({
                   {towType === 'exchange' ? (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <CustomerContactFields
-                        name={workingVehicleContact}
-                        phone={workingVehicleContactPhone}
-                        onNameChange={setWorkingVehicleContact}
-                        onPhoneChange={setWorkingVehicleContactPhone}
-                        savedContacts={savedContacts}
-                        contactsLoading={contactsLoading}
-                        disabled={saving}
-                        showSavePill={showSaveWorkingSourceContactOption}
-                        saveActive={saveWorkingSourceContactToCustomer}
-                        onSaveToggle={() =>
-                          setSaveWorkingSourceContactToCustomer((prev) => !prev)
-                        }
-                        onSelectContact={() => setSaveWorkingSourceContactToCustomer(false)}
-                        header={
-                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                            <label className="text-sm font-medium text-gray-700">איש קשר במוצא — רכב תקין</label>
-                            <div className="flex gap-1.5 flex-wrap justify-end">
-                              {!selectedCustomerId && (
-                                <button type="button" onClick={() => copyFromCustomer('working_source')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                              )}
-                            </div>
-                          </div>
-                        }
-                      />
+                        {showWorkingOriginContact && (
+                          <CustomerContactFields
+                            name={workingVehicleContact}
+                            phone={workingVehicleContactPhone}
+                            onNameChange={setWorkingVehicleContact}
+                            onPhoneChange={setWorkingVehicleContactPhone}
+                            savedContacts={savedContacts}
+                            contactsLoading={contactsLoading}
+                            disabled={saving}
+                            showSavePill={showSaveWorkingSourceContactOption}
+                            saveActive={saveWorkingSourceContactToCustomer}
+                            onSaveToggle={() =>
+                              setSaveWorkingSourceContactToCustomer((prev) => !prev)
+                            }
+                            onSelectContact={() =>
+                              setSaveWorkingSourceContactToCustomer(false)
+                            }
+                            header={
+                              <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                                <label className="text-sm font-medium text-gray-700">
+                                  איש קשר במוצא התקין
+                                </label>
+                                <div className="flex gap-1.5 flex-wrap justify-end">
+                                  {!selectedCustomerId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => copyFromCustomer('working_source')}
+                                      className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                                    >
+                                      כמו לקוח 👤
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            }
+                          />
+                        )}
 
-                      {exchangePointSplit && (
-                      <CustomerContactFields
-                        name={workingDestinationContact}
-                        phone={workingDestinationContactPhone}
-                        onNameChange={setWorkingDestinationContact}
-                        onPhoneChange={setWorkingDestinationContactPhone}
-                        savedContacts={savedContacts}
-                        contactsLoading={contactsLoading}
-                        disabled={saving}
-                        showSavePill={showSaveWorkingDestinationContactOption}
-                        saveActive={saveWorkingDestinationContactToCustomer}
-                        onSaveToggle={() =>
-                          setSaveWorkingDestinationContactToCustomer((prev) => !prev)
-                        }
-                        onSelectContact={() => setSaveWorkingDestinationContactToCustomer(false)}
-                        header={
-                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                            <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקין</label>
-                            <div className="flex gap-1.5 flex-wrap justify-end">
-                              {!selectedCustomerId && (
-                                <button type="button" onClick={() => copyFromCustomer('working_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                              )}
-                            </div>
-                          </div>
-                        }
-                      />
-                      )}
+                        {showWorkingDestinationContact && (
+                          <CustomerContactFields
+                            name={workingDestinationContact}
+                            phone={workingDestinationContactPhone}
+                            onNameChange={setWorkingDestinationContact}
+                            onPhoneChange={setWorkingDestinationContactPhone}
+                            savedContacts={savedContacts}
+                            contactsLoading={contactsLoading}
+                            disabled={saving}
+                            showSavePill={showSaveWorkingDestinationContactOption}
+                            saveActive={saveWorkingDestinationContactToCustomer}
+                            onSaveToggle={() =>
+                              setSaveWorkingDestinationContactToCustomer((prev) => !prev)
+                            }
+                            onSelectContact={() =>
+                              setSaveWorkingDestinationContactToCustomer(false)
+                            }
+                            header={
+                              <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                                <label className="text-sm font-medium text-gray-700">
+                                  איש קשר ביעד התקין
+                                </label>
+                                <div className="flex gap-1.5 flex-wrap justify-end">
+                                  {!selectedCustomerId && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        copyFromCustomer('working_destination')
+                                      }
+                                      className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                                    >
+                                      כמו לקוח 👤
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            }
+                          />
+                        )}
 
-                      <div>
-                        <CustomerContactFields
-                          name={exchangeContactName}
-                          phone={exchangeContactPhone}
-                          onNameChange={setExchangeContactName}
-                          onPhoneChange={setExchangeContactPhone}
-                          savedContacts={savedContacts}
-                          contactsLoading={contactsLoading}
-                          disabled={saving}
-                          showSavePill={showSaveExchangePickupContactOption}
-                          saveActive={saveExchangePickupContactToCustomer}
-                          onSaveToggle={() =>
-                            setSaveExchangePickupContactToCustomer((prev) => !prev)
-                          }
-                          onSelectContact={() => setSaveExchangePickupContactToCustomer(false)}
-                          header={
-                            <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                              <label className="text-sm font-medium text-gray-700">
-                                {exchangePointSplit
-                                  ? 'איש קשר במוצא — רכב תקול'
-                                  : 'איש קשר בנקודת החלפה'}
-                              </label>
-                              {!selectedCustomerId && (
+                        {showExchangePointContact && (
+                          <div>
+                            <CustomerContactFields
+                              name={exchangeContactName}
+                              phone={exchangeContactPhone}
+                              onNameChange={setExchangeContactName}
+                              onPhoneChange={setExchangeContactPhone}
+                              savedContacts={savedContacts}
+                              contactsLoading={contactsLoading}
+                              disabled={saving}
+                              showSavePill={showSaveExchangePickupContactOption}
+                              saveActive={saveExchangePickupContactToCustomer}
+                              onSaveToggle={() =>
+                                setSaveExchangePickupContactToCustomer((prev) => !prev)
+                              }
+                              onSelectContact={() =>
+                                setSaveExchangePickupContactToCustomer(false)
+                              }
+                              header={
+                                <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                                  <label className="text-sm font-medium text-gray-700">
+                                    {exchangePointSplit
+                                      ? 'איש קשר במוצא התקול'
+                                      : 'איש קשר בנקודת החלפה'}
+                                  </label>
+                                  {!selectedCustomerId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => copyFromCustomer('exchange_pickup')}
+                                      className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
+                                    >
+                                      כמו לקוח 👤
+                                    </button>
+                                  )}
+                                </div>
+                              }
+                            />
+                            {showWorkingDestinationContact &&
+                              showDefectiveDestinationContact &&
+                              workingDestinationContact && (
                                 <button
                                   type="button"
-                                  onClick={() => copyFromCustomer('exchange_pickup')}
-                                  className="text-xs px-2 py-1 rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700"
+                                  onClick={() => {
+                                    setDefectiveDestinationContact(
+                                      workingDestinationContact,
+                                    )
+                                    setDefectiveDestinationContactPhone(
+                                      workingDestinationContactPhone,
+                                    )
+                                  }}
+                                  className="mt-1.5 text-xs text-cyan-600 hover:underline"
                                 >
-                                  כמו לקוח 👤
+                                  זהה ליעד תקין ↓
                                 </button>
                               )}
-                            </div>
-                          }
-                        />
-                        {exchangePointSplit && workingDestinationContact && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDefectiveDestinationContact(workingDestinationContact)
-                              setDefectiveDestinationContactPhone(workingDestinationContactPhone)
-                            }}
-                            className="mt-1.5 text-xs text-cyan-600 hover:underline"
-                          >
-                            זהה ליעד תקין ↓
-                          </button>
-                        )}
-                      </div>
-
-                      <CustomerContactFields
-                        name={defectiveDestinationContact}
-                        phone={defectiveDestinationContactPhone}
-                        onNameChange={setDefectiveDestinationContact}
-                        onPhoneChange={setDefectiveDestinationContactPhone}
-                        savedContacts={savedContacts}
-                        contactsLoading={contactsLoading}
-                        disabled={saving}
-                        showSavePill={showSaveDefectiveDestinationContactOption}
-                        saveActive={saveDefectiveDestinationContactToCustomer}
-                        onSaveToggle={() =>
-                          setSaveDefectiveDestinationContactToCustomer((prev) => !prev)
-                        }
-                        onSelectContact={() => setSaveDefectiveDestinationContactToCustomer(false)}
-                        header={
-                          <div className="flex justify-between items-start mb-2 min-h-[32px]">
-                            <label className="text-sm font-medium text-gray-700">איש קשר ביעד — רכב תקול</label>
-                            <div className="flex gap-1.5 flex-wrap justify-end">
-                              {!selectedCustomerId && (
-                                <button type="button" onClick={() => copyFromCustomer('defective_destination')} className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100">כמו לקוח 👤</button>
-                              )}
-                            </div>
                           </div>
-                        }
-                      />
+                        )}
+
+                        {showDefectiveDestinationContact && (
+                          <CustomerContactFields
+                            name={defectiveDestinationContact}
+                            phone={defectiveDestinationContactPhone}
+                            onNameChange={setDefectiveDestinationContact}
+                            onPhoneChange={setDefectiveDestinationContactPhone}
+                            savedContacts={savedContacts}
+                            contactsLoading={contactsLoading}
+                            disabled={saving}
+                            showSavePill={showSaveDefectiveDestinationContactOption}
+                            saveActive={saveDefectiveDestinationContactToCustomer}
+                            onSaveToggle={() =>
+                              setSaveDefectiveDestinationContactToCustomer((prev) => !prev)
+                            }
+                            onSelectContact={() =>
+                              setSaveDefectiveDestinationContactToCustomer(false)
+                            }
+                            header={
+                              <div className="flex justify-between items-start mb-2 min-h-[32px]">
+                                <label className="text-sm font-medium text-gray-700">
+                                  איש קשר ביעד התקול
+                                </label>
+                                <div className="flex gap-1.5 flex-wrap justify-end">
+                                  {!selectedCustomerId && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        copyFromCustomer('defective_destination')
+                                      }
+                                      className="px-2.5 py-1 text-xs font-medium rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                                    >
+                                      כמו לקוח 👤
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            }
+                          />
+                        )}
                       </div>
                     </>
                   ) : towType === 'single' ? (

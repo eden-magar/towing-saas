@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react'
 import { Bookmark, Link2, Loader2, MapPin } from 'lucide-react'
+import {
+  ADDRESS_FIELD_ACTION_BTN_CLASS,
+  ADDRESS_FIELD_ACTION_ICON_SIZE,
+} from './addressFieldActions'
 import { supabase } from '../../../lib/supabase'
 import { StorageYardConfirmDialog } from '../shared/StorageYardConfirmDialog'
 import {
@@ -614,13 +618,8 @@ export function AddressInput({
       ? 'flex-1 min-w-0 px-4 h-12 border border-gt-border-field rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
       : 'flex-1 min-w-0 px-4 py-2.5 border border-gt-border-field rounded-lg text-sm text-gt-text-primary placeholder:text-gt-text-tertiary hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20'
 
-  const actionButtonClassName = isNarrow
-    ? 'shrink-0 h-9 w-9 flex items-center justify-center border border-gt-border-field rounded-lg text-gray-500 hover:bg-gray-50 hover:border-gt-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-    : isMobileSized
-      ? 'shrink-0 px-3 min-h-[48px] min-w-[48px] flex items-center justify-center border border-gt-border-field rounded-lg text-gray-500 hover:bg-gray-50 hover:border-gt-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-      : 'shrink-0 px-3 py-2.5 border border-gt-border-field rounded-lg text-gray-500 hover:bg-gray-50 hover:border-gt-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-
-  const actionIconSize = isNarrow ? 16 : 18
+  const actionButtonClassName = ADDRESS_FIELD_ACTION_BTN_CLASS
+  const actionIconSize = ADDRESS_FIELD_ACTION_ICON_SIZE
 
   const renderLinkButton = () => {
     if (readOnly) return null
@@ -832,7 +831,7 @@ export function AddressInput({
         {/* Actions on their own row under the field — full-width input above.
             Fixed order (RTL start/right → left): map pin → paste link → save bookmark */}
         {showActionRow && (
-          <div className="mt-1.5 flex flex-wrap items-center justify-start gap-2">
+          <div className="mt-1.5 flex min-h-9 flex-wrap items-center justify-start gap-1.5">
             {onPinDropClick && (
               <button
                 type="button"

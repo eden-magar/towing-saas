@@ -3,6 +3,11 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Bookmark, BookmarkCheck, X } from 'lucide-react'
 import { SelectorModalShell } from '../tow-forms/shared/SelectorModalShell'
+import {
+  ADDRESS_FIELD_ACTION_BTN_ACTIVE_CLASS,
+  ADDRESS_FIELD_ACTION_BTN_CLASS,
+  ADDRESS_FIELD_ACTION_ICON_SIZE,
+} from '../tow-forms/routes/addressFieldActions'
 
 export type CustomerAddressPendingDraft = {
   label: string
@@ -77,12 +82,11 @@ export function SaveCustomerAddressControl({
           type="button"
           onClick={openModal}
           disabled={disabled}
-          title="עריכת כתובת שמורה"
+          title={`עריכת כתובת שמורה: ${pending.label}`}
           aria-label={`כתובת ממתינה לשמירה: ${pending.label}`}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#33d4ff]/40 bg-[#33d4ff]/10 px-2.5 py-1 text-xs font-medium text-[#1a9bc7] transition-colors hover:bg-[#33d4ff]/15 disabled:opacity-50"
+          className={`${ADDRESS_FIELD_ACTION_BTN_CLASS} ${ADDRESS_FIELD_ACTION_BTN_ACTIVE_CLASS}`}
         >
-          <BookmarkCheck size={13} className="shrink-0" aria-hidden />
-          <span className="truncate">{pending.label}</span>
+          <BookmarkCheck size={ADDRESS_FIELD_ACTION_ICON_SIZE} aria-hidden />
         </button>
       ) : (
         <button
@@ -91,9 +95,9 @@ export function SaveCustomerAddressControl({
           disabled={disabled}
           title="שמור כתובת קבועה"
           aria-label="שמור כתובת קבועה"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gt-border-field text-gray-500 transition-colors hover:bg-gray-50 hover:border-gt-border hover:text-[#21b8e6] disabled:opacity-50"
+          className={ADDRESS_FIELD_ACTION_BTN_CLASS}
         >
-          <Bookmark size={16} aria-hidden />
+          <Bookmark size={ADDRESS_FIELD_ACTION_ICON_SIZE} aria-hidden />
         </button>
       )}
 

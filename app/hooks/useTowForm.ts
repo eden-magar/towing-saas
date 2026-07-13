@@ -43,7 +43,11 @@ import {
 } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
 import { extractBasePrices, resolveVehicleBasePrice } from '../lib/utils/price-calculator'
-import { buildExchangePriceAffectingSignature, buildSinglePriceAffectingSignature } from '../lib/utils/tow-save-handler'
+import {
+  buildExchangePriceAffectingSignature,
+  buildSinglePriceAffectingSignature,
+} from '../lib/utils/tow-save-handler'
+import { matchesStorageYard, yardFromBasePriceList } from '../lib/utils/storage-yard-match'
 import { normalizePlate } from '../lib/utils/plate-number'
 import {
   STORAGE_OTHER_CUSTOMER_MESSAGE,
@@ -3891,6 +3895,19 @@ export function useTowForm(
     [isFromRequestLoad, requestOriginalValues],
   )
 
+  const exchangeYard = yardFromBasePriceList(basePriceList)
+  const saveWorkingOriginContact =
+    workingVehicleSource !== 'storage' &&
+    !matchesStorageYard(workingVehicleAddress, exchangeYard)
+  const saveWorkingDestinationContact =
+    exchangePointSplit &&
+    !workingVehicleDestinationIsStorage &&
+    !matchesStorageYard(workingVehicleDestinationAddress, exchangeYard)
+  const saveExchangePointContact = !matchesStorageYard(exchangeAddress, exchangeYard)
+  const saveDefectiveDestinationContact =
+    defectiveDestination !== 'storage' &&
+    !matchesStorageYard(defectiveDestinationAddress, exchangeYard)
+
   const { handleSave } = useTowSave({
     companyId,
     user,
@@ -3982,21 +3999,35 @@ export function useTowForm(
     defectiveSelectedServices,
     defectiveVehicleType,
     workingVehicleSourceAddress: workingVehicleAddress,
-    workingVehicleDestinationAddress,
+    workingVehicleDestinationAddress: exchangePointSplit
+      ? workingVehicleDestinationAddress
+      : exchangeAddress,
     exchangePointSplit,
-    workingVehicleContactName: workingVehicleContact,
-    workingVehicleContactPhone,
+    workingVehicleContactName: saveWorkingOriginContact
+      ? workingVehicleContact
+      : undefined,
+    workingVehicleContactPhone: saveWorkingOriginContact
+      ? workingVehicleContactPhone
+      : undefined,
     defectiveVehiclePlate,
     defectiveVehicleCode,
     defectiveVehicleData,
     exchangePointAddress: exchangeAddress,
-    exchangeContactName,
-    exchangeContactPhone,
-    workingDestinationContactName: workingDestinationContact,
-    workingDestinationContactPhone,
+    exchangeContactName: saveExchangePointContact ? exchangeContactName : undefined,
+    exchangeContactPhone: saveExchangePointContact ? exchangeContactPhone : undefined,
+    workingDestinationContactName: saveWorkingDestinationContact
+      ? workingDestinationContact
+      : undefined,
+    workingDestinationContactPhone: saveWorkingDestinationContact
+      ? workingDestinationContactPhone
+      : undefined,
     defectiveDestinationAddress: defectiveDestinationAddress,
-    defectiveDestinationContactName: defectiveDestinationContact,
-    defectiveDestinationContactPhone,
+    defectiveDestinationContactName: saveDefectiveDestinationContact
+      ? defectiveDestinationContact
+      : undefined,
+    defectiveDestinationContactPhone: saveDefectiveDestinationContact
+      ? defectiveDestinationContactPhone
+      : undefined,
     selectedStoredVehicleId,
     workingVehicleSource,
     selectedWorkingVehicleId,
