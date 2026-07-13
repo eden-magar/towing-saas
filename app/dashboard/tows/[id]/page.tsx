@@ -71,6 +71,7 @@ import {
   type PortalVisibilityOverrideState,
 } from '../../../lib/utils/portal-visibility'
 import { approveTowQuote, getTowWithPoints, getTowDetailLight, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
+import { TowInternalNotesCard } from '../../../components/tows/TowInternalNotesCard'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
@@ -2552,6 +2553,8 @@ export default function TowDetailsPage() {
                   )}
                 </div>
               </div>
+
+              <TowInternalNotesCard towId={towId} />
             </div>
 
             {/* סיידבר */}

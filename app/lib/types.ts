@@ -870,6 +870,19 @@ export interface TowChangeLog {
   }
 }
 
+/** Append-only internal notes on a tow (company_admin / dispatcher only). */
+export interface TowInternalNote {
+  id: string
+  company_id: string
+  tow_id: string
+  author_id: string
+  body: string
+  created_at: string
+  author?: {
+    full_name: string
+  }
+}
+
 // ===== Driver Tasks =====
 
 export type TaskStatus = 'pending' | 'accepted' | 'in_progress' | 'done' | 'rejected'
