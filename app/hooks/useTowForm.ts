@@ -122,6 +122,12 @@ function routeStopsDistanceSignatureFromStops(stops: RouteStop[]): string {
   )
 }
 
+/** Stable primitive for empty-leg distance effects (fixed-length useEffect deps). */
+function addressDistanceKey(a?: AddressData | null): string {
+  if (!a?.address?.trim()) return ''
+  return `${a.address}|${a.lat ?? ''}|${a.lng ?? ''}`
+}
+
 function routeStopsDistanceSignatureFromPoints(
   points: Array<{ address?: string | null; lat?: unknown; lng?: unknown }>
 ): string {
@@ -1466,10 +1472,27 @@ export function useTowForm(
     selectedPriceItem,
   ])
 
-  // Calculate base to pickup distance
+  // Empty-leg pickup key (מהחניון למוצא). Primitive so useEffect deps stay fixed-length.
+  // Exchange: working origin. Single/custom: routeStops pickup.
+  const emptyLegPickupKey =
+    towType === 'exchange'
+      ? addressDistanceKey(workingVehicleAddress)
+      : addressDistanceKey(findPickupRouteStop(routeStops)?.address)
+
+  // Calculate base to pickup distance (מהחניון למוצא).
   useEffect(() => {
-    const pickup = findPickupRouteStop(routeStops)
-    if (!startFromBase || !pickup?.address.address || !basePriceList?.base_lat || !basePriceList?.base_lng) {
+    const pickupAddress: AddressData | undefined =
+      towType === 'exchange'
+        ? workingVehicleAddress
+        : findPickupRouteStop(routeStops)?.address
+
+    if (
+      !startFromBase ||
+      !emptyLegPickupKey ||
+      !pickupAddress?.address ||
+      !basePriceList?.base_lat ||
+      !basePriceList?.base_lng
+    ) {
       setBaseToPickupDistance(null)
       return
     }
@@ -1484,7 +1507,7 @@ export function useTowForm(
           lat: basePriceList.base_lat,
           lng: basePriceList.base_lng
         }
-        const result = await calculateDistance(baseAddress, pickup.address)
+        const result = await calculateDistance(baseAddress, pickupAddress)
         if (!cancelled) setBaseToPickupDistance(result)
       } catch (err) {
         console.error('Base distance calculation error:', err)
@@ -1498,7 +1521,14 @@ export function useTowForm(
       cancelled = true
       clearTimeout(timeout)
     }
-  }, [startFromBase, routeStops, basePriceList?.base_lat, basePriceList?.base_lng])
+  }, [
+    startFromBase,
+    towType,
+    emptyLegPickupKey,
+    basePriceList?.base_lat,
+    basePriceList?.base_lng,
+    basePriceList?.base_address,
+  ])
 
 
   // Calculate exchange total distance
@@ -1588,8 +1618,16 @@ export function useTowForm(
     stopsAfterExchange,
   ])
 
+  // Empty-leg dropoff key (מהיעד לחניון). Primitive so useEffect deps stay fixed-length.
+  // Exchange: defective destination. Single: routeStops dropoff. Custom: unsupported ('').
+  const emptyLegDropoffKey =
+    towType === 'exchange'
+      ? addressDistanceKey(defectiveDestinationAddress)
+      : towType === 'custom'
+        ? ''
+        : addressDistanceKey(findDropoffRouteStop(routeStops)?.address)
+
   // Calculate last dropoff → base distance (deadhead / נסיעת סרק).
-  // Mirrors the base-to-pickup effect, but in reverse: final dropoff back to base.
   useEffect(() => {
     const preserveSeededDeadhead = () =>
       !!(editTowId && editSeededDeadheadRef.current != null)
@@ -1599,20 +1637,9 @@ export function useTowForm(
       return
     }
 
-    // Resolve the final dropoff for the active flow.
     let lastDropoff: AddressData | undefined
     if (towType === 'exchange') {
-      const waypoints = buildExchangeDistanceWaypoints(
-        editTowId ? editExchangeRouteLayoutRef.current : null,
-        !!editTowId,
-        workingVehicleAddress,
-        workingVehicleDestinationAddress,
-        exchangeAddress,
-        defectiveDestinationAddress,
-        stopsBeforeExchange,
-        stopsAfterExchange
-      )
-      lastDropoff = waypoints[waypoints.length - 1]
+      lastDropoff = defectiveDestinationAddress
     } else if (towType === 'custom') {
       // TODO(deadhead): custom routes compute distance in RouteBuilder; wire last point → base later.
       if (!preserveSeededDeadhead()) setDropoffToBaseDistance(null)
@@ -1621,7 +1648,7 @@ export function useTowForm(
       lastDropoff = findDropoffRouteStop(routeStops)?.address
     }
 
-    if (!lastDropoff?.address) {
+    if (!emptyLegDropoffKey || !lastDropoff?.address) {
       if (!preserveSeededDeadhead()) setDropoffToBaseDistance(null)
       return
     }
@@ -1657,25 +1684,11 @@ export function useTowForm(
   }, [
     chargeDeadheadReturn,
     towType,
-    routeStops,
+    emptyLegDropoffKey,
+    editTowId,
     basePriceList?.base_lat,
     basePriceList?.base_lng,
     basePriceList?.base_address,
-    editTowId,
-    workingVehicleAddress.address,
-    workingVehicleAddress.lat,
-    workingVehicleAddress.lng,
-    workingVehicleDestinationAddress.address,
-    workingVehicleDestinationAddress.lat,
-    workingVehicleDestinationAddress.lng,
-    exchangeAddress.address,
-    exchangeAddress.lat,
-    exchangeAddress.lng,
-    defectiveDestinationAddress.address,
-    defectiveDestinationAddress.lat,
-    defectiveDestinationAddress.lng,
-    stopsBeforeExchange,
-    stopsAfterExchange,
   ])
   // Read URL params or set defaults once on create (never clobber user-picked date/time)
   useEffect(() => {
