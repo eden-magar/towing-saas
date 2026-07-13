@@ -1855,6 +1855,76 @@ export async function updateStorageFollowUpTow(input: UpdateStorageFollowUpInput
   })
 }
 
+/**
+ * Resolve defective-vehicle pickup + dropoff for a linked tow.
+ * Layout-independent: prefers tow_point_vehicles links (is_working = false),
+ * then hub `exchange` point, then four-point order 2/3.
+ */
+function resolveDefectiveLegPoints(
+  points: TowPointWithDetails[] | undefined,
+  defectiveVehicleId: string | undefined
+): {
+  pickup: TowPointWithDetails | undefined
+  dropoff: TowPointWithDetails | undefined
+} {
+  const sorted = [...(points ?? [])].sort((a, b) => a.point_order - b.point_order)
+
+  const linksDefective = (p: TowPointWithDetails) =>
+    (p.vehicles ?? []).some((pv) => {
+      const vehicle = pv.vehicle as (TowVehicle & { id?: string }) | null | undefined
+      if (!vehicle) return false
+      if (vehicle.is_working === false) return true
+      return !!defectiveVehicleId && vehicle.id === defectiveVehicleId
+    })
+
+  const defectiveLinked = sorted.filter(linksDefective)
+  if (defectiveLinked.length > 0) {
+    const pickup =
+      defectiveLinked.find(
+        (p) => p.point_type === 'pickup' || p.point_type === 'exchange'
+      ) ??
+      defectiveLinked.find((p) =>
+        (p.vehicles ?? []).some((pv) => {
+          const action = String(pv.action)
+          return action === 'pickup' || action === 'exchange'
+        })
+      )
+    const dropoff = defectiveLinked.find((p) => p.point_type === 'dropoff')
+    return { pickup, dropoff }
+  }
+
+  const hubExchange = sorted.find((p) => p.point_type === 'exchange')
+  if (hubExchange) {
+    const defectiveDropoffs = sorted.filter(
+      (p) => p.point_type === 'dropoff' && linksDefective(p)
+    )
+    return {
+      pickup: hubExchange,
+      dropoff:
+        defectiveDropoffs[0] ??
+        sorted.filter((p) => p.point_type === 'dropoff').at(-1) ??
+        sorted.find((p) => p.point_type === 'dropoff'),
+    }
+  }
+
+  // Four-point without junction rows: pickup @ order 2, dropoff @ order 3
+  if (sorted.length === 4) {
+    return {
+      pickup:
+        sorted.find((p) => p.point_order === 2 && p.point_type === 'pickup') ??
+        sorted[2],
+      dropoff:
+        sorted.find((p) => p.point_order === 3 && p.point_type === 'dropoff') ??
+        sorted[3],
+    }
+  }
+
+  return {
+    pickup: sorted.find((p) => p.point_type === 'exchange'),
+    dropoff: sorted.find((p) => p.point_type === 'dropoff'),
+  }
+}
+
 export async function createLinkedTow(
   originalTowId: string,
   input: {
@@ -1869,8 +1939,11 @@ export async function createLinkedTow(
   if (!originalTow) throw new Error('Original tow not found')
 
   const defectiveVehicle = originalTow.vehicles?.find(v => !(v as any).is_working)
-  const exchangePoint = originalTow.points?.find(p => p.point_type === 'exchange')
-  const dropoffPoint = originalTow.points?.find(p => p.point_type === 'dropoff')
+  const { pickup: defectivePickupPoint, dropoff: dropoffPoint } =
+    resolveDefectiveLegPoints(
+      originalTow.points,
+      defectiveVehicle?.id
+    )
 
   const towId = crypto.randomUUID()
   const status = input.driverId ? 'assigned' : 'pending'
@@ -1911,14 +1984,14 @@ export async function createLinkedTow(
   }
 
   const points = []
-  if (exchangePoint) {
+  if (defectivePickupPoint) {
     points.push({
       tow_id: towId,
       point_order: 0,
       point_type: 'pickup',
-      address: exchangePoint.address,
-      lat: exchangePoint.lat,
-      lng: exchangePoint.lng,
+      address: defectivePickupPoint.address,
+      lat: defectivePickupPoint.lat,
+      lng: defectivePickupPoint.lng,
       status: 'pending',
     })
   }
