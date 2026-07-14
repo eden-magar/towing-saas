@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getDayTows } from '../../../lib/queries/calendar'
 import { TowWithDetails } from '../../../lib/queries/tows'
+import { formatPriceRecalcConfirmMessage } from '../../../lib/utils/price-change-confirm'
 import {
   ArrowRight,
   ArrowLeftRight,
@@ -494,6 +495,8 @@ function CreateTowForm({
     copyFromCustomer,
     resetForm,
     handleSave,
+    priceRecalcConfirm,
+    resolvePriceRecalcConfirm,
     setSavedTowId,
     setShowAssignNowModal,
   } = form
@@ -5027,6 +5030,40 @@ function CreateTowForm({
             </div>
           )
         })()}
+
+      {priceRecalcConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 bg-amber-500 text-white">
+              <h3 className="font-bold text-lg">עדכון מחיר</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-gray-800 font-medium text-center text-lg">
+                {formatPriceRecalcConfirmMessage(
+                  priceRecalcConfirm.oldPrice,
+                  priceRecalcConfirm.newPrice,
+                )}
+              </p>
+            </div>
+            <div className="flex gap-3 p-5 bg-gray-50 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => resolvePriceRecalcConfirm(false)}
+                className="flex-1 py-3 border border-gray-300 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={() => resolvePriceRecalcConfirm(true)}
+                className="flex-1 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 font-medium"
+              >
+                שמור עם המחיר החדש
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAssignNowModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

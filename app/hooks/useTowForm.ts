@@ -43,7 +43,11 @@ import {
   StoredVehicleWithCustomer,
 } from '../lib/queries/storage'
 import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-maps'
-import { extractBasePrices, resolveVehicleBasePrice } from '../lib/utils/price-calculator'
+import {
+  customerDiscountForPriceMode,
+  extractBasePrices,
+  resolveVehicleBasePrice,
+} from '../lib/utils/price-calculator'
 import {
   buildExchangePriceAffectingSignature,
   buildSinglePriceAffectingSignature,
@@ -63,8 +67,8 @@ import {
   extractManualSurcharges,
 } from '../lib/utils/manual-surcharge'
 import {
-  extractTowLevelServices,
-  excludeTowLevelServices,
+  extractTowLevelServicesFromBreakdown,
+  hydrateSelectedServicesFromBreakdown,
   mergeExchangeVehicleServicesIntoTowLevel,
 } from '../lib/utils/tow-service-surcharge'
 import { RoutePoint, type VehicleOnTruck } from '../components/tow-forms/routes'
@@ -1324,14 +1328,22 @@ export function useTowForm(
     if (!towDate || !towTime) return
 
     const manualAdj = parseFloat(manualAdjustmentPercent ?? '') || 0
+    // Must mirror useTowSave → prepareTowData: hub passes exchangeAddress as working dest.
+    const baselineWorkingDest = exchangePointSplit
+      ? workingVehicleDestinationAddress
+      : exchangeAddress
     editExchangePriceBaselineRef.current = buildExchangePriceAffectingSignature({
       exchangeRouteLayout: editExchangeRouteLayoutRef.current,
       workingVehicleSourceAddress: workingVehicleAddress,
-      workingVehicleDestinationAddress,
+      workingVehicleDestinationAddress: baselineWorkingDest,
       exchangePointAddress: exchangeAddress,
       defectiveDestinationAddress,
       stopsBeforeExchange,
       stopsAfterExchange,
+      chargeDeadheadReturn,
+      deadheadKm: chargeDeadheadReturn
+        ? (dropoffToBaseDistance?.distanceKm ?? 0)
+        : 0,
       workingVehicleType: workingVehicleType || undefined,
       defectiveVehicleType: defectiveVehicleType || undefined,
       workingManualWeight,
@@ -1364,10 +1376,13 @@ export function useTowForm(
     towTime,
     workingVehicleAddress,
     workingVehicleDestinationAddress,
+    exchangePointSplit,
     exchangeAddress,
     defectiveDestinationAddress,
     stopsBeforeExchange,
     stopsAfterExchange,
+    chargeDeadheadReturn,
+    dropoffToBaseDistance,
     workingVehicleType,
     defectiveVehicleType,
     workingManualWeight,
@@ -1412,14 +1427,19 @@ export function useTowForm(
         orderNotes: s.orderNotes,
       })),
       startFromBase,
+      chargeDeadheadReturn,
+      deadheadKm: chargeDeadheadReturn
+        ? (dropoffToBaseDistance?.distanceKm ?? 0)
+        : 0,
       vehicleType: vehicleType || undefined,
       manualWeight,
       priceMode,
       customerId: selectedCustomerId,
-      discountPercent:
-        editTowSnapshot?.price_breakdown?.discount_percent ??
-        selectedCustomerPricing?.discount_percent ??
-        0,
+      // Same rule as singlePriceSignatureFromSaveInput / prepareTowData save path.
+      discountPercent: customerDiscountForPriceMode(
+        priceMode,
+        selectedCustomerPricing?.discount_percent,
+      ),
       selectedLocationSurcharges,
       selectedServices,
       activeTimeSurchargeIds: activeTimeSurchargesList.map((s) => s.id),
@@ -1451,6 +1471,8 @@ export function useTowForm(
     routeStops,
     routeStopsDistanceSignature,
     startFromBase,
+    chargeDeadheadReturn,
+    dropoffToBaseDistance,
     vehicleType,
     manualWeight,
     priceMode,
@@ -1964,25 +1986,28 @@ export function useTowForm(
         }
         // Selected services from price breakdown (ad-hoc manual lines are handled separately so
         // they are not mistaken for catalog selections and dropped on re-save).
-        if (tow.price_breakdown?.service_surcharges?.length) {
-          const catalogLines = excludeTowLevelServices(
-            tow.price_breakdown.service_surcharges.filter(
-              (s: { is_ad_hoc?: boolean }) => s.is_ad_hoc !== true
-            )
-          )
+        // VAT-exempt catalog lines live in vat_exempt_surcharges — must hydrate into selections
+        // or they vanish from the modal and get blanked on re-save.
+        const storedTaxableServices = tow.price_breakdown?.service_surcharges
+        const storedExemptServices = tow.price_breakdown?.vat_exempt_surcharges
+        if (
+          (storedTaxableServices?.length ?? 0) > 0 ||
+          (storedExemptServices?.length ?? 0) > 0
+        ) {
           setSelectedServices(
-            catalogLines.map((s: { id: string; price: number; units?: number; amount: number }) => ({
-              id: s.id,
-              quantity: s.units,
-              manualPrice: s.units === undefined && s.amount !== s.price ? s.amount : undefined
-            }))
-          )
-          setTowServiceSurcharges(extractTowLevelServices(tow.price_breakdown.service_surcharges))
-          setManualSurcharges(
-            extractManualSurcharges(
-              tow.price_breakdown.service_surcharges,
-              tow.price_breakdown.vat_exempt_surcharges,
+            hydrateSelectedServicesFromBreakdown(
+              storedTaxableServices,
+              storedExemptServices,
             ),
+          )
+          setTowServiceSurcharges(
+            extractTowLevelServicesFromBreakdown(
+              storedTaxableServices,
+              storedExemptServices,
+            ),
+          )
+          setManualSurcharges(
+            extractManualSurcharges(storedTaxableServices, storedExemptServices),
           )
         } else {
           setSelectedServices([])
@@ -2179,8 +2204,12 @@ export function useTowForm(
 
           // Unified footer is the only catalog UI; fold legacy vehicle_role lines into
           // towServiceSurcharges so they still display and price. Clear per-vehicle lists.
+          // Include vat_exempt_surcharges so VAT-exempt catalog lines round-trip.
           setTowServiceSurcharges(
-            mergeExchangeVehicleServicesIntoTowLevel(tow.price_breakdown?.service_surcharges)
+            mergeExchangeVehicleServicesIntoTowLevel(
+              tow.price_breakdown?.service_surcharges,
+              tow.price_breakdown?.vat_exempt_surcharges,
+            ),
           )
           setWorkingSelectedServices([])
           setDefectiveSelectedServices([])
@@ -3908,6 +3937,26 @@ export function useTowForm(
     [isFromRequestLoad, requestOriginalValues],
   )
 
+  const [priceRecalcConfirm, setPriceRecalcConfirm] = useState<{
+    oldPrice: number
+    newPrice: number
+  } | null>(null)
+  const priceRecalcResolverRef = useRef<((accepted: boolean) => void) | null>(null)
+
+  const confirmPriceChange = useCallback((oldPrice: number, newPrice: number) => {
+    return new Promise<boolean>((resolve) => {
+      priceRecalcResolverRef.current = resolve
+      setPriceRecalcConfirm({ oldPrice, newPrice })
+    })
+  }, [])
+
+  const resolvePriceRecalcConfirm = useCallback((accepted: boolean) => {
+    const resolve = priceRecalcResolverRef.current
+    priceRecalcResolverRef.current = null
+    setPriceRecalcConfirm(null)
+    resolve?.(accepted)
+  }, [])
+
   const { handleSave } = useTowSave({
     companyId,
     user,
@@ -4041,6 +4090,7 @@ export function useTowForm(
     setSavedTowId,
     setShowAssignNowModal,
     beforeSaveTow: () => beforeSaveTowRef.current?.() ?? Promise.resolve(),
+    confirmPriceChange,
     fromRequestId: isFromRequestLoad ? fromRequestId : undefined,
     setSaveWarning,
   })
@@ -4295,5 +4345,7 @@ export function useTowForm(
     resetForm,
     copyFromCustomer,
     handleSave,
+    priceRecalcConfirm,
+    resolvePriceRecalcConfirm,
   }
 }

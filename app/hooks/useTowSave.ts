@@ -31,6 +31,10 @@ import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
 import { markCustomerTowRequestConverted } from '../lib/queries/customer-tow-requests'
 import { serializeDefects } from '../lib/constants/defects'
+import {
+  formatPriceRecalcConfirmMessage,
+  pricesMateriallyDiffer,
+} from '../lib/utils/price-change-confirm'
 
 const STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE =
   'גרירת ההמשך כבר שובצה — כדי לבטלה, פתח אותה ישירות'
@@ -200,6 +204,11 @@ interface UseTowSaveParams {
   setShowAssignNowModal: (v: boolean) => void
   /** Runs after validation passes, before persisting the tow. */
   beforeSaveTow?: () => Promise<void>
+  /**
+   * Edit only: when prepareTowData produces a different final price than the stored tow,
+   * ask the dispatcher to confirm before writing. Return true to save with the new price.
+   */
+  confirmPriceChange?: (oldPrice: number, newPrice: number) => Promise<boolean>
   /** When set, mark the portal request converted after a successful create. */
   fromRequestId?: string
   setSaveWarning?: (msg: string) => void
@@ -335,6 +344,7 @@ export function useTowSave(params: UseTowSaveParams) {
     setSavedTowId,
     setShowAssignNowModal,
     beforeSaveTow,
+    confirmPriceChange,
     fromRequestId,
     setSaveWarning,
   } = params
@@ -588,6 +598,23 @@ export function useTowSave(params: UseTowSaveParams) {
           ? (originalTow?.final_price ?? null)
           : undefined,
     })
+
+    if (editTowId && originalTow) {
+      const oldPrice = Number(originalTow.final_price) || 0
+      const newPrice = Number(towData.finalPrice) || 0
+      if (pricesMateriallyDiffer(oldPrice, newPrice)) {
+        setSaving(false)
+        const accepted = confirmPriceChange
+          ? await confirmPriceChange(oldPrice, newPrice)
+          : window.confirm(
+              `${formatPriceRecalcConfirmMessage(oldPrice, newPrice)}\n\nלשמור עם המחיר החדש?`,
+            )
+        if (!accepted) {
+          return
+        }
+        setSaving(true)
+      }
+    }
 
     const isStorageEligible =
       (towType === 'single' && dropoffToStorage) ||

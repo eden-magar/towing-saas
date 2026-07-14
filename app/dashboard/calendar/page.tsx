@@ -19,6 +19,10 @@ import { TowWithDetails } from '../../lib/queries/tows'
 import { DriverWithDetails, TruckWithDetails } from '../../lib/types'
 import { getTruckTypeLabel } from '../../lib/utils/truck-type-labels'
 import { recalculateTowPrice, updateTow } from '../../lib/queries/tows'
+import {
+  formatPriceRecalcConfirmMessage,
+  pricesMateriallyDiffer,
+} from '../../lib/utils/price-change-confirm'
 import { supabase } from '../../lib/supabase'
 import { 
   ChevronRight,
@@ -1194,14 +1198,11 @@ export default function CalendarPage() {
       if (priceMode === 'recommended' && draggedTow.price_breakdown) {
         // מחיר מומלץ - מחשבים מחדש
         const result = await recalculateTowPrice(draggedTow.id, newDate, companyId)
-        
-        const oldSurchargeIds = (draggedTow.price_breakdown?.time_surcharges ?? [])
-          .map((s: any) => s.id).sort().join(',')
-        const newSurchargeIds = (result?.newBreakdown?.time_surcharges ?? [])
-          .map((s: any) => s.id).sort().join(',')
-        const timeSurchargesChanged = oldSurchargeIds !== newSurchargeIds
 
-        if (result && timeSurchargesChanged) {
+        if (
+          result &&
+          pricesMateriallyDiffer(result.oldPrice, result.newPrice)
+        ) {
           setPriceUpdateInfo({
             towId: draggedTow.id,
             oldPrice: result.oldPrice,
@@ -2593,7 +2594,12 @@ const handleSkipPriceUpdate = () => {
                 <>
                   {/* מחיר מומלץ - הצגת מחיר חדש מחושב */}
                   <div className="text-center">
-                    <p className="text-gray-600 mb-4">המחיר עודכן בעקבות שינוי הזמן:</p>
+                    <p className="text-gray-600 mb-4">
+                      {formatPriceRecalcConfirmMessage(
+                        priceUpdateInfo.oldPrice,
+                        priceUpdateInfo.newPrice ?? 0,
+                      )}
+                    </p>
                     
                     <div className="flex items-center justify-center gap-4">
                       <div className="text-center">
@@ -2714,7 +2720,7 @@ const handleSkipPriceUpdate = () => {
                   disabled={updatingPrice}
                   className="flex-1 py-3 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors font-medium disabled:bg-gray-300"
                 >
-                  {updatingPrice ? 'מעדכן...' : `עדכן ל-₪${Number(priceUpdateInfo.newPrice).toFixed(2)}`}
+                  {updatingPrice ? 'מעדכן...' : 'שמור עם המחיר החדש'}
                 </button>
               ) : (
                 <button

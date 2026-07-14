@@ -25,7 +25,7 @@ import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-
 import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 import { persistVehicleCodesToCache } from '../vehicle-lookup'
 import { withSignedTowImageUrls } from './tow-images-storage'
-import { calculateTowPrice } from '../utils/price-calculator'
+import { calculateTowPrice, customerDiscountForPriceMode } from '../utils/price-calculator'
 
 // ==================== טיפוסים ====================
 
@@ -2609,7 +2609,10 @@ export async function recalculateTowPrice(
     locationSurcharges,
     serviceSurcharges,
     priceMode: 'recommended',
-    discountPercent: breakdown.discount_percent || 0,
+    discountPercent: customerDiscountForPriceMode(
+      tow.price_mode,
+      breakdown.discount_percent || 0,
+    ),
     manualAdjustmentPercent: manualSigned,
     vatPercent: vatRate,
   })

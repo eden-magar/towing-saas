@@ -6,7 +6,12 @@ import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { TimeInput, DateInput } from '../../../components/ui'
 import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
-import { calculateTowPrice, computeStoredPriceBreakdownTotals, type TowPriceResult } from '../../../lib/utils/price-calculator'
+import { calculateTowPrice, computeStoredPriceBreakdownTotals, customerDiscountForPriceMode, type TowPriceResult } from '../../../lib/utils/price-calculator'
+import {
+  formatPriceRecalcConfirmMessage,
+  pricesMateriallyDiffer,
+  roundMoney2,
+} from '../../../lib/utils/price-change-confirm'
 import {
   computeCancellationFee,
   computeCancellationFeeBreakdown,
@@ -27,10 +32,13 @@ import { SurchargesSection, SelectedService, TowTruckTypeSelector } from '../../
 import {
   extractManualSurcharges,
   manualSurchargesToBreakdown,
-  excludeManualSurcharges,
+  manualSurchargesToCalcInput,
   type ManualSurcharge,
 } from '../../../lib/utils/manual-surcharge'
-import { excludeTowLevelServices } from '../../../lib/utils/tow-service-surcharge'
+import {
+  extractTowLevelServicesFromBreakdown,
+  hydrateSelectedServicesFromBreakdown,
+} from '../../../lib/utils/tow-service-surcharge'
 import { 
   ArrowRight, 
   Edit2, 
@@ -254,8 +262,16 @@ export default function TowDetailsPage() {
   const [serviceSurchargesData, setServiceSurchargesData] = useState<ServiceSurcharge[]>([])
   const [editSelectedServices, setEditSelectedServices] = useState<SelectedService[]>([])
   const [editManualSurcharges, setEditManualSurcharges] = useState<ManualSurcharge[]>([])
-  // Tow-level catalog lines are preserved verbatim here (no editor on this quick-edit surface).
-  const [editTowLevelLines, setEditTowLevelLines] = useState<any[]>([])
+  // Tow-level catalog lines are preserved here (no editor on this quick-edit surface).
+  const [editTowLevelServices, setEditTowLevelServices] = useState<SelectedService[]>([])
+  const [pendingInlineSave, setPendingInlineSave] = useState<{
+    oldPrice: number
+    newPrice: number
+    finalPrice: number
+    priceBreakdown: any
+    scheduledAt: string
+    scheduledEndAt: string | null
+  } | null>(null)
 
   const [editScheduledDate, setEditScheduledDate] = useState('')
   const [editScheduledTime, setEditScheduledTime] = useState('')
@@ -741,29 +757,23 @@ export default function TowDetailsPage() {
         color: v.color || '',
         towReason: v.tow_reason || ''
       })) || [])
-      // Initialize selected services from price breakdown (catalog only; ad-hoc lines are separate)
-      if (tow.price_breakdown?.service_surcharges) {
-        const catalogLines = excludeTowLevelServices(
-          excludeManualSurcharges(tow.price_breakdown.service_surcharges)
+      // Initialize selected services from price breakdown (catalog only; ad-hoc lines are separate).
+      // VAT-exempt catalog lines live in vat_exempt_surcharges — must hydrate or they blank on save.
+      const storedTaxable = tow.price_breakdown?.service_surcharges
+      const storedExempt = tow.price_breakdown?.vat_exempt_surcharges
+      if ((storedTaxable?.length ?? 0) > 0 || (storedExempt?.length ?? 0) > 0) {
+        setEditSelectedServices(
+          hydrateSelectedServicesFromBreakdown(storedTaxable, storedExempt),
         )
-        const services: SelectedService[] = catalogLines.map((s: any) => ({
-          id: s.id,
-          quantity: s.units || undefined,
-          manualPrice: s.price_type === 'manual' ? s.amount : undefined
-        }))
-        setEditSelectedServices(services)
-        setEditTowLevelLines(
-          tow.price_breakdown.service_surcharges.filter((s: any) => s.is_tow_level === true)
+        setEditTowLevelServices(
+          extractTowLevelServicesFromBreakdown(storedTaxable, storedExempt),
         )
         setEditManualSurcharges(
-          extractManualSurcharges(
-            tow.price_breakdown.service_surcharges,
-            tow.price_breakdown.vat_exempt_surcharges,
-          ),
+          extractManualSurcharges(storedTaxable, storedExempt),
         )
       } else {
         setEditSelectedServices([])
-        setEditTowLevelLines([])
+        setEditTowLevelServices([])
         setEditManualSurcharges([])
       }
 
@@ -775,121 +785,256 @@ export default function TowDetailsPage() {
     setIsEditing(false)
   }
 
-  const handleSaveChanges = async () => {
+  const commitInlineSave = async (payload: {
+    finalPrice: number
+    priceBreakdown: any
+    scheduledAt: string
+    scheduledEndAt: string | null
+  }) => {
     if (!tow) return
-    
-    if (editVehicles.length === 0) {
-      alert('חייב להיות לפחות רכב אחד בגרירה')
-      return
-    }
-
-    // יצירת תאריך חדש
-    const newScheduledAt = new Date(`${editScheduledDate}T${editScheduledTime}:00`)
-    const newScheduledEndAt =
-      editScheduledEndDate && editScheduledEndTime
-        ? new Date(`${editScheduledEndDate}T${editScheduledEndTime}:00`).toISOString()
-        : null
-
-    // חישוב מחדש של תוספות שירות
-    let newPriceBreakdown = tow.price_breakdown ? { ...tow.price_breakdown } : null
-    let newFinalPrice = editFinalPrice
-
-    if (newPriceBreakdown) {
-      // חישוב תוספות שירות חדשות
-      const catalogServiceSurcharges = editSelectedServices.map(selected => {
-        const service = serviceSurchargesData.find(s => s.id === selected.id)
-        if (!service) return null
-
-        let amount = 0
-        let units: number | undefined = undefined
-
-        if (service.price_type === 'manual') {
-          amount = selected.manualPrice || 0
-        } else if (service.price_type === 'per_unit') {
-          units = selected.quantity || 1
-          amount = service.price * units
-        } else {
-          amount = service.price
-        }
-
-        return {
-          id: service.id,
-          label: service.label,
-          price: service.price,
-          price_type: service.price_type,
-          units,
-          amount
-        }
-      }).filter((s): s is NonNullable<typeof s> => s !== null && s.amount > 0)
-
-      const newServiceSurcharges = [
-        ...catalogServiceSurcharges,
-        ...editTowLevelLines,
-        ...manualSurchargesToBreakdown(editManualSurcharges),
-      ]
-
-      // עדכון ה-breakdown
-      newPriceBreakdown.service_surcharges = newServiceSurcharges
-
-      // חישוב מחדש של הסכומים
-      const baseSubtotal = newPriceBreakdown.base_price + newPriceBreakdown.distance_price
-      const timeAmount = newPriceBreakdown.time_surcharges.reduce((max, s) => Math.max(max, s.amount), 0)
-      const locationAmount = newPriceBreakdown.location_surcharges.reduce((sum, s) => sum + s.amount, 0)
-      const servicesAmount = newServiceSurcharges.reduce((sum, s) => sum + s.amount, 0)
-
-      const beforeDiscount = baseSubtotal + timeAmount + locationAmount + servicesAmount
-      const discountPct = Math.min(100, Math.max(0, newPriceBreakdown.discount_percent || 0))
-      const discountAmount = Math.min(
-        beforeDiscount,
-        beforeDiscount * (discountPct / 100)
-      )
-      const beforeVat = Math.max(0, beforeDiscount - discountAmount)
-      const vatAmount = Math.max(0, beforeVat * 0.18)
-      const total = Math.max(0, beforeVat + vatAmount)
-
-      newPriceBreakdown.subtotal = beforeDiscount
-      newPriceBreakdown.discount_amount = discountAmount
-      newPriceBreakdown.vat_amount = vatAmount
-      newPriceBreakdown.total = total
-
-      newFinalPrice = total
-    }
-
     setSaving(true)
     try {
       await updateTow({
         towId: tow.id,
         customerId: editCustomerId,
         notes: editNotes || null,
-        finalPrice: newFinalPrice || null,
-        scheduledAt: newScheduledAt.toISOString(),
-        scheduledEndAt: newScheduledEndAt,
-        priceBreakdown: newPriceBreakdown,
+        finalPrice: payload.finalPrice || null,
+        scheduledAt: payload.scheduledAt,
+        scheduledEndAt: payload.scheduledEndAt,
+        priceBreakdown: payload.priceBreakdown,
         requiredTruckTypes: editRequiredTruckTypes,
-        vehicles: editVehicles.map(v => ({
+        vehicles: editVehicles.map((v) => ({
           plateNumber: v.plateNumber,
           manufacturer: v.manufacturer || undefined,
           model: v.model || undefined,
           year: v.year || undefined,
           vehicleType: v.vehicleType as any || undefined,
           color: v.color || undefined,
-          towReason: v.towReason || undefined
+          towReason: v.towReason || undefined,
         })),
-        legs: [{
-          legType: 'pickup',
-          fromAddress: editFromAddress,
-          toAddress: editToAddress
-        }]
+        legs: [
+          {
+            legType: 'pickup',
+            fromAddress: editFromAddress,
+            toAddress: editToAddress,
+          },
+        ],
       })
       await refreshTow()
       if (changeLogsLoaded) void loadChangeLogs(true)
       setIsEditing(false)
+      setPendingInlineSave(null)
     } catch (err) {
       console.error('Error saving changes:', err)
       alert('שגיאה בשמירת השינויים')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSaveChanges = async () => {
+    if (!tow) return
+
+    if (editVehicles.length === 0) {
+      alert('חייב להיות לפחות רכב אחד בגרירה')
+      return
+    }
+
+    const newScheduledAt = new Date(`${editScheduledDate}T${editScheduledTime}:00`)
+    const newScheduledEndAt =
+      editScheduledEndDate && editScheduledEndTime
+        ? new Date(`${editScheduledEndDate}T${editScheduledEndTime}:00`).toISOString()
+        : null
+
+    let newPriceBreakdown = tow.price_breakdown ? { ...tow.price_breakdown } : null
+    let newFinalPrice = editFinalPrice
+
+    if (newPriceBreakdown) {
+      const buildCatalogLines = (
+        selected: SelectedService[],
+        opts?: { isTowLevel?: boolean },
+      ) =>
+        selected
+          .map((selectedRow) => {
+            const service = serviceSurchargesData.find((s) => s.id === selectedRow.id)
+            if (!service) return null
+
+            let amount = 0
+            let units: number | undefined = undefined
+
+            if (service.price_type === 'manual') {
+              amount = selectedRow.manualPrice || 0
+            } else if (service.price_type === 'per_unit') {
+              units = selectedRow.quantity || 1
+              amount = service.price * units
+            } else {
+              amount = service.price
+            }
+
+            if (!(amount > 0)) return null
+
+            return {
+              id: service.id,
+              label: service.label,
+              price: service.price,
+              price_type: service.price_type,
+              units,
+              amount,
+              ...(opts?.isTowLevel ? { is_tow_level: true as const } : {}),
+              ...(service.is_vat_exempt ? { is_vat_exempt: true as const } : {}),
+            }
+          })
+          .filter((s): s is NonNullable<typeof s> => s !== null)
+
+      const catalogLines = [
+        ...buildCatalogLines(editSelectedServices),
+        ...buildCatalogLines(editTowLevelServices, { isTowLevel: true }),
+      ]
+      const manualLines = manualSurchargesToBreakdown(editManualSurcharges)
+      const allLines = [...catalogLines, ...manualLines]
+      const taxableLines = allLines.filter((s) => !s.is_vat_exempt)
+      const exemptLines = allLines
+        .filter((s) => s.is_vat_exempt)
+        .map(({ is_vat_exempt: _flag, ...rest }) => rest)
+
+      newPriceBreakdown.service_surcharges = taxableLines
+      newPriceBreakdown.vat_exempt_surcharges = exemptLines
+
+      const mode = String(tow.price_mode || '')
+      const isRecommendedStack =
+        mode === 'recommended' || mode === 'recommended_customer'
+
+      if (isRecommendedStack && basePriceList) {
+        const deadheadKm = newPriceBreakdown.deadhead_km || 0
+        const deadheadPrice = newPriceBreakdown.deadhead_price || 0
+        const manualSigned =
+          (newPriceBreakdown.manual_adjustment_percent ?? 0) > 0
+            ? newPriceBreakdown.manual_adjustment_type === 'markup'
+              ? newPriceBreakdown.manual_adjustment_percent!
+              : -(newPriceBreakdown.manual_adjustment_percent!)
+            : 0
+
+        const result = calculateTowPrice({
+          priceList: {
+            base_prices: {
+              private: basePriceList.base_price_private || 0,
+              motorcycle: basePriceList.base_price_motorcycle || 0,
+              heavy: basePriceList.base_price_heavy || 0,
+              machinery: basePriceList.base_price_machinery || 0,
+              personal_import: basePriceList.base_price_private || 0,
+            },
+            price_per_km: basePriceList.price_per_km || 12,
+            minimum_price: basePriceList.minimum_price || 0,
+          },
+          vehicleType: (newPriceBreakdown.vehicle_type as any) || 'private',
+          distanceKm: newPriceBreakdown.distance_km || 0,
+          deadheadKm,
+          deadheadRate:
+            deadheadKm > 0 && deadheadPrice > 0
+              ? deadheadPrice / deadheadKm
+              : (basePriceList as any)?.price_per_km_deadhead ?? 0,
+          basePriceOverride: newPriceBreakdown.base_price,
+          timeSurcharges: timeSurchargesData,
+          towDate: editScheduledDate,
+          towTime: editScheduledTime,
+          isHoliday: false,
+          activeTimeSurchargeIds: (newPriceBreakdown.time_surcharges || [])
+            .map((s: { id?: string }) => s.id)
+            .filter((id: string | undefined): id is string => !!id),
+          hasManualTimeSurchargeOverride: true,
+          locationSurcharges: (newPriceBreakdown.location_surcharges || []).map(
+            (s: { id: string; label: string; percent: number }) => ({
+              id: s.id,
+              label: s.label,
+              percent: s.percent,
+            }),
+          ),
+          serviceSurcharges: [
+            ...catalogLines.map((s) => ({
+              amount: s.amount,
+              label: s.label,
+              ...(s.is_vat_exempt ? { vatExempt: true as const } : {}),
+            })),
+            ...manualSurchargesToCalcInput(editManualSurcharges),
+          ],
+          priceMode: 'recommended',
+          discountPercent: customerDiscountForPriceMode(
+            tow.price_mode,
+            newPriceBreakdown.discount_percent,
+          ),
+          manualAdjustmentPercent: manualSigned,
+          vatPercent: vatRate,
+        })
+
+        const maxTimePercent = result.maxTimeSurchargePercent
+        newPriceBreakdown = {
+          ...newPriceBreakdown,
+          base_price: roundMoney2(result.basePrice),
+          distance_price: roundMoney2(result.distancePrice),
+          deadhead_km: result.deadheadKm,
+          deadhead_price: roundMoney2(result.deadheadPrice),
+          time_surcharges:
+            maxTimePercent > 0
+              ? [
+                  {
+                    id:
+                      (newPriceBreakdown.time_surcharges?.[0] as { id?: string })?.id ||
+                      '',
+                    label: result.maxTimeSurchargeLabel || 'תוספת זמן',
+                    percent: maxTimePercent,
+                    amount: roundMoney2(result.timeSurchargeAmount),
+                  },
+                ]
+              : [],
+          location_surcharges: result.locationSurchargeLines.map((line) => {
+            const existing = (newPriceBreakdown!.location_surcharges || []).find(
+              (s: { id?: string; percent?: number }) =>
+                s.id === line.id || s.percent === line.percent,
+            )
+            return {
+              id: line.id || existing?.id || '',
+              label:
+                line.label || existing?.label || `תוספת מיקום (${line.percent}%)`,
+              percent: line.percent,
+              amount: roundMoney2(line.amount),
+            }
+          }),
+          service_surcharges: taxableLines,
+          vat_exempt_surcharges: exemptLines,
+          subtotal: roundMoney2(result.beforeVat),
+          discount_percent: customerDiscountForPriceMode(
+            tow.price_mode,
+            newPriceBreakdown.discount_percent,
+          ),
+          discount_amount: roundMoney2(result.discountAmount),
+          vat_amount: roundMoney2(result.vatAmount),
+          total: roundMoney2(result.total),
+        }
+        newFinalPrice = roundMoney2(result.total)
+      }
+    }
+
+    const oldPrice = Number(tow.final_price) || 0
+    const scheduledAtIso = newScheduledAt.toISOString()
+
+    if (pricesMateriallyDiffer(oldPrice, newFinalPrice)) {
+      setPendingInlineSave({
+        oldPrice,
+        newPrice: newFinalPrice,
+        finalPrice: newFinalPrice,
+        priceBreakdown: newPriceBreakdown,
+        scheduledAt: scheduledAtIso,
+        scheduledEndAt: newScheduledEndAt,
+      })
+      return
+    }
+
+    await commitInlineSave({
+      finalPrice: newFinalPrice,
+      priceBreakdown: newPriceBreakdown,
+      scheduledAt: scheduledAtIso,
+      scheduledEndAt: newScheduledEndAt,
+    })
   }
 
   const addVehicle = () => {
@@ -989,16 +1134,19 @@ export default function TowDetailsPage() {
         locationSurcharges,
         serviceSurcharges,
         priceMode: 'recommended',
-        discountPercent: tow.price_breakdown.discount_percent || 0,
+        discountPercent: customerDiscountForPriceMode(
+          tow.price_mode,
+          tow.price_breakdown.discount_percent || 0,
+        ),
         manualAdjustmentPercent: manualSigned,
-        vatPercent: 0.18,
+        vatPercent: vatRate,
         ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
       })
 
-      const oldPrice = tow.price_breakdown.total
+      const oldPrice = tow.final_price ?? tow.price_breakdown.total
       const newPrice = newResult.total
 
-      if (Math.abs(oldPrice - newPrice) > 1) {
+      if (pricesMateriallyDiffer(oldPrice, newPrice)) {
         setPriceChangeModal({
           oldPrice,
           newPrice,
@@ -3878,22 +4026,62 @@ export default function TowDetailsPage() {
         </div>
       )}
 
+      {pendingInlineSave && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ width: '420px', maxWidth: '95vw' }}>
+            <div className="px-5 py-4 bg-amber-500 text-white">
+              <h3 className="font-bold text-lg">עדכון מחיר</h3>
+            </div>
+            <div className="p-5">
+              <p className="text-center text-lg font-medium text-gray-800">
+                {formatPriceRecalcConfirmMessage(
+                  pendingInlineSave.oldPrice,
+                  pendingInlineSave.newPrice,
+                )}
+              </p>
+            </div>
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setPendingInlineSave(null)}
+                disabled={saving}
+                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  commitInlineSave({
+                    finalPrice: pendingInlineSave.finalPrice,
+                    priceBreakdown: pendingInlineSave.priceBreakdown,
+                    scheduledAt: pendingInlineSave.scheduledAt,
+                    scheduledEndAt: pendingInlineSave.scheduledEndAt,
+                  })
+                }
+                disabled={saving}
+                className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600"
+              >
+                שמור עם המחיר החדש
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {priceChangeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl overflow-hidden" style={{ width: '420px', maxWidth: '95vw' }}>
             <div className="px-5 py-4 bg-amber-500 text-white">
-              <h3 className="font-bold text-lg">המחיר השתנה</h3>
-              <p className="text-sm text-amber-100 mt-1">השעה החדשה משפיעה על המחיר</p>
+              <h3 className="font-bold text-lg">עדכון מחיר</h3>
             </div>
             <div className="p-5 space-y-4">
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                <span className="text-sm text-gray-500">מחיר ישן</span>
-                <span className="font-bold text-gray-400 line-through">₪{Number(priceChangeModal.oldPrice).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl border border-amber-200">
-                <span className="text-sm text-amber-700">מחיר חדש</span>
-                <span className="font-bold text-amber-700 text-lg">₪{Number(priceChangeModal.newPrice).toFixed(2)}</span>
-              </div>
+              <p className="text-center text-lg font-medium text-gray-800">
+                {formatPriceRecalcConfirmMessage(
+                  priceChangeModal.oldPrice,
+                  priceChangeModal.newPrice,
+                )}
+              </p>
               <div className="text-sm space-y-1 text-gray-600">
                 {priceChangeModal.newBreakdown.filter(i => i.amount !== 0).map((item, idx) => (
                   <div key={idx} className="flex justify-between">
@@ -3905,18 +4093,20 @@ export default function TowDetailsPage() {
             </div>
             <div className="flex gap-3 px-5 pb-5">
               <button
-                onClick={() => doAssign(false)}
+                onClick={() => {
+                  setPriceChangeModal(null)
+                }}
                 disabled={assigning}
                 className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50"
               >
-                שמור מחיר ישן
+                ביטול
               </button>
               <button
                 onClick={() => doAssign(true)}
                 disabled={assigning}
                 className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-medium hover:bg-amber-600"
               >
-                עדכן למחיר חדש
+                שמור עם המחיר החדש
               </button>
             </div>
           </div>
