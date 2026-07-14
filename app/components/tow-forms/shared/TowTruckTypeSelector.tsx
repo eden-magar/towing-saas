@@ -26,6 +26,47 @@ export const TRUCK_TYPES = [
   { id: 'carrier', label: 'מובילית', icon: '🚚' },
 ] as const
 
+/**
+ * Waiting-state stand-in for סוג גרר before the vehicle is identified.
+ * Not a button — copy must explain why (no hover tooltips).
+ */
+export function TruckTypeWaitingPlaceholder({ compact }: { compact?: boolean } = {}) {
+  const fromContext = useVehicleActionsCompact()
+  const isCompact = compact ?? fromContext
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={
+        isCompact
+          ? 'inline-flex max-w-[11rem] flex-col justify-center gap-0.5 rounded-lg border border-dashed border-amber-300/80 bg-amber-50/80 px-2 py-1 text-right'
+          : 'inline-flex min-h-[44px] max-w-[14rem] flex-col justify-center gap-0.5 rounded-xl border border-dashed border-amber-300/80 bg-amber-50/80 px-3 py-1.5 text-right'
+      }
+    >
+      <span
+        className={
+          isCompact
+            ? 'text-[11px] font-medium leading-tight text-amber-900'
+            : 'text-sm font-medium leading-tight text-amber-900'
+        }
+      >
+        סוג גרר · נדרשים פרטי רכב
+      </span>
+      <span
+        className={
+          isCompact
+            ? 'text-[10px] leading-snug text-amber-800/80'
+            : 'text-xs leading-snug text-amber-800/85'
+        }
+      >
+        {isCompact
+          ? 'אחרי רישוי / ידני / אחסנה'
+          : 'זמין אחרי בדיקת רישוי, הזנה ידנית או בחירה מאחסנה'}
+      </span>
+    </div>
+  )
+}
+
 /** Neutral vs accent tile classes — sibling of fault grid tiles. */
 export function truckTypeOptionClassName(selected: boolean): string {
   return selected

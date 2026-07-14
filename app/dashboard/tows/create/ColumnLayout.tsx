@@ -45,7 +45,9 @@ import {
   SurchargesSection,
   TowTruckTypeSelector,
   RequiredTruckTypeMissingModal,
+  TowSaveBlockingModal,
   isRequiredTruckTypeError,
+  isSaveBlockingValidationError,
 } from '../../../components/tow-forms/shared'
 import { isPickableStoredVehicle } from '../../../lib/queries/storage'
 import { TimeInStoragePill } from '../../../components/storage/TimeInStoragePill'
@@ -275,7 +277,7 @@ export function ColumnLayout({
       className="min-h-full bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8"
       dir="rtl"
     >
-      {form.error && !isRequiredTruckTypeError(form.error) && (
+      {form.error && !isSaveBlockingValidationError(form.error) && (
         <div className="fixed top-4 left-4 right-4 z-50 rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
           {form.error}
         </div>
@@ -289,6 +291,17 @@ export function ColumnLayout({
         onChooseTruckType={() => {
           form.setTruckTypeError(false)
           setTruckTypePickerOpen(true)
+        }}
+      />
+      <TowSaveBlockingModal
+        open={
+          isSaveBlockingValidationError(form.error) &&
+          !isRequiredTruckTypeError(form.error)
+        }
+        message={form.error || ''}
+        onClose={() => {
+          form.setError('')
+          form.setTruckTypeError(false)
         }}
       />
       <TowTruckTypeSelector

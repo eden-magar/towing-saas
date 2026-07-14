@@ -35,9 +35,12 @@ import {
   formatPriceRecalcConfirmMessage,
   pricesMateriallyDiffer,
 } from '../lib/utils/price-change-confirm'
-
-const STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE =
-  'גרירת ההמשך כבר שובצה — כדי לבטלה, פתח אותה ישירות'
+import {
+  MISSING_ROUTE_ADDRESSES_MESSAGE,
+  MISSING_STORAGE_PLATE_MESSAGE,
+  REQUIRED_TRUCK_TYPE_MESSAGE,
+  STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
+} from '../lib/utils/tow-save-blocking'
 
 const STORAGE_FOLLOW_UP_CANCELLED_ON_EDIT = 'בוטל מעריכת גרירת אב'
 
@@ -360,7 +363,7 @@ export function useTowSave(params: UseTowSaveParams) {
   // Validation - truck type is required
   if (requiredTruckTypes.length === 0) {
     setTruckTypeError(true)
-    setError('יש לבחור סוג גרר נדרש')
+    setError(REQUIRED_TRUCK_TYPE_MESSAGE)
     truckTypeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     return
   }
@@ -368,14 +371,14 @@ export function useTowSave(params: UseTowSaveParams) {
 
   // Validation - vehicle plate required for storage dropoff
   if (dropoffToStorage && !vehiclePlate) {
-    setError('יש להזין מספר לוחית לרכב המיועד לאחסנה')
+    setError(MISSING_STORAGE_PLATE_MESSAGE)
     return
   }
   
   // Validation for single tow
   if (towType === 'single') {
     if (requiredTruckTypes.length === 0) {
-      setError('יש לבחור סוג גרר נדרש')
+      setError(REQUIRED_TRUCK_TYPE_MESSAGE)
       return
     }
     // Block saving a single tow with no usable pickup/dropoff address —
@@ -386,7 +389,7 @@ export function useTowSave(params: UseTowSaveParams) {
       !pickupStop?.address?.address?.trim() ||
       !dropoffStop?.address?.address?.trim()
     ) {
-      setError('יש להזין כתובת מוצא ויעד לגרירה')
+      setError(MISSING_ROUTE_ADDRESSES_MESSAGE)
       return
     }
   }

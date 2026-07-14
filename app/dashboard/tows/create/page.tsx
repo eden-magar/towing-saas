@@ -62,14 +62,18 @@ import {
   VehicleCoreLookupChips,
   DefectSelector,
   TowTruckTypeSelector,
+  TruckTypeWaitingPlaceholder,
   TRUCK_TYPES,
   truckTypeOptionClassName,
   RequiredTruckTypeMissingModal,
+  TowSaveBlockingModal,
   isRequiredTruckTypeError,
+  isSaveBlockingValidationError,
   VehicleCardActions,
   vehicleActionTriggerClass,
   ManualVehicleEntryTrigger,
 } from '../../../components/tow-forms/shared'
+import { REQUIRED_TRUCK_TYPE_MESSAGE } from '../../../lib/utils/tow-save-blocking'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { StorageFollowUpSection } from '../../../components/tow-forms/StorageFollowUpSection'
@@ -1925,7 +1929,7 @@ function CreateTowForm({
     if (!companyId || !user || !towType) return
     if (requiredTruckTypes.length === 0) {
       setTruckTypeError(true)
-      setError('יש לבחור סוג גרר נדרש')
+      setError(REQUIRED_TRUCK_TYPE_MESSAGE)
       truckTypeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
@@ -2465,7 +2469,7 @@ function CreateTowForm({
 
   return (
     <div className="min-h-full bg-gt-canvas -m-4 sm:-m-6 lg:-m-8 p-4 sm:p-6 lg:p-8" dir="rtl">
-      {error && !isRequiredTruckTypeError(error) && (
+      {error && !isSaveBlockingValidationError(error) && (
         <div className="fixed top-4 left-4 right-4 z-50 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl">
           {error}
         </div>
@@ -2479,6 +2483,16 @@ function CreateTowForm({
         onChooseTruckType={() => {
           setTruckTypeError(false)
           setTruckTypePickerOpen(true)
+        }}
+      />
+      <TowSaveBlockingModal
+        open={
+          isSaveBlockingValidationError(error) && !isRequiredTruckTypeError(error)
+        }
+        message={error || ''}
+        onClose={() => {
+          setError('')
+          setTruckTypeError(false)
         }}
       />
       {/* Host picker for validation CTA — modal portaled; trigger hidden. */}
@@ -2782,12 +2796,7 @@ function CreateTowForm({
                                   }
                                 />
                                 {vehicleData === null && !vehicleLookupNotFound ? (
-                                  <span
-                                    title="סוג הגרר יופיע לאחר בדיקת רישוי"
-                                    className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-xl border border-dashed border-gray-200 px-3 text-sm text-gray-400"
-                                  >
-                                    סוג גרר
-                                  </span>
+                                  <TruckTypeWaitingPlaceholder />
                                 ) : (
                                   <div
                                     ref={truckTypeSectionRef}
@@ -3425,12 +3434,7 @@ function CreateTowForm({
                                   }}
                                 />
                               ) : (
-                                <span
-                                  title="סוג הגרר יופיע לאחר בדיקת רישוי"
-                                  className="inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-lg border border-dashed border-gray-200 px-2 text-xs text-gray-400"
-                                >
-                                  סוג גרר
-                                </span>
+                                <TruckTypeWaitingPlaceholder />
                               )}
                             </div>
                           </VehicleCardActions>

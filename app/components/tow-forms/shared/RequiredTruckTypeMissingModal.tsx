@@ -1,14 +1,21 @@
 'use client'
 
 import { AlertTriangle } from 'lucide-react'
+import {
+  REQUIRED_TRUCK_TYPE_MESSAGE,
+  isRequiredTruckTypeError,
+  isSaveBlockingValidationError,
+} from '../../../lib/utils/tow-save-blocking'
 import { SelectorModalShell } from './SelectorModalShell'
 
-/** Same string `useTowSave` / quote-save set via `setError` for missing truck type. */
-export const REQUIRED_TRUCK_TYPE_MESSAGE = 'יש לבחור סוג גרר נדרש'
-
-export function isRequiredTruckTypeError(message: string | null | undefined): boolean {
-  return message === REQUIRED_TRUCK_TYPE_MESSAGE
-}
+export {
+  REQUIRED_TRUCK_TYPE_MESSAGE,
+  MISSING_ROUTE_ADDRESSES_MESSAGE,
+  MISSING_STORAGE_PLATE_MESSAGE,
+  STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
+  isRequiredTruckTypeError,
+  isSaveBlockingValidationError,
+} from '../../../lib/utils/tow-save-blocking'
 
 interface RequiredTruckTypeMissingModalProps {
   open: boolean
@@ -19,11 +26,10 @@ interface RequiredTruckTypeMissingModalProps {
 
 /**
  * Centered modal when save is blocked for missing required truck type.
- * Replaces the fixed top error strip for this message only.
  *
  * Exchange: save only requires `requiredTruckTypes` (the primary / working-vehicle
  * picker). Defective “גרר נוסף” is a separate optional path — this CTA opens the
- * primary picker. If they still lack something else, the next save attempt surfaces it.
+ * primary picker.
  */
 export function RequiredTruckTypeMissingModal({
   open,
@@ -54,8 +60,6 @@ export function RequiredTruckTypeMissingModal({
           <button
             type="button"
             onClick={() => {
-              // Open picker first, then dismiss this dialog — same open state the
-              // vehicle-card / host TowTruckTypeSelector listens to.
               onChooseTruckType()
               onClose()
             }}
@@ -67,7 +71,58 @@ export function RequiredTruckTypeMissingModal({
       }
     >
       <div className="p-4 text-sm text-gt-text-secondary" dir="rtl">
-        <p>יש לבחור לפחות סוג גרר אחד לפני שמירת הגרירה. לחצו «בחר סוג גרר» לבחירה מהרשימה.</p>
+        <p>
+          {REQUIRED_TRUCK_TYPE_MESSAGE}. לחצו «בחר סוג גרר» לבחירה מהרשימה.
+        </p>
+      </div>
+    </SelectorModalShell>
+  )
+}
+
+interface TowSaveBlockingModalProps {
+  open: boolean
+  message: string
+  onClose: () => void
+}
+
+/**
+ * Generic centered modal for other save-blocking validation errors
+ * (missing route addresses, storage plate, etc.). Truck-type uses
+ * {@link RequiredTruckTypeMissingModal} instead (has a picker CTA).
+ */
+export function TowSaveBlockingModal({
+  open,
+  message,
+  onClose,
+}: TowSaveBlockingModalProps) {
+  // Truck-type has its own CTA modal — never double-render.
+  if (isRequiredTruckTypeError(message)) return null
+  if (!isSaveBlockingValidationError(message)) return null
+
+  return (
+    <SelectorModalShell
+      open={open}
+      onClose={onClose}
+      tone="danger"
+      title={
+        <span className="inline-flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden />
+          לא ניתן לשמור
+        </span>
+      }
+      panelClassName="max-w-md"
+      footer={
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full min-h-[44px] rounded-xl bg-gt-brand text-sm font-medium text-white transition-colors hover:bg-gt-brand-hover"
+        >
+          הבנתי
+        </button>
+      }
+    >
+      <div className="p-4 text-sm text-gt-text-secondary" dir="rtl">
+        <p>{message}</p>
       </div>
     </SelectorModalShell>
   )

@@ -14,6 +14,7 @@ import {
   isCustomTowEditWipeBlocked,
   prepareTowData,
 } from '../lib/utils/tow-save-handler'
+import { REQUIRED_TRUCK_TYPE_MESSAGE } from '../lib/utils/tow-save-blocking'
 import { canApproveQuote, isClosedTowStatus } from '../lib/utils/can-edit-closed-tow'
 
 type Form = ReturnType<typeof useTowForm>
@@ -87,7 +88,7 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
     if (!form.companyId || !form.user || !form.towType) return
     if (form.requiredTruckTypes.length === 0) {
       form.setTruckTypeError(true)
-      form.setError('יש לבחור סוג גרר נדרש')
+      form.setError(REQUIRED_TRUCK_TYPE_MESSAGE)
       form.truckTypeSectionRef.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',

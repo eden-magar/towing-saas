@@ -11,7 +11,9 @@ import { FormCard } from '../ui'
 import { FlashNotice, useFlashNotice } from '../ui/FlashNotice'
 import {
   RequiredTruckTypeMissingModal,
+  TowSaveBlockingModal,
   isRequiredTruckTypeError,
+  isSaveBlockingValidationError,
   TowTruckTypeSelector,
 } from '../tow-forms/shared'
 import { SectionTowType } from './sections/SectionTowType'
@@ -86,7 +88,7 @@ export function TowCreateWizard() {
 
       <FlashNotice message={notice} />
 
-      {form.error && !isRequiredTruckTypeError(form.error) && (
+      {form.error && !isSaveBlockingValidationError(form.error) && (
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {form.error}
         </div>
@@ -100,6 +102,17 @@ export function TowCreateWizard() {
         onChooseTruckType={() => {
           form.setTruckTypeError(false)
           setTruckTypePickerOpen(true)
+        }}
+      />
+      <TowSaveBlockingModal
+        open={
+          isSaveBlockingValidationError(form.error) &&
+          !isRequiredTruckTypeError(form.error)
+        }
+        message={form.error || ''}
+        onClose={() => {
+          form.setError('')
+          form.setTruckTypeError(false)
         }}
       />
       <TowTruckTypeSelector
