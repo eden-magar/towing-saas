@@ -10,27 +10,26 @@ export function useVehicleActionsCompact() {
 
 /**
  * Vehicle actions group: מאחסנה · ידני · תקלות · סוג גרר (RTL right→left).
- * Default: one row on desktop, wrap on mobile.
- * `compact` — smaller triggers for half-width exchange columns (wrap only on mobile).
+ * Always wraps — never horizontal-scrolls — so grown triggers (e.g. תקלות with
+ * selections) cannot push siblings outside FormSubcard/FormCard overflow-hidden
+ * and make them unclickable.
+ * `compact` — smaller triggers for half-width exchange columns.
  */
 export function VehicleCardActions({
   children,
   className = '',
-  wrap = false,
+  wrap: _wrap = false,
   compact = false,
 }: {
   children: ReactNode
   className?: string
-  /** Always wrap (legacy). Prefer `compact` for exchange half-width columns. */
+  /** @deprecated Wrapping is always on; kept for call-site compatibility. */
   wrap?: boolean
-  /** Compact triggers; one row on desktop, wrap only on narrow viewports. */
+  /** Compact triggers for half-width exchange columns. */
   compact?: boolean
 }) {
-  const layoutClass = compact
-    ? 'flex-nowrap gap-1.5 overflow-x-auto max-sm:flex-wrap sm:overflow-visible'
-    : wrap
-      ? 'flex-wrap gap-2'
-      : 'flex-nowrap gap-2 overflow-x-auto max-sm:flex-wrap sm:overflow-visible'
+  void _wrap
+  const layoutClass = compact ? 'flex-wrap gap-1.5' : 'flex-wrap gap-2'
 
   return (
     <VehicleActionsCompactContext.Provider value={compact}>

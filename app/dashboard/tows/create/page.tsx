@@ -2393,6 +2393,14 @@ function CreateTowForm({
   const lockedOpacity = quoteApproved ? 1 : 0.35
   const lockedPointer = quoteApproved ? 'auto' : 'none'
 
+  // Single-tow truck-type gate: "do we have a vehicle?" (not "did lookup succeed?").
+  // vehicleLookupNotFound doubles as the manual-entry path flag.
+  const hasSingleVehicleDetails =
+    vehicleData !== null ||
+    vehicleLookupNotFound ||
+    Boolean(selectedStoredVehicleId) ||
+    Boolean(vehiclePlate.trim())
+
   const handleQuoteApproveClick = useCallback(async () => {
     if (editTowId && loadedTowStatus === 'quote') {
       if (!canApproveQuote(user?.role)) {
@@ -2795,7 +2803,7 @@ function CreateTowForm({
                                       : undefined
                                   }
                                 />
-                                {vehicleData === null && !vehicleLookupNotFound ? (
+                                {!hasSingleVehicleDetails ? (
                                   <TruckTypeWaitingPlaceholder />
                                 ) : (
                                   <div

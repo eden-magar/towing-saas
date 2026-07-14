@@ -39,15 +39,15 @@ export function TruckTypeWaitingPlaceholder({ compact }: { compact?: boolean } =
       aria-live="polite"
       className={
         isCompact
-          ? 'inline-flex max-w-[11rem] flex-col justify-center gap-0.5 rounded-lg border border-dashed border-amber-300/80 bg-amber-50/80 px-2 py-1 text-right'
-          : 'inline-flex min-h-[44px] max-w-[14rem] flex-col justify-center gap-0.5 rounded-xl border border-dashed border-amber-300/80 bg-amber-50/80 px-3 py-1.5 text-right'
+          ? 'inline-flex shrink-0 min-w-[8rem] flex-col justify-center gap-0.5 rounded-lg border border-dashed border-amber-300/80 bg-amber-50/80 px-2 py-1 text-right'
+          : 'inline-flex shrink-0 min-h-[44px] min-w-[10rem] flex-col justify-center gap-0.5 rounded-xl border border-dashed border-amber-300/80 bg-amber-50/80 px-3 py-1.5 text-right'
       }
     >
       <span
         className={
           isCompact
-            ? 'text-[11px] font-medium leading-tight text-amber-900'
-            : 'text-sm font-medium leading-tight text-amber-900'
+            ? 'whitespace-nowrap text-[11px] font-medium leading-tight text-amber-900'
+            : 'whitespace-nowrap text-sm font-medium leading-tight text-amber-900'
         }
       >
         סוג גרר · נדרשים פרטי רכב
@@ -55,8 +55,8 @@ export function TruckTypeWaitingPlaceholder({ compact }: { compact?: boolean } =
       <span
         className={
           isCompact
-            ? 'text-[10px] leading-snug text-amber-800/80'
-            : 'text-xs leading-snug text-amber-800/85'
+            ? 'whitespace-nowrap text-[10px] leading-snug text-amber-800/80'
+            : 'whitespace-nowrap text-xs leading-snug text-amber-800/85'
         }
       >
         {isCompact
