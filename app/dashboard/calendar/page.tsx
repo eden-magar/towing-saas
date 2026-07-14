@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/AuthContext'
 import {
   getWeekTows,
   updateTowSchedule,
-  searchTows,
+  searchCalendarTows,
   getCalendarTowRoutePoints,
   type CalendarTowSearchHit,
   type CalendarTowRoutePoint,
@@ -689,7 +689,7 @@ export default function CalendarPage() {
     setGlobalSearchLoading(true)
     setGlobalSearchError('')
 
-    searchTows(companyId, debouncedGlobalSearch)
+    searchCalendarTows(companyId, debouncedGlobalSearch)
       .then((results) => {
         if (!cancelled && requestId === globalSearchRequestIdRef.current) {
           setGlobalSearchResults(results)

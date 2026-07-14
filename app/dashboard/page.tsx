@@ -6,14 +6,14 @@
   import { useAuth } from '../lib/AuthContext'
   import { getDashboardStats, getPendingUnassignedTows, getQuoteTows, getOpenTowsCountByDriver, DashboardStats } from '../lib/queries/dashboard'
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
-  import { TowWithDetails, searchTows } from '../lib/queries/tows'
+  import { TowWithDetails } from '../lib/queries/tows'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getPendingCustomerTowRequests } from '../lib/queries/customer-tow-requests'
   import { CustomerTowRequestDetailsPanel } from '../components/tow-forms/CustomerTowRequestDetailsPanel'
   import { SelectorModalShell } from '../components/tow-forms/shared/SelectorModalShell'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
   import { getDriversOvertime, getActiveDriversWithLocation } from '../lib/queries/driver-shifts'
-  import { getDayTowsWithPrevDay } from '../lib/queries/calendar'
+  import { getDayTowsWithPrevDay, searchCalendarTows, type CalendarTowSearchHit } from '../lib/queries/calendar'
   import { getDayEvents, getQuoteEvents, getPendingUnassignedEvents, type EventListItem } from '../lib/queries/events'
   import { getEventTimeBounds } from '../lib/utils/event-time-bounds'
   import { supabase } from '../lib/supabase'
@@ -243,7 +243,7 @@
     const dashCalendarScrollRef = useRef<HTMLDivElement>(null)
     const [towSearchInput, setTowSearchInput] = useState('')
     const [towSearchDebounced, setTowSearchDebounced] = useState('')
-    const [towSearchResults, setTowSearchResults] = useState<TowWithDetails[]>([])
+    const [towSearchResults, setTowSearchResults] = useState<CalendarTowSearchHit[]>([])
     const [towSearchOpen, setTowSearchOpen] = useState(false)
     const [isSearching, setIsSearching] = useState(false)
 
@@ -253,7 +253,8 @@
     }, [towSearchInput])
 
     useEffect(() => {
-      if (!companyId || !towSearchDebounced.trim()) {
+      const q = towSearchDebounced.trim()
+      if (!companyId || q.length < 2) {
         setTowSearchResults([])
         setTowSearchOpen(false)
         setIsSearching(false)
@@ -262,7 +263,7 @@
       let cancelled = false
       setTowSearchResults([])
       setIsSearching(true)
-      searchTows(companyId, towSearchDebounced)
+      searchCalendarTows(companyId, q, 8)
         .then(r => {
           if (!cancelled) {
             setTowSearchResults(r)
@@ -831,24 +832,23 @@
               value={towSearchInput}
               onChange={e => setTowSearchInput(e.target.value)}
               onFocus={() => {
-                if (towSearchResults.length > 0 && towSearchDebounced.trim()) setTowSearchOpen(true)
+                if (towSearchResults.length > 0 && towSearchDebounced.trim().length >= 2) setTowSearchOpen(true)
               }}
               placeholder="חיפוש גרירה..."
               className="w-72 rounded-xl border border-gray-300 bg-white py-2 pr-10 pl-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
             />
           </div>
-          {towSearchOpen && towSearchDebounced.trim() && (
+              {towSearchOpen && towSearchDebounced.trim().length >= 2 && (
             <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-lg">
               {isSearching ? (
                 <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500">
                   <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
                   מחפש...
                 </div>
-              ) : towSearchResults.length === 0 && towSearchDebounced.trim() ? (
+              ) : towSearchResults.length === 0 && towSearchDebounced.trim().length >= 2 ? (
                 <div className="px-3 py-2 text-xs text-gray-500">לא נמצאו תוצאות</div>
               ) : (
                 towSearchResults.map(t => {
-                  const v = t.vehicles?.[0]
                   const towDateIso = t.scheduled_at || t.created_at
                   return (
                     <button
@@ -877,11 +877,11 @@
                         )}
                       </span>
                       <span className="text-gray-400">|</span>
-                      <span className="min-w-0 truncate text-gray-700">{t.customer?.name ?? '—'}</span>
+                      <span className="min-w-0 truncate text-gray-700">{t.customer_name ?? '—'}</span>
                       <span className="text-gray-400">|</span>
-                      <span className="shrink-0 whitespace-nowrap text-gray-700">{v?.plate_number ?? '—'}</span>
+                      <span className="shrink-0 whitespace-nowrap text-gray-700">{t.plate ?? '—'}</span>
                       <span className="text-gray-400">|</span>
-                      <span className="shrink-0 whitespace-nowrap text-gray-600">{v?.vehicle_type && isKnownVehicleType(v.vehicle_type) ? getVehicleTypeLabel(v.vehicle_type) : '—'}</span>
+                      <span className="shrink-0 whitespace-nowrap text-gray-600">{t.vehicle_type && isKnownVehicleType(t.vehicle_type) ? getVehicleTypeLabel(t.vehicle_type) : '—'}</span>
                     </button>
                   )
                 })

@@ -171,7 +171,9 @@ export interface CalendarTowSearchHit {
   id: string
   customer_name: string | null
   scheduled_at: string | null
+  created_at: string
   plate: string | null
+  vehicle_type: string | null
   driver_name: string | null
   status: string
   order_number: string | null
@@ -241,6 +243,7 @@ type SearchCalendarTowsRow = {
   created_at: string
   status: string
   plate: string | null
+  vehicle_type: string | null
   driver_name: string | null
   order_number: string | null
   customer_order_number: string | null
@@ -248,8 +251,8 @@ type SearchCalendarTowsRow = {
   dropoff_address: string | null
 }
 
-/** Company-scoped global calendar search via search_calendar_tows RPC (single round-trip). */
-export async function searchTows(
+/** Company-scoped global calendar/dashboard tow search via search_calendar_tows RPC (single round-trip). */
+export async function searchCalendarTows(
   companyId: string,
   query: string,
   limit = 50
@@ -288,7 +291,9 @@ export async function searchTows(
       id: row.id,
       customer_name: row.customer_name ?? null,
       scheduled_at: row.scheduled_at,
+      created_at: row.created_at,
       plate: row.plate ?? null,
+      vehicle_type: row.vehicle_type ?? null,
       driver_name: row.driver_name ?? null,
       status: row.status,
       order_number: row.order_number ?? null,
