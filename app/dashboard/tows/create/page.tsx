@@ -2766,66 +2766,6 @@ function CreateTowForm({
                                 )}
                               </button>
                             </div>
-                            <div className="mt-1.5">
-                              <VehicleCardActions>
-                                <ManualVehicleEntryTrigger
-                                  active={vehicleLookupNotFound}
-                                  values={{
-                                    plateNumber: vehiclePlate,
-                                    vehicleType,
-                                    manufacturer: manualManufacturer,
-                                    color: manualColor,
-                                    chassis: manualChassis,
-                                    weight: manualWeight,
-                                  }}
-                                  onSave={(v) => {
-                                    setPlateStorageWarning(null)
-                                    setVehiclePlate(v.plateNumber)
-                                    setVehicleData(null)
-                                    setVehicleLookupNotFound(true)
-                                    setVehicleType(v.vehicleType)
-                                    setManualManufacturer(v.manufacturer)
-                                    setManualColor(v.color)
-                                    setManualChassis(v.chassis)
-                                    setManualWeight(v.weight)
-                                  }}
-                                />
-                                <DefectSelector
-                                  variant="triggerOnly"
-                                  selectedDefects={selectedDefects}
-                                  onChange={setSelectedDefects}
-                                  triggerClassName={
-                                    defectsStatus
-                                      ? withRequestFieldClass(
-                                          vehicleActionTriggerClass(selectedDefects.length > 0),
-                                          defectsStatus,
-                                        )
-                                      : undefined
-                                  }
-                                />
-                                {!hasSingleVehicleDetails ? (
-                                  <TruckTypeWaitingPlaceholder />
-                                ) : (
-                                  <div
-                                    ref={truckTypeSectionRef}
-                                    className={
-                                      truckTypeError
-                                        ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
-                                        : 'shrink-0'
-                                    }
-                                  >
-                                    <TowTruckTypeSelector
-                                      variant="triggerOnly"
-                                      selectedTypes={requiredTruckTypes}
-                                      onChange={(types) => {
-                                        setRequiredTruckTypes(types)
-                                        if (types.length > 0) setTruckTypeError(false)
-                                      }}
-                                    />
-                                  </div>
-                                )}
-                              </VehicleCardActions>
-                            </div>
                             {vehicleData?.data?.driveType?.includes?.('קדמית') && (
                               <p className="text-sm text-amber-700 bg-amber-50 p-2 rounded-lg mt-2">
                                 מומלץ: רמסע (רכב עם הנעה קדמית)
@@ -2843,6 +2783,64 @@ function CreateTowForm({
                               className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm" />
                           </div>
                         </div>
+                        <VehicleCardActions>
+                          <ManualVehicleEntryTrigger
+                            active={vehicleLookupNotFound}
+                            values={{
+                              plateNumber: vehiclePlate,
+                              vehicleType,
+                              manufacturer: manualManufacturer,
+                              color: manualColor,
+                              chassis: manualChassis,
+                              weight: manualWeight,
+                            }}
+                            onSave={(v) => {
+                              setPlateStorageWarning(null)
+                              setVehiclePlate(v.plateNumber)
+                              setVehicleData(null)
+                              setVehicleLookupNotFound(true)
+                              setVehicleType(v.vehicleType)
+                              setManualManufacturer(v.manufacturer)
+                              setManualColor(v.color)
+                              setManualChassis(v.chassis)
+                              setManualWeight(v.weight)
+                            }}
+                          />
+                          <DefectSelector
+                            variant="triggerOnly"
+                            selectedDefects={selectedDefects}
+                            onChange={setSelectedDefects}
+                            triggerClassName={
+                              defectsStatus
+                                ? withRequestFieldClass(
+                                    vehicleActionTriggerClass(selectedDefects.length > 0),
+                                    defectsStatus,
+                                  )
+                                : undefined
+                            }
+                          />
+                          {!hasSingleVehicleDetails ? (
+                            <TruckTypeWaitingPlaceholder />
+                          ) : (
+                            <div
+                              ref={truckTypeSectionRef}
+                              className={
+                                truckTypeError
+                                  ? 'shrink-0 rounded-xl ring-2 ring-red-500 ring-offset-1'
+                                  : 'shrink-0'
+                              }
+                            >
+                              <TowTruckTypeSelector
+                                variant="triggerOnly"
+                                selectedTypes={requiredTruckTypes}
+                                onChange={(types) => {
+                                  setRequiredTruckTypes(types)
+                                  if (types.length > 0) setTruckTypeError(false)
+                                }}
+                              />
+                            </div>
+                          )}
+                        </VehicleCardActions>
                         {storagePickupEditLocked && (
                           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
                             לא ניתן לשנות פרטי איסוף מאחסנה — הגרירה כבר התחילה

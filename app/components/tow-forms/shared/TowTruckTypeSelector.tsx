@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Info } from 'lucide-react'
 import { SelectorModalShell } from './SelectorModalShell'
 import { vehicleActionTriggerClass, useVehicleActionsCompact } from './VehicleCardActions'
 
@@ -26,9 +27,13 @@ export const TRUCK_TYPES = [
   { id: 'carrier', label: 'מובילית', icon: '🚚' },
 ] as const
 
+const TRUCK_TYPE_WAITING_HINT =
+  'זמין אחרי בדיקת רישוי, הזנה ידנית או בחירה מאחסנה'
+
 /**
  * Waiting-state stand-in for סוג גרר before the vehicle is identified.
- * Not a button — copy must explain why (no hover tooltips).
+ * Not a button — dashed amber chip matches sibling trigger size; hint via title + sr-only
+ * (no Tooltip primitive in the codebase).
  */
 export function TruckTypeWaitingPlaceholder({ compact }: { compact?: boolean } = {}) {
   const fromContext = useVehicleActionsCompact()
@@ -37,32 +42,19 @@ export function TruckTypeWaitingPlaceholder({ compact }: { compact?: boolean } =
     <div
       role="status"
       aria-live="polite"
+      title={TRUCK_TYPE_WAITING_HINT}
       className={
         isCompact
-          ? 'inline-flex shrink-0 min-w-[8rem] flex-col justify-center gap-0.5 rounded-lg border border-dashed border-amber-300/80 bg-amber-50/80 px-2 py-1 text-right'
-          : 'inline-flex shrink-0 min-h-[44px] min-w-[10rem] flex-col justify-center gap-0.5 rounded-xl border border-dashed border-amber-300/80 bg-amber-50/80 px-3 py-1.5 text-right'
+          ? 'inline-flex shrink-0 min-h-[32px] items-center justify-center gap-1 rounded-lg border border-dashed border-amber-300/80 bg-amber-50/80 px-2 text-xs font-medium text-amber-900'
+          : 'inline-flex shrink-0 min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-dashed border-amber-300/80 bg-amber-50/80 px-2.5 sm:px-3 text-sm font-semibold text-amber-900'
       }
     >
-      <span
-        className={
-          isCompact
-            ? 'whitespace-nowrap text-[11px] font-medium leading-tight text-amber-900'
-            : 'whitespace-nowrap text-sm font-medium leading-tight text-amber-900'
-        }
-      >
-        סוג גרר · נדרשים פרטי רכב
-      </span>
-      <span
-        className={
-          isCompact
-            ? 'whitespace-nowrap text-[10px] leading-snug text-amber-800/80'
-            : 'whitespace-nowrap text-xs leading-snug text-amber-800/85'
-        }
-      >
-        {isCompact
-          ? 'אחרי רישוי / ידני / אחסנה'
-          : 'זמין אחרי בדיקת רישוי, הזנה ידנית או בחירה מאחסנה'}
-      </span>
+      <span className="whitespace-nowrap">סוג גרר</span>
+      <Info
+        className={isCompact ? 'h-3 w-3 shrink-0 text-amber-700/80' : 'h-3.5 w-3.5 shrink-0 text-amber-700/80'}
+        aria-hidden
+      />
+      <span className="sr-only">{TRUCK_TYPE_WAITING_HINT}</span>
     </div>
   )
 }
