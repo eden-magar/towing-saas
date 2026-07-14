@@ -103,7 +103,9 @@ export function isOtherSelected(defects: readonly string[]): boolean {
 export function extractOtherText(defects: readonly string[]): string {
   for (const d of defects) {
     if (d.startsWith(OTHER_DEFECT_PREFIX)) {
-      return d.slice(OTHER_DEFECT_PREFIX.length).trim()
+      const rest = d.slice(OTHER_DEFECT_PREFIX.length)
+      // Keep typing spaces — only strip the separator space after `אחר:`.
+      return rest.startsWith(' ') ? rest.slice(1) : rest
     }
   }
   return ''
@@ -122,14 +124,17 @@ export function toggleOther(defects: readonly string[]): string[] {
 
 /**
  * Keep אחר selected and set/clear free text.
- * Empty text → bare `אחר`; non-empty → `אחר: <trimmed>`.
+ * Empty text → bare `אחר`; non-empty → `אחר: <text>` (spaces preserved for live input).
+ * Callers that persist to DB should trim via {@link serializeDefects}.
  */
 export function applyOtherText(defects: readonly string[], text: string): string[] {
   const withoutOther = defects.filter(
     (d) => d !== OTHER_DEFECT_VALUE && !d.startsWith(OTHER_DEFECT_PREFIX)
   )
-  const trimmed = text.trim()
-  return [...withoutOther, trimmed ? `${OTHER_DEFECT_PREFIX} ${trimmed}` : OTHER_DEFECT_VALUE]
+  return [
+    ...withoutOther,
+    text.length > 0 ? `${OTHER_DEFECT_PREFIX} ${text}` : OTHER_DEFECT_VALUE,
+  ]
 }
 
 export type ParsedTowReasonDefects = {
@@ -221,7 +226,7 @@ export function serializeDefects(
     (d) => d !== OTHER_DEFECT_VALUE && !d.startsWith(OTHER_DEFECT_PREFIX)
   )
   const text =
-    otherText !== undefined ? otherText.trim() : extractOtherText(defects)
+    otherText !== undefined ? otherText.trim() : extractOtherText(defects).trim()
   const parts = [...predefined]
   if (isOtherSelected(defects)) {
     parts.push(text ? `${OTHER_DEFECT_PREFIX} ${text}` : OTHER_DEFECT_VALUE)
