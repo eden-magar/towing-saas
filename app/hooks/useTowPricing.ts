@@ -486,14 +486,11 @@ export function useTowPricing(params: UseTowPricingParams) {
         ? mergePriceLists(basePriceList, selectedCustomerPricing?.price_list ?? null)
         : basePriceList
 
-    if (priceMode === 'custom' && customPrice) {
-      const price = parseFloat(customPrice)
+    if (priceMode === 'custom') {
+      const parsed = parseFloat(customPrice)
+      const price = Number.isFinite(parsed) ? parsed : 0
       const result = calculateTowPrice({
-        priceList: {
-          base_prices: extractBasePrices(activePriceList),
-          price_per_km: 12,
-          minimum_price: 250
-        },
+        priceList: priceListForTowCalc(activePriceList),
         vehicleType: 'private',
         distanceKm: 0,
         timeSurcharges: [],
@@ -547,7 +544,8 @@ export function useTowPricing(params: UseTowPricingParams) {
 
   return {
     recommendedPrice: recommendedResult?.total ?? 0,
-    // `total` and `finalPrice` are identical in TowPriceResult; minimum is applied pre-manual only.
+    // `total` and `finalPrice` are identical in TowPriceResult.
+    // Recommended/customer: minimum applies to the final total. Custom/fixed: no floor.
     finalPrice: finalResult?.total ?? 0,
     priceResult: finalResult,
   }

@@ -4097,24 +4097,29 @@ function CreateTowForm({
                   </div>
                 )}
                 {priceMode === 'custom' && (
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="number"
-                      value={customPrice}
-                      onChange={(e) => setCustomPrice(e.target.value)}
-                      placeholder="מחיר"
-                      className="px-4 py-2.5 border border-gray-300 rounded-xl w-32"
-                    />
-                    <label className="flex items-center gap-2">
+                  <div className="space-y-3">
+                    <div className="flex gap-2 items-center">
                       <input
-                        type="checkbox"
-                        checked={customPriceIncludesVat}
-                        onChange={(e) =>
-                          setCustomPriceIncludesVat(e.target.checked)
-                        }
+                        type="number"
+                        value={customPrice}
+                        onChange={(e) => setCustomPrice(e.target.value)}
+                        placeholder="מחיר"
+                        className="px-4 py-2.5 border border-gray-300 rounded-xl w-32"
                       />
-                      כולל מע״מ
-                    </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={customPriceIncludesVat}
+                          onChange={(e) =>
+                            setCustomPriceIncludesVat(e.target.checked)
+                          }
+                        />
+                        כולל מע״מ
+                      </label>
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">
+                      סה״כ: ₪{finalPrice.toFixed(2)}
+                    </p>
                   </div>
                 )}
                 {(priceMode === 'recommended' ||

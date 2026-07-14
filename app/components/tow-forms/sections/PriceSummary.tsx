@@ -327,10 +327,10 @@ export function PriceSummary({
           </div>
         )}
 
-        {priceMode === 'custom' && customPrice && (
+        {priceMode === 'custom' && (
           <div className="flex justify-between">
             <span className="text-gray-500">מחיר ידני</span>
-            <span className="text-gray-700">₪{Number(customPrice).toFixed(2)}</span>
+            <span className="text-gray-700">₪{finalPrice.toFixed(2)}</span>
           </div>
         )}
       </div>
@@ -339,7 +339,7 @@ export function PriceSummary({
         priceMode === 'recommended_customer' ||
         (priceMode === 'fixed' && selectedPriceItem) ||
         (priceMode === 'customer' && selectedPriceItem) ||
-        (priceMode === 'custom' && !!customPrice)) && (
+        priceMode === 'custom') && (
         <div className="border-t border-gray-200 pt-3">
           <div className="flex justify-between items-center">
             <span className="font-bold text-gray-800">סה״כ כולל מע״מ</span>

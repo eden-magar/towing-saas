@@ -20,8 +20,9 @@
  * No mid-calculation rounding — callers round only for display/storage.
  * A 100% customer discount yields exactly ₪0 on the discounted portion (never negative).
  *
- * Fixed / customer / custom modes bypass this stack (unchanged aside from optional
- * vatExemptSurcharges appended before the minimum floor when provided).
+ * Fixed / custom modes bypass this stack and do NOT apply the minimum floor —
+ * the dispatcher-set or catalog item price is charged as-is (plus optional VAT-exempt ₪).
+ * Customer catalog items still apply the minimum after VAT / exempt lines.
  */
 
 import { VehicleType } from '../types'
@@ -264,12 +265,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     ]
     const exemptSum = appendVatExemptLines(breakdown, exemptServices)
     const withExempt = total + exemptSum
-    const floored = applyMinimumFloor(withExempt, input.priceList.minimum_price)
-    if (floored.minimumApplied) {
-      breakdown.push({ label: 'מחיר מינימום', amount: floored.total, type: 'base', bold: true })
-    } else {
-      breakdown.push({ label: 'סה״כ', amount: floored.total, type: 'base', bold: true })
-    }
+    // Fixed catalog price is explicit — do not apply the minimum floor.
+    breakdown.push({ label: 'סה״כ', amount: withExempt, type: 'base', bold: true })
     return {
       basePrice: 0,
       distancePrice: 0,
@@ -280,9 +277,9 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
       vatAmount,
       beforeDiscount: total,
       discountAmount,
-      finalPrice: floored.total,
-      minimumApplied: floored.minimumApplied,
-      total: floored.total,
+      finalPrice: withExempt,
+      minimumApplied: false,
+      total: withExempt,
       breakdown,
     }
   }
@@ -331,8 +328,8 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
     ]
     const exemptSum = appendVatExemptLines(breakdown, exemptServices)
     const withExempt = total + exemptSum
-    const floored = applyMinimumFloor(withExempt, input.priceList.minimum_price)
-    breakdown.push({ label: 'סה״כ', amount: floored.total, type: 'base', bold: true })
+    // Manual (ידני): dispatcher-set price — do not apply the minimum floor.
+    breakdown.push({ label: 'סה״כ', amount: withExempt, type: 'base', bold: true })
     return {
       basePrice: 0,
       distancePrice: 0,
@@ -345,9 +342,9 @@ export function calculateTowPrice(input: TowPriceInput): TowPriceResult {
       beforeDiscount: total,
       discountAmount: 0,
       afterDiscount: total,
-      finalPrice: floored.total,
-      minimumApplied: floored.minimumApplied,
-      total: floored.total,
+      finalPrice: withExempt,
+      minimumApplied: false,
+      total: withExempt,
       breakdown,
     }
   }

@@ -384,6 +384,32 @@ export function SectionPricing({
                 כולל מע״מ
               </span>
             </label>
+            <div
+              className={
+                isCompact
+                  ? 'flex items-baseline justify-between gap-2 pt-1.5 mt-0.5 border-t border-gray-200'
+                  : 'flex items-baseline justify-between pt-2 mt-1 border-t border-gray-200'
+              }
+            >
+              <span
+                className={
+                  isCompact
+                    ? 'text-xs font-medium text-gray-500'
+                    : 'text-sm font-medium text-gray-500'
+                }
+              >
+                סה״כ
+              </span>
+              <span
+                className={
+                  isCompact
+                    ? 'text-lg font-bold text-gray-900 tabular-nums shrink-0'
+                    : 'text-2xl font-bold text-gray-900'
+                }
+              >
+                ₪{form.finalPrice.toFixed(2)}
+              </span>
+            </div>
           </div>
         )}
 
