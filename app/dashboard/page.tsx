@@ -21,7 +21,11 @@
   import { getVehicleTypeLabel, isKnownVehicleType } from '../lib/vehicle-lookup'
   import DriversMap, { MAP_STATUS_LEGEND } from '../components/DriversMap'
   import EditShiftModal from '../components/EditShiftModal'
-  import { formatOpenShiftDuration, formatShiftStartJerusalem } from '../lib/shift-datetime'
+  import {
+    JERUSALEM_TZ,
+    formatOpenShiftDuration,
+    formatShiftStartJerusalem,
+  } from '../lib/shift-datetime'
   import Link from 'next/link'
   import { Plus, RefreshCw, AlertTriangle, FileText, Shield, CreditCard, Clock, ChevronLeft, ChevronRight, Truck, Search, Loader2, CheckCircle, XCircle, Play, X, Sparkles } from 'lucide-react'
   import {
@@ -96,6 +100,24 @@
       year: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
+    })
+  }
+
+  /** Search-dropdown date: he-IL day/month (same digits as formatIncomingScheduledAt), Asia/Jerusalem; year only when not current year. */
+  function formatTowSearchResultDate(iso: string): string {
+    const date = new Date(iso)
+    const yearOpts: Intl.DateTimeFormatOptions = {
+      timeZone: JERUSALEM_TZ,
+      year: 'numeric',
+    }
+    const includeYear =
+      date.toLocaleDateString('en-GB', yearOpts) !==
+      new Date().toLocaleDateString('en-GB', yearOpts)
+    return date.toLocaleDateString('he-IL', {
+      day: '2-digit',
+      month: '2-digit',
+      ...(includeYear ? { year: 'numeric' as const } : {}),
+      timeZone: JERUSALEM_TZ,
     })
   }
 
@@ -827,6 +849,7 @@
               ) : (
                 towSearchResults.map(t => {
                   const v = t.vehicles?.[0]
+                  const towDateIso = t.scheduled_at || t.created_at
                   return (
                     <button
                       key={t.id}
@@ -842,7 +865,11 @@
                         setIsSearching(false)
                       }}
                     >
-                      <span className="font-bold text-gray-800">
+                      <span className="shrink-0 whitespace-nowrap text-gray-500">
+                        {formatTowSearchResultDate(towDateIso)}
+                      </span>
+                      <span className="text-gray-400">|</span>
+                      <span className="shrink-0 font-bold text-gray-800">
                         {t.order_number ? (
                           <>{t.order_number}{t.customer_order_number ? ` (${t.customer_order_number})` : ''}</>
                         ) : (
@@ -850,11 +877,11 @@
                         )}
                       </span>
                       <span className="text-gray-400">|</span>
-                      <span className="text-gray-700">{t.customer?.name ?? '—'}</span>
+                      <span className="min-w-0 truncate text-gray-700">{t.customer?.name ?? '—'}</span>
                       <span className="text-gray-400">|</span>
-                      <span className="text-gray-700">{v?.plate_number ?? '—'}</span>
+                      <span className="shrink-0 whitespace-nowrap text-gray-700">{v?.plate_number ?? '—'}</span>
                       <span className="text-gray-400">|</span>
-                      <span className="text-gray-600">{v?.vehicle_type && isKnownVehicleType(v.vehicle_type) ? getVehicleTypeLabel(v.vehicle_type) : '—'}</span>
+                      <span className="shrink-0 whitespace-nowrap text-gray-600">{v?.vehicle_type && isKnownVehicleType(v.vehicle_type) ? getVehicleTypeLabel(v.vehicle_type) : '—'}</span>
                     </button>
                   )
                 })
