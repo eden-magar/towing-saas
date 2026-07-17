@@ -350,7 +350,7 @@ export default function CashManagementPage() {
       </div>
 
       {/* Drivers list */}
-      <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gt-border-subtle shadow-sm overflow-hidden max-w-[620px] mx-auto">
         <div className="p-4 border-b border-gt-border-subtle">
           <div className="relative">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gt-text-tertiary" />
