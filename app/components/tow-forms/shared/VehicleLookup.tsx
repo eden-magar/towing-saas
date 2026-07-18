@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Search, Loader2, AlertTriangle, PenLine, Check } from 'lucide-react'
 import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
@@ -11,6 +11,8 @@ import {
   ManualVehicleEntryModal,
   type ManualVehicleEntryValues,
 } from './ManualVehicleEntryModal'
+
+type LookupTrigger = 'manual' | 'blur'
 
 interface VehicleLookupProps {
   plateNumber: string
@@ -90,6 +92,7 @@ export function VehicleLookup({
   const [loading, setLoading] = useState(false)
   const [localNotFound, setLocalNotFound] = useState(false)
   const [showManualModal, setShowManualModal] = useState(false)
+  const inflightPlateRef = useRef<string | null>(null)
 
   // Controlled manual-entry mode only when the parent wires the shared state.
   const manualEnabled = typeof onVehicleLookupNotFoundChange === 'function'
@@ -99,16 +102,36 @@ export function VehicleLookup({
     else setLocalNotFound(val)
   }
 
-  const handleLookup = async () => {
-    if (plateNumber.length < 5) return
-    
+  const lastSuccessfulPlate = vehicleData?.found
+    ? vehicleData.data?.plateNumber ?? null
+    : null
+
+  /**
+   * Registry lookup. Manual (button) keeps prior clear-on-start / clear-on-miss
+   * behavior. Blur never blanks existing details — only replaces on success.
+   */
+  const handleLookup = async (trigger: LookupTrigger = 'manual') => {
+    const clean = normalizePlate(plateNumber)
+    if (clean.length < 5) return
+    if (inflightPlateRef.current === clean) return
+    if (
+      trigger === 'blur' &&
+      lastSuccessfulPlate &&
+      normalizePlate(lastSuccessfulPlate) === clean
+    ) {
+      return
+    }
+
+    inflightPlateRef.current = clean
     setLoading(true)
-    setNotFound(false)
-    onVehicleDataChange(null)
-    
+    if (trigger === 'manual') {
+      setNotFound(false)
+      onVehicleDataChange(null)
+    }
+
     try {
       const result = await lookupVehicle(plateNumber)
-      
+
       if (result.found && result.data) {
         onVehicleDataChange(result)
         onVehicleTypeChange(result.source || 'private')
@@ -121,10 +144,21 @@ export function VehicleLookup({
         ) {
           onVehicleCodeChange(cachedCode)
         }
-      } else {
+      } else if (trigger === 'manual') {
         setNotFound(true)
         onVehicleDataChange(null)
         onVehicleTypeChange('')
+        if (manualEnabled) setShowManualModal(true)
+      } else {
+        // Blur miss: keep any existing details; flag not-found for manual entry UX.
+        const existingPlate = vehicleData?.found
+          ? normalizePlate(vehicleData.data?.plateNumber ?? '')
+          : ''
+        if (existingPlate && existingPlate !== clean) {
+          onVehicleDataChange(null)
+          onVehicleTypeChange('')
+        }
+        setNotFound(true)
         if (manualEnabled) setShowManualModal(true)
       }
     } catch (error) {
@@ -132,6 +166,7 @@ export function VehicleLookup({
       setNotFound(true)
       if (manualEnabled) setShowManualModal(true)
     } finally {
+      if (inflightPlateRef.current === clean) inflightPlateRef.current = null
       setLoading(false)
     }
   }
@@ -266,15 +301,16 @@ export function VehicleLookup({
                       ? 'w-full pl-9 pr-2 h-9 bg-white border border-gt-border-field rounded-lg text-sm font-semibold text-gray-900 placeholder:font-normal hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
                       : 'w-full pl-14 pr-3 h-12 bg-white border border-gt-border-field rounded-lg text-lg font-semibold text-gray-900 placeholder:font-normal hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 disabled:bg-gray-100'
                   }
-                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                  onKeyDown={(e) => e.key === 'Enter' && void handleLookup('manual')}
                   onBlur={() => {
                     if (
                       shouldTriggerPlateLookupOnBlur(plateNumber, {
-                        hasFoundData: vehicleData?.found,
+                        lastSuccessfulPlate,
                         lookupAlreadyFailed: notFound,
+                        isLookupInFlight: loading || inflightPlateRef.current != null,
                       })
                     ) {
-                      void handleLookup()
+                      void handleLookup('blur')
                     }
                   }}
                 />
@@ -282,7 +318,7 @@ export function VehicleLookup({
                 {/* כפתור חיפוש - אייקון שקט (ghost) בתוך השדה */}
                 <button
                   type="button"
-                  onClick={handleLookup}
+                  onClick={() => void handleLookup('manual')}
                   disabled={loading || plateNumber.length < 5 || disabled}
                   aria-label="חפש רכב"
                   className={
@@ -378,22 +414,23 @@ export function VehicleLookup({
               ? 'col-span-3 sm:flex-1 sm:min-w-0 px-3 h-12 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 font-mono disabled:bg-gray-100'
               : 'col-span-3 sm:flex-1 sm:min-w-0 px-3 py-2 border border-gt-border-field rounded-lg text-sm hover:border-gt-border focus:outline-none focus:border-gt-brand focus:ring-[3px] focus:ring-gt-brand/20 font-mono disabled:bg-gray-100'
           }
-          onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+          onKeyDown={(e) => e.key === 'Enter' && void handleLookup('manual')}
           onBlur={() => {
             if (
               shouldTriggerPlateLookupOnBlur(plateNumber, {
-                hasFoundData: vehicleData?.found,
+                lastSuccessfulPlate,
                 lookupAlreadyFailed: notFound,
+                isLookupInFlight: loading || inflightPlateRef.current != null,
               })
             ) {
-              void handleLookup()
+              void handleLookup('blur')
             }
           }}
         />
 
         {/* כפתור חיפוש */}
         <button
-          onClick={handleLookup}
+          onClick={() => void handleLookup('manual')}
           disabled={loading || plateNumber.length < 5 || disabled}
           className={
             isMobile

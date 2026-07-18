@@ -576,6 +576,10 @@ function CreateTowForm({
   const [approvingQuote, setApprovingQuote] = useState(false)
   const [defectiveLookupLoading, setDefectiveLookupLoading] = useState(false)
   const [workingLookupLoading, setWorkingLookupLoading] = useState(false)
+  /** Sync in-flight guards so blur cannot double-fire before React loading state commits. */
+  const singleLookupInflightRef = useRef<string | null>(null)
+  const workingLookupInflightRef = useRef<string | null>(null)
+  const defectiveLookupInflightRef = useRef<string | null>(null)
   const [showDriverPicker, setShowDriverPicker] = useState(false)
   const [pendingPickerDriverId, setPendingPickerDriverId] = useState<string | null>(null)
   const [pendingPickerDate, setPendingPickerDate] = useState<string | null>(null)
@@ -1745,140 +1749,234 @@ function CreateTowForm({
     } else handlePinDropConfirm(data)
   }
 
-  // Vehicle lookup for single
-  const handleVehicleLookup = useCallback(async () => {
-    if (vehiclePlate.replace(/[^0-9]/g, '').length < 5) return
-    setDefectiveLookupLoading(true)
-    try {
-      const storedResult = await tryResolveStoredPlateForSlot(
-        vehiclePlate,
-        'single'
-      )
-      if (storedResult.status === 'blocked') {
-        setPlateStorageWarning(storedResult.message)
-        setVehicleData(null)
-        setVehicleLookupNotFound(false)
-        return
-      }
-      if (storedResult.status === 'hydrated') {
-        setPlateStorageWarning(null)
-        return
-      }
-      setPlateStorageWarning(null)
-      const result = await lookupVehicle(vehiclePlate)
-      if (result.found && result.data) {
-        setVehicleData(result)
-        setVehicleType(result.source || 'private')
-        setVehicleLookupNotFound(false)
-        const cachedCode = result.vehicleCode?.trim()
-        if (cachedCode && !vehicleCode.trim()) setVehicleCode(cachedCode)
-      } else {
-        setVehicleData(null)
-        setVehicleType('')
-        setVehicleLookupNotFound(true)
-        setManualManufacturer('')
-        setManualColor('')
-        setManualWeight('')
-        setManualChassis('')
-      }
-    } catch {
-      setVehicleData(null)
-    } finally {
-      setDefectiveLookupLoading(false)
-    }
-  }, [vehiclePlate, vehicleCode, tryResolveStoredPlateForSlot, setVehicleCode])
+  type PlateLookupTrigger = 'manual' | 'blur'
 
-  const handleWorkingVehicleLookup = useCallback(async (plate?: string) => {
-    const resolvedPlate = plate ?? workingVehiclePlate
-    if (resolvedPlate.replace(/[^0-9]/g, '').length < 5) return
-    setWorkingLookupLoading(true)
-    try {
-      const storedResult = await tryResolveStoredPlateForSlot(
-        resolvedPlate,
-        'exchange-working'
-      )
-      if (storedResult.status === 'blocked') {
-        setPlateStorageWarning(storedResult.message)
-        setWorkingVehicleData(null)
-        setWorkingVehicleNotFound(false)
+  // Vehicle lookup for single — blur preserves details on miss; manual clears as before
+  const handleVehicleLookup = useCallback(
+    async (trigger: PlateLookupTrigger = 'manual') => {
+      const clean = normalizePlate(vehiclePlate)
+      if (clean.length < 5) return
+      if (singleLookupInflightRef.current === clean) return
+      if (
+        trigger === 'blur' &&
+        vehicleData?.found &&
+        normalizePlate(vehicleData.data?.plateNumber ?? '') === clean
+      ) {
         return
       }
-      if (storedResult.status === 'hydrated') {
-        setPlateStorageWarning(null)
-        return
-      }
-      setPlateStorageWarning(null)
-      const result = await lookupVehicle(resolvedPlate)
-      if (result.found && result.data) {
-        setWorkingVehicleData(result)
-        setWorkingVehicleType(result.source || 'private')
-        setWorkingVehicleNotFound(false)
-        const cachedCode = result.vehicleCode?.trim()
-        if (cachedCode && !workingVehicleCode.trim()) {
-          setWorkingVehicleCode(cachedCode)
+
+      singleLookupInflightRef.current = clean
+      setDefectiveLookupLoading(true)
+      try {
+        const storedResult = await tryResolveStoredPlateForSlot(
+          vehiclePlate,
+          'single'
+        )
+        if (storedResult.status === 'blocked') {
+          setPlateStorageWarning(storedResult.message)
+          if (trigger === 'manual') {
+            setVehicleData(null)
+            setVehicleLookupNotFound(false)
+          }
+          return
         }
-      } else {
-        setWorkingVehicleData(null)
-        setWorkingVehicleType('')
-        setWorkingVehicleNotFound(true)
+        if (storedResult.status === 'hydrated') {
+          setPlateStorageWarning(null)
+          return
+        }
+        setPlateStorageWarning(null)
+        const result = await lookupVehicle(vehiclePlate)
+        if (result.found && result.data) {
+          setVehicleData(result)
+          setVehicleType(result.source || 'private')
+          setVehicleLookupNotFound(false)
+          const cachedCode = result.vehicleCode?.trim()
+          if (cachedCode && !vehicleCode.trim()) setVehicleCode(cachedCode)
+        } else if (trigger === 'manual') {
+          setVehicleData(null)
+          setVehicleType('')
+          setVehicleLookupNotFound(true)
+          setManualManufacturer('')
+          setManualColor('')
+          setManualWeight('')
+          setManualChassis('')
+        } else {
+          const existingPlate = vehicleData?.found
+            ? normalizePlate(vehicleData.data?.plateNumber ?? '')
+            : ''
+          if (existingPlate && existingPlate !== clean) {
+            setVehicleData(null)
+            setVehicleType('')
+          }
+          setVehicleLookupNotFound(true)
+        }
+      } catch {
+        if (trigger === 'manual') setVehicleData(null)
+      } finally {
+        if (singleLookupInflightRef.current === clean) {
+          singleLookupInflightRef.current = null
+        }
+        setDefectiveLookupLoading(false)
       }
-    } catch {
-      setWorkingVehicleData(null)
-    } finally {
-      setWorkingLookupLoading(false)
-    }
-  }, [
-    workingVehiclePlate,
-    workingVehicleCode,
-    tryResolveStoredPlateForSlot,
-    setWorkingVehicleCode,
-  ])
+    },
+    [
+      vehiclePlate,
+      vehicleCode,
+      vehicleData,
+      tryResolveStoredPlateForSlot,
+      setVehicleCode,
+    ]
+  )
+
+  const handleWorkingVehicleLookup = useCallback(
+    async (plate?: string, trigger: PlateLookupTrigger = 'manual') => {
+      const resolvedPlate = plate ?? workingVehiclePlate
+      const clean = normalizePlate(resolvedPlate)
+      if (clean.length < 5) return
+      if (workingLookupInflightRef.current === clean) return
+      if (
+        trigger === 'blur' &&
+        workingVehicleData?.found &&
+        normalizePlate(workingVehicleData.data?.plateNumber ?? '') === clean
+      ) {
+        return
+      }
+
+      workingLookupInflightRef.current = clean
+      setWorkingLookupLoading(true)
+      try {
+        const storedResult = await tryResolveStoredPlateForSlot(
+          resolvedPlate,
+          'exchange-working'
+        )
+        if (storedResult.status === 'blocked') {
+          setPlateStorageWarning(storedResult.message)
+          if (trigger === 'manual') {
+            setWorkingVehicleData(null)
+            setWorkingVehicleNotFound(false)
+          }
+          return
+        }
+        if (storedResult.status === 'hydrated') {
+          setPlateStorageWarning(null)
+          return
+        }
+        setPlateStorageWarning(null)
+        const result = await lookupVehicle(resolvedPlate)
+        if (result.found && result.data) {
+          setWorkingVehicleData(result)
+          setWorkingVehicleType(result.source || 'private')
+          setWorkingVehicleNotFound(false)
+          const cachedCode = result.vehicleCode?.trim()
+          if (cachedCode && !workingVehicleCode.trim()) {
+            setWorkingVehicleCode(cachedCode)
+          }
+        } else if (trigger === 'manual') {
+          setWorkingVehicleData(null)
+          setWorkingVehicleType('')
+          setWorkingVehicleNotFound(true)
+        } else {
+          const existingPlate = workingVehicleData?.found
+            ? normalizePlate(workingVehicleData.data?.plateNumber ?? '')
+            : ''
+          if (existingPlate && existingPlate !== clean) {
+            setWorkingVehicleData(null)
+            setWorkingVehicleType('')
+          }
+          setWorkingVehicleNotFound(true)
+        }
+      } catch {
+        if (trigger === 'manual') setWorkingVehicleData(null)
+      } finally {
+        if (workingLookupInflightRef.current === clean) {
+          workingLookupInflightRef.current = null
+        }
+        setWorkingLookupLoading(false)
+      }
+    },
+    [
+      workingVehiclePlate,
+      workingVehicleCode,
+      workingVehicleData,
+      tryResolveStoredPlateForSlot,
+      setWorkingVehicleCode,
+    ]
+  )
 
   // Vehicle lookup for defective (exchange)
-  const handleDefectiveLookup = useCallback(async () => {
-    if (defectiveVehiclePlate.replace(/[^0-9]/g, '').length < 5) return
-    setDefectiveLookupLoading(true)
-    try {
-      const storedResult = await tryResolveStoredPlateForSlot(
-        defectiveVehiclePlate,
-        'exchange-defective'
-      )
-      if (storedResult.status === 'blocked') {
-        setPlateStorageWarning(storedResult.message)
-        setDefectiveVehicleData(null)
-        setDefectiveVehicleNotFound(false)
+  const handleDefectiveLookup = useCallback(
+    async (trigger: PlateLookupTrigger = 'manual') => {
+      const clean = normalizePlate(defectiveVehiclePlate)
+      if (clean.length < 5) return
+      if (defectiveLookupInflightRef.current === clean) return
+      if (
+        trigger === 'blur' &&
+        defectiveVehicleData?.found &&
+        normalizePlate(defectiveVehicleData.data?.plateNumber ?? '') === clean
+      ) {
         return
       }
-      if (storedResult.status === 'hydrated') {
-        setPlateStorageWarning(null)
-        return
-      }
-      setPlateStorageWarning(null)
-      const result = await lookupVehicle(defectiveVehiclePlate)
-      if (result.found && result.data) {
-        setDefectiveVehicleData(result)
-        setDefectiveVehicleType(result.source || 'private')
-        setDefectiveVehicleNotFound(false)
-        const cachedCode = result.vehicleCode?.trim()
-        if (cachedCode && !defectiveVehicleCode.trim()) {
-          setDefectiveVehicleCode(cachedCode)
+
+      defectiveLookupInflightRef.current = clean
+      setDefectiveLookupLoading(true)
+      try {
+        const storedResult = await tryResolveStoredPlateForSlot(
+          defectiveVehiclePlate,
+          'exchange-defective'
+        )
+        if (storedResult.status === 'blocked') {
+          setPlateStorageWarning(storedResult.message)
+          if (trigger === 'manual') {
+            setDefectiveVehicleData(null)
+            setDefectiveVehicleNotFound(false)
+          }
+          return
         }
-      } else {
-        setDefectiveVehicleData(null)
-        setDefectiveVehicleType('')
-        setDefectiveVehicleNotFound(true)
+        if (storedResult.status === 'hydrated') {
+          setPlateStorageWarning(null)
+          return
+        }
+        setPlateStorageWarning(null)
+        const result = await lookupVehicle(defectiveVehiclePlate)
+        if (result.found && result.data) {
+          setDefectiveVehicleData(result)
+          setDefectiveVehicleType(result.source || 'private')
+          setDefectiveVehicleNotFound(false)
+          const cachedCode = result.vehicleCode?.trim()
+          if (cachedCode && !defectiveVehicleCode.trim()) {
+            setDefectiveVehicleCode(cachedCode)
+          }
+        } else if (trigger === 'manual') {
+          setDefectiveVehicleData(null)
+          setDefectiveVehicleType('')
+          setDefectiveVehicleNotFound(true)
+        } else {
+          const existingPlate = defectiveVehicleData?.found
+            ? normalizePlate(defectiveVehicleData.data?.plateNumber ?? '')
+            : ''
+          if (existingPlate && existingPlate !== clean) {
+            setDefectiveVehicleData(null)
+            setDefectiveVehicleType('')
+          }
+          setDefectiveVehicleNotFound(true)
+        }
+      } catch {
+        if (trigger === 'manual') setDefectiveVehicleData(null)
+      } finally {
+        if (defectiveLookupInflightRef.current === clean) {
+          defectiveLookupInflightRef.current = null
+        }
+        setDefectiveLookupLoading(false)
       }
-    } catch {
-      setDefectiveVehicleData(null)
-    } finally {
-      setDefectiveLookupLoading(false)
-    }
-  }, [
-    defectiveVehiclePlate,
-    defectiveVehicleCode,
-    tryResolveStoredPlateForSlot,
-    setDefectiveVehicleCode,
-  ])
+    },
+    [
+      defectiveVehiclePlate,
+      defectiveVehicleCode,
+      defectiveVehicleData,
+      tryResolveStoredPlateForSlot,
+      setDefectiveVehicleCode,
+    ]
+  )
 
   // Vehicle lookup for working (exchange)
   const handleWorkingLookup = useCallback(async () => {
@@ -2737,11 +2835,16 @@ function CreateTowForm({
                                   const val = e.target.value.trim()
                                   if (
                                     shouldTriggerPlateLookupOnBlur(val, {
-                                      hasFoundData: vehicleData?.found,
+                                      lastSuccessfulPlate: vehicleData?.found
+                                        ? vehicleData.data?.plateNumber
+                                        : null,
                                       lookupAlreadyFailed: vehicleLookupNotFound,
+                                      isLookupInFlight:
+                                        defectiveLookupLoading ||
+                                        singleLookupInflightRef.current != null,
                                     })
                                   ) {
-                                    handleVehicleLookup()
+                                    void handleVehicleLookup('blur')
                                   }
                                 }}
                                 placeholder="1234567"
@@ -2752,7 +2855,7 @@ function CreateTowForm({
                               />
                               <button
                                 type="button"
-                                onClick={handleVehicleLookup}
+                                onClick={() => void handleVehicleLookup('manual')}
                                 disabled={
                                   vehiclePlate.replace(/[^0-9]/g, '').length < 5 ||
                                   defectiveLookupLoading
@@ -3341,11 +3444,16 @@ function CreateTowForm({
                                 const val = e.target.value.trim()
                                 if (
                                   shouldTriggerPlateLookupOnBlur(val, {
-                                    hasFoundData: workingVehicleData?.found,
+                                    lastSuccessfulPlate: workingVehicleData?.found
+                                      ? workingVehicleData.data?.plateNumber
+                                      : null,
                                     lookupAlreadyFailed: workingVehicleNotFound,
+                                    isLookupInFlight:
+                                      workingLookupLoading ||
+                                      workingLookupInflightRef.current != null,
                                   })
                                 ) {
-                                  handleWorkingVehicleLookup(val)
+                                  void handleWorkingVehicleLookup(val, 'blur')
                                 }
                               }}
                               placeholder="מספר רכב"
@@ -3643,11 +3751,16 @@ function CreateTowForm({
                                 const val = e.target.value.trim()
                                 if (
                                   shouldTriggerPlateLookupOnBlur(val, {
-                                    hasFoundData: defectiveVehicleData?.found,
+                                    lastSuccessfulPlate: defectiveVehicleData?.found
+                                      ? defectiveVehicleData.data?.plateNumber
+                                      : null,
                                     lookupAlreadyFailed: defectiveVehicleNotFound,
+                                    isLookupInFlight:
+                                      defectiveLookupLoading ||
+                                      defectiveLookupInflightRef.current != null,
                                   })
                                 ) {
-                                  handleDefectiveLookup()
+                                  void handleDefectiveLookup('blur')
                                 }
                               }}
                               placeholder="מספר רכב"
