@@ -3238,9 +3238,9 @@ export default function TowDetailsPage() {
                             <span className="mx-2">→</span>
                             <span className="text-gray-800">{log.new_value || '—'}</span>
                           </div>
-                          {log.user?.full_name && (
-                            <div className="mt-1 text-xs text-gray-400">על ידי {log.user.full_name}</div>
-                          )}
+                          <div className="mt-1 text-xs text-gray-400">
+                            על ידי {log.user?.full_name ?? 'לא ידוע'}
+                          </div>
                         </>
                       )}
                     </div>
