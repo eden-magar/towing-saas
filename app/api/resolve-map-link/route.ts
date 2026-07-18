@@ -150,6 +150,9 @@ type GeocodeResult = {
   formatted_address?: string
   types?: string[]
   address_components?: GeocodeAddressComponent[]
+  geometry?: {
+    location?: { lat: number; lng: number }
+  }
 }
 
 /** City label from address_components: locality, else administrative_area_level_2. */
@@ -164,13 +167,57 @@ function cityFromGeocodeResult(result: GeocodeResult): string | null {
   return null
 }
 
+/** Equirectangular distance in meters — fine for nearby geocode candidates. */
+function distanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const x = toRad(lng2 - lng1) * Math.cos(toRad((lat1 + lat2) / 2))
+  const y = toRad(lat2 - lat1)
+  return Math.sqrt(x * x + y * y) * 6371000
+}
+
+function isStreetOrRoute(result: GeocodeResult): boolean {
+  const types = result.types ?? []
+  return types.includes('street_address') || types.includes('route')
+}
+
+function isPlusCode(result: GeocodeResult): boolean {
+  return (result.types ?? []).includes('plus_code')
+}
+
+function closestResult(
+  pool: GeocodeResult[],
+  lat: number,
+  lng: number
+): GeocodeResult {
+  let best = pool[0]
+  let bestDist = Infinity
+  for (const result of pool) {
+    const loc = result.geometry?.location
+    const dist =
+      loc != null ? distanceMeters(lat, lng, loc.lat, loc.lng) : Infinity
+    if (dist < bestDist) {
+      best = result
+      bestDist = dist
+    }
+  }
+  return best
+}
+
 /**
- * Pick readable address text: majority city among results (avoids a lone
- * street_address mislabeled to a neighboring city), then prefer street-level
- * precision (street_address / route) over plus_code or bare locality.
- * Falls back to results[0] when no locality info exists.
+ * Pick readable address text:
+ * majority city → usable street types (street_address / route) → nearest of those.
+ * Falls back to closest non-plus_code in that city, then results[0].
  */
-function pickFormattedAddress(results: GeocodeResult[]): string | null {
+function pickFormattedAddress(
+  results: GeocodeResult[],
+  lat: number,
+  lng: number
+): string | null {
   if (results.length === 0) return null
 
   const withAddress = results.filter((r) => r.formatted_address?.trim())
@@ -197,31 +244,31 @@ function pickFormattedAddress(results: GeocodeResult[]): string | null {
     return withAddress[0].formatted_address?.trim() || null
   }
 
-  const candidates = withAddress.filter(
+  const cityResults = withAddress.filter(
     (r) => cityFromGeocodeResult(r) === majorityCity
   )
-  const pool = candidates.length > 0 ? candidates : withAddress
-
-  const precisionRank = (result: GeocodeResult): number => {
-    const types = result.types ?? []
-    if (types.includes('street_address')) return 3
-    if (types.includes('route')) return 2
-    if (types.includes('plus_code')) return 0
-    if (types.includes('locality') || types.includes('political')) return 1
-    return 1
+  if (cityResults.length === 0) {
+    return withAddress[0].formatted_address?.trim() || null
   }
 
-  let best = pool[0]
-  let bestRank = precisionRank(best)
-  for (let i = 1; i < pool.length; i++) {
-    const rank = precisionRank(pool[i])
-    if (rank > bestRank) {
-      best = pool[i]
-      bestRank = rank
-    }
+  const usable = cityResults.filter(isStreetOrRoute)
+  if (usable.length > 0) {
+    return (
+      closestResult(usable, lat, lng).formatted_address?.trim() ||
+      withAddress[0].formatted_address ||
+      null
+    )
   }
 
-  return best.formatted_address?.trim() || withAddress[0].formatted_address || null
+  // No street/route in majority city: closest of any type, avoiding plus_code
+  // when another candidate exists.
+  const nonPlus = cityResults.filter((r) => !isPlusCode(r))
+  const fallbackPool = nonPlus.length > 0 ? nonPlus : cityResults
+  return (
+    closestResult(fallbackPool, lat, lng).formatted_address?.trim() ||
+    withAddress[0].formatted_address ||
+    null
+  )
 }
 
 async function reverseGeocodeAddress(lat: number, lng: number): Promise<string> {
@@ -238,7 +285,7 @@ async function reverseGeocodeAddress(lat: number, lng: number): Promise<string> 
       results?: GeocodeResult[]
     }
 
-    const picked = pickFormattedAddress(data.results ?? [])
+    const picked = pickFormattedAddress(data.results ?? [], lat, lng)
     if (picked) return picked
   } catch (err) {
     console.error('[resolve-map-link] geocode failed', err)
