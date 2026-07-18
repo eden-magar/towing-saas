@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { getDriverDisplayName, hebrewTowStatusLabel, logTowAction } from './tow-change-log'
 
 export type RejectionReason = 'break' | 'vehicle_issue' | 'too_far' | 'personal' | 'other'
 
@@ -158,6 +159,23 @@ export async function approveRejectionRequest(
       })
       .eq('id', request.tow_id)
   }
+
+  const newDriverName = reassignToDriverId
+    ? await getDriverDisplayName(reassignToDriverId)
+    : null
+  await logTowAction(
+    request.tow_id,
+    [
+      {
+        field_name: 'אישור דחייה',
+        old_value: null,
+        new_value: reassignToDriverId
+          ? `הועבר לנהג ${newDriverName ?? ''} (${hebrewTowStatusLabel('assigned')})`
+          : `הוחזר לתור (${hebrewTowStatusLabel('pending')})`,
+      },
+    ],
+    reviewerId
+  )
 
   return true
 }

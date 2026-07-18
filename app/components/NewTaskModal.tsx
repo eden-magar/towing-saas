@@ -15,14 +15,13 @@ import {
   X,
   Route
 } from 'lucide-react'
-import { DriverTask } from '@/app/lib/queries/driver-tasks'
+import { DriverTask, acceptTask } from '@/app/lib/queries/driver-tasks'
 import { 
   createRejectionRequest, 
   getPendingRejectionRequest,
   REJECTION_REASONS,
   RejectionReason 
 } from '@/app/lib/queries/rejection-requests'
-import { supabase } from '@/app/lib/supabase'
 import LicensePlate from '@/app/driver/components/LicensePlate'
 
 type RoutePointLite = { point_type: string; point_order: number }
@@ -174,16 +173,7 @@ export default function NewTaskModal({
   const handleAccept = async () => {
     setIsProcessing(true)
     try {
-      const { error } = await supabase
-        .from('tows')
-        .update({
-          status: 'in_progress',
-          started_at: new Date().toISOString(),
-        })
-        .eq('id', task.id)
-
-      if (error) throw error
-
+      await acceptTask(task.id)
       onAccept()
       router.push(`/driver/task/${task.id}`)
     } catch (err) {

@@ -883,7 +883,7 @@ export interface DriverCashTransaction {
 export interface TowChangeLog {
   id: string
   tow_id: string
-  changed_by: string
+  changed_by: string | null
   changed_at: string
   field_name: string
   old_value: string | null

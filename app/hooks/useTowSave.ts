@@ -11,7 +11,6 @@ import {
   updateTow,
   updateTowStatus,
   updateStorageFollowUpTow,
-  saveTowChangeLogs,
   type EditTowSnapshot,
 } from '../lib/queries/tows'
 import {
@@ -729,29 +728,8 @@ export function useTowSave(params: UseTowSaveParams) {
       console.error('[useTowSave] sync storage reservations failed:', err)
     }
 
-    // שמירת לוג שינויים
-    if (originalTow && user) {
-      const changes: { field_name: string; old_value: string | null; new_value: string | null }[] = []
-      
-      if (String(originalTow.final_price) !== String(towData.finalPrice)) {
-        changes.push({ field_name: 'מחיר סופי', old_value: String(originalTow.final_price ?? ''), new_value: String(towData.finalPrice ?? '') })
-      }
-      if ((originalTow.payment_method ?? '') !== (towData.paymentMethod ?? '')) {
-        changes.push({ field_name: 'אמצעי תשלום', old_value: originalTow.payment_method ?? null, new_value: towData.paymentMethod ?? null })
-      }
-      if ((originalTow.notes ?? '') !== (towData.notes ?? '')) {
-        changes.push({ field_name: 'הערות', old_value: originalTow.notes ?? null, new_value: towData.notes ?? null })
-      }
-      const normalizeDate = (d: string | null) => d ? new Date(d).toISOString().slice(0, 16) : null
-      if (normalizeDate(originalTow.scheduled_at) !== normalizeDate(towData.scheduledAt ?? null)) {
-        const formatDate = (d: string | null) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
-        changes.push({ field_name: 'תאריך ושעה', old_value: formatDate(originalTow.scheduled_at), new_value: formatDate(towData.scheduledAt ?? null) })
-      }
-      if (changes.length > 0) {
-        await saveTowChangeLogs(editTowId, user.id, changes)
-      }
-    }
-    
+    // שמירת לוג שינויים — handled inside updateTow (covers all edit entry points)
+
     await updateTow({ ...towData, towId: editTowId, priceMode })
 
     try {

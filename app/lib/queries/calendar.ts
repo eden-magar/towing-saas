@@ -6,6 +6,12 @@ import {
   getTowTimeBounds,
   type TowTimeBoundsInput,
 } from '../utils/tow-time-bounds'
+import {
+  formatLogDateTime,
+  getDriverDisplayName,
+  logTowAction,
+  type TowChangeEntry,
+} from './tow-change-log'
 
 type CalendarTowVehicleSummary = Pick<TowVehicle, 'id' | 'tow_id' | 'plate_number' | 'order_index'>
 type CalendarTowLegSummary = Pick<TowLeg, 'id' | 'tow_id' | 'leg_order' | 'from_address' | 'to_address'>
@@ -314,6 +320,12 @@ export async function updateTowSchedule(
   driverId?: string,
   truckId?: string
 ) {
+  const { data: existing } = await supabase
+    .from('tows')
+    .select('scheduled_at, driver_id')
+    .eq('id', towId)
+    .maybeSingle()
+
   const updates: Record<string, any> = {
     scheduled_at: scheduledAt.toISOString()
   }
@@ -347,6 +359,31 @@ export async function updateTowSchedule(
     } catch (err) {
       console.error('Failed to check/create driver-truck assignment:', err)
     }
+  }
+
+  const logs: TowChangeEntry[] = []
+  const oldSchedule = formatLogDateTime(existing?.scheduled_at)
+  const newSchedule = formatLogDateTime(scheduledAt.toISOString())
+  if (oldSchedule !== newSchedule) {
+    logs.push({
+      field_name: 'תזמון מחדש',
+      old_value: oldSchedule,
+      new_value: newSchedule,
+    })
+  }
+  if (driverId && driverId !== existing?.driver_id) {
+    const [oldName, newName] = await Promise.all([
+      getDriverDisplayName(existing?.driver_id),
+      getDriverDisplayName(driverId),
+    ])
+    logs.push({
+      field_name: 'שיבוץ נהג',
+      old_value: oldName,
+      new_value: newName ?? 'שובץ',
+    })
+  }
+  if (logs.length > 0) {
+    await logTowAction(towId, logs)
   }
 
   return true

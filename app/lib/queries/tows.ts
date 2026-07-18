@@ -6,7 +6,6 @@ import {
 import { getCompanySettings } from './settings'
 import { updatePointStatus } from './driver-tasks'
 import type {
-  TowChangeLog,
   VehicleLookupResult,
   TowPoint,
   TowPointWithDetails,
@@ -26,6 +25,21 @@ import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 import { persistVehicleCodesToCache } from '../vehicle-lookup'
 import { withSignedTowImageUrls } from './tow-images-storage'
 import { calculateTowPrice, customerDiscountForPriceMode } from '../utils/price-calculator'
+import {
+  formatLogDateTime,
+  getDriverDisplayName,
+  hebrewTowStatusLabel,
+  logTowAction,
+  stringifyLogValue,
+  type TowChangeEntry,
+} from './tow-change-log'
+
+export {
+  getTowChangeLogs,
+  logTowAction,
+  resolveActingUserId,
+  saveTowChangeLogs,
+} from './tow-change-log'
 
 // ==================== טיפוסים ====================
 
@@ -1154,6 +1168,14 @@ export async function createTow(input: CreateTowInput) {
     }
   }
 
+  await logTowAction(towId, [
+    {
+      field_name: 'יצירת גרירה',
+      old_value: null,
+      new_value: hebrewTowStatusLabel(status),
+    },
+  ], input.createdBy)
+
   return { id: towId }
 }
 
@@ -1208,6 +1230,14 @@ export async function approveTowQuote(towId: string): Promise<ApproveTowQuoteRes
 
   await syncTowToLegacyCalendar(towId)
 
+  await logTowAction(towId, [
+    {
+      field_name: 'אישור הצעת מחיר',
+      old_value: hebrewTowStatusLabel('quote'),
+      new_value: hebrewTowStatusLabel(newStatus),
+    },
+  ])
+
   return { approved: true, newStatus }
 }
 
@@ -1220,16 +1250,13 @@ export async function updateTowStatus(
   changedBy?: string
 ) {
   const isTerminalCancel = status === 'cancelled' || status === 'cancelled_charged'
-  let previousStatus: string | null = null
 
-  if (isTerminalCancel) {
-    const { data: existing } = await supabase
-      .from('tows')
-      .select('status')
-      .eq('id', towId)
-      .maybeSingle()
-    previousStatus = existing?.status ?? null
-  }
+  const { data: existing } = await supabase
+    .from('tows')
+    .select('status')
+    .eq('id', towId)
+    .maybeSingle()
+  const previousStatus: string | null = existing?.status ?? null
 
   const updates: Record<string, any> = { status }
 
@@ -1280,28 +1307,24 @@ export async function updateTowStatus(
     } catch (err) {
       console.error('[updateTowStatus] failed to unreserve vehicles:', err)
     }
+  }
 
-    if (changedBy) {
-      const logs: { field_name: string; old_value: string | null; new_value: string | null }[] = [
-        {
-          field_name: 'סטטוס',
-          old_value: previousStatus,
-          new_value: status,
-        },
-      ]
-      if (status === 'cancelled_charged' && cancellationFee != null && cancellationFee > 0) {
-        logs.push({
-          field_name: 'דמי ביטול',
-          old_value: null,
-          new_value: String(cancellationFee),
-        })
-      }
-      try {
-        await saveTowChangeLogs(towId, changedBy, logs)
-      } catch (err) {
-        console.error('[updateTowStatus] failed to save change logs:', err)
-      }
+  if (previousStatus !== status) {
+    const logs: TowChangeEntry[] = [
+      {
+        field_name: 'שינוי סטטוס',
+        old_value: hebrewTowStatusLabel(previousStatus),
+        new_value: hebrewTowStatusLabel(status),
+      },
+    ]
+    if (status === 'cancelled_charged' && cancellationFee != null && cancellationFee > 0) {
+      logs.push({
+        field_name: 'דמי ביטול',
+        old_value: null,
+        new_value: String(cancellationFee),
+      })
     }
+    await logTowAction(towId, logs, changedBy)
   }
 
   return true
@@ -1402,13 +1425,17 @@ export async function manualCloseTow(
     minute: '2-digit',
   })
 
-  await saveTowChangeLogs(towId, adminUserId, [
-    {
-      field_name: 'סגירה ידנית',
-      old_value: tow.status,
-      new_value: `הגרירה נסגרה ידנית ע״י ${adminName} בתאריך ${closedAtLabel}`,
-    },
-  ])
+  await logTowAction(
+    towId,
+    [
+      {
+        field_name: 'סגירה ידנית',
+        old_value: hebrewTowStatusLabel(tow.status),
+        new_value: `הגרירה נסגרה ידנית ע״י ${adminName} בתאריך ${closedAtLabel}`,
+      },
+    ],
+    adminUserId
+  )
 
   return true
 }
@@ -1460,23 +1487,49 @@ export async function getTowDetailLight(towId: string): Promise<{
 export async function assignDriver(towId: string, driverId: string, truckId?: string, scheduledAt?: string) {
   const { data: existing } = await supabase
     .from('tows')
-    .select('scheduled_at')
+    .select('scheduled_at, driver_id')
     .eq('id', towId)
     .single()
+
+  const previousDriverId = existing?.driver_id ?? null
+  const isRemove = driverId == null || (driverId as unknown) === ''
 
   const { error } = await supabase
     .from('tows')
     .update({
-      driver_id: driverId,
+      driver_id: isRemove ? null : driverId,
       truck_id: truckId || null,
       status: 'assigned',
-      scheduled_at: scheduledAt || existing?.scheduled_at || new Date().toISOString()
+      scheduled_at: scheduledAt || existing?.scheduled_at || new Date().toISOString(),
     })
     .eq('id', towId)
 
   if (error) {
     console.error('Error assigning driver:', error)
     throw error
+  }
+
+  if (isRemove) {
+    const oldName = await getDriverDisplayName(previousDriverId)
+    await logTowAction(towId, [
+      {
+        field_name: 'הסרת נהג',
+        old_value: oldName,
+        new_value: null,
+      },
+    ])
+  } else {
+    const [oldName, newName] = await Promise.all([
+      getDriverDisplayName(previousDriverId),
+      getDriverDisplayName(driverId),
+    ])
+    await logTowAction(towId, [
+      {
+        field_name: 'שיבוץ נהג',
+        old_value: oldName,
+        new_value: newName ?? 'שובץ',
+      },
+    ])
   }
 
   return true
@@ -1921,12 +1974,30 @@ export async function createLinkedTow(
     await supabase.from('tow_points').insert(points)
   }
 
+  await logTowAction(
+    towId,
+    [
+      {
+        field_name: 'יצירת גרירה',
+        old_value: null,
+        new_value: `גרירה מקושרת — ${hebrewTowStatusLabel(status)}`,
+      },
+    ],
+    input.createdBy
+  )
+
   return { id: towId }
 }
 
 // ==================== עדכון מחיר ====================
 
 export async function updateTowPrice(towId: string, finalPrice: number) {
+  const { data: existing } = await supabase
+    .from('tows')
+    .select('final_price')
+    .eq('id', towId)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('tows')
     .update({ final_price: finalPrice })
@@ -1936,6 +2007,14 @@ export async function updateTowPrice(towId: string, finalPrice: number) {
     console.error('Error updating tow price:', error)
     throw error
   }
+
+  await logTowAction(towId, [
+    {
+      field_name: 'מחיר סופי',
+      old_value: existing?.final_price != null ? String(existing.final_price) : null,
+      new_value: String(finalPrice),
+    },
+  ])
 
   return true
 }
@@ -2247,7 +2326,41 @@ async function reconcileTowPointVehicles(
 export async function updateTow(input: UpdateTowInput) {
   const { data: existingTow, error: existingTowError } = await supabase
     .from('tows')
-    .select('status')
+    .select(
+      `
+      status,
+      customer_id,
+      customer_order_number,
+      department,
+      ordered_by,
+      notes,
+      final_price,
+      recommended_price,
+      price_mode,
+      price_breakdown,
+      scheduled_at,
+      scheduled_end_at,
+      completed_at,
+      payment_method,
+      invoice_name,
+      start_from_base,
+      dropoff_to_storage,
+      required_truck_types,
+      visibility_overrides,
+      show_photos_override,
+      show_price_override,
+      show_driver_info_override,
+      show_driver_phone_override,
+      show_status_history_override,
+      show_vehicles_override,
+      show_notes_override,
+      second_driver_id,
+      second_driver_scheduled_at,
+      tow_type,
+      driver_id,
+      truck_id
+    `
+    )
     .eq('id', input.towId)
     .single()
 
@@ -2258,37 +2371,239 @@ export async function updateTow(input: UpdateTowInput) {
 
   const protectClosedProgress = isClosedTowStatus(existingTow?.status)
 
+  const [existingVehiclesRes, existingPointsRes, existingLegsRes] = await Promise.all([
+    input.vehicles
+      ? supabase
+          .from('tow_vehicles')
+          .select('id, plate_number, manufacturer, model, color, is_working, tow_reason, order_index')
+          .eq('tow_id', input.towId)
+          .order('order_index', { ascending: true })
+      : Promise.resolve({ data: null as any, error: null }),
+    input.points
+      ? supabase
+          .from('tow_points')
+          .select('id, point_order, point_type, address, contact_name, contact_phone, status')
+          .eq('tow_id', input.towId)
+          .order('point_order', { ascending: true })
+      : Promise.resolve({ data: null as any, error: null }),
+    input.legs && !protectClosedProgress
+      ? supabase
+          .from('tow_legs')
+          .select('leg_type, leg_order, from_address, to_address')
+          .eq('tow_id', input.towId)
+          .order('leg_order', { ascending: true })
+      : Promise.resolve({ data: null as any, error: null }),
+  ])
+
+  const changeLogs: TowChangeEntry[] = []
+  const pushIfChanged = (
+    fieldName: string,
+    oldVal: string | null,
+    newVal: string | null
+  ) => {
+    const o = oldVal ?? null
+    const n = newVal ?? null
+    if (o === n) return
+    changeLogs.push({ field_name: fieldName, old_value: o, new_value: n })
+  }
+
   const towUpdates: Record<string, any> = {}
-  
-  if (input.customerId !== undefined) towUpdates.customer_id = input.customerId
-  if (input.customerOrderNumber !== undefined) towUpdates.customer_order_number = input.customerOrderNumber || null
-  if (input.department !== undefined) towUpdates.department = input.department
-  if (input.ordered_by !== undefined) towUpdates.ordered_by = input.ordered_by
-  if (input.notes !== undefined) towUpdates.notes = input.notes
-  if (input.finalPrice !== undefined) towUpdates.final_price = input.finalPrice
-  if (input.recommendedPrice !== undefined) towUpdates.recommended_price = input.recommendedPrice
-  if (input.priceBreakdown !== undefined) towUpdates.price_breakdown = input.priceBreakdown
-  if (input.priceMode !== undefined) towUpdates.price_mode = input.priceMode
-  if (input.requiredTruckTypes !== undefined) towUpdates.required_truck_types = input.requiredTruckTypes
-  if (input.scheduledAt !== undefined) towUpdates.scheduled_at = input.scheduledAt
-  if (input.scheduledEndAt !== undefined) towUpdates.scheduled_end_at = input.scheduledEndAt
-  if (input.completedAt !== undefined) towUpdates.completed_at = input.completedAt
-  if (input.paymentMethod !== undefined) towUpdates.payment_method = input.paymentMethod
-  if (input.invoiceName !== undefined) towUpdates.invoice_name = input.invoiceName
-  if (input.startFromBase !== undefined) towUpdates.start_from_base = input.startFromBase
-  if (input.dropoffToStorage !== undefined) towUpdates.dropoff_to_storage = input.dropoffToStorage
-  if (input.visibilityOverrides !== undefined) towUpdates.visibility_overrides = input.visibilityOverrides
+
+  if (input.customerId !== undefined) {
+    towUpdates.customer_id = input.customerId
+    if ((existingTow?.customer_id ?? null) !== (input.customerId ?? null)) {
+      const ids = [existingTow?.customer_id, input.customerId].filter(Boolean) as string[]
+      let nameById = new Map<string, string>()
+      if (ids.length > 0) {
+        const { data: customers } = await supabase
+          .from('customers')
+          .select('id, name')
+          .in('id', ids)
+        nameById = new Map((customers ?? []).map((c) => [c.id, c.name]))
+      }
+      pushIfChanged(
+        'לקוח',
+        existingTow?.customer_id
+          ? nameById.get(existingTow.customer_id) ?? existingTow.customer_id
+          : null,
+        input.customerId ? nameById.get(input.customerId) ?? input.customerId : null
+      )
+    }
+  }
+  if (input.customerOrderNumber !== undefined) {
+    towUpdates.customer_order_number = input.customerOrderNumber || null
+    pushIfChanged(
+      'מספר הזמנת לקוח',
+      existingTow?.customer_order_number ?? null,
+      input.customerOrderNumber || null
+    )
+  }
+  if (input.department !== undefined) {
+    towUpdates.department = input.department
+    pushIfChanged('מחלקה', existingTow?.department ?? null, input.department ?? null)
+  }
+  if (input.ordered_by !== undefined) {
+    towUpdates.ordered_by = input.ordered_by
+    pushIfChanged('מזמין', existingTow?.ordered_by ?? null, input.ordered_by ?? null)
+  }
+  if (input.notes !== undefined) {
+    towUpdates.notes = input.notes
+    pushIfChanged('הערות', existingTow?.notes ?? null, input.notes ?? null)
+  }
+  if (input.finalPrice !== undefined) {
+    towUpdates.final_price = input.finalPrice
+    pushIfChanged(
+      'מחיר סופי',
+      existingTow?.final_price != null ? String(existingTow.final_price) : null,
+      input.finalPrice != null ? String(input.finalPrice) : null
+    )
+  }
+  if (input.recommendedPrice !== undefined) {
+    towUpdates.recommended_price = input.recommendedPrice
+    pushIfChanged(
+      'מחיר מומלץ',
+      existingTow?.recommended_price != null ? String(existingTow.recommended_price) : null,
+      input.recommendedPrice != null ? String(input.recommendedPrice) : null
+    )
+  }
+  if (input.priceBreakdown !== undefined) {
+    towUpdates.price_breakdown = input.priceBreakdown
+    const oldTotal =
+      existingTow?.price_breakdown &&
+      typeof (existingTow.price_breakdown as any).total === 'number'
+        ? String((existingTow.price_breakdown as any).total)
+        : stringifyLogValue(existingTow?.price_breakdown)
+    const newTotal =
+      input.priceBreakdown && typeof input.priceBreakdown.total === 'number'
+        ? String(input.priceBreakdown.total)
+        : stringifyLogValue(input.priceBreakdown)
+    pushIfChanged('פירוט מחיר', oldTotal, newTotal)
+  }
+  if (input.priceMode !== undefined) {
+    towUpdates.price_mode = input.priceMode
+    pushIfChanged('מצב מחיר', existingTow?.price_mode ?? null, input.priceMode ?? null)
+  }
+  if (input.requiredTruckTypes !== undefined) {
+    towUpdates.required_truck_types = input.requiredTruckTypes
+    pushIfChanged(
+      'סוגי גרר נדרשים',
+      stringifyLogValue(existingTow?.required_truck_types),
+      stringifyLogValue(input.requiredTruckTypes)
+    )
+  }
+  if (input.scheduledAt !== undefined) {
+    towUpdates.scheduled_at = input.scheduledAt
+    pushIfChanged(
+      'תאריך ושעה',
+      formatLogDateTime(existingTow?.scheduled_at),
+      formatLogDateTime(input.scheduledAt)
+    )
+  }
+  if (input.scheduledEndAt !== undefined) {
+    towUpdates.scheduled_end_at = input.scheduledEndAt
+    pushIfChanged(
+      'שעת סיום מתוכננת',
+      formatLogDateTime(existingTow?.scheduled_end_at),
+      formatLogDateTime(input.scheduledEndAt)
+    )
+  }
+  if (input.completedAt !== undefined) {
+    towUpdates.completed_at = input.completedAt
+    pushIfChanged(
+      'שעת סיום בפועל',
+      formatLogDateTime(existingTow?.completed_at),
+      formatLogDateTime(input.completedAt)
+    )
+  }
+  if (input.paymentMethod !== undefined) {
+    towUpdates.payment_method = input.paymentMethod
+    pushIfChanged(
+      'אמצעי תשלום',
+      existingTow?.payment_method ?? null,
+      input.paymentMethod ?? null
+    )
+  }
+  if (input.invoiceName !== undefined) {
+    towUpdates.invoice_name = input.invoiceName
+    pushIfChanged('שם לחשבונית', existingTow?.invoice_name ?? null, input.invoiceName ?? null)
+  }
+  if (input.startFromBase !== undefined) {
+    towUpdates.start_from_base = input.startFromBase
+    pushIfChanged(
+      'יציאה מבסיס',
+      stringifyLogValue(existingTow?.start_from_base),
+      stringifyLogValue(input.startFromBase)
+    )
+  }
+  if (input.dropoffToStorage !== undefined) {
+    towUpdates.dropoff_to_storage = input.dropoffToStorage
+    pushIfChanged(
+      'פריקה לאחסנה',
+      stringifyLogValue(existingTow?.dropoff_to_storage),
+      stringifyLogValue(input.dropoffToStorage)
+    )
+  }
+  if (input.visibilityOverrides !== undefined) {
+    towUpdates.visibility_overrides = input.visibilityOverrides
+    pushIfChanged(
+      'הגדרות תצוגה',
+      stringifyLogValue(existingTow?.visibility_overrides),
+      stringifyLogValue(input.visibilityOverrides)
+    )
+  }
   if (input.portalVisibilityOverrides) {
     for (const [column, value] of Object.entries(input.portalVisibilityOverrides)) {
       towUpdates[column] = value
+      const prev = (existingTow as any)?.[column]
+      if (prev !== value) {
+        pushIfChanged(`תצוגת פורטל (${column})`, stringifyLogValue(prev), stringifyLogValue(value))
+      }
     }
   }
-  if (input.secondDriverId !== undefined) towUpdates.second_driver_id = input.secondDriverId
-  if (input.secondDriverScheduledAt !== undefined) towUpdates.second_driver_scheduled_at = input.secondDriverScheduledAt
-  if (input.towType !== undefined) towUpdates.tow_type = input.towType
-  if (input.driverId !== undefined) towUpdates.driver_id = input.driverId
-  if (input.truckId !== undefined) towUpdates.truck_id = input.truckId
-  if (input.status !== undefined) towUpdates.status = input.status
+  if (input.secondDriverId !== undefined) {
+    towUpdates.second_driver_id = input.secondDriverId
+    if ((existingTow?.second_driver_id ?? null) !== (input.secondDriverId ?? null)) {
+      const [oldName, newName] = await Promise.all([
+        getDriverDisplayName(existingTow?.second_driver_id),
+        getDriverDisplayName(input.secondDriverId),
+      ])
+      pushIfChanged('נהג שני', oldName, newName)
+    }
+  }
+  if (input.secondDriverScheduledAt !== undefined) {
+    towUpdates.second_driver_scheduled_at = input.secondDriverScheduledAt
+    pushIfChanged(
+      'תזמון נהג שני',
+      formatLogDateTime(existingTow?.second_driver_scheduled_at),
+      formatLogDateTime(input.secondDriverScheduledAt)
+    )
+  }
+  if (input.towType !== undefined) {
+    towUpdates.tow_type = input.towType
+    pushIfChanged('סוג גרירה', existingTow?.tow_type ?? null, input.towType ?? null)
+  }
+  if (input.driverId !== undefined) {
+    towUpdates.driver_id = input.driverId
+    if ((existingTow?.driver_id ?? null) !== (input.driverId ?? null)) {
+      const [oldName, newName] = await Promise.all([
+        getDriverDisplayName(existingTow?.driver_id),
+        getDriverDisplayName(input.driverId),
+      ])
+      pushIfChanged('נהג', oldName, newName)
+    }
+  }
+  if (input.truckId !== undefined) {
+    towUpdates.truck_id = input.truckId
+    pushIfChanged('גרר', existingTow?.truck_id ?? null, input.truckId ?? null)
+  }
+  if (input.status !== undefined) {
+    towUpdates.status = input.status
+    pushIfChanged(
+      'שינוי סטטוס',
+      hebrewTowStatusLabel(existingTow?.status),
+      hebrewTowStatusLabel(input.status)
+    )
+  }
 
   // Assigning a driver to a still-pending tow must promote it to 'assigned',
   // otherwise it stays "ממתין לשיבוץ" and never reaches the driver app
@@ -2300,6 +2615,97 @@ export async function updateTow(input: UpdateTowInput) {
     existingTow?.status === 'pending'
   ) {
     towUpdates.status = 'assigned'
+    pushIfChanged(
+      'שינוי סטטוס',
+      hebrewTowStatusLabel('pending'),
+      hebrewTowStatusLabel('assigned')
+    )
+  }
+
+  if (input.vehicles) {
+    const prevPlates = (existingVehiclesRes.data ?? [])
+      .map((v: { plate_number: string }) => v.plate_number)
+      .filter(Boolean)
+      .join(', ')
+    const nextPlates = input.vehicles
+      .map((v) => v.plateNumber)
+      .filter(Boolean)
+      .join(', ')
+    pushIfChanged('רכבים', prevPlates || null, nextPlates || null)
+  }
+
+  if (input.legs && !protectClosedProgress) {
+    const summarizeLegs = (
+      rows: { leg_type?: string; from_address?: string | null; to_address?: string | null; legType?: string; fromAddress?: string; toAddress?: string }[]
+    ) =>
+      rows
+        .map((l) => {
+          const type = l.legType ?? l.leg_type ?? ''
+          const from = l.fromAddress ?? l.from_address ?? ''
+          const to = l.toAddress ?? l.to_address ?? ''
+          return `${type}: ${from} → ${to}`
+        })
+        .join(' | ')
+    pushIfChanged(
+      'מסלול (רגליים)',
+      summarizeLegs(existingLegsRes.data ?? []) || null,
+      summarizeLegs(input.legs) || null
+    )
+  }
+
+  if (input.points) {
+    type PrevPointRow = {
+      id: string
+      point_order: number
+      point_type: string
+      address: string | null
+      contact_name: string | null
+      contact_phone: string | null
+      status: string
+    }
+    const prevPoints = (existingPointsRes.data ?? []) as PrevPointRow[]
+    const prevById = new Map(prevPoints.map((p) => [p.id, p]))
+    const incomingIds = new Set(
+      input.points.map((p) => p.id).filter((id): id is string => !!id)
+    )
+
+    for (const prev of prevPoints) {
+      if (!incomingIds.has(prev.id)) {
+        changeLogs.push({
+          field_name: 'נקודה הוסרה',
+          old_value: prev.address || `נקודה ${prev.point_order}`,
+          new_value: null,
+        })
+      }
+    }
+
+    for (const point of input.points) {
+      if (point.id && prevById.has(point.id)) {
+        const prev = prevById.get(point.id)!
+        if ((prev.address ?? null) !== (point.address ?? null)) {
+          changeLogs.push({
+            field_name: 'כתובת נקודה',
+            old_value: prev.address,
+            new_value: point.address ?? null,
+          })
+        }
+        const prevContact = [prev.contact_name, prev.contact_phone].filter(Boolean).join(' / ')
+        const nextContact = [point.contact_name, point.contact_phone].filter(Boolean).join(' / ')
+        if (prevContact !== nextContact) {
+          changeLogs.push({
+            field_name: 'איש קשר בנקודה',
+            old_value: prevContact || null,
+            new_value: nextContact || null,
+          })
+        }
+      } else {
+        changeLogs.push({
+          field_name: 'נקודה נוספה',
+          old_value: null,
+          new_value: point.address || `${point.point_type} #${point.point_order}`,
+        })
+      }
+    }
   }
 
   if (Object.keys(towUpdates).length > 0) {
@@ -2376,6 +2782,10 @@ export async function updateTow(input: UpdateTowInput) {
       console.error('Error updating tow points:', pointsError)
       throw pointsError
     }
+  }
+
+  if (changeLogs.length > 0) {
+    await logTowAction(input.towId, changeLogs)
   }
 
   return true
@@ -2555,37 +2965,5 @@ export async function recalculateTowPrice(
   }
 }
 
-// שמירת לוג שינויים
-export async function saveTowChangeLogs(
-  towId: string,
-  changedBy: string,
-  changes: { field_name: string; old_value: string | null; new_value: string | null }[]
-) {
-  if (changes.length === 0) return
-  const { error } = await supabase
-    .from('tow_change_log')
-    .insert(changes.map(c => ({
-      tow_id: towId,
-      changed_by: changedBy,
-      field_name: c.field_name,
-      old_value: c.old_value,
-      new_value: c.new_value
-    })))
-  if (error) throw error
-}
 
-// טעינת לוג שינויים
-export async function getTowChangeLogs(towId: string): Promise<TowChangeLog[]> {
-  const { data, error } = await supabase
-    .from('tow_change_log')
-    .select(`
-      *,
-      user:users!tow_change_log_changed_by_fkey (
-        full_name
-      )
-    `)
-    .eq('tow_id', towId)
-    .order('changed_at', { ascending: false })
-  if (error) throw error
-  return data || []
-}
+

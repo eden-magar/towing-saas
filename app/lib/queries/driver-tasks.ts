@@ -15,6 +15,7 @@ import {
   hydrateDefectsFromTowReason,
   serializeDefects,
 } from '../constants/defects'
+import { hebrewTowStatusLabel, logTowAction } from './tow-change-log'
 
 // ==================== טיפוסים ====================
 
@@ -624,6 +625,12 @@ export async function updateDriverStatus(
 // ==================== קבלת/דחיית משימה ====================
 
 export async function acceptTask(towId: string) {
+  const { data: existing } = await supabase
+    .from('tows')
+    .select('status')
+    .eq('id', towId)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('tows')
     .update({ 
@@ -636,6 +643,14 @@ export async function acceptTask(towId: string) {
     console.error('Error accepting task:', error)
     throw error
   }
+
+  await logTowAction(towId, [
+    {
+      field_name: 'קבלת גרירה',
+      old_value: hebrewTowStatusLabel(existing?.status),
+      new_value: hebrewTowStatusLabel('in_progress'),
+    },
+  ])
 
   return true
 }
@@ -664,6 +679,12 @@ export async function updateTaskStatus(
   towId: string, 
   status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged'
 ) {
+  const { data: existing } = await supabase
+    .from('tows')
+    .select('status')
+    .eq('id', towId)
+    .maybeSingle()
+
   const updates: Record<string, any> = { 
     status,
     updated_at: new Date().toISOString()
@@ -686,6 +707,21 @@ export async function updateTaskStatus(
     console.error('Error updating task status:', error)
     throw error
   }
+
+  const fieldName =
+    status === 'completed'
+      ? 'סיום גרירה'
+      : status === 'in_progress'
+        ? 'קבלת גרירה'
+        : 'שינוי סטטוס'
+
+  await logTowAction(towId, [
+    {
+      field_name: fieldName,
+      old_value: hebrewTowStatusLabel(existing?.status),
+      new_value: hebrewTowStatusLabel(status),
+    },
+  ])
 
   return true
 }
