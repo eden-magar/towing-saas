@@ -140,6 +140,90 @@ function extractCoordsFromWazeJson(html: string): { lat: number; lng: number } |
   return null
 }
 
+type GeocodeAddressComponent = {
+  long_name?: string
+  short_name?: string
+  types?: string[]
+}
+
+type GeocodeResult = {
+  formatted_address?: string
+  types?: string[]
+  address_components?: GeocodeAddressComponent[]
+}
+
+/** City label from address_components: locality, else administrative_area_level_2. */
+function cityFromGeocodeResult(result: GeocodeResult): string | null {
+  const components = result.address_components ?? []
+  const locality = components.find((c) => c.types?.includes('locality'))
+  if (locality?.long_name?.trim()) return locality.long_name.trim()
+  const admin2 = components.find((c) =>
+    c.types?.includes('administrative_area_level_2')
+  )
+  if (admin2?.long_name?.trim()) return admin2.long_name.trim()
+  return null
+}
+
+/**
+ * Pick readable address text: majority city among results (avoids a lone
+ * street_address mislabeled to a neighboring city), then prefer street-level
+ * precision (street_address / route) over plus_code or bare locality.
+ * Falls back to results[0] when no locality info exists.
+ */
+function pickFormattedAddress(results: GeocodeResult[]): string | null {
+  if (results.length === 0) return null
+
+  const withAddress = results.filter((r) => r.formatted_address?.trim())
+  if (withAddress.length === 0) return null
+
+  const cityCounts = new Map<string, number>()
+  for (const result of withAddress) {
+    const city = cityFromGeocodeResult(result)
+    if (!city) continue
+    cityCounts.set(city, (cityCounts.get(city) ?? 0) + 1)
+  }
+
+  let majorityCity: string | null = null
+  let majorityCount = 0
+  for (const [city, count] of cityCounts) {
+    if (count > majorityCount) {
+      majorityCity = city
+      majorityCount = count
+    }
+  }
+
+  // No locality/admin2 on any result → keep legacy first-result behavior.
+  if (majorityCity == null) {
+    return withAddress[0].formatted_address?.trim() || null
+  }
+
+  const candidates = withAddress.filter(
+    (r) => cityFromGeocodeResult(r) === majorityCity
+  )
+  const pool = candidates.length > 0 ? candidates : withAddress
+
+  const precisionRank = (result: GeocodeResult): number => {
+    const types = result.types ?? []
+    if (types.includes('street_address')) return 3
+    if (types.includes('route')) return 2
+    if (types.includes('plus_code')) return 0
+    if (types.includes('locality') || types.includes('political')) return 1
+    return 1
+  }
+
+  let best = pool[0]
+  let bestRank = precisionRank(best)
+  for (let i = 1; i < pool.length; i++) {
+    const rank = precisionRank(pool[i])
+    if (rank > bestRank) {
+      best = pool[i]
+      bestRank = rank
+    }
+  }
+
+  return best.formatted_address?.trim() || withAddress[0].formatted_address || null
+}
+
 async function reverseGeocodeAddress(lat: number, lng: number): Promise<string> {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   if (!apiKey) {
@@ -151,12 +235,11 @@ async function reverseGeocodeAddress(lat: number, lng: number): Promise<string> 
       `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=he`
     )
     const data = (await res.json()) as {
-      results?: Array<{ formatted_address?: string }>
+      results?: GeocodeResult[]
     }
 
-    if (data.results?.[0]?.formatted_address) {
-      return data.results[0].formatted_address
-    }
+    const picked = pickFormattedAddress(data.results ?? [])
+    if (picked) return picked
   } catch (err) {
     console.error('[resolve-map-link] geocode failed', err)
   }
