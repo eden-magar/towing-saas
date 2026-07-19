@@ -5,6 +5,7 @@ import {
 } from './storage'
 import { getCompanySettings } from './settings'
 import { updatePointStatus } from './driver-tasks'
+import { logManualActionItem } from './manual-action-items'
 import type {
   VehicleLookupResult,
   TowPoint,
@@ -1339,7 +1340,7 @@ export async function manualCloseTow(
   adminFullName: string
 ) {
   const [towRes, pointsRes] = await Promise.all([
-    supabase.from('tows').select('id, status').eq('id', towId).single(),
+    supabase.from('tows').select('id, status, order_number').eq('id', towId).single(),
     supabase
       .from('tow_points')
       .select('id, status, is_storage')
@@ -1394,8 +1395,39 @@ export async function manualCloseTow(
     }
   }
 
+  const towLabel = tow.order_number
+    ? `הזמנה ${tow.order_number}`
+    : `גרירה ${towId}`
+
   for (const point of storagePoints) {
-    await updatePointStatus(point.id, 'completed')
+    const result = await updatePointStatus(point.id, 'completed')
+    if (result.storageOk && result.storageFailures.length === 0) continue
+
+    const failures =
+      result.storageFailures.length > 0
+        ? result.storageFailures
+        : ['unknown']
+
+    for (const failure of failures) {
+      const parsed = failure.trim().match(/^(.*?)\s+(add|release)$/i)
+      const plate = parsed?.[1]?.trim() || null
+      const isRelease = parsed?.[2]?.toLowerCase() === 'release'
+      await logManualActionItem({
+        type: isRelease ? 'storage_release_failed' : 'storage_add_failed',
+        severity: 'high',
+        message: isRelease
+          ? `סגירה ידנית (${towLabel}): רכב ${plate ?? 'לא ידוע'} לא שוחרר מאחסנה למרות שנקודת האחסון הושלמה`
+          : `סגירה ידנית (${towLabel}): רכב ${plate ?? 'לא ידוע'} לא נכנס לאחסנה למרות שנקודת האחסון הושלמה`,
+        towId,
+        relatedEntity: plate ?? point.id,
+        details: {
+          storageFailures: result.storageFailures,
+          failure,
+          pointId: point.id,
+          source: 'manualCloseTow',
+        },
+      })
+    }
   }
 
   const now = new Date().toISOString()
