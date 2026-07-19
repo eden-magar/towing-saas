@@ -994,17 +994,27 @@
               </div>
             )}
 
-            {manualItems.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
-                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                    <span className="leading-snug">דורש טיפול ידני</span>
-                  </div>
+            <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
+              <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      manualItems.length > 0 ? 'bg-amber-500' : 'bg-green-500'
+                    }`}
+                  />
+                  <span className="leading-snug">דורש טיפול ידני</span>
+                </div>
+                {manualItems.length > 0 ? (
                   <span className="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full shrink-0">
                     {manualItems.length}
                   </span>
-                </div>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 bg-green-50 text-green-700 rounded-full shrink-0">
+                    <CheckCircle size={12} className="text-green-600" strokeWidth={2.5} />
+                  </span>
+                )}
+              </div>
+              {manualItems.length > 0 ? (
                 <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
                   {manualItems.map((item) => {
                     const createdLabel = new Date(item.created_at).toLocaleString('he-IL', {
@@ -1051,8 +1061,12 @@
                     )
                   })}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="px-3 py-2 text-center text-xs text-gray-400">
+                  אין כשלים — הכל תקין
+                </div>
+              )}
+            </div>
 
             {(alerts.length > 0 || overtimeDrivers.length > 0) && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-w-0">
