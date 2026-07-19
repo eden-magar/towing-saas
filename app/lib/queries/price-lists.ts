@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { logManualActionItem } from './manual-action-items'
 
 // ==================== טיפוסים ====================
 
@@ -1149,25 +1150,52 @@ export async function saveCustomerSurcharges(
     service: Omit<ServiceSurcharge, 'id' | 'company_id'>[]
   }
 ) {
-  await supabase.from('time_surcharges').delete().eq('price_list_id', priceListId)
-  await supabase.from('location_surcharges').delete().eq('price_list_id', priceListId)
-  await supabase.from('service_surcharges').delete().eq('price_list_id', priceListId)
+  const timeRows = surcharges.time.map((s) => ({
+    name: s.name,
+    label: s.label,
+    time_description: s.time_description ?? null,
+    time_start: s.time_start ?? null,
+    time_end: s.time_end ?? null,
+    surcharge_percent: s.surcharge_percent,
+    day_type: s.day_type ?? 'weekday',
+    sort_order: s.sort_order ?? 0,
+    is_active: s.is_active,
+  }))
 
-  if (surcharges.time.length > 0) {
-    await supabase.from('time_surcharges').insert(
-      surcharges.time.map(s => ({ ...s, company_id: companyId, price_list_id: priceListId }))
-    )
+  const locationRows = surcharges.location.map((s) => ({
+    label: s.label,
+    surcharge_percent: s.surcharge_percent,
+    is_active: s.is_active,
+  }))
+
+  const serviceRows = surcharges.service.map((s) => ({
+    label: s.label,
+    price: s.price,
+    price_type: s.price_type,
+    unit_label: s.unit_label ?? null,
+    is_active: s.is_active,
+    is_vat_exempt: s.is_vat_exempt === true,
+  }))
+
+  const { error } = await supabase.rpc('replace_customer_surcharges', {
+    p_price_list_id: priceListId,
+    p_time: timeRows,
+    p_location: locationRows,
+    p_service: serviceRows,
+  })
+
+  if (error) {
+    await logManualActionItem({
+      type: 'pricing_save_failed',
+      severity: 'high',
+      message: `שמירת תוספות מחירון לקוח נכשלה (price_list ${priceListId}) — ייתכן שהתוספות לא נשמרו`,
+      relatedEntity: priceListId,
+      details: { error: error.message, source: 'saveCustomerSurcharges' },
+      companyId,
+    })
+    throw error
   }
-  if (surcharges.location.length > 0) {
-    await supabase.from('location_surcharges').insert(
-      surcharges.location.map(s => ({ ...s, company_id: companyId, price_list_id: priceListId }))
-    )
-  }
-  if (surcharges.service.length > 0) {
-    await supabase.from('service_surcharges').insert(
-      surcharges.service.map(s => ({ ...s, company_id: companyId, price_list_id: priceListId }))
-    )
-  }
+
   return true
 }
 
