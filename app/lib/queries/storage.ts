@@ -36,6 +36,35 @@ export interface StoredVehicle {
 
 export interface StoredVehicleWithCustomer extends StoredVehicle {
   customer_name: string | null
+  /** Dropoff address of the reserved follow-up tow; null when not reserved / no dropoff */
+  destination_address?: string | null
+  /** order_number of the reserved tow, when present */
+  reserved_tow_order_number?: string | null
+}
+
+type ReservedTowPointRow = {
+  address: string | null
+  point_type: string | null
+  point_order: number | null
+}
+
+type ReservedTowNest = {
+  id: string
+  order_number: string | null
+  tow_points: ReservedTowPointRow[] | null
+} | null
+
+/** Last dropoff by point_order (same idea as NewTaskModal reverse-find). */
+function destinationAddressFromReservedTow(
+  reservedTow: ReservedTowNest
+): string | null {
+  if (!reservedTow?.tow_points?.length) return null
+  const dropoff = [...reservedTow.tow_points]
+    .sort((a, b) => (a.point_order ?? 0) - (b.point_order ?? 0))
+    .reverse()
+    .find((p) => p.point_type === 'dropoff')
+  const address = dropoff?.address?.trim()
+  return address || null
 }
 
 export interface StorageHistoryItem {
@@ -97,6 +126,15 @@ export async function getStoredVehicles(
       customer:customers!customer_id (
         id,
         name
+      ),
+      reserved_tow:tows!reserved_for_tow_id (
+        id,
+        order_number,
+        tow_points (
+          address,
+          point_type,
+          point_order
+        )
       )
     `)
     .eq('company_id', companyId)
@@ -119,10 +157,21 @@ export async function getStoredVehicles(
     throw error
   }
 
-  return (data || []).map(item => ({
-    ...item,
-    customer_name: (item.customer as any)?.name || null
-  }))
+  return (data || []).map((item) => {
+    const reservedTow = (item as { reserved_tow?: ReservedTowNest }).reserved_tow ?? null
+    const { reserved_tow: _omit, customer, ...rest } = item as typeof item & {
+      reserved_tow?: ReservedTowNest
+      customer?: { id: string; name: string } | null
+    }
+    return {
+      ...rest,
+      customer_name: customer?.name || null,
+      destination_address: destinationAddressFromReservedTow(reservedTow),
+      reserved_tow_order_number: reservedTow?.order_number
+        ? String(reservedTow.order_number)
+        : null,
+    }
+  })
 }
 
 // ==================== שמירת רכב לגרירה (reserved) ====================

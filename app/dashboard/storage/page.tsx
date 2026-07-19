@@ -453,6 +453,7 @@ export default function StoragePage() {
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">רכב</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">לקוח</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">מיקום</th>
+                <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">יעד</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">תאריך כניסה</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">סטטוס</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-gray-600">פעולות</th>
@@ -495,6 +496,22 @@ export default function StoragePage() {
                       <MapPin size={16} />
                       <span>{vehicle.location || '---'}</span>
                     </div>
+                  </td>
+                  <td className="px-4 py-4 max-w-[12rem]">
+                    {vehicle.current_status === 'reserved_for_tow' &&
+                    vehicle.destination_address ? (
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Truck size={16} className="shrink-0 text-amber-600" />
+                        <span
+                          className="truncate text-sm"
+                          title={vehicle.destination_address}
+                        >
+                          {vehicle.destination_address}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col items-start gap-1.5 text-gray-600">
@@ -681,6 +698,16 @@ export default function StoragePage() {
                     {vehicle.location}
                   </span>
                 )}
+                {vehicle.current_status === 'reserved_for_tow' &&
+                  vehicle.destination_address && (
+                    <span
+                      className="flex items-center gap-1 min-w-0 max-w-full"
+                      title={vehicle.destination_address}
+                    >
+                      <Truck size={14} className="shrink-0 text-amber-600" />
+                      <span className="truncate">{vehicle.destination_address}</span>
+                    </span>
+                  )}
               </div>
             </div>
           ))}
