@@ -273,36 +273,43 @@ export default function TasksPage() {
           </button>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-lg shadow overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-gray-400 text-sm">טוען...</div>
           ) : tasks.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">אין משימות עדיין</div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full bg-white text-base text-right border-collapse" dir="rtl">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">משימה ראשית</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">תת-משימה</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">משובץ ל</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">יעד</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">נוצר ע"י</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">סטטוס</th>
+                <tr className="bg-gray-100 border-b-2 border-gray-300">
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base">משימה ראשית</th>
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base">תת-משימה</th>
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base">משובץ ל</th>
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base">יעד</th>
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base">נוצר ע"י</th>
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base">סטטוס</th>
+                  <th className="text-right px-4 py-4 font-semibold text-gray-700 text-base min-w-[12rem] max-w-xs w-[18rem]">
+                    הערת נהג
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {tasks.map(task => {
                   const overdue = isOverdue(task.due_at, task.status)
                   const isSelected = selectedTask?.id === task.id
+                  const completionNote =
+                    task.status === 'done' ? (task.completion_note?.trim() || '') : ''
+                  const rejectedReason =
+                    task.status === 'rejected' ? (task.rejected_reason?.trim() || '') : ''
                   return (
                     <tr
                       key={task.id}
                       onClick={() => openEdit(task)}
-                      className={`border-b border-gray-100 last:border-0 cursor-pointer transition-colors ${
+                      className={`border-b border-gray-200 last:border-b-0 cursor-pointer transition-colors ${
                         isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                       }`}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           {task.task_type && (
                             <span
@@ -310,24 +317,43 @@ export default function TasksPage() {
                               style={{ background: task.task_type.color }}
                             />
                           )}
-                          <span className="font-medium">{task.task_type?.name || '—'}</span>
+                          <span className="font-medium text-base text-gray-900">
+                            {task.task_type?.name || '—'}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{task.task_subtype?.name || '—'}</td>
-                      <td className="px-4 py-3">{task.driver?.user?.full_name || '—'}</td>
-                      <td className={`px-4 py-3 text-xs ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                      <td className="px-4 py-4 text-base text-gray-600">
+                        {task.task_subtype?.name || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-base font-medium text-gray-900">
+                        {task.driver?.user?.full_name || '—'}
+                      </td>
+                      <td className={`px-4 py-4 text-base ${overdue ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
                         {new Date(task.due_at).toLocaleString('he-IL', {
                           day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
                         })}
                         {overdue && ' ⚠'}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs">
+                      <td className="px-4 py-4 text-base text-gray-600">
                         {task.created_by_user?.full_name || '—'}
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[task.status]}`}>
+                      <td className="px-4 py-4">
+                        <span className={`px-2 py-1 rounded-full text-base font-medium ${STATUS_COLORS[task.status]}`}>
                           {STATUS_LABELS[task.status]}
                         </span>
+                      </td>
+                      <td className="px-4 py-4 align-top min-w-[12rem] max-w-xs w-[18rem]">
+                        {completionNote ? (
+                          <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-base text-gray-800 whitespace-pre-line">
+                            {completionNote}
+                          </div>
+                        ) : rejectedReason ? (
+                          <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-base text-red-800 whitespace-pre-line">
+                            {rejectedReason}
+                          </div>
+                        ) : (
+                          <span className="text-base text-gray-400">—</span>
+                        )}
                       </td>
                     </tr>
                   )
