@@ -925,9 +925,9 @@
 
           {/* עמודה ימין (צרה): מפה + רשימות משניות */}
           <div className="flex flex-col gap-3 min-h-0 min-w-0 overflow-hidden flex-1">
-          <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-[12rem] min-w-0 overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-[18rem] min-w-0 overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 flex-shrink-0">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 מפה חיה
               </div>
@@ -952,11 +952,11 @@
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 flex-1 min-h-0 min-w-0 overflow-y-auto">
+          <div className="flex flex-col gap-3 flex-none max-h-[60%] min-h-0 min-w-0 overflow-y-auto">
             {rejectionRequests.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                     <span className="leading-snug">בקשות דחייה</span>
                   </div>
@@ -969,7 +969,7 @@
                     return (
                       <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
+                          <div className="text-sm font-medium text-gray-700 truncate">{req.driver?.user?.full_name}</div>
                           <div className="text-xs text-gray-400 truncate">
                             {req.reason === 'other'
                               ? (req.reason_note || 'אחר')
@@ -997,7 +997,7 @@
             {manualItems.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                     <span className="leading-snug">דורש טיפול ידני</span>
                   </div>
@@ -1018,7 +1018,7 @@
                     return (
                       <div key={item.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700 whitespace-normal break-words">
+                          <div className="text-sm font-medium text-gray-700 whitespace-normal break-words">
                             {item.message}
                           </div>
                           <div className="text-xs text-gray-400 mt-0.5">{createdLabel}</div>
@@ -1054,10 +1054,12 @@
               </div>
             )}
 
+            {(alerts.length > 0 || overtimeDrivers.length > 0) && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-w-0">
             {alerts.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                     <span className="leading-snug">התראות תוקף</span>
                   </div>
@@ -1075,7 +1077,7 @@
                           <Icon size={10} className={alert.severity === 'expired' ? 'text-red-600' : 'text-amber-600'} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-gray-700 truncate">{alert.entityName}</div>
+                          <div className="text-sm font-medium text-gray-700 truncate">{alert.entityName}</div>
                           <div className="text-xs text-gray-500 truncate">{config?.label || ''}</div>
                           <div className="text-xs text-gray-400">{getDaysText(alert.daysLeft)}</div>
                         </div>
@@ -1092,7 +1094,7 @@
             {overtimeDrivers.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
                     <span className="leading-snug">לא סיימו משמרת</span>
                   </div>
@@ -1113,7 +1115,7 @@
                       <div key={shift.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 min-w-0">
-                            <div className="text-xs font-medium text-gray-700 truncate min-w-0">
+                            <div className="text-sm font-medium text-gray-700 truncate min-w-0">
                               {driver?.user?.full_name}
                             </div>
                             <button
@@ -1142,6 +1144,8 @@
                 </div>
               </div>
             )}
+              </div>
+            )}
           </div>
           </div>
 
@@ -1152,7 +1156,7 @@
             <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-0 min-w-0">
               <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 flex-shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm font-medium text-gray-700 shrink-0">גרירות היום</span>
+                  <span className="text-sm font-semibold text-gray-700 shrink-0">גרירות היום</span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -1360,7 +1364,7 @@
             {quoteTows.length + quoteEvents.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 min-w-0 flex-shrink-0">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-sm font-medium text-amber-800 leading-snug min-w-0">
+                  <span className="text-sm font-semibold text-amber-800 leading-snug min-w-0">
                     הצעות מחיר ממתינות
                   </span>
                   <span className="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shrink-0">
@@ -1372,7 +1376,7 @@
                     <div
                       key={`tow-${t.id}`}
                       onClick={() => router.push(`/dashboard/tows/${t.id}`)}
-                      className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-xs gap-2"
+                      className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-amber-50 text-sm gap-2"
                     >
                       <span className="font-medium shrink-0">{t.order_number || t.id.slice(0, 8)}</span>
                       <span className="text-gray-500 flex-1 min-w-0 truncate">{t.customer?.name || 'לקוח'}</span>
@@ -1383,7 +1387,7 @@
                     <div
                       key={`event-${e.id}`}
                       onClick={() => router.push(`/dashboard/events/${e.id}`)}
-                      className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-cyan-50 text-xs gap-2 ring-1 ring-cyan-200"
+                      className="flex items-center justify-between p-2 min-w-0 bg-white rounded-lg cursor-pointer hover:bg-cyan-50 text-sm gap-2 ring-1 ring-cyan-200"
                     >
                       <span className="flex items-center gap-1 font-medium shrink-0">
                         <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[9px] px-1 py-px rounded font-bold leading-none">
@@ -1405,7 +1409,7 @@
               {/* ממתינות לשיבוץ */}
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 min-h-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                     <span className="leading-snug">ממתינות לשיבוץ</span>
                   </div>
@@ -1423,7 +1427,7 @@
                     {pendingTows.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(tow => (
                     <div key={tow.id} onClick={() => router.push(`/dashboard/tows/${tow.id}`)} className="px-3 py-1.5 flex items-center gap-2 min-w-0 cursor-pointer hover:bg-gray-50 transition-colors">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-700 truncate">{tow.customer?.name || '—'} · {tow.vehicles?.[0]?.plate_number || '—'}</div>
+                        <div className="text-sm font-medium text-gray-700 truncate">{tow.customer?.name || '—'} · {tow.vehicles?.[0]?.plate_number || '—'}</div>
                         <div className="text-xs text-gray-400 truncate">{tow.legs?.[0]?.from_address?.split(',')[0] || '—'} ← {tow.legs?.[tow.legs.length - 1]?.to_address?.split(',')[0] || '—'}</div>
                       </div>
                       <span className="text-xs text-amber-600 shrink-0">{formatWaitTime(tow.created_at)}</span>
@@ -1433,7 +1437,7 @@
                     {pendingEvents.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map(event => (
                     <div key={event.id} onClick={() => router.push(`/dashboard/events/${event.id}`)} className="px-3 py-1.5 flex items-center gap-2 min-w-0 cursor-pointer hover:bg-cyan-50 transition-colors ring-1 ring-inset ring-cyan-100">
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-700 truncate flex items-center gap-1">
+                        <div className="text-sm font-medium text-gray-700 truncate flex items-center gap-1">
                           <span className="inline-flex items-center gap-0.5 bg-cyan-400 text-white text-[9px] px-1 py-px rounded font-bold leading-none shrink-0">
                             <Sparkles size={8} />
                             אירוע
@@ -1454,7 +1458,7 @@
               {/* בקשות נכנסות */}
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 min-h-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#33d4ff] shrink-0" />
                     <span className="leading-snug">בקשות נכנסות</span>
                   </div>
@@ -1474,7 +1478,7 @@
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-xs font-medium text-gray-700 truncate">
+                          <span className="text-sm font-medium text-gray-700 truncate">
                             {req.customer?.name || '—'}
                           </span>
                           {req.tow_type === 'exchange' && (
