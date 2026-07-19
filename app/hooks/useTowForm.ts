@@ -46,6 +46,7 @@ import { loadGoogleMaps, calculateDistance, AddressData } from '../lib/google-ma
 import {
   customerDiscountForPriceMode,
   extractBasePrices,
+  mergePriceLists,
   resolveVehicleBasePrice,
 } from '../lib/utils/price-calculator'
 import {
@@ -2986,7 +2987,11 @@ export function useTowForm(
   }
 
   const basePriceOverride = useMemo(() => {
-    const flat = extractBasePrices(basePriceList)
+    const activeList =
+      priceMode === 'recommended_customer'
+        ? mergePriceLists(basePriceList, selectedCustomerPricing?.price_list ?? null)
+        : basePriceList
+    const flat = extractBasePrices(activeList)
     if (towType === 'exchange') {
       const seededBase =
         editTowId && editSeededExchangeBaseRef.current != null
@@ -3062,6 +3067,8 @@ export function useTowForm(
     defectiveVehicleData,
     basePriceList,
     weightBrackets,
+    priceMode,
+    selectedCustomerPricing,
   ])
 
   // ==================== Price Calculations ====================
