@@ -3,6 +3,17 @@ import { resolveActingUserId } from './tow-change-log'
 
 export type ManualActionSeverity = 'high' | 'medium' | 'low'
 
+export type ManualActionItem = {
+  id: string
+  type: string
+  severity: string
+  status: string
+  message: string
+  tow_id: string | null
+  related_entity: string | null
+  created_at: string
+}
+
 export type LogManualActionItemInput = {
   type: string
   message: string
@@ -66,5 +77,48 @@ export async function logManualActionItem(
     }
   } catch (err) {
     console.error('[logManualActionItem] failed', input.type, err)
+  }
+}
+
+export async function getOpenManualActionItems(
+  companyId: string
+): Promise<ManualActionItem[]> {
+  const { data, error } = await supabase
+    .from('manual_action_items')
+    .select('id, type, severity, status, message, tow_id, related_entity, created_at')
+    .eq('company_id', companyId)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching open manual action items:', error)
+    return []
+  }
+
+  return (data || []) as ManualActionItem[]
+}
+
+export async function resolveManualActionItem(
+  id: string
+): Promise<{ ok: boolean }> {
+  try {
+    const resolvedBy = await resolveActingUserId()
+    const { error } = await supabase
+      .from('manual_action_items')
+      .update({
+        status: 'resolved',
+        resolved_at: new Date().toISOString(),
+        resolved_by: resolvedBy,
+      })
+      .eq('id', id)
+
+    if (error) {
+      console.error('[resolveManualActionItem] failed', id, error)
+      return { ok: false }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('[resolveManualActionItem] failed', id, err)
+    return { ok: false }
   }
 }

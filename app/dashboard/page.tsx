@@ -7,6 +7,11 @@
   import { getDashboardStats, getPendingUnassignedTows, getQuoteTows, getOpenTowsCountByDriver, DashboardStats } from '../lib/queries/dashboard'
   import { getExpiryAlerts, ExpiryAlert } from '../lib/queries/alerts'
   import { TowWithDetails } from '../lib/queries/tows'
+  import {
+    getOpenManualActionItems,
+    resolveManualActionItem,
+    type ManualActionItem,
+  } from '../lib/queries/manual-action-items'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
   import { getPendingCustomerTowRequests } from '../lib/queries/customer-tow-requests'
   import { CustomerTowRequestDetailsPanel } from '../components/tow-forms/CustomerTowRequestDetailsPanel'
@@ -200,6 +205,8 @@
     const [quoteEvents, setQuoteEvents] = useState<EventListItem[]>([])
     const [openTowsByDriver, setOpenTowsByDriver] = useState<Record<string, number>>({})
     const [alerts, setAlerts] = useState<ExpiryAlert[]>([])
+    const [manualItems, setManualItems] = useState<ManualActionItem[]>([])
+    const [resolvingManualItemId, setResolvingManualItemId] = useState<string | null>(null)
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
     const [incomingRequests, setIncomingRequests] = useState<any[]>([])
     const [viewingIncomingRequest, setViewingIncomingRequest] = useState<{
@@ -321,6 +328,7 @@
       try {
         const [
           alertsData,
+          manualItemsData,
           rejectionsData,
           incomingData,
           driversData,
@@ -329,6 +337,7 @@
           allDriversData,
         ] = await Promise.all([
           getExpiryAlerts(companyId),
+          getOpenManualActionItems(companyId),
           getPendingRejectionRequests(companyId),
           getPendingCustomerTowRequests(companyId),
           getAvailableDrivers(companyId),
@@ -338,6 +347,7 @@
         ])
 
         setAlerts(alertsData)
+        setManualItems(manualItemsData)
         setRejectionRequests(rejectionsData)
         setIncomingRequests(incomingData)
         setAvailableDrivers(driversData)
@@ -435,6 +445,16 @@
         setAlerts(alertsData)
       } catch (err) {
         console.error('Dashboard alerts refresh error:', err)
+      }
+    }, [companyId])
+
+    const refreshManualItems = useCallback(async () => {
+      if (!companyId) return
+      try {
+        const items = await getOpenManualActionItems(companyId)
+        setManualItems(items)
+      } catch (err) {
+        console.error('Dashboard manual items refresh error:', err)
       }
     }, [companyId])
 
@@ -764,7 +784,7 @@
     }
 
     return (
-      <div className="flex flex-col gap-3 h-[calc(100vh-4rem)] p-4 overflow-hidden" dir="rtl">
+      <div className="flex flex-col gap-3 h-full overflow-hidden" dir="rtl">
 
         <div className="flex items-center gap-3 flex-shrink-0 flex-wrap">
 
@@ -905,7 +925,7 @@
 
           {/* עמודה ימין (צרה): מפה + רשימות משניות */}
           <div className="flex flex-col gap-3 min-h-0 min-w-0 overflow-hidden flex-1">
-          <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-xl flex flex-col flex-1 min-h-[12rem] min-w-0 overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 flex-shrink-0">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -932,7 +952,7 @@
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 shrink-0 min-w-0">
+          <div className="flex flex-col gap-3 flex-1 min-h-0 min-w-0 overflow-y-auto">
             {rejectionRequests.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
@@ -967,6 +987,66 @@
                           <button onClick={() => { setSelectedRequest(req); setShowApprovalModal(true) }} className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100">אשר</button>
                           <button onClick={() => setDenyConfirmRequest(req)} className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100">דחה</button>
                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {manualItems.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
+                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2 text-xs font-medium text-gray-700 min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    <span className="leading-snug">דורש טיפול ידני</span>
+                  </div>
+                  <span className="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded-full shrink-0">
+                    {manualItems.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
+                  {manualItems.map((item) => {
+                    const createdLabel = new Date(item.created_at).toLocaleString('he-IL', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: JERUSALEM_TZ,
+                    })
+                    const resolving = resolvingManualItemId === item.id
+                    return (
+                      <div key={item.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-gray-700 whitespace-normal break-words">
+                            {item.message}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">{createdLabel}</div>
+                          {item.tow_id && (
+                            <Link
+                              href={`/dashboard/tows/${item.tow_id}`}
+                              className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600"
+                            >
+                              פרטי גרירה ←
+                            </Link>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={resolving}
+                          onClick={async () => {
+                            setResolvingManualItemId(item.id)
+                            try {
+                              const { ok } = await resolveManualActionItem(item.id)
+                              if (ok) await refreshManualItems()
+                            } finally {
+                              setResolvingManualItemId(null)
+                            }
+                          }}
+                          className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-50 shrink-0"
+                        >
+                          טופל
+                        </button>
                       </div>
                     )
                   })}
