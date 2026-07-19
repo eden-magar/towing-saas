@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { persistVehicleCodeToCache } from '../vehicle-lookup'
+import { logManualActionItem } from './manual-action-items'
 
 // ==================== Types ====================
 
@@ -178,6 +179,15 @@ export async function getVehiclesReservedForTow(
 
   if (error) {
     console.error('[getVehiclesReservedForTow] error:', error)
+    await logManualActionItem({
+      type: 'reservation_sync_failed',
+      severity: 'medium',
+      message:
+        'שליפת רכבים השמורים לגרירה נכשלה — ייתכן ששחרור מהמלאי דולג',
+      towId,
+      relatedEntity: towId,
+      details: { error: error.message, source: 'getVehiclesReservedForTow' },
+    })
     return []
   }
   return (data as StoredVehicle[]) || []

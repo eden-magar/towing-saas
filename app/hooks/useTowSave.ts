@@ -18,6 +18,7 @@ import {
   unreserveVehicleFromTow,
   getVehiclesReservedForTow,
 } from '../lib/queries/storage'
+import { logManualActionItem } from '../lib/queries/manual-action-items'
 import { AddressData } from '../lib/google-maps'
 import { findPickupRouteStop, findDropoffRouteStop, type RouteStop } from './useTowForm'
 import { DistanceResult, PriceItem, TowType } from '../components/tow-forms/sections'
@@ -726,6 +727,21 @@ export function useTowSave(params: UseTowSaveParams) {
       }
     } catch (err) {
       console.error('[useTowSave] sync storage reservations failed:', err)
+      const plateHint =
+        (towType === 'single' && vehiclePlate?.trim()) ||
+        (towType === 'exchange' && workingVehiclePlate?.trim()) ||
+        null
+      const orderLabel = customerOrderNumber?.trim() || editTowId
+      const errMessage =
+        err instanceof Error ? err.message : String(err ?? 'unknown')
+      await logManualActionItem({
+        type: 'reservation_sync_failed',
+        severity: 'high',
+        message: `עדכון שמירת רכב במלאי נכשל בעת עריכת גרירה ${orderLabel} — ייתכן שהשמירה שגויה, נדרשת בדיקה`,
+        towId: editTowId,
+        relatedEntity: plateHint || editTowId,
+        details: { error: errMessage, source: 'useTowSave:edit' },
+      })
     }
 
     // שמירת לוג שינויים — handled inside updateTow (covers all edit entry points)

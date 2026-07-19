@@ -9,6 +9,7 @@ import {
   reserveVehicleForTow,
   unreserveVehicleFromTow,
 } from '../lib/queries/storage'
+import { logManualActionItem } from '../lib/queries/manual-action-items'
 import {
   CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE,
   isCustomTowEditWipeBlocked,
@@ -313,6 +314,21 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
           }
         } catch (err) {
           console.error('[handleSaveAsQuote] sync storage reservations failed:', err)
+          const plateHint =
+            (towType === 'single' && form.vehiclePlate?.trim()) ||
+            (towType === 'exchange' && form.workingVehiclePlate?.trim()) ||
+            null
+          const errMessage =
+            err instanceof Error ? err.message : String(err ?? 'unknown')
+          await logManualActionItem({
+            type: 'reservation_sync_failed',
+            severity: 'high',
+            message:
+              'סנכרון שמירת רכב במלאי נכשל בעת שמירת הצעת מחיר — ייתכן שהמלאי השמור שגוי',
+            towId: editTowId,
+            relatedEntity: plateHint || form.orderNumber || editTowId,
+            details: { error: errMessage, source: 'useQuoteGate:save' },
+          })
         }
       } else {
         const quoteResult = await createTow({ ...towData, status: 'quote' as const })
@@ -337,6 +353,21 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
             }
           } catch (err) {
             console.error('[handleSaveAsQuote] reserve storage failed:', err)
+            const plateHint =
+              (towType === 'single' && form.vehiclePlate?.trim()) ||
+              (towType === 'exchange' && form.workingVehiclePlate?.trim()) ||
+              null
+            const errMessage =
+              err instanceof Error ? err.message : String(err ?? 'unknown')
+            await logManualActionItem({
+              type: 'reservation_sync_failed',
+              severity: 'high',
+              message:
+                'סנכרון שמירת רכב במלאי נכשל בעת שמירת הצעת מחיר — ייתכן שהמלאי השמור שגוי',
+              towId: quoteTowId,
+              relatedEntity: plateHint || quoteTowId,
+              details: { error: errMessage, source: 'useQuoteGate:createReserve' },
+            })
           }
         }
       }

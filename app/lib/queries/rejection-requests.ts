@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
 import { getDriverDisplayName, hebrewTowStatusLabel, logTowAction } from './tow-change-log'
+import { logManualActionItem } from './manual-action-items'
 
 export type RejectionReason = 'break' | 'vehicle_issue' | 'too_far' | 'personal' | 'other'
 
@@ -142,22 +143,38 @@ export async function approveRejectionRequest(
   }
 
   // עדכון הגרירה
-  if (reassignToDriverId) {
-    await supabase
+  const { error: towUpdateError } = await supabase
+    .from('tows')
+    .update(
+      reassignToDriverId
+        ? { driver_id: reassignToDriverId, status: 'assigned' }
+        : { driver_id: null, status: 'pending' }
+    )
+    .eq('id', request.tow_id)
+
+  if (towUpdateError) {
+    console.error('Error updating tow after rejection approve:', towUpdateError)
+    const { data: towMeta } = await supabase
       .from('tows')
-      .update({ 
-        driver_id: reassignToDriverId,
-        status: 'assigned'
-      })
+      .select('order_number')
       .eq('id', request.tow_id)
-  } else {
-    await supabase
-      .from('tows')
-      .update({ 
-        driver_id: null,
-        status: 'pending'
-      })
-      .eq('id', request.tow_id)
+      .maybeSingle()
+    const orderLabel = towMeta?.order_number
+      ? String(towMeta.order_number)
+      : request.tow_id
+    await logManualActionItem({
+      type: 'rejection_approve_failed',
+      severity: 'high',
+      message: `בקשת דחייה אושרה אך עדכון הגרירה ${orderLabel} נכשל — ייתכן שהגרירה עדיין משויכת לנהג הקודם, נדרש טיפול ידני`,
+      towId: request.tow_id,
+      relatedEntity: orderLabel,
+      details: {
+        error: towUpdateError.message,
+        requestId,
+        source: 'approveRejectionRequest',
+        reassignToDriverId: reassignToDriverId ?? null,
+      },
+    })
   }
 
   const newDriverName = reassignToDriverId

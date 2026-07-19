@@ -1254,7 +1254,7 @@ export async function updateTowStatus(
 
   const { data: existing } = await supabase
     .from('tows')
-    .select('status')
+    .select('status, order_number')
     .eq('id', towId)
     .maybeSingle()
   const previousStatus: string | null = existing?.status ?? null
@@ -1300,13 +1300,32 @@ export async function updateTowStatus(
   }
 
   if (isTerminalCancel) {
+    let reservedPlates: string[] = []
     try {
       const reserved = await getVehiclesReservedForTow(towId)
+      reservedPlates = reserved.map((v) => v.plate_number).filter(Boolean)
       for (const v of reserved) {
         await unreserveVehicleFromTow({ storedVehicleId: v.id })
       }
     } catch (err) {
       console.error('[updateTowStatus] failed to unreserve vehicles:', err)
+      const orderLabel = existing?.order_number
+        ? String(existing.order_number)
+        : towId
+      const errMessage =
+        err instanceof Error ? err.message : String(err ?? 'unknown')
+      await logManualActionItem({
+        type: 'reservation_sync_failed',
+        severity: 'high',
+        message: `גרירה ${orderLabel} בוטלה אך ייתכן שהרכב עדיין מסומן כשמור לגרירה — נדרש שחרור ידני`,
+        towId,
+        relatedEntity: reservedPlates[0] ?? towId,
+        details: {
+          error: errMessage,
+          source: 'updateTowStatus:cancel',
+          plates: reservedPlates,
+        },
+      })
     }
   }
 
