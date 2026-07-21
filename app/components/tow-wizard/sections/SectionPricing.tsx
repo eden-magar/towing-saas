@@ -10,6 +10,7 @@ import {
   getActiveTimeSurchargeSummary,
   getTimeSurchargeLabel,
 } from '../../../lib/utils/time-surcharge-summary'
+import { CustomerPriceListBadge } from '../../CustomerPriceListBadge'
 
 type Form = ReturnType<typeof useTowForm>
 
@@ -275,6 +276,13 @@ export function SectionPricing({
               )
             })}
           </div>
+          {form.priceMode === 'recommended_customer' && (
+            <div className={isCompact ? 'mt-1.5' : 'mt-2'}>
+              <CustomerPriceListBadge
+                customerName={form.selectedCustomerPricing?.customer?.name}
+              />
+            </div>
+          )}
         </div>
 
         {form.priceMode === 'fixed' && (

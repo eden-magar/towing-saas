@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
+import { CustomerPriceListBadge } from '../../../components/CustomerPriceListBadge'
 import { TimeInput, DateInput } from '../../../components/ui'
 import {
   getServiceSurcharges,
@@ -2938,6 +2939,11 @@ export default function TowDetailsPage() {
                   <h2 className="font-bold">סיכום מחיר</h2>
                 </div>
                 <div className="p-4 sm:p-5">
+                  {String(tow.price_mode) === 'recommended_customer' && (
+                    <div className="mb-3">
+                      <CustomerPriceListBadge customerName={tow.customer?.name} />
+                    </div>
+                  )}
                   {isEditing ? (
                     <div>
                       <label className="block text-sm text-gray-600 mb-1">מחיר סופי</label>

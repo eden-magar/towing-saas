@@ -45,6 +45,7 @@ import {
   type RouteRole,
   type RouteStop,
 } from '../../../hooks/useTowForm'
+import { CustomerPriceListBadge } from '../../../components/CustomerPriceListBadge'
 import { AddressInput } from '../../../components/tow-forms/routes/AddressInput'
 import {
   DropToStorageToggle,
@@ -4195,6 +4196,13 @@ function CreateTowForm({
                     ידני
                   </button>
                 </div>
+                {priceMode === 'recommended_customer' && (
+                  <div>
+                    <CustomerPriceListBadge
+                      customerName={selectedCustomerPricing?.customer?.name}
+                    />
+                  </div>
+                )}
                 {priceMode === 'fixed' && (
                   <div className="space-y-3">
                     <select
