@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, PenLine } from 'lucide-react'
 import type { VehicleType } from '../../../lib/types'
 import { normalizePlate } from '../../../lib/utils/plate-number'
@@ -40,9 +40,15 @@ export function ManualVehicleEntryModal({
   values,
 }: ManualVehicleEntryModalProps) {
   const [draft, setDraft] = useState<ManualVehicleEntryValues>(values)
+  // Seed draft only on closed→open. While open, local draft is source of truth —
+  // parent re-renders (e.g. TOKEN_REFRESHED) must not overwrite in-progress edits.
+  const wasOpenRef = useRef(false)
 
   useEffect(() => {
-    if (open) setDraft(values)
+    if (open && !wasOpenRef.current) {
+      setDraft(values)
+    }
+    wasOpenRef.current = open
   }, [open, values])
 
   const plateDigits = draft.plateNumber.replace(/[^0-9]/g, '')
