@@ -32,6 +32,7 @@ import {
   priceListForTowCalc,
   resolveDeadheadRate,
 } from '../utils/price-calculator'
+import { inheritFollowUpPriceMode } from '../utils/follow-up-price-mode'
 import { roundMoney2 } from '../utils/price-change-confirm'
 import {
   formatLogDateTime,
@@ -1647,6 +1648,8 @@ export interface CreateStorageFollowUpInput {
   companyId: string
   createdBy: string
   customerId: string | null
+  /** Parent tow's price_mode at spawn (form being saved). */
+  parentPriceMode?: string | null
   vehiclePlate: string
   vehicleData: VehicleLookupResult | null
   vehicleType: string
@@ -1692,7 +1695,7 @@ export async function createStorageFollowUpTow(
     requiredTruckTypes: input.requiredTruckTypes,
     scheduledAt: undefined,
     finalPrice: undefined,
-    priceMode: 'recommended',
+    priceMode: inheritFollowUpPriceMode(input.parentPriceMode, !!input.customerId),
     priceBreakdown: null,
     notes: 'גרירת המשך מאחסנה',
     customerOrderNumber: input.customerOrderNumber ?? undefined,
@@ -2022,7 +2025,10 @@ export async function createLinkedTow(
       required_truck_types: originalTow.required_truck_types,
       linked_tow_id: originalTowId,
       final_price: null,
-      price_mode: 'recommended',
+      price_mode: inheritFollowUpPriceMode(
+        originalTow.price_mode,
+        !!originalTow.customer_id,
+      ),
     })
 
   if (error) throw error

@@ -668,6 +668,7 @@ export function useTowSave(params: UseTowSaveParams) {
         companyId,
         createdBy: user.id,
         customerId: finalCustomerId ?? null,
+        parentPriceMode: priceMode,
         vehiclePlate: followUpPlate,
         vehicleData: followUpVehicleData,
         vehicleType: followUpVehicleType,
