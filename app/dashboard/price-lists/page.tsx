@@ -32,6 +32,11 @@ import {
   createDefaultTimeSurchargeRow,
   resolveTimeSurchargeLabel,
 } from './components/TimeSurchargesEditor'
+import { CustomerServiceSurchargesModal } from './components/CustomerServiceSurchargesModal'
+import {
+  mergeCompanyServiceSurchargesForCustomer,
+  type CustomerServiceSurchargeRow,
+} from '../../lib/utils/customer-service-surcharges'
 
 // ==================== Types ====================
 
@@ -142,7 +147,8 @@ interface CustomerPriceList {
   minimum_price?: number | null
   customer_time_surcharges?: TimeSurcharge[]
   customer_location_surcharges?: LocationSurcharge[]
-  customer_service_surcharges?: ServiceSurcharge[]
+  /** Seeded from company services + customer overrides (always full company list in the modal). */
+  customer_service_surcharges?: CustomerServiceSurchargeRow[]
 }
 
 function mapCustomerWithPricingToList(c: CustomerWithPricing): CustomerPriceList {
@@ -175,6 +181,10 @@ export default function PriceListsPage() {
   // Customer modal state
   const [editingCustomer, setEditingCustomer] = useState<CustomerPriceList | null>(null)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [showServiceSurchargesModal, setShowServiceSurchargesModal] = useState(false)
+  const [serviceSurchargesModalRows, setServiceSurchargesModalRows] = useState<
+    CustomerServiceSurchargeRow[]
+  >([])
 
   // Base prices state
   const [baseLocation, setBaseLocation] = useState<BaseLocationData>({ address: '' })
@@ -622,10 +632,12 @@ export default function PriceListsPage() {
 
   // Customer pricing
   const openCustomerModal = async (customer: CustomerPriceList) => {
-  const base = { ...customer, price_items: [...customer.price_items] }
-  
-  // שליפת מחירון לקוח אם קיים
-  const existingPriceList = await getCustomerPriceList(customer.customer_company_id)
+    const base: CustomerPriceList = { ...customer, price_items: [...customer.price_items] }
+
+    let savedServices: ServiceSurcharge[] = []
+
+    // שליפת מחירון לקוח אם קיים
+    const existingPriceList = await getCustomerPriceList(customer.customer_company_id)
     if (existingPriceList) {
       const surcharges = await getCustomerSurcharges(existingPriceList.id)
       base.price_list_id = existingPriceList.id
@@ -640,7 +652,7 @@ export default function PriceListsPage() {
       base.price_per_km_machinery = existingPriceList.price_per_km_machinery
       base.price_per_km_deadhead = existingPriceList.price_per_km_deadhead
       base.minimum_price = existingPriceList.minimum_price
-      base.customer_time_surcharges = surcharges.timeSurcharges.map(s => {
+      base.customer_time_surcharges = surcharges.timeSurcharges.map((s) => {
         const label = resolveTimeSurchargeLabel(s)
         return {
           ...s,
@@ -649,12 +661,27 @@ export default function PriceListsPage() {
         }
       })
       base.customer_location_surcharges = surcharges.locationSurcharges
-      base.customer_service_surcharges = surcharges.serviceSurcharges
+      savedServices = (surcharges.serviceSurcharges || []).map((s) => ({
+        id: s.id,
+        label: s.label,
+        price: s.price,
+        price_type: (s.price_type as ServiceSurcharge['price_type']) || 'fixed',
+        unit_label: s.unit_label || '',
+        is_active: s.is_active,
+        is_vat_exempt: s.is_vat_exempt === true,
+      }))
     } else {
       base.customer_time_surcharges = []
       base.customer_location_surcharges = []
-      base.customer_service_surcharges = []
     }
+
+    // Always show the full company service list; overlay saved customer prices by label.
+    // TODO(company-service-sync): new company services appear here on re-open; frozen catalogs
+    // stay stale in calc until re-save (see customer-service-surcharges.ts).
+    base.customer_service_surcharges = mergeCompanyServiceSurchargesForCustomer(
+      serviceSurcharges,
+      savedServices
+    )
 
     setEditingCustomer(base)
     setShowCustomerModal(true)
@@ -706,55 +733,61 @@ export default function PriceListsPage() {
     })()
   }, [loading, authLoading, companyId, searchParams, router])
 
-  const saveCustomerPrices = async () => {
-    if (!editingCustomer || !companyId) return
+  const saveCustomerPrices = async (
+    customerOverride?: CustomerPriceList,
+    options?: { closeCustomerModal?: boolean }
+  ) => {
+    const customer = customerOverride ?? editingCustomer
+    if (!customer || !companyId) return
+    const closeCustomerModal = options?.closeCustomerModal !== false
 
     try {
       // שמירת הנחה + price items (כמו קודם)
       await updateCustomerPricing(
-        editingCustomer.customer_company_id,
-        editingCustomer.discount_percent,
-        editingCustomer.price_items.map(p => ({ label: p.label, price: p.price }))
+        customer.customer_company_id,
+        customer.discount_percent,
+        customer.price_items.map((p) => ({ label: p.label, price: p.price }))
       )
 
       // שמירת מחירון מלא / תוספות לקוח (base/km אופציונלי)
-      const hasCustomPricing = editingCustomer.base_price_private ||
-        editingCustomer.base_price_motorcycle ||
-        editingCustomer.base_price_heavy ||
-        editingCustomer.base_price_machinery ||
-        editingCustomer.price_per_km ||
-        editingCustomer.price_per_km_private ||
-        editingCustomer.price_per_km_motorcycle ||
-        editingCustomer.price_per_km_heavy ||
-        editingCustomer.price_per_km_machinery ||
-        editingCustomer.price_per_km_deadhead
+      const hasCustomPricing =
+        customer.base_price_private ||
+        customer.base_price_motorcycle ||
+        customer.base_price_heavy ||
+        customer.base_price_machinery ||
+        customer.price_per_km ||
+        customer.price_per_km_private ||
+        customer.price_per_km_motorcycle ||
+        customer.price_per_km_heavy ||
+        customer.price_per_km_machinery ||
+        customer.price_per_km_deadhead
 
       const hasSurcharges =
-        (editingCustomer.customer_time_surcharges?.length ?? 0) > 0 ||
-        (editingCustomer.customer_location_surcharges?.length ?? 0) > 0 ||
-        (editingCustomer.customer_service_surcharges?.length ?? 0) > 0
+        (customer.customer_time_surcharges?.length ?? 0) > 0 ||
+        (customer.customer_location_surcharges?.length ?? 0) > 0 ||
+        (customer.customer_service_surcharges?.length ?? 0) > 0
 
       if (hasCustomPricing || hasSurcharges) {
         const priceListId = await upsertCustomerPriceList(
           companyId,
-          editingCustomer.customer_company_id,
+          customer.customer_company_id,
           {
-            base_price_private: editingCustomer.base_price_private ?? null,
-            base_price_motorcycle: editingCustomer.base_price_motorcycle ?? null,
-            base_price_heavy: editingCustomer.base_price_heavy ?? null,
-            base_price_machinery: editingCustomer.base_price_machinery ?? null,
-            price_per_km: editingCustomer.price_per_km ?? null,
-            price_per_km_private: editingCustomer.price_per_km_private ?? null,
-            price_per_km_motorcycle: editingCustomer.price_per_km_motorcycle ?? null,
-            price_per_km_heavy: editingCustomer.price_per_km_heavy ?? null,
-            price_per_km_machinery: editingCustomer.price_per_km_machinery ?? null,
-            price_per_km_deadhead: editingCustomer.price_per_km_deadhead ?? null,
-            minimum_price: editingCustomer.minimum_price ?? null,
+            base_price_private: customer.base_price_private ?? null,
+            base_price_motorcycle: customer.base_price_motorcycle ?? null,
+            base_price_heavy: customer.base_price_heavy ?? null,
+            base_price_machinery: customer.base_price_machinery ?? null,
+            price_per_km: customer.price_per_km ?? null,
+            price_per_km_private: customer.price_per_km_private ?? null,
+            price_per_km_motorcycle: customer.price_per_km_motorcycle ?? null,
+            price_per_km_heavy: customer.price_per_km_heavy ?? null,
+            price_per_km_machinery: customer.price_per_km_machinery ?? null,
+            price_per_km_deadhead: customer.price_per_km_deadhead ?? null,
+            minimum_price: customer.minimum_price ?? null,
           }
         )
 
         await saveCustomerSurcharges(priceListId, companyId, {
-          time: (editingCustomer.customer_time_surcharges || []).map(s => {
+          time: (customer.customer_time_surcharges || []).map((s) => {
             const label = resolveTimeSurchargeLabel(s)
             return {
               name: label,
@@ -768,12 +801,12 @@ export default function PriceListsPage() {
               is_active: s.is_active,
             }
           }),
-          location: (editingCustomer.customer_location_surcharges || []).map(s => ({
+          location: (customer.customer_location_surcharges || []).map((s) => ({
             label: s.label,
             surcharge_percent: s.surcharge_percent,
             is_active: s.is_active,
           })),
-          service: (editingCustomer.customer_service_surcharges || []).map(s => ({
+          service: (customer.customer_service_surcharges || []).map((s) => ({
             label: s.label,
             price: s.price,
             price_type: s.price_type,
@@ -784,18 +817,22 @@ export default function PriceListsPage() {
         })
       }
 
-      setCustomerPriceLists(prev => {
-        const exists = prev.some(c => c.id === editingCustomer.id)
+      setCustomerPriceLists((prev) => {
+        const exists = prev.some((c) => c.id === customer.id)
         if (exists) {
-          return prev.map(c => (c.id === editingCustomer.id ? editingCustomer : c))
+          return prev.map((c) => (c.id === customer.id ? customer : c))
         }
-        return [...prev, editingCustomer]
+        return [...prev, customer]
       })
-      setShowCustomerModal(false)
-      setEditingCustomer(null)
+      setEditingCustomer(customer)
+      if (closeCustomerModal) {
+        setShowCustomerModal(false)
+        setEditingCustomer(null)
+      }
     } catch (error) {
       console.error('Error saving customer prices:', error)
       alert('שגיאה בשמירת מחירון הלקוח')
+      throw error
     }
   }
 
@@ -936,7 +973,11 @@ export default function PriceListsPage() {
                 <p className="text-white/80 text-sm">{editingCustomer.name}</p>
               </div>
               <button
-                onClick={() => { setShowCustomerModal(false); setEditingCustomer(null) }}
+                onClick={() => {
+                  setShowServiceSurchargesModal(false)
+                  setShowCustomerModal(false)
+                  setEditingCustomer(null)
+                }}
                 className="p-2 hover:bg-white/20 rounded-lg"
               >
                 <X size={20} />
@@ -1126,90 +1167,28 @@ export default function PriceListsPage() {
                 </div>
               </div>
 
-              {/* תוספות שירות */}
+              {/* תוספות שירות — dedicated modal (keeps this form uncluttered) */}
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-gray-800">תוספות שירות</h3>
-                  <button
-                    onClick={() => setEditingCustomer({
-                      ...editingCustomer,
-                      customer_service_surcharges: [...(editingCustomer.customer_service_surcharges || []), {
-                        id: `new_${Date.now()}`, label: '', price: 0, price_type: 'fixed', unit_label: '', is_active: true, is_vat_exempt: false
-                      }]
-                    })}
-                    className="text-xs text-[#33d4ff] flex items-center gap-1 hover:underline"
-                  >
-                    <Plus size={14} /> הוסף
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {(editingCustomer.customer_service_surcharges || []).map((s, i) => (
-                    <div key={s.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
-                      <input
-                        type="text"
-                        value={s.label}
-                        onChange={(e) => {
-                          const updated = [...(editingCustomer.customer_service_surcharges || [])]
-                          updated[i] = { ...updated[i], label: e.target.value }
-                          setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
-                        }}
-                        placeholder="שם"
-                        className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                      />
-                      <select
-                        value={s.price_type}
-                        onChange={(e) => {
-                          const updated = [...(editingCustomer.customer_service_surcharges || [])]
-                          updated[i] = { ...updated[i], price_type: e.target.value as any }
-                          setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
-                        }}
-                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
-                      >
-                        <option value="fixed">קבוע</option>
-                        <option value="per_unit">ליחידה</option>
-                        <option value="manual">ידני</option>
-                      </select>
-                      <label
-                        className="flex items-center gap-1 text-[10px] text-gray-500 shrink-0"
-                        title="לא נכלל במע״מ ולא בהנחת לקוח"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={s.is_vat_exempt === true}
-                          onChange={(e) => {
-                            const updated = [...(editingCustomer.customer_service_surcharges || [])]
-                            updated[i] = { ...updated[i], is_vat_exempt: e.target.checked }
-                            setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
-                          }}
-                          className="rounded accent-[#33d4ff]"
-                        />
-                        פטור
-                      </label>
-                      <div className="relative w-24">
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₪</span>
-                        <input
-                          type="number"
-                          value={s.price}
-                          onChange={(e) => {
-                            const updated = [...(editingCustomer.customer_service_surcharges || [])]
-                            updated[i] = { ...updated[i], price: Number(e.target.value) }
-                            setEditingCustomer({ ...editingCustomer, customer_service_surcharges: updated })
-                          }}
-                          className="w-full pr-7 pl-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none"
-                        />
-                      </div>
-                      <button
-                        onClick={() => setEditingCustomer({
-                          ...editingCustomer,
-                          customer_service_surcharges: (editingCustomer.customer_service_surcharges || []).filter((_, idx) => idx !== i)
-                        })}
-                        className="p-1 text-gray-400 hover:text-red-500"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <h3 className="font-semibold text-gray-800 mb-2">תוספות שירות</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setServiceSurchargesModalRows([
+                      ...(editingCustomer.customer_service_surcharges || []),
+                    ])
+                    setShowServiceSurchargesModal(true)
+                  }}
+                  className="w-full flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-right hover:border-[#33d4ff] hover:bg-white transition-colors"
+                >
+                  <span className="font-medium text-gray-800">
+                    תוספות שירות (
+                    {(editingCustomer.customer_service_surcharges || []).length})
+                  </span>
+                  <span className="text-xs text-[#33d4ff] font-medium">עריכה</span>
+                </button>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  מחירי שירות מותאמים ללקוח — נפתח במסך נפרד
+                </p>
               </div>
 
               {/* מחירים מותאמים (price items) */}
@@ -1273,13 +1252,17 @@ export default function PriceListsPage() {
 
             <div className="flex gap-3 px-5 py-4 border-t bg-gray-50">
               <button
-                onClick={() => { setShowCustomerModal(false); setEditingCustomer(null) }}
+                onClick={() => {
+                  setShowServiceSurchargesModal(false)
+                  setShowCustomerModal(false)
+                  setEditingCustomer(null)
+                }}
                 className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 font-medium"
               >
                 ביטול
               </button>
               <button
-                onClick={saveCustomerPrices}
+                onClick={() => void saveCustomerPrices()}
                 className="flex-1 py-2.5 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] font-medium"
               >
                 שמור
@@ -1288,6 +1271,21 @@ export default function PriceListsPage() {
           </div>
         </div>
       )}
+
+      <CustomerServiceSurchargesModal
+        open={showServiceSurchargesModal && !!editingCustomer}
+        customerName={editingCustomer?.name || ''}
+        initialRows={serviceSurchargesModalRows}
+        onClose={() => setShowServiceSurchargesModal(false)}
+        onSave={async (rows) => {
+          if (!editingCustomer) return
+          const next: CustomerPriceList = {
+            ...editingCustomer,
+            customer_service_surcharges: rows,
+          }
+          await saveCustomerPrices(next, { closeCustomerModal: false })
+        }}
+      />
 
 
     </div>
