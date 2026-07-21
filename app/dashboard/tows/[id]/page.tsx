@@ -3485,16 +3485,19 @@ export default function TowDetailsPage() {
                 </div>
               )}
               {shareMessage && (
-                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 break-all">
+                <div className="mb-4 max-w-[620px] rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 break-all">
                   {shareMessage}
                 </div>
               )}
               {(shareLinksLoading ||
                 shareLinks.some((l) => l.is_valid) ||
                 shareLinks.length > 0) && (
-                <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                <div className="mb-5 max-w-[620px] rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-xs font-medium text-gray-600">קישורי שיתוף</p>
+                    <div className="flex items-center gap-1.5">
+                      <Link2 size={15} className="text-blue-600 shrink-0" />
+                      <p className="text-sm font-semibold text-gray-800">קישורי שיתוף</p>
+                    </div>
                     {shareLinksLoading && (
                       <Loader2 size={14} className="animate-spin text-gray-400" />
                     )}
@@ -3503,31 +3506,30 @@ export default function TowDetailsPage() {
                   !shareLinksLoading ? (
                     <p className="text-xs text-gray-400">אין קישורים פעילים</p>
                   ) : (
-                    <ul className="space-y-2">
+                    <ul className="divide-y divide-blue-100">
                       {shareLinks
                         .filter((l) => l.is_valid)
                         .map((link) => (
                           <li
                             key={link.token}
-                            className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-700 bg-white rounded-lg border border-gray-100 px-2.5 py-2"
+                            className="flex items-center gap-3 py-2 first:pt-0 last:pb-0"
                           >
-                            <div className="min-w-0">
-                              <span>
-                                נוצר{' '}
-                                {new Date(link.created_at).toLocaleString('he-IL')}
-                              </span>
-                              <span className="text-gray-400 mx-1.5">·</span>
-                              <span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm text-gray-800 truncate">
                                 בתוקף עד{' '}
                                 {new Date(link.expires_at).toLocaleDateString(
                                   'he-IL'
                                 )}
-                              </span>
+                              </p>
+                              <p className="text-[11px] text-gray-400 truncate">
+                                נוצר{' '}
+                                {new Date(link.created_at).toLocaleString('he-IL')}
+                              </p>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-1 shrink-0">
                               <button
                                 type="button"
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200/80 bg-white/70 text-gray-500 hover:bg-white hover:text-gray-700"
                                 onClick={() => {
                                   const url = `${window.location.origin}/share/tow/${link.token}`
                                   void navigator.clipboard
@@ -3536,9 +3538,9 @@ export default function TowDetailsPage() {
                                     .catch(() => setShareMessage(url))
                                 }}
                                 title="העתק קישור"
+                                aria-label="העתק קישור"
                               >
-                                <Copy size={12} />
-                                העתק
+                                <Copy size={14} />
                               </button>
                               <button
                                 type="button"
@@ -3546,14 +3548,15 @@ export default function TowDetailsPage() {
                                 onClick={() =>
                                   void handleRevokeShareLink(link.token)
                                 }
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                title="בטל קישור"
+                                aria-label="בטל קישור"
                               >
                                 {shareBusyToken === link.token ? (
-                                  <Loader2 size={12} className="animate-spin" />
+                                  <Loader2 size={14} className="animate-spin" />
                                 ) : (
-                                  <Ban size={12} />
+                                  <Ban size={14} />
                                 )}
-                                בטל
                               </button>
                             </div>
                           </li>
