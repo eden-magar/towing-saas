@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SelectorModalShell } from '@/app/components/tow-forms/shared/SelectorModalShell'
 import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
+import { normalizePlate } from '@/app/lib/utils/plate-number'
 
 /** Minimal shape needed to render/filter a stored-vehicle row (portal or dashboard). */
 export type StorageVehiclePickerItem = {
@@ -75,10 +76,13 @@ export function StorageVehiclePickerModal<T extends StorageVehiclePickerItem>({
     const q = search.trim().toLowerCase()
     if (!q) return base
 
+    const plateQuery = normalizePlate(search)
     return base.filter((vehicle) => {
-      const plate = vehicle.plate_number.toLowerCase()
       const makeModel = makeModelLabel(vehicle).toLowerCase()
-      return plate.includes(q) || makeModel.includes(q)
+      const matchesPlate =
+        plateQuery.length > 0 &&
+        normalizePlate(vehicle.plate_number).includes(plateQuery)
+      return matchesPlate || makeModel.includes(q)
     })
   }, [vehicles, search, showReservedDisabled])
 

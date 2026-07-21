@@ -31,6 +31,7 @@ import {
 } from '@/app/components/customer-portal/portalRequestActionStyles'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { storedVehicleToCondition } from '@/app/lib/utils/storage-vehicle'
+import { normalizePlate } from '@/app/lib/utils/plate-number'
 import { TimeInStoragePill } from '@/app/components/storage/TimeInStoragePill'
 import {
   Button,
@@ -230,13 +231,16 @@ export default function NewCustomerTowRequestPage() {
   const filteredStoredVehicles = (() => {
     const q = storageSearch.trim().toLowerCase()
     if (!q) return storedVehicles
+    const plateQuery = normalizePlate(storageSearch)
     return storedVehicles.filter((vehicle) => {
-      const plate = vehicle.plate_number.toLowerCase()
       const makeModel = [vehicle.vehicle_data?.manufacturer, vehicle.vehicle_data?.model]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-      return plate.includes(q) || makeModel.includes(q)
+      const matchesPlate =
+        plateQuery.length > 0 &&
+        normalizePlate(vehicle.plate_number).includes(plateQuery)
+      return matchesPlate || makeModel.includes(q)
     })
   })()
 

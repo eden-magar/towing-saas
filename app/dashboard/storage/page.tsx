@@ -138,14 +138,19 @@ export default function StoragePage() {
   }
 
   const filteredVehicles = vehicles.filter(vehicle => {
-    const matchesSearch = 
-      vehicle.plate_number.includes(searchQuery) ||
-      vehicle.customer_name?.includes(searchQuery) ||
-      vehicle.location?.includes(searchQuery) ||
-      vehicle.vehicle_data?.manufacturer?.includes(searchQuery) ||
-      vehicle.vehicle_data?.model?.includes(searchQuery) ||
-      (vehicle as any).vehicle_code?.includes(searchQuery)
-    const matchesCondition = conditionFilter === 'all' || (vehicle as any).vehicle_condition === conditionFilter
+    const queryTrimmed = searchQuery.trim()
+    const plateQuery = normalizePlate(queryTrimmed)
+    const matchesSearch =
+      !queryTrimmed ||
+      (plateQuery.length > 0 &&
+        normalizePlate(vehicle.plate_number).includes(plateQuery)) ||
+      vehicle.customer_name?.includes(queryTrimmed) ||
+      vehicle.location?.includes(queryTrimmed) ||
+      vehicle.vehicle_data?.manufacturer?.includes(queryTrimmed) ||
+      vehicle.vehicle_data?.model?.includes(queryTrimmed) ||
+      (vehicle as any).vehicle_code?.includes(queryTrimmed)
+    const matchesCondition =
+      conditionFilter === 'all' || (vehicle as any).vehicle_condition === conditionFilter
     return matchesSearch && matchesCondition
   })
 

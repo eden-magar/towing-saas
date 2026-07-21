@@ -9,6 +9,7 @@ import { TruckWithDetails, TruckAssignedDriver } from '../../lib/types'
 import { DateInput } from '../../components/ui'
 import { getDrivers } from '../../lib/queries/drivers'
 import { DriverWithDetails } from '../../lib/types'
+import { normalizePlate } from '../../lib/utils/plate-number'
 
 type TruckDocFields = TruckWithDetails & {
   license_photo_url?: string | null
@@ -349,7 +350,11 @@ export default function TrucksPage() {
     if (statusFilter !== 'all' && status !== statusFilter) return false
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      if (!truck.plate_number.toLowerCase().includes(query) &&
+      const plateQuery = normalizePlate(searchQuery)
+      const matchesPlate =
+        plateQuery.length > 0 &&
+        normalizePlate(truck.plate_number).includes(plateQuery)
+      if (!matchesPlate &&
           !(truck.manufacturer?.toLowerCase().includes(query)) &&
           !(truck.model?.toLowerCase().includes(query))) {
         return false
@@ -526,7 +531,7 @@ export default function TrucksPage() {
 
     const isDuplicate = await checkTruckDuplicate(
       companyId,
-      formData.plate,
+      normalizePlate(formData.plate),
       editingTruck?.id
     )
 
@@ -1093,7 +1098,9 @@ export default function TrucksPage() {
                       <input
                         type="text"
                         value={formData.plate}
-                        onChange={(e) => setFormData({ ...formData, plate: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, plate: normalizePlate(e.target.value) })
+                        }
                         placeholder="12-345-67"
                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#33d4ff] font-mono"
                       />

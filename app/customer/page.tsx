@@ -8,6 +8,7 @@ import { getCustomerForUser, getCustomerTows, getCustomerStats, CUSTOMER_PORTAL_
 import { getCustomerTowRequests } from '@/app/lib/queries/customer-tow-requests'
 import type { CustomerPortalTow, CustomerTowRequest } from '@/app/lib/types'
 import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
+import { normalizePlate } from '@/app/lib/utils/plate-number'
 import {
   Truck,
   Clock,
@@ -165,10 +166,14 @@ export default function CustomerDashboard() {
   const filteredTows = tows.filter(tow => {
     if (!searchQuery) return true
     const q = searchQuery.toLowerCase()
+    const plateQuery = normalizePlate(searchQuery)
     return (
       tow.order_number?.toLowerCase().includes(q) ||
       tow.customer_order_number?.toLowerCase().includes(q) ||
-      tow.vehicles.some(v => v.plate_number.includes(q)) ||
+      (plateQuery.length > 0 &&
+        tow.vehicles.some((v) =>
+          normalizePlate(v.plate_number).includes(plateQuery)
+        )) ||
       tow.points.some(p => p.address?.toLowerCase().includes(q))
     )
   })

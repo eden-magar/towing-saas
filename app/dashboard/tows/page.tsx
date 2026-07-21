@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useAuth } from '../../lib/AuthContext'
 import { getTows, getTowListStats, searchTowsByField, type TowSearchField, TowWithDetails } from '../../lib/queries/tows'
 import { getEvents, type EventListItem } from '../../lib/queries/events'
+import { normalizePlate } from '../../lib/utils/plate-number'
 
 type LocalYmd = { year: number; month: number; day: number }
 
@@ -368,7 +369,8 @@ export default function TowsPage() {
     // סינון לפי חיפוש
     if (searchTerm) {
       const query = searchTerm.toLowerCase()
-      const vehiclePlate = tow.vehicles[0]?.plate_number?.toLowerCase() || ''
+      const plateQuery = normalizePlate(searchTerm)
+      const vehiclePlate = normalizePlate(tow.vehicles[0]?.plate_number || '')
       const customerName = tow.customer?.name?.toLowerCase() || ''
       const driverName = tow.driver?.user?.full_name?.toLowerCase() || ''
       const orderNum = tow.order_number?.toLowerCase() || ''
@@ -380,7 +382,9 @@ export default function TowsPage() {
         return orderNum.startsWith(orderQuery) || customerOrderNum.startsWith(orderQuery)
       }
       
-      if (!vehiclePlate.includes(query) && 
+      const matchesPlate =
+        plateQuery.length > 0 && vehiclePlate.includes(plateQuery)
+      if (!matchesPlate && 
           !customerName.includes(query) && 
           !driverName.includes(query) &&
           !orderNum.startsWith(query) &&

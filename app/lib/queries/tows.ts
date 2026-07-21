@@ -508,10 +508,13 @@ async function resolveTowIdsByField(
   }
 
   if (field === 'vehicle') {
+    const plateDigits = normalizePlate(v)
+    if (!plateDigits) return []
+    const platePattern = `%${plateDigits}%`
     const { data: vehicleRows, error: vErr } = await supabase
       .from('tow_vehicles')
       .select('tow_id')
-      .ilike('plate_number', pattern)
+      .ilike('plate_number', platePattern)
     if (vErr) throw vErr
     const vehicleTowIds = [
       ...new Set((vehicleRows ?? []).map((r: { tow_id: string }) => r.tow_id)),

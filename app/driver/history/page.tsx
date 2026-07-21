@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { getDriverByUserId, DriverInfo } from '../../lib/queries/driver-tasks'
 import { supabase } from '../../lib/supabase'
+import { normalizePlate } from '../../lib/utils/plate-number'
 import { 
   History, 
   Search, 
@@ -220,13 +221,17 @@ export default function DriverHistoryPage() {
       }
       return item.status === filter
     })
-    .filter(item => 
-      !searchQuery || 
-      item.vehicle.name.includes(searchQuery) ||
-      item.vehicle.plate.includes(searchQuery) ||
-      item.from.includes(searchQuery) ||
-      item.to.includes(searchQuery)
-    )
+    .filter(item => {
+      if (!searchQuery) return true
+      const plateQuery = normalizePlate(searchQuery)
+      return (
+        item.vehicle.name.includes(searchQuery) ||
+        (plateQuery.length > 0 &&
+          normalizePlate(item.vehicle.plate).includes(plateQuery)) ||
+        item.from.includes(searchQuery) ||
+        item.to.includes(searchQuery)
+      )
+    })
 
   const groupedItems = filteredItems.reduce((groups, item) => {
     const date = item.date
