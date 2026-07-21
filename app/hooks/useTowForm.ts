@@ -6,7 +6,7 @@ import { getTowWithPoints, findStorageFollowUpChild, type EditTowSnapshot, type 
 import { getCustomersLite, CustomerListItem } from '../lib/queries/customers'
 import { getDrivers } from '../lib/queries/drivers'
 import { getCompanySettings } from '../lib/queries/settings'
-import { getTrucks } from '../lib/queries/trucks'
+import { getTrucksForForm } from '../lib/queries/trucks'
 import { 
   getBasePriceList, 
   getCustomerIdsWithPersonalPricing, 
@@ -1086,8 +1086,7 @@ export function useTowForm(
 
   // ==================== Effects ====================
   
-  // Load Google Maps
-  useEffect(() => { loadGoogleMaps() }, [])
+  // Google Maps loads on demand via AddressInput / distance effects (not on mount)
 
   useEffect(() => {
     vatPercentRef.current = vatPercent
@@ -1874,7 +1873,7 @@ export function useTowForm(
         setInheritCustomerOrderNumber(false)
       }
       try {
-        const tow = await getTowWithPoints(sourceTowId)
+        const tow = await getTowWithPoints(sourceTowId, { includeImages: false })
         if (!tow) return
         if (editTowId) {
           setLoadedTowStatus(tow.status)
@@ -2424,7 +2423,15 @@ export function useTowForm(
         }
 
         if (editTowId) {
-          const reserved = await getVehiclesReservedForTow(editTowId)
+          // Reserved storage vehicle + follow-up child are independent of each other
+          const [reserved, followUpSettled] = await Promise.all([
+            getVehiclesReservedForTow(editTowId),
+            findStorageFollowUpChild(editTowId, companyId).then(
+              (child) => ({ ok: true as const, child }),
+              (err: unknown) => ({ ok: false as const, err })
+            ),
+          ])
+
           if (reserved.length > 0) {
             const rv = reserved[0]
             const effectiveType = towTypeMap[tow.tow_type] || 'single'
@@ -2449,8 +2456,10 @@ export function useTowForm(
             setDropoffToBaseDistance({ distanceKm: savedDeadheadKm, durationMinutes: 0 })
           }
 
-          try {
-            const followUpChild = await findStorageFollowUpChild(editTowId, companyId)
+          if (!followUpSettled.ok) {
+            console.error('Error loading storage follow-up child:', followUpSettled.err)
+          } else {
+            const followUpChild = followUpSettled.child
             if (followUpChild) {
               setFollowUpChildTowId(followUpChild.id)
               setFollowUpChildStatus(followUpChild.status)
@@ -2502,8 +2511,6 @@ export function useTowForm(
               setEditFollowUpExistingPoints([])
               setEditFollowUpExistingVehicles([])
             }
-          } catch (followUpLoadErr) {
-            console.error('Error loading storage follow-up child:', followUpLoadErr)
           }
 
           setEditHydrationSettled(true)
@@ -2915,12 +2922,6 @@ export function useTowForm(
           setServiceSurchargesData(value)
         })
         .catch((err) => console.error('Error loading serviceSurcharges:', err))
-      getDrivers(companyId)
-        .then((v) => setDrivers(v))
-        .catch((err) => console.error('Error loading drivers:', err))
-      getTrucks(companyId)
-        .then((v) => setTrucks(v))
-        .catch((err) => console.error('Error loading trucks:', err))
 
       const results = await Promise.allSettled([
         getBasePriceList(companyId),
@@ -2976,6 +2977,15 @@ export function useTowForm(
       } else {
         console.error('Error loading companySettings:', companySettingsResult.reason)
       }
+
+      // Drivers/trucks only needed for assignment UI — start after pricing catalogs so they
+      // don't contend for bandwidth during first interactive paint.
+      getDrivers(companyId)
+        .then((v) => setDrivers(v))
+        .catch((err) => console.error('Error loading drivers:', err))
+      getTrucksForForm(companyId)
+        .then((v) => setTrucks(v))
+        .catch((err) => console.error('Error loading trucks:', err))
     } finally {
       setDataLoading(false)
     }

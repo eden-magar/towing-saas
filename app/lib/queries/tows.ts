@@ -802,7 +802,17 @@ export async function getTow(towId: string): Promise<TowWithDetails | null> {
 
 // ==================== NEW: שליפת גרירה עם נקודות ====================
 
-export async function getTowWithPoints(towId: string): Promise<TowWithDetails | null> {
+export type GetTowWithPointsOptions = {
+  /** Default true. Form hydrate can skip — images are unused there and signing is expensive. */
+  includeImages?: boolean
+}
+
+export async function getTowWithPoints(
+  towId: string,
+  options?: GetTowWithPointsOptions
+): Promise<TowWithDetails | null> {
+  const includeImages = options?.includeImages !== false
+
   const [towRes, vehiclesRes, legsRes, pointsRes, imagesRes] = await Promise.all([
     supabase
       .from('tows')
@@ -840,11 +850,13 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     `)
       .eq('tow_id', towId)
       .order('point_order', { ascending: true }),
-    supabase
-      .from('tow_images')
-      .select('id, image_url, image_type, tow_point_id, tow_vehicle_id, notes, created_at')
-      .eq('tow_id', towId)
-      .order('created_at', { ascending: true }),
+    includeImages
+      ? supabase
+          .from('tow_images')
+          .select('id, image_url, image_type, tow_point_id, tow_vehicle_id, notes, created_at')
+          .eq('tow_id', towId)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: null, error: null }),
   ])
 
   if (towRes.error) {
@@ -888,7 +900,7 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     })
   }
 
-  if (imagesRes.error) {
+  if (includeImages && imagesRes.error) {
     console.error('Error fetching tow images:', {
       message: imagesRes.error.message,
       details: imagesRes.error.details,
@@ -907,8 +919,9 @@ export async function getTowWithPoints(towId: string): Promise<TowWithDetails | 
     created_at: string
   }
 
-  const rawImages = (!imagesRes.error ? imagesRes.data : null) ?? []
-  const signedImages = await withSignedTowImageUrls(rawImages)
+  const signedImages = includeImages
+    ? await withSignedTowImageUrls((!imagesRes.error ? imagesRes.data : null) ?? [])
+    : []
 
   const imagesByPointId: Record<string, TowPointImageRow[]> = {}
   for (const img of signedImages) {
@@ -1803,7 +1816,7 @@ export async function findStorageFollowUpChild(
   const childId = matches[0]?.id
   if (!childId) return null
 
-  return getTowWithPoints(childId)
+  return getTowWithPoints(childId, { includeImages: false })
 }
 
 export interface UpdateStorageFollowUpInput {

@@ -75,6 +75,21 @@ export async function deleteTruckDocument(pathOrUrl: string): Promise<void> {
 // ==================== שליפת משאיות ====================
 
 export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> {
+  return fetchTrucksWithDetails(companyId, { includeTowCounts: true })
+}
+
+/**
+ * Trucks + current driver assignments only — skips the full-company tow count scan.
+ * Use on the create/edit form (counts are unused there). Prefer {@link getTrucks} for the trucks page.
+ */
+export async function getTrucksForForm(companyId: string): Promise<TruckWithDetails[]> {
+  return fetchTrucksWithDetails(companyId, { includeTowCounts: false })
+}
+
+async function fetchTrucksWithDetails(
+  companyId: string,
+  options: { includeTowCounts: boolean }
+): Promise<TruckWithDetails[]> {
   const { data: trucks, error } = await supabase
     .from('tow_trucks')
     .select('*')
@@ -104,35 +119,37 @@ export async function getTrucks(companyId: string): Promise<TruckWithDetails[]> 
     .eq('is_current', true)
     .in('truck_id', trucks.map(t => t.id))
 
-  // שליפת ספירת גרירות היום
-  const today = new Date().toISOString().split('T')[0]
-  const { data: towCounts } = await supabase
-    .from('tows')
-    .select('truck_id')
-    .eq('company_id', companyId)
-    .gte('created_at', `${today}T00:00:00`)
-    .lte('created_at', `${today}T23:59:59`)
-
-  // שליפת ספירת גרירות כוללת (ללא סינון תאריך)
-  const { data: allTowCounts } = await supabase
-    .from('tows')
-    .select('truck_id')
-    .eq('company_id', companyId)
-
-  // מיפוי ספירות
   const countByTruck: Record<string, number> = {}
-  towCounts?.forEach(tow => {
-    if (tow.truck_id) {
-      countByTruck[tow.truck_id] = (countByTruck[tow.truck_id] || 0) + 1
-    }
-  })
-
   const totalCountByTruck: Record<string, number> = {}
-  allTowCounts?.forEach(tow => {
-    if (tow.truck_id) {
-      totalCountByTruck[tow.truck_id] = (totalCountByTruck[tow.truck_id] || 0) + 1
-    }
-  })
+
+  if (options.includeTowCounts) {
+    // שליפת ספירת גרירות היום
+    const today = new Date().toISOString().split('T')[0]
+    const { data: towCounts } = await supabase
+      .from('tows')
+      .select('truck_id')
+      .eq('company_id', companyId)
+      .gte('created_at', `${today}T00:00:00`)
+      .lte('created_at', `${today}T23:59:59`)
+
+    // שליפת ספירת גרירות כוללת (ללא סינון תאריך)
+    const { data: allTowCounts } = await supabase
+      .from('tows')
+      .select('truck_id')
+      .eq('company_id', companyId)
+
+    towCounts?.forEach(tow => {
+      if (tow.truck_id) {
+        countByTruck[tow.truck_id] = (countByTruck[tow.truck_id] || 0) + 1
+      }
+    })
+
+    allTowCounts?.forEach(tow => {
+      if (tow.truck_id) {
+        totalCountByTruck[tow.truck_id] = (totalCountByTruck[tow.truck_id] || 0) + 1
+      }
+    })
+  }
 
   // מיפוי שיוכים (מספר נהגים לכל גרר)
   const assignmentsByTruck: Record<string, TruckAssignedDriver[]> = {}
