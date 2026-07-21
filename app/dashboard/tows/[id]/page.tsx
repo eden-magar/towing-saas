@@ -64,6 +64,8 @@ import {
   Eye,
   Link2,
   Calendar,
+  Download,
+  Loader2,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback'
@@ -189,7 +191,7 @@ function CancellationFeeBreakdownDisplay({
 export default function TowDetailsPage() {
   const params = useParams()
   const router = useRouter()
-  const { user, companyId } = useAuth()
+  const { user, companyId, session } = useAuth()
   const towId = params.id as string
   
   const [loading, setLoading] = useState(true)
@@ -203,6 +205,9 @@ export default function TowDetailsPage() {
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'images' | 'portal'>('details')
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set())
+  const [imagesDownloading, setImagesDownloading] = useState(false)
+  const [imagesDownloadError, setImagesDownloadError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showChangeDriverModal, setShowChangeDriverModal] = useState(false)
@@ -517,8 +522,82 @@ export default function TowDetailsPage() {
     void Promise.all([loadDriversAndTrucks(), loadSurchargesAndPricing()])
   }, [loadDriversAndTrucks, loadSurchargesAndPricing])
 
+  const toggleImageSelected = useCallback((imageId: string) => {
+    setSelectedImageIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(imageId)) next.delete(imageId)
+      else next.add(imageId)
+      return next
+    })
+  }, [])
+
+  const downloadTowImages = useCallback(
+    async (ids?: string[]) => {
+      if (!tow?.id) return
+      const token = session?.access_token
+      if (!token) {
+        setImagesDownloadError('יש להתחבר מחדש כדי להוריד תמונות')
+        return
+      }
+
+      setImagesDownloading(true)
+      setImagesDownloadError('')
+      try {
+        const qs =
+          ids && ids.length > 0
+            ? `?ids=${encodeURIComponent(ids.join(','))}`
+            : ''
+        const res = await fetch(`/api/tows/${tow.id}/images/download${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!res.ok) {
+          let message = 'שגיאה בהורדת התמונות'
+          try {
+            const body = (await res.json()) as { error?: string }
+            if (body.error) message = body.error
+          } catch {
+            /* ignore non-JSON error body */
+          }
+          setImagesDownloadError(message)
+          return
+        }
+
+        const blob = await res.blob()
+        const disposition = res.headers.get('Content-Disposition') || ''
+        const match = disposition.match(/filename="([^"]+)"/)
+        const filename = match?.[1] || `tow_${tow.order_number || tow.id}_photos.zip`
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+
+        const skipped = Number(res.headers.get('X-Photos-Skipped') || '0')
+        if (skipped > 0) {
+          setImagesDownloadError(
+            `ההורדה הושלמה, אך ${skipped} תמונות לא נכללו (כשל בהורדה מהאחסון)`
+          )
+        }
+      } catch (err) {
+        console.error('Tow images download failed:', err)
+        setImagesDownloadError('שגיאה בהורדת התמונות')
+      } finally {
+        setImagesDownloading(false)
+      }
+    },
+    [tow?.id, tow?.order_number, session?.access_token]
+  )
+
   const handleTabChange = useCallback((tab: 'details' | 'history' | 'images' | 'portal') => {
     setActiveTab(tab)
+    if (tab !== 'images') {
+      setSelectedImageIds(new Set())
+      setImagesDownloadError('')
+    }
     if (tab === 'history') void loadChangeLogs()
   }, [loadChangeLogs])
 
@@ -3258,10 +3337,57 @@ export default function TowDetailsPage() {
 
         {activeTab === 'images' && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+            <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold text-gray-800">תמונות</h2>
+              {(() => {
+                const imageCount =
+                  tow.points?.reduce(
+                    (sum: number, point: any) => sum + (point.images?.length || 0),
+                    0
+                  ) || 0
+                if (imageCount === 0) return null
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {selectedImageIds.size > 0 && (
+                      <button
+                        type="button"
+                        disabled={imagesDownloading}
+                        onClick={() =>
+                          void downloadTowImages(Array.from(selectedImageIds))
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {imagesDownloading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Download size={16} />
+                        )}
+                        הורד נבחרים ({selectedImageIds.size})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={imagesDownloading}
+                      onClick={() => void downloadTowImages()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#33d4ff] text-white hover:bg-[#2bb8e0] disabled:opacity-50"
+                    >
+                      {imagesDownloading ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Download size={16} />
+                      )}
+                      הורד הכל
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
             <div className="p-4 sm:p-5">
+              {imagesDownloadError && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  {imagesDownloadError}
+                </div>
+              )}
               {(() => {
                 const allImages = tow.points?.flatMap((point: any) => 
                   (point.images || []).map((img: any) => ({ ...img, point }))
@@ -3313,15 +3439,30 @@ export default function TowDetailsPage() {
                               const plate = img.tow_vehicle_id
                                 ? vehiclePlateById[img.tow_vehicle_id]
                                 : undefined
+                              const selected = selectedImageIds.has(img.id)
                               return (
-                                <a key={img.id} href={img.image_url} target="_blank" rel="noopener noreferrer" className="group">
-                                  <div className="aspect-square rounded-xl overflow-hidden border border-gray-200 group-hover:border-[#33d4ff] transition-colors">
-                                    <img src={img.image_url} alt={img.image_type} className="w-full h-full object-cover" />
-                                  </div>
-                                  <p className="text-xs text-gray-400 mt-1 text-center">
-                                    {plate ? `${typeLabel} · ${plate}` : typeLabel}
-                                  </p>
-                                </a>
+                                <div key={img.id} className="relative">
+                                  <label
+                                    className="absolute top-2 right-2 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-white/90 shadow-sm border border-gray-200"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={() => toggleImageSelected(img.id)}
+                                      className="h-4 w-4 accent-[#33d4ff]"
+                                      aria-label={`בחר תמונה ${typeLabel}`}
+                                    />
+                                  </label>
+                                  <a href={img.image_url} target="_blank" rel="noopener noreferrer" className="group block">
+                                    <div className={`aspect-square rounded-xl overflow-hidden border transition-colors ${selected ? 'border-[#33d4ff] ring-2 ring-[#33d4ff]/30' : 'border-gray-200 group-hover:border-[#33d4ff]'}`}>
+                                      <img src={img.image_url} alt={img.image_type} className="w-full h-full object-cover" />
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1 text-center">
+                                      {plate ? `${typeLabel} · ${plate}` : typeLabel}
+                                    </p>
+                                  </a>
+                                </div>
                               )
                             })}
                           </div>
