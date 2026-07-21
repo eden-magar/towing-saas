@@ -66,6 +66,9 @@ import {
   Calendar,
   Download,
   Loader2,
+  Share2,
+  Copy,
+  Ban,
 } from 'lucide-react'
 import { useAuth } from '../../../lib/AuthContext'
 import { useDebouncedCallback } from '../../../hooks/useDebouncedCallback'
@@ -81,6 +84,12 @@ import {
   type PortalVisibilityOverrideState,
 } from '../../../lib/utils/portal-visibility'
 import { approveTowQuote, getTowWithPoints, getTowDetailLight, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
+import {
+  createTowShareLink,
+  listTowShareLinks,
+  revokeTowShareLink,
+  type TowShareLinkListItem,
+} from '../../../lib/queries/tow-share-links'
 import { TowInternalNotesCard } from '../../../components/tows/TowInternalNotesCard'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
 import { supabase } from '../../../lib/supabase'
@@ -208,6 +217,11 @@ export default function TowDetailsPage() {
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set())
   const [imagesDownloading, setImagesDownloading] = useState(false)
   const [imagesDownloadError, setImagesDownloadError] = useState('')
+  const [shareLinks, setShareLinks] = useState<TowShareLinkListItem[]>([])
+  const [shareLinksLoading, setShareLinksLoading] = useState(false)
+  const [shareCreating, setShareCreating] = useState(false)
+  const [shareBusyToken, setShareBusyToken] = useState<string | null>(null)
+  const [shareMessage, setShareMessage] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showChangeDriverModal, setShowChangeDriverModal] = useState(false)
@@ -531,6 +545,72 @@ export default function TowDetailsPage() {
     })
   }, [])
 
+  const refreshShareLinks = useCallback(async () => {
+    if (!tow?.id) return
+    setShareLinksLoading(true)
+    try {
+      const links = await listTowShareLinks(tow.id)
+      setShareLinks(links)
+    } catch (err) {
+      console.error('Error loading share links:', err)
+    } finally {
+      setShareLinksLoading(false)
+    }
+  }, [tow?.id])
+
+  const handleCreateShareLink = useCallback(async () => {
+    if (!tow?.id) return
+    setShareCreating(true)
+    setShareMessage('')
+    try {
+      const { token, expires_at } = await createTowShareLink(tow.id)
+      const url = `${window.location.origin}/share/tow/${token}`
+      const expiresLabel = new Date(expires_at).toLocaleDateString('he-IL')
+      const message = `שלום, מצורף קישור לצפייה בתמונות הגרירה:\n${url}\nהקישור בתוקף עד ${expiresLabel}.`
+
+      try {
+        await navigator.clipboard.writeText(url)
+        setShareMessage('הקישור הועתק ללוח')
+      } catch {
+        setShareMessage(url)
+      }
+
+      window.open(
+        `https://wa.me/?text=${encodeURIComponent(message)}`,
+        '_blank',
+        'noopener,noreferrer'
+      )
+
+      await refreshShareLinks()
+    } catch (err) {
+      console.error('Error creating share link:', err)
+      setShareMessage(
+        err instanceof Error ? err.message : 'שגיאה ביצירת קישור שיתוף'
+      )
+    } finally {
+      setShareCreating(false)
+    }
+  }, [tow?.id, refreshShareLinks])
+
+  const handleRevokeShareLink = useCallback(
+    async (token: string) => {
+      setShareBusyToken(token)
+      setShareMessage('')
+      try {
+        await revokeTowShareLink(token)
+        await refreshShareLinks()
+      } catch (err) {
+        console.error('Error revoking share link:', err)
+        setShareMessage(
+          err instanceof Error ? err.message : 'שגיאה בביטול הקישור'
+        )
+      } finally {
+        setShareBusyToken(null)
+      }
+    },
+    [refreshShareLinks]
+  )
+
   const downloadTowImages = useCallback(
     async (ids?: string[]) => {
       if (!tow?.id) return
@@ -597,9 +677,12 @@ export default function TowDetailsPage() {
     if (tab !== 'images') {
       setSelectedImageIds(new Set())
       setImagesDownloadError('')
+      setShareMessage('')
+    } else {
+      void refreshShareLinks()
     }
     if (tab === 'history') void loadChangeLogs()
-  }, [loadChangeLogs])
+  }, [loadChangeLogs, refreshShareLinks])
 
   const handlePortalVisibilityOverrideChange = useCallback(
     async (flag: PortalVisibilityFlag, state: PortalVisibilityOverrideState) => {
@@ -3378,6 +3461,19 @@ export default function TowDetailsPage() {
                       )}
                       הורד הכל
                     </button>
+                    <button
+                      type="button"
+                      disabled={shareCreating}
+                      onClick={() => void handleCreateShareLink()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {shareCreating ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Share2 size={16} />
+                      )}
+                      צור קישור שיתוף
+                    </button>
                   </div>
                 )
               })()}
@@ -3386,6 +3482,84 @@ export default function TowDetailsPage() {
               {imagesDownloadError && (
                 <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   {imagesDownloadError}
+                </div>
+              )}
+              {shareMessage && (
+                <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 break-all">
+                  {shareMessage}
+                </div>
+              )}
+              {(shareLinksLoading ||
+                shareLinks.some((l) => l.is_valid) ||
+                shareLinks.length > 0) && (
+                <div className="mb-5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-xs font-medium text-gray-600">קישורי שיתוף</p>
+                    {shareLinksLoading && (
+                      <Loader2 size={14} className="animate-spin text-gray-400" />
+                    )}
+                  </div>
+                  {shareLinks.filter((l) => l.is_valid).length === 0 &&
+                  !shareLinksLoading ? (
+                    <p className="text-xs text-gray-400">אין קישורים פעילים</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {shareLinks
+                        .filter((l) => l.is_valid)
+                        .map((link) => (
+                          <li
+                            key={link.token}
+                            className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-700 bg-white rounded-lg border border-gray-100 px-2.5 py-2"
+                          >
+                            <div className="min-w-0">
+                              <span>
+                                נוצר{' '}
+                                {new Date(link.created_at).toLocaleString('he-IL')}
+                              </span>
+                              <span className="text-gray-400 mx-1.5">·</span>
+                              <span>
+                                בתוקף עד{' '}
+                                {new Date(link.expires_at).toLocaleDateString(
+                                  'he-IL'
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                onClick={() => {
+                                  const url = `${window.location.origin}/share/tow/${link.token}`
+                                  void navigator.clipboard
+                                    .writeText(url)
+                                    .then(() => setShareMessage('הקישור הועתק ללוח'))
+                                    .catch(() => setShareMessage(url))
+                                }}
+                                title="העתק קישור"
+                              >
+                                <Copy size={12} />
+                                העתק
+                              </button>
+                              <button
+                                type="button"
+                                disabled={shareBusyToken === link.token}
+                                onClick={() =>
+                                  void handleRevokeShareLink(link.token)
+                                }
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                {shareBusyToken === link.token ? (
+                                  <Loader2 size={12} className="animate-spin" />
+                                ) : (
+                                  <Ban size={12} />
+                                )}
+                                בטל
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
                 </div>
               )}
               {(() => {

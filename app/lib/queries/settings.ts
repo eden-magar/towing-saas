@@ -32,6 +32,7 @@ const COMPANY_SETTINGS_PUBLIC_SELECT = [
   'base_address',
   'base_lat',
   'base_lng',
+  'share_link_default_expiry_days',
   'created_at',
   'updated_at',
 ].join(', ')
@@ -52,6 +53,7 @@ type CompanySettingsRow = {
   base_address: string | null
   base_lat: number | null
   base_lng: number | null
+  share_link_default_expiry_days: number
   created_at: string
   updated_at: string
 }
@@ -166,6 +168,7 @@ async function createDefaultSettings(companyId: string): Promise<CompanySettings
   const defaultSettings = {
     company_id: companyId,
     default_vat_percent: 18,
+    share_link_default_expiry_days: 7,
     working_hours_start: '08:00',
     working_hours_end: '18:00',
     evening_hours_start: '15:00',
@@ -209,6 +212,7 @@ interface UpdateSettingsInput {
   base_address?: string
   base_lat?: number
   base_lng?: number
+  share_link_default_expiry_days?: number
 }
 
 export async function updateCompanySettings(
@@ -229,6 +233,13 @@ export async function updateCompanySettings(
   if (input.base_address !== undefined) updates.base_address = input.base_address
   if (input.base_lat !== undefined) updates.base_lat = input.base_lat
   if (input.base_lng !== undefined) updates.base_lng = input.base_lng
+  if (input.share_link_default_expiry_days !== undefined) {
+    const days = Math.round(input.share_link_default_expiry_days)
+    if (days < 1 || days > 90) {
+      throw new Error('תפוגת קישור שיתוף חייבת להיות בין 1 ל-90 ימים')
+    }
+    updates.share_link_default_expiry_days = days
+  }
 
   const { error } = await supabase
     .from('company_settings')

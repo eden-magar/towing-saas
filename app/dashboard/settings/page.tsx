@@ -21,7 +21,8 @@ import {
   CreditCard,
   MessageSquare,
   AlertCircle,
-  ImageIcon
+  ImageIcon,
+  Link2,
 } from 'lucide-react'
 import {
   getCompanyDetails,
@@ -62,7 +63,8 @@ export default function SettingsPage() {
 
   // Form state - System Settings
   const [systemForm, setSystemForm] = useState({
-    default_vat_percent: 18
+    default_vat_percent: 18,
+    share_link_default_expiry_days: 7,
   })
 
   // Form state - Integrations (API keys are write-only; never loaded from server)
@@ -108,7 +110,9 @@ export default function SettingsPage() {
       if (settings) {
         setCompanySettings(settings)
         setSystemForm({
-          default_vat_percent: settings.default_vat_percent || 18
+          default_vat_percent: settings.default_vat_percent || 18,
+          share_link_default_expiry_days:
+            settings.share_link_default_expiry_days || 7,
         })
         setIntegrationsForm({
           kapaset_api_key: '',
@@ -151,7 +155,18 @@ export default function SettingsPage() {
     setSuccess('')
 
     try {
-      await updateCompanySettings(companyId, systemForm)
+      const expiryDays = Math.min(
+        90,
+        Math.max(1, Math.round(systemForm.share_link_default_expiry_days) || 7)
+      )
+      await updateCompanySettings(companyId, {
+        ...systemForm,
+        share_link_default_expiry_days: expiryDays,
+      })
+      setSystemForm((prev) => ({
+        ...prev,
+        share_link_default_expiry_days: expiryDays,
+      }))
       setSuccess('הגדרות המערכת נשמרו בהצלחה')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -515,6 +530,37 @@ export default function SettingsPage() {
                     <span className="text-gray-500">%</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">אחוז מע"מ ברירת מחדל לחשבוניות</p>
+                </div>
+
+                {/* Share link default expiry */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <Link2 size={14} className="inline ml-1" />
+                    תפוגת קישור שיתוף (ימים)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={systemForm.share_link_default_expiry_days}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value, 10)
+                        setSystemForm({
+                          ...systemForm,
+                          share_link_default_expiry_days: Number.isFinite(n)
+                            ? n
+                            : 7,
+                        })
+                      }}
+                      className="w-32 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      min="1"
+                      max="90"
+                      step="1"
+                    />
+                    <span className="text-gray-500">ימים</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    כמה ימים קישור שיתוף תמונות לגרירה נשאר פעיל (1–90)
+                  </p>
                 </div>
 
                 {/* Info box about time surcharges */}
