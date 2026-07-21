@@ -25,7 +25,14 @@ import { syncTowToLegacyCalendar } from '../integrations/legacy-calendar/client-
 import type { TowPortalVisibilityOverrides } from '../utils/portal-visibility'
 import { persistVehicleCodesToCache } from '../vehicle-lookup'
 import { withSignedTowImageUrls } from './tow-images-storage'
-import { calculateTowPrice, customerDiscountForPriceMode } from '../utils/price-calculator'
+import {
+  calculateTowPrice,
+  customerDiscountForPriceMode,
+  mergePriceLists,
+  priceListForTowCalc,
+  resolveDeadheadRate,
+} from '../utils/price-calculator'
+import { roundMoney2 } from '../utils/price-change-confirm'
 import {
   formatLogDateTime,
   getDriverDisplayName,
@@ -34,6 +41,28 @@ import {
   stringifyLogValue,
   type TowChangeEntry,
 } from './tow-change-log'
+import {
+  getCustomerPricingByCustomerId,
+  resolveSurchargeCatalog,
+  type TimeSurcharge,
+} from './price-lists'
+
+const JERUSALEM_TZ = 'Asia/Jerusalem'
+
+/** Calendar day (YYYY-MM-DD) in Asia/Jerusalem — not UTC. */
+function jerusalemYmd(d: Date): string {
+  return d.toLocaleDateString('sv-SE', { timeZone: JERUSALEM_TZ })
+}
+
+/** HH:mm in Asia/Jerusalem. */
+function jerusalemHm(d: Date): string {
+  return d.toLocaleTimeString('en-GB', {
+    timeZone: JERUSALEM_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
 
 export {
   getTowChangeLogs,
@@ -2881,6 +2910,12 @@ export async function deleteTow(towId: string) {
 
 // ==================== חישוב מחיר מחדש לפי תאריך ====================
 
+/**
+ * Recompute recommended / recommended_customer price for a new schedule.
+ * Keeps stored distance_km (schedule change must not re-derive km from legs).
+ * For recommended_customer: mergePriceLists + customer time-surcharge catalog
+ * (same pipeline as tow-save-handler buildSingleTowPriceBreakdown).
+ */
 export async function recalculateTowPrice(
   towId: string,
   newScheduledAt: Date,
@@ -2891,22 +2926,27 @@ export async function recalculateTowPrice(
 
   const oldPrice = tow.final_price || 0
   const breakdown = tow.price_breakdown
+  const priceMode = String(tow.price_mode || 'recommended')
+  const isCustomerList = priceMode === 'recommended_customer'
 
-  const { data: timeSurcharges } = await supabase
+  const { data: companyTimeSurcharges, error: timeErr } = await supabase
     .from('time_surcharges')
     .select('*')
     .eq('company_id', companyId)
     .eq('is_active', true)
 
-  if (!timeSurcharges) return null
+  if (timeErr) {
+    console.error('Error loading time surcharges for recalc:', timeErr)
+    return null
+  }
 
-  const newDate = newScheduledAt.toISOString().split('T')[0]
-  const newTime = `${String(newScheduledAt.getHours()).padStart(2, '0')}:${String(newScheduledAt.getMinutes()).padStart(2, '0')}`
+  const newDate = jerusalemYmd(newScheduledAt)
+  const newTime = jerusalemHm(newScheduledAt)
 
   const companySettings = await getCompanySettings(companyId)
   const vatRate = (companySettings?.default_vat_percent ?? 18) / 100
 
-  const { data: priceList } = await supabase
+  const { data: companyPriceList } = await supabase
     .from('price_lists')
     .select('*')
     .eq('company_id', companyId)
@@ -2914,6 +2954,26 @@ export async function recalculateTowPrice(
     .eq('is_active', true)
     .limit(1)
     .maybeSingle()
+
+  let customerPricing: Awaited<ReturnType<typeof getCustomerPricingByCustomerId>> = null
+  if (isCustomerList && tow.customer_id) {
+    try {
+      customerPricing = await getCustomerPricingByCustomerId(companyId, tow.customer_id)
+    } catch (err) {
+      console.error('Error loading customer pricing for recalc:', err)
+    }
+  }
+
+  const activePriceList = isCustomerList
+    ? mergePriceLists(companyPriceList, customerPricing?.price_list ?? null)
+    : (companyPriceList as Record<string, any> | null)
+
+  const timeSurchargesForCalc: TimeSurcharge[] = isCustomerList
+    ? resolveSurchargeCatalog(
+        customerPricing?.customer_time_surcharges,
+        (companyTimeSurcharges as TimeSurcharge[]) ?? [],
+      )
+    : ((companyTimeSurcharges as TimeSurcharge[]) ?? [])
 
   const locationSurcharges = (breakdown.location_surcharges || []).map((s) => ({
     id: s.id,
@@ -2939,27 +2999,21 @@ export async function recalculateTowPrice(
         : -(breakdown.manual_adjustment_percent!)
       : 0
 
+  const deadheadKm = breakdown.deadhead_km || 0
+  const deadheadPriceStored = breakdown.deadhead_price || 0
+  const deadheadRate =
+    deadheadKm > 0 && deadheadPriceStored > 0
+      ? deadheadPriceStored / deadheadKm
+      : resolveDeadheadRate(activePriceList)
+
   const result = calculateTowPrice({
-    priceList: {
-      base_prices: {
-        private: priceList?.base_price_private ?? breakdown.base_price ?? 0,
-        motorcycle: priceList?.base_price_motorcycle ?? 0,
-        heavy: priceList?.base_price_heavy ?? 0,
-        machinery: priceList?.base_price_machinery ?? 0,
-        personal_import: priceList?.base_price_private ?? breakdown.base_price ?? 0,
-      },
-      price_per_km: priceList?.price_per_km ?? 12,
-      minimum_price: priceList?.minimum_price ?? 0,
-    },
+    priceList: priceListForTowCalc(activePriceList),
     vehicleType: (breakdown.vehicle_type as any) || 'private',
     distanceKm: breakdown.distance_km || 0,
-    deadheadKm: breakdown.deadhead_km || 0,
-    deadheadRate:
-      (breakdown.deadhead_km || 0) > 0 && (breakdown.deadhead_price || 0) > 0
-        ? (breakdown.deadhead_price || 0) / (breakdown.deadhead_km || 1)
-        : (priceList as any)?.price_per_km_deadhead ?? 0,
+    deadheadKm,
+    deadheadRate,
     basePriceOverride: breakdown.base_price,
-    timeSurcharges: timeSurcharges as any,
+    timeSurcharges: timeSurchargesForCalc,
     towDate: newDate,
     towTime: newTime,
     isHoliday: false,
@@ -2967,21 +3021,33 @@ export async function recalculateTowPrice(
     serviceSurcharges,
     priceMode: 'recommended',
     discountPercent: customerDiscountForPriceMode(
-      tow.price_mode,
-      breakdown.discount_percent || 0,
+      priceMode,
+      breakdown.discount_percent || customerPricing?.discount_percent || 0,
     ),
     manualAdjustmentPercent: manualSigned,
     vatPercent: vatRate,
   })
 
+  const activeTimeMatch =
+    result.maxTimeSurchargePercent > 0
+      ? timeSurchargesForCalc.find(
+          (s) =>
+            s.surcharge_percent === result.maxTimeSurchargePercent &&
+            (s.label === result.maxTimeSurchargeLabel || !result.maxTimeSurchargeLabel),
+        ) ??
+        timeSurchargesForCalc.find(
+          (s) => s.surcharge_percent === result.maxTimeSurchargePercent,
+        )
+      : undefined
+
   const timeSurchargesBreakdown =
     result.maxTimeSurchargePercent > 0
       ? [
           {
-            id: '',
+            id: activeTimeMatch?.id || '',
             label: result.maxTimeSurchargeLabel || `תוספת זמן`,
             percent: result.maxTimeSurchargePercent,
-            amount: result.timeSurchargeAmount,
+            amount: roundMoney2(result.timeSurchargeAmount),
           },
         ]
       : []
@@ -2994,27 +3060,32 @@ export async function recalculateTowPrice(
       id: line.id || existing?.id || '',
       label: line.label || existing?.label || `תוספת מיקום (${line.percent}%)`,
       percent: line.percent,
-      amount: line.amount,
+      amount: roundMoney2(line.amount),
     }
   })
 
+  const newTotal = roundMoney2(result.total)
   const newBreakdown: PriceBreakdown = {
     ...breakdown,
-    base_price: result.basePrice,
-    distance_price: result.distancePrice,
+    base_price: roundMoney2(result.basePrice),
+    distance_price: roundMoney2(result.distancePrice),
     deadhead_km: result.deadheadKm,
-    deadhead_price: result.deadheadPrice,
+    deadhead_price: roundMoney2(result.deadheadPrice),
     time_surcharges: timeSurchargesBreakdown,
     location_surcharges: locationSurchargesBreakdown,
-    subtotal: result.beforeVat,
-    discount_amount: result.discountAmount,
-    vat_amount: result.vatAmount,
-    total: result.total,
+    subtotal: roundMoney2(result.beforeVat),
+    discount_percent: customerDiscountForPriceMode(
+      priceMode,
+      breakdown.discount_percent || customerPricing?.discount_percent || 0,
+    ),
+    discount_amount: roundMoney2(result.discountAmount),
+    vat_amount: roundMoney2(result.vatAmount),
+    total: newTotal,
   }
 
   return {
     oldPrice,
-    newPrice: result.total,
+    newPrice: newTotal,
     newBreakdown,
   }
 }

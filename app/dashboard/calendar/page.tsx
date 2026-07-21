@@ -613,6 +613,7 @@ export default function CalendarPage() {
   oldPrice: number
   newPrice: number | null
   newBreakdown: any | null
+  oldBreakdown: any | null
   customerName: string
   priceMode: string
 } | null>(null)
@@ -1193,10 +1194,12 @@ export default function CalendarPage() {
 
       // בדיקה אם יש פירוט מחיר - אם כן, נחשב מחדש
       // בדיקת מצב המחיר
-      const priceMode = draggedTow.price_mode || 'recommended'
+      const priceMode = String(draggedTow.price_mode || 'recommended')
+      const isAutoRecalcMode =
+        priceMode === 'recommended' || priceMode === 'recommended_customer'
       
-      if (priceMode === 'recommended' && draggedTow.price_breakdown) {
-        // מחיר מומלץ - מחשבים מחדש
+      if (isAutoRecalcMode && draggedTow.price_breakdown) {
+        // מחיר מומלץ / מחירון לקוח — מחשבים מחדש (merged list ב-recalculateTowPrice)
         const result = await recalculateTowPrice(draggedTow.id, newDate, companyId)
 
         if (
@@ -1208,19 +1211,21 @@ export default function CalendarPage() {
             oldPrice: result.oldPrice,
             newPrice: result.newPrice,
             newBreakdown: result.newBreakdown,
+            oldBreakdown: draggedTow.price_breakdown,
             customerName: draggedTow.customer?.name || 'ללא לקוח',
             priceMode: priceMode
           })
           setManualPrice('')
           setShowPriceUpdateModal(true)
         }
-      } else if (priceMode !== 'recommended') {
-        // מחיר ידני/קבוע/לקוח - רק מתריעים
+      } else if (!isAutoRecalcMode) {
+        // מחיר ידני/קבוע/לקוח קטלוג - רק מתריעים
         setPriceUpdateInfo({
           towId: draggedTow.id,
           oldPrice: draggedTow.final_price || 0,
           newPrice: null,
           newBreakdown: null,
+          oldBreakdown: draggedTow.price_breakdown,
           customerName: draggedTow.customer?.name || 'ללא לקוח',
           priceMode: priceMode
         })
@@ -2579,18 +2584,40 @@ const handleSkipPriceUpdate = () => {
       )}
 
       {/* מודל עדכון מחיר */}
-      {showPriceUpdateModal && priceUpdateInfo && (
+      {showPriceUpdateModal && priceUpdateInfo && (() => {
+        const isAutoRecalcMode =
+          priceUpdateInfo.priceMode === 'recommended' ||
+          priceUpdateInfo.priceMode === 'recommended_customer'
+        const oldTimePct =
+          priceUpdateInfo.oldBreakdown?.time_surcharges?.[0]?.percent ?? 0
+        const newTimePct =
+          priceUpdateInfo.newBreakdown?.time_surcharges?.[0]?.percent ?? 0
+        const timeSurchargeChanged = oldTimePct !== newTimePct
+        const priceDelta =
+          priceUpdateInfo.newPrice != null
+            ? priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice
+            : 0
+        const deltaLabel = (() => {
+          const abs = `₪${Math.abs(priceDelta).toFixed(2)}`
+          if (!timeSurchargeChanged) {
+            return priceDelta > 0 ? `+${abs}` : `-${abs}`
+          }
+          if (priceDelta > 0) return `+${abs} (תוספת זמן)`
+          if (newTimePct < oldTimePct) return `-${abs} (הסרת תוספת זמן)`
+          return `-${abs}`
+        })()
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-xl">
-            <div className={`px-5 py-4 text-white ${priceUpdateInfo.priceMode === 'recommended' ? 'bg-amber-500' : 'bg-blue-500'}`}>
+            <div className={`px-5 py-4 text-white ${isAutoRecalcMode ? 'bg-amber-500' : 'bg-blue-500'}`}>
               <h2 className="font-bold text-lg">
-                {priceUpdateInfo.priceMode === 'recommended' ? 'עדכון מחיר' : 'שים לב'}
+                {isAutoRecalcMode ? 'עדכון מחיר' : 'שים לב'}
               </h2>
               <p className="text-white/80 text-sm">{priceUpdateInfo.customerName}</p>
             </div>
             
             <div className="p-5 space-y-4">
-              {priceUpdateInfo.priceMode === 'recommended' && priceUpdateInfo.newPrice !== null ? (
+              {isAutoRecalcMode && priceUpdateInfo.newPrice !== null ? (
                 <>
                   {/* מחיר מומלץ - הצגת מחיר חדש מחושב */}
                   <div className="text-center">
@@ -2656,13 +2683,9 @@ const handleSkipPriceUpdate = () => {
                       </div>
                     )}
                     
-                    {priceUpdateInfo.newPrice > priceUpdateInfo.oldPrice ? (
-                      <p className="text-sm text-amber-600 mt-3">
-                        +₪{(priceUpdateInfo.newPrice - priceUpdateInfo.oldPrice).toFixed(2)} (תוספת זמן)
-                      </p>
-                    ) : (
-                      <p className="text-sm text-green-600 mt-3">
-                        -₪{(priceUpdateInfo.oldPrice - priceUpdateInfo.newPrice).toFixed(2)} (ללא תוספת זמן)
+                    {priceDelta !== 0 && (
+                      <p className={`text-sm mt-3 ${priceDelta > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                        {deltaLabel}
                       </p>
                     )}
                   </div>
@@ -2714,7 +2737,7 @@ const handleSkipPriceUpdate = () => {
               >
                 השאר ללא שינוי
               </button>
-              {priceUpdateInfo.priceMode === 'recommended' && priceUpdateInfo.newPrice !== null && !manualPrice ? (
+              {isAutoRecalcMode && priceUpdateInfo.newPrice !== null && !manualPrice ? (
                 <button
                   onClick={handleConfirmPriceUpdate}
                   disabled={updatingPrice}
@@ -2727,7 +2750,7 @@ const handleSkipPriceUpdate = () => {
                   onClick={handleManualPriceUpdate}
                   disabled={updatingPrice || !manualPrice}
                   className={`flex-1 py-3 text-white rounded-xl transition-colors font-medium disabled:bg-gray-300 ${
-                    priceUpdateInfo.priceMode === 'recommended' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-500 hover:bg-blue-600'
+                    isAutoRecalcMode ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-500 hover:bg-blue-600'
                   }`}
                 >
                   {updatingPrice ? 'מעדכן...' : 'עדכן מחיר'}
@@ -2736,7 +2759,8 @@ const handleSkipPriceUpdate = () => {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

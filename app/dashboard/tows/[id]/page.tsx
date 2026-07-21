@@ -5,8 +5,23 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { TimeInput, DateInput } from '../../../components/ui'
-import { getServiceSurcharges, ServiceSurcharge, getBasePriceList, getTimeSurcharges, getActiveTimeSurcharges, TimeSurcharge } from '../../../lib/queries/price-lists'
-import { calculateTowPrice, computeStoredPriceBreakdownTotals, customerDiscountForPriceMode, type TowPriceResult } from '../../../lib/utils/price-calculator'
+import {
+  getServiceSurcharges,
+  ServiceSurcharge,
+  getBasePriceList,
+  getTimeSurcharges,
+  getCustomerPricingByCustomerId,
+  resolveSurchargeCatalog,
+  TimeSurcharge,
+} from '../../../lib/queries/price-lists'
+import {
+  calculateTowPrice,
+  computeStoredPriceBreakdownTotals,
+  customerDiscountForPriceMode,
+  mergePriceLists,
+  priceListForTowCalc,
+  resolveDeadheadRate,
+} from '../../../lib/utils/price-calculator'
 import {
   formatPriceRecalcConfirmMessage,
   pricesMateriallyDiffer,
@@ -83,7 +98,19 @@ import {
   type PortalVisibilityFlag,
   type PortalVisibilityOverrideState,
 } from '../../../lib/utils/portal-visibility'
-import { approveTowQuote, getTowWithPoints, getTowDetailLight, updateTow, updateTowStatus, assignDriver, getTowChangeLogs, TowWithDetails, createLinkedTow, manualCloseTow } from '../../../lib/queries/tows'
+import {
+  approveTowQuote,
+  getTowWithPoints,
+  getTowDetailLight,
+  updateTow,
+  updateTowStatus,
+  assignDriver,
+  getTowChangeLogs,
+  TowWithDetails,
+  createLinkedTow,
+  manualCloseTow,
+  recalculateTowPrice,
+} from '../../../lib/queries/tows'
 import {
   createTowShareLink,
   listTowShareLinks,
@@ -327,9 +354,7 @@ export default function TowDetailsPage() {
   const [priceChangeModal, setPriceChangeModal] = useState<{
     oldPrice: number
     newPrice: number
-    newBreakdown: any[]
-    newResult: TowPriceResult
-    activeSurcharges: TimeSurcharge[]
+    newBreakdown: NonNullable<TowWithDetails['price_breakdown']>
   } | null>(null)
 
   const manualClosingRef = useRef(false)
@@ -1076,34 +1101,47 @@ export default function TowDetailsPage() {
               : -(newPriceBreakdown.manual_adjustment_percent!)
             : 0
 
+        let customerPricing: Awaited<
+          ReturnType<typeof getCustomerPricingByCustomerId>
+        > = null
+        if (mode === 'recommended_customer' && (editCustomerId || tow.customer_id)) {
+          try {
+            customerPricing = await getCustomerPricingByCustomerId(
+              companyId!,
+              editCustomerId || tow.customer_id!,
+            )
+          } catch (err) {
+            console.error('Error loading customer pricing for inline save:', err)
+          }
+        }
+
+        const activePriceList =
+          mode === 'recommended_customer'
+            ? mergePriceLists(basePriceList, customerPricing?.price_list ?? null)
+            : basePriceList
+        const timeSurchargesForCalc =
+          mode === 'recommended_customer'
+            ? resolveSurchargeCatalog(
+                customerPricing?.customer_time_surcharges,
+                timeSurchargesData,
+              )
+            : timeSurchargesData
+
         const result = calculateTowPrice({
-          priceList: {
-            base_prices: {
-              private: basePriceList.base_price_private || 0,
-              motorcycle: basePriceList.base_price_motorcycle || 0,
-              heavy: basePriceList.base_price_heavy || 0,
-              machinery: basePriceList.base_price_machinery || 0,
-              personal_import: basePriceList.base_price_private || 0,
-            },
-            price_per_km: basePriceList.price_per_km || 12,
-            minimum_price: basePriceList.minimum_price || 0,
-          },
+          priceList: priceListForTowCalc(activePriceList),
           vehicleType: (newPriceBreakdown.vehicle_type as any) || 'private',
           distanceKm: newPriceBreakdown.distance_km || 0,
           deadheadKm,
           deadheadRate:
             deadheadKm > 0 && deadheadPrice > 0
               ? deadheadPrice / deadheadKm
-              : (basePriceList as any)?.price_per_km_deadhead ?? 0,
+              : resolveDeadheadRate(activePriceList),
           basePriceOverride: newPriceBreakdown.base_price,
-          timeSurcharges: timeSurchargesData,
+          timeSurcharges: timeSurchargesForCalc,
           towDate: editScheduledDate,
           towTime: editScheduledTime,
           isHoliday: false,
-          activeTimeSurchargeIds: (newPriceBreakdown.time_surcharges || [])
-            .map((s: { id?: string }) => s.id)
-            .filter((id: string | undefined): id is string => !!id),
-          hasManualTimeSurchargeOverride: true,
+          // Re-evaluate time surcharges for the edited schedule (same as form / recalculateTowPrice).
           locationSurcharges: (newPriceBreakdown.location_surcharges || []).map(
             (s: { id: string; label: string; percent: number }) => ({
               id: s.id,
@@ -1122,13 +1160,20 @@ export default function TowDetailsPage() {
           priceMode: 'recommended',
           discountPercent: customerDiscountForPriceMode(
             tow.price_mode,
-            newPriceBreakdown.discount_percent,
+            newPriceBreakdown.discount_percent ||
+              customerPricing?.discount_percent ||
+              0,
           ),
           manualAdjustmentPercent: manualSigned,
           vatPercent: vatRate,
         })
 
         const maxTimePercent = result.maxTimeSurchargePercent
+        const matchedTime = timeSurchargesForCalc.find(
+          (s) =>
+            s.surcharge_percent === maxTimePercent &&
+            (s.label === result.maxTimeSurchargeLabel || !result.maxTimeSurchargeLabel),
+        )
         newPriceBreakdown = {
           ...newPriceBreakdown,
           base_price: roundMoney2(result.basePrice),
@@ -1139,9 +1184,7 @@ export default function TowDetailsPage() {
             maxTimePercent > 0
               ? [
                   {
-                    id:
-                      (newPriceBreakdown.time_surcharges?.[0] as { id?: string })?.id ||
-                      '',
+                    id: matchedTime?.id || '',
                     label: result.maxTimeSurchargeLabel || 'תוספת זמן',
                     percent: maxTimePercent,
                     amount: roundMoney2(result.timeSurchargeAmount),
@@ -1166,7 +1209,9 @@ export default function TowDetailsPage() {
           subtotal: roundMoney2(result.beforeVat),
           discount_percent: customerDiscountForPriceMode(
             tow.price_mode,
-            newPriceBreakdown.discount_percent,
+            newPriceBreakdown.discount_percent ||
+              customerPricing?.discount_percent ||
+              0,
           ),
           discount_amount: roundMoney2(result.discountAmount),
           vat_amount: roundMoney2(result.vatAmount),
@@ -1225,96 +1270,21 @@ export default function TowDetailsPage() {
   }
 
   const handleAssignDriver = async () => {
-    if (!selectedDriverId || !selectedTruckId || !tow) return
+    if (!selectedDriverId || !selectedTruckId || !tow || !companyId) return
 
-    const pricing = await loadSurchargesAndPricing()
+    const mode = String(tow.price_mode || '')
+    const isAutoRecalc =
+      (mode === 'recommended' || mode === 'recommended_customer') &&
+      !!tow.price_breakdown &&
+      !!scheduleDate
 
-    // חישוב מחיר חדש לפי שעה חדשה
-    if (
-      tow.price_breakdown &&
-      pricing?.basePriceList &&
-      pricing.timeSurcharges.length > 0 &&
-      tow.price_mode === 'recommended'
-    ) {
-      const newDate = scheduleDate.toISOString().split('T')[0]
-      const newTime = scheduleDate.toTimeString().slice(0, 5)
-      const activeSurcharges = getActiveTimeSurcharges(pricing.timeSurcharges, newTime, newDate, false)
-      const locationSurcharges = (tow.price_breakdown.location_surcharges || []).map((s: any) => ({
-        percent: s.percent,
-        label: s.label,
-        id: s.id,
-      }))
-      const serviceSurcharges = [
-        ...(tow.price_breakdown.service_surcharges || []).map((s: any) => ({
-          amount: s.amount,
-          label: s.label,
-        })),
-        ...(tow.price_breakdown.vat_exempt_surcharges || []).map((s: any) => ({
-          amount: s.amount,
-          label: s.label,
-          vatExempt: true as const,
-        })),
-      ]
-
-      const basePriceOverride =
-        tow.tow_type === 'exchange'
-          ? (tow.price_breakdown?.base_price ?? undefined)
-          : undefined
-
-      const manualSigned =
-        (tow.price_breakdown.manual_adjustment_percent ?? 0) > 0
-          ? tow.price_breakdown.manual_adjustment_type === 'markup'
-            ? tow.price_breakdown.manual_adjustment_percent!
-            : -tow.price_breakdown.manual_adjustment_percent!
-          : 0
-
-      const newResult = calculateTowPrice({
-        priceList: {
-          base_prices: {
-            private: pricing.basePriceList.base_price_private || 0,
-            motorcycle: pricing.basePriceList.base_price_motorcycle || 0,
-            heavy: pricing.basePriceList.base_price_heavy || 0,
-            machinery: pricing.basePriceList.base_price_machinery || 0,
-            personal_import: pricing.basePriceList.base_price_private || 0,
-          },
-          price_per_km: pricing.basePriceList.price_per_km || 12,
-          minimum_price: pricing.basePriceList.minimum_price || 250,
-        },
-        vehicleType: (tow.price_breakdown.vehicle_type as any) || 'private',
-        distanceKm: tow.price_breakdown.distance_km || 0,
-        deadheadKm: tow.price_breakdown.deadhead_km || 0,
-        deadheadRate:
-          (tow.price_breakdown.deadhead_km || 0) > 0 && (tow.price_breakdown.deadhead_price || 0) > 0
-            ? (tow.price_breakdown.deadhead_price || 0) / (tow.price_breakdown.deadhead_km || 1)
-            : 0,
-        timeSurcharges: pricing.timeSurcharges,
-        towDate: newDate,
-        towTime: newTime,
-        isHoliday: false,
-        activeTimeSurchargeIds: activeSurcharges.map(s => s.id),
-        hasManualTimeSurchargeOverride: true,
-        locationSurcharges,
-        serviceSurcharges,
-        priceMode: 'recommended',
-        discountPercent: customerDiscountForPriceMode(
-          tow.price_mode,
-          tow.price_breakdown.discount_percent || 0,
-        ),
-        manualAdjustmentPercent: manualSigned,
-        vatPercent: vatRate,
-        ...(basePriceOverride !== undefined ? { basePriceOverride } : {}),
-      })
-
-      const oldPrice = tow.final_price ?? tow.price_breakdown.total
-      const newPrice = newResult.total
-
-      if (pricesMateriallyDiffer(oldPrice, newPrice)) {
+    if (isAutoRecalc) {
+      const result = await recalculateTowPrice(tow.id, scheduleDate, companyId)
+      if (result && pricesMateriallyDiffer(result.oldPrice, result.newPrice)) {
         setPriceChangeModal({
-          oldPrice,
-          newPrice,
-          newBreakdown: newResult.breakdown,
-          newResult,
-          activeSurcharges,
+          oldPrice: result.oldPrice,
+          newPrice: result.newPrice,
+          newBreakdown: result.newBreakdown,
         })
         return
       }
@@ -1343,36 +1313,7 @@ export default function TowDetailsPage() {
           towId: tow.id,
           finalPrice: priceChangeModal.newPrice,
           recommendedPrice: priceChangeModal.newPrice,
-          priceBreakdown: tow.price_breakdown ? {
-            ...tow.price_breakdown,
-            base_price: priceChangeModal.newResult.basePrice,
-            distance_price: priceChangeModal.newResult.distancePrice,
-            deadhead_km: priceChangeModal.newResult.deadheadKm,
-            deadhead_price: priceChangeModal.newResult.deadheadPrice,
-            subtotal: priceChangeModal.newResult.beforeVat,
-            time_surcharges: priceChangeModal.activeSurcharges
-              .filter(s => s.surcharge_percent === priceChangeModal.newResult.maxTimeSurchargePercent)
-              .map(s => ({
-                id: s.id,
-                label: s.label,
-                percent: s.surcharge_percent,
-                amount: priceChangeModal.newResult.timeSurchargeAmount,
-              })),
-            location_surcharges: priceChangeModal.newResult.locationSurchargeLines.map((line) => {
-              const existing = (tow.price_breakdown?.location_surcharges || []).find(
-                (s: any) => s.id === line.id || s.percent === line.percent,
-              )
-              return {
-                id: line.id || existing?.id || '',
-                label: line.label || existing?.label || `תוספת מיקום (${line.percent}%)`,
-                percent: line.percent,
-                amount: line.amount,
-              }
-            }),
-            vat_amount: priceChangeModal.newResult.vatAmount,
-            discount_amount: priceChangeModal.newResult.discountAmount,
-            total: priceChangeModal.newResult.total,
-          } : null,
+          priceBreakdown: priceChangeModal.newBreakdown,
         })
       }
       closeDriverModal()
@@ -4400,13 +4341,29 @@ export default function TowDetailsPage() {
                   priceChangeModal.newPrice,
                 )}
               </p>
-              <div className="text-sm space-y-1 text-gray-600">
-                {priceChangeModal.newBreakdown.filter(i => i.amount !== 0).map((item, idx) => (
-                  <div key={idx} className="flex justify-between">
-                    <span>{item.label}</span>
-                    <span>₪{Math.round(item.amount)}</span>
+              <div className="text-sm space-y-1 text-gray-600 text-right">
+                <div className="flex justify-between">
+                  <span>₪{roundMoney2(priceChangeModal.newBreakdown.base_price).toFixed(2)}</span>
+                  <span>מחיר בסיס</span>
+                </div>
+                {(priceChangeModal.newBreakdown.distance_km || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span>₪{roundMoney2(priceChangeModal.newBreakdown.distance_price).toFixed(2)}</span>
+                    <span>מרחק ({Number(priceChangeModal.newBreakdown.distance_km).toFixed(1)} ק״מ)</span>
                   </div>
-                ))}
+                )}
+                {(priceChangeModal.newBreakdown.time_surcharges || [])
+                  .filter((s) => s.amount > 0)
+                  .map((s, idx) => (
+                    <div key={s.id || idx} className="flex justify-between text-amber-700">
+                      <span>₪{roundMoney2(s.amount).toFixed(2)}</span>
+                      <span>{s.label} (+{s.percent}%)</span>
+                    </div>
+                  ))}
+                <div className="flex justify-between font-medium text-gray-800 pt-1 border-t border-gray-100">
+                  <span>₪{roundMoney2(priceChangeModal.newPrice).toFixed(2)}</span>
+                  <span>סה״כ</span>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 px-5 pb-5">
