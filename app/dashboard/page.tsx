@@ -270,6 +270,8 @@
       let cancelled = false
       setTowSearchResults([])
       setIsSearching(true)
+      // Open immediately so the in-flight "מחפש..." state is visible (not only after results).
+      setTowSearchOpen(true)
       searchCalendarTows(companyId, q, 8)
         .then(r => {
           if (!cancelled) {
@@ -280,7 +282,7 @@
         .catch(() => {
           if (!cancelled) {
             setTowSearchResults([])
-            setTowSearchOpen(false)
+            setTowSearchOpen(true)
           }
         })
         .finally(() => {
@@ -852,7 +854,7 @@
               value={towSearchInput}
               onChange={e => setTowSearchInput(e.target.value)}
               onFocus={() => {
-                if (towSearchResults.length > 0 && towSearchDebounced.trim().length >= 2) setTowSearchOpen(true)
+                if (towSearchDebounced.trim().length >= 2) setTowSearchOpen(true)
               }}
               placeholder="חיפוש גרירה..."
               className="w-72 rounded-xl border border-gray-300 bg-white py-2 pr-10 pl-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-[#33d4ff] focus:outline-none focus:ring-2 focus:ring-[#33d4ff]/40"
