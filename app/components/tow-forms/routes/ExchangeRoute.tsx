@@ -147,6 +147,13 @@ interface ExchangeRouteProps {
   onConfirmPendingStopAddress?: (stopId: string, draft: CustomerAddressPendingDraft) => void
   onClearPendingStopAddress?: (stopId: string) => void
   saveAddressDisabled?: boolean
+  /** Audit yard-confirm answers (yes / no / dismissed). */
+  onStorageYardAnswer?: (
+    fieldKey: string,
+    role: 'pickup' | 'dropoff',
+    outcome: 'yes' | 'no' | 'dismissed',
+    address: string,
+  ) => void
 }
 
 export function ExchangeRoute({
@@ -236,6 +243,7 @@ export function ExchangeRoute({
   onConfirmPendingStopAddress,
   onClearPendingStopAddress,
   saveAddressDisabled = false,
+  onStorageYardAnswer,
 }: ExchangeRouteProps) {
   const addressSaveEnabled = savedCustomerAddresses !== undefined
   const storageYard = yardFromBasePriceList(basePriceList)
@@ -249,6 +257,18 @@ export function ExchangeRoute({
           onStartFromBaseChange(true)
         },
         fieldKey: 'exchange-working-origin',
+        onAnswer: onStorageYardAnswer
+          ? (
+              outcome: 'yes' | 'no' | 'dismissed',
+              address: string,
+            ) =>
+              onStorageYardAnswer(
+                'exchange-working-origin',
+                'pickup',
+                outcome,
+                address,
+              )
+          : undefined,
       }
     : null
   const defectiveDropoffYardConfirm = storageYard
@@ -267,6 +287,18 @@ export function ExchangeRoute({
           }
         },
         fieldKey: 'exchange-defective-dest',
+        onAnswer: onStorageYardAnswer
+          ? (
+              outcome: 'yes' | 'no' | 'dismissed',
+              address: string,
+            ) =>
+              onStorageYardAnswer(
+                'exchange-defective-dest',
+                'dropoff',
+                outcome,
+                address,
+              )
+          : undefined,
       }
     : null
 

@@ -1204,14 +1204,50 @@ export async function createTow(input: CreateTowInput) {
 
   if (pointsResult.error) {
     console.error('Error creating tow point:', pointsResult.error)
-    // לא נעצור את כל התהליך - הנקודות הן תוספת
-  } else if (pointVehicleRows.length > 0) {
+    await supabase.from('tow_legs').delete().eq('tow_id', towId)
+    await supabase.from('tow_vehicles').delete().eq('tow_id', towId)
+    await supabase.from('tows').delete().eq('id', towId)
+    throw pointsResult.error
+  }
+
+  if (pointVehicleRows.length > 0) {
     const { error: pointVehicleError } = await supabase
       .from('tow_point_vehicles')
       .insert(pointVehicleRows)
 
     if (pointVehicleError) {
       console.error('Error creating tow point vehicle:', pointVehicleError)
+      const errText =
+        pointVehicleError.message ||
+        String(pointVehicleError ?? 'unknown')
+      const towLabel = input.customerOrderNumber
+        ? `הזמנה ${input.customerOrderNumber}`
+        : `גרירה ${towId}`
+      await logManualActionItem({
+        type: 'tow_point_vehicles_link_failed',
+        severity: 'high',
+        companyId: input.companyId,
+        message: `${towLabel}: קישור רכבים לנקודות נכשל ביצירה — ${errText}`,
+        towId,
+        relatedEntity: towId,
+        details: {
+          towId,
+          pointIds: pointIds.filter(Boolean),
+          pointVehicleRows: pointVehicleRows.map((row) => ({
+            tow_point_id: row.tow_point_id,
+            tow_vehicle_id: row.tow_vehicle_id,
+            action: row.action,
+          })),
+          vehicleIndicesByPoint: (input.points || []).map((p, i) => ({
+            pointId: pointIds[i] ?? null,
+            point_order: p.point_order,
+            point_type: p.point_type,
+            vehicleIndices: p.vehicleIndices ?? [],
+          })),
+          error: errText,
+          source: 'createTow',
+        },
+      })
     }
   }
 
@@ -1460,39 +1496,9 @@ export async function manualCloseTow(
     }
   }
 
-  const towLabel = tow.order_number
-    ? `הזמנה ${tow.order_number}`
-    : `גרירה ${towId}`
-
   for (const point of storagePoints) {
-    const result = await updatePointStatus(point.id, 'completed')
-    if (result.storageOk && result.storageFailures.length === 0) continue
-
-    const failures =
-      result.storageFailures.length > 0
-        ? result.storageFailures
-        : ['unknown']
-
-    for (const failure of failures) {
-      const parsed = failure.trim().match(/^(.*?)\s+(add|release)$/i)
-      const plate = parsed?.[1]?.trim() || null
-      const isRelease = parsed?.[2]?.toLowerCase() === 'release'
-      await logManualActionItem({
-        type: isRelease ? 'storage_release_failed' : 'storage_add_failed',
-        severity: 'high',
-        message: isRelease
-          ? `סגירה ידנית (${towLabel}): רכב ${plate ?? 'לא ידוע'} לא שוחרר מאחסנה למרות שנקודת האחסון הושלמה`
-          : `סגירה ידנית (${towLabel}): רכב ${plate ?? 'לא ידוע'} לא נכנס לאחסנה למרות שנקודת האחסון הושלמה`,
-        towId,
-        relatedEntity: plate ?? point.id,
-        details: {
-          storageFailures: result.storageFailures,
-          failure,
-          pointId: point.id,
-          source: 'manualCloseTow',
-        },
-      })
-    }
+    // Storage side effects + manual_action_items are handled inside updatePointStatus.
+    await updatePointStatus(point.id, 'completed')
   }
 
   const now = new Date().toISOString()
@@ -2227,12 +2233,14 @@ function buildPointOfficeRow(point: PreparedTowPoint, towId: string, forInsert: 
     contact_name: point.contact_name,
     contact_phone: point.contact_phone,
     order_notes: point.order_notes ?? null,
-    is_storage: point.isStorage || false,
     stop_subtype: point.stop_subtype ?? null,
   }
-  // Office notes on insert only — driver may write to `notes` during task flow
+  // Create / insert: undefined → false. Update: omit when absent so we preserve DB.
   if (forInsert) {
+    row.is_storage = point.isStorage === true
     row.notes = point.notes
+  } else if (point.isStorage !== undefined) {
+    row.is_storage = point.isStorage === true
   }
   return row
 }

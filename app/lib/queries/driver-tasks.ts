@@ -16,6 +16,7 @@ import {
   serializeDefects,
 } from '../constants/defects'
 import { hebrewTowStatusLabel, logTowAction } from './tow-change-log'
+import { logManualActionItem } from './manual-action-items'
 
 // ==================== טיפוסים ====================
 
@@ -848,13 +849,43 @@ async function handleStorageOnPointCompleted(
 
   const { data: tow, error: towError } = await supabase
     .from('tows')
-    .select('id, company_id, customer_id, driver_id, tow_type, customer_order_number')
+    .select('id, company_id, customer_id, driver_id, tow_type, customer_order_number, order_number')
     .eq('id', point.tow_id)
     .single()
 
   if (towError || !tow) {
     console.error('[storage] failed to load tow for storage side effect:', towError)
     return { ok: false, failures: ['לא ניתן לטעון את פרטי הגרירה למחסן'] }
+  }
+
+  const towLabel = tow.order_number
+    ? `הזמנה ${tow.order_number}`
+    : `גרירה ${tow.id}`
+
+  const logStorageFailure = async (opts: {
+    isRelease: boolean
+    plate: string | null
+    errorText: string
+    extra?: Record<string, unknown>
+  }) => {
+    const plate = opts.plate
+    await logManualActionItem({
+      type: opts.isRelease ? 'storage_release_failed' : 'storage_add_failed',
+      severity: 'high',
+      companyId: tow.company_id,
+      message: opts.isRelease
+        ? `${towLabel}: רכב ${plate ?? 'לא ידוע'} לא שוחרר מאחסנה למרות שנקודת האחסון הושלמה — ${opts.errorText}`
+        : `${towLabel}: רכב ${plate ?? 'לא ידוע'} לא נכנס לאחסנה למרות שנקודת האחסון הושלמה — ${opts.errorText}`,
+      towId: tow.id,
+      relatedEntity: plate ?? point.id,
+      details: {
+        pointId: point.id,
+        plate,
+        error: opts.errorText,
+        source: 'handleStorageOnPointCompleted',
+        ...(opts.extra ?? {}),
+      },
+    })
   }
 
   let performedBy: string | undefined
@@ -892,7 +923,14 @@ async function handleStorageOnPointCompleted(
 
   if (pvError) {
     console.error('[storage] failed to load point vehicles:', pvError)
-    return { ok: false, failures: ['לא ניתן לטעון רכבים לנקודה'] }
+    const errText = pvError.message || 'לא ניתן לטעון רכבים לנקודה'
+    failures.push(errText)
+    await logStorageFailure({
+      isRelease: point.point_type === 'pickup',
+      plate: null,
+      errorText: errText,
+    })
+    return { ok: false, failures }
   }
 
   let vehicles: PointLinkedVehicle[] = (pointVehicleRows ?? [])
@@ -912,12 +950,32 @@ async function handleStorageOnPointCompleted(
       .eq('tow_id', point.tow_id)
       .order('order_index', { ascending: true })
 
-    vehicles = (towVehicles ?? []).filter((v) => !!v.plate_number) as PointLinkedVehicle[]
+    let fallback = (towVehicles ?? []).filter((v) => !!v.plate_number) as PointLinkedVehicle[]
+
+    // Exchange: do not store/release both vehicles when links are missing.
+    // Dropoff → defective (is_working === false); pickup → working (is_working === true).
+    if (tow.tow_type === 'exchange' && fallback.length > 0) {
+      if (point.point_type === 'dropoff') {
+        fallback = fallback.filter((v) => v.is_working === false)
+      } else if (point.point_type === 'pickup') {
+        fallback = fallback.filter((v) => v.is_working === true)
+      }
+    }
+
+    vehicles = fallback
   }
 
   if (vehicles.length === 0) {
+    const errText = 'לא נמצא רכב לקישור לנקודת האחסון'
     console.error('[storage] no vehicles found for point', pointId)
-    return { ok: true, failures: [] }
+    failures.push(errText)
+    await logStorageFailure({
+      isRelease: point.point_type === 'pickup',
+      plate: null,
+      errorText: errText,
+      extra: { reason: 'empty_vehicle_list' },
+    })
+    return { ok: false, failures }
   }
 
   const isExchange = tow.tow_type === 'exchange'
@@ -930,11 +988,17 @@ async function handleStorageOnPointCompleted(
           vehicle.plate_number
         )
         if (!stored) {
+          const errText = 'לא נמצא רכב באחסנה לשחרור'
           console.error(
             '[storage] no stored vehicle found for release:',
             vehicle.plate_number
           )
           failures.push(`${vehicle.plate_number} release`)
+          await logStorageFailure({
+            isRelease: true,
+            plate: vehicle.plate_number,
+            errorText: errText,
+          })
           continue
         }
         const releaseNotes =
@@ -948,8 +1012,14 @@ async function handleStorageOnPointCompleted(
           notes: releaseNotes,
         })
       } catch (err) {
+        const errText = err instanceof Error ? err.message : String(err ?? 'unknown')
         console.error('[storage] release failed for plate', vehicle.plate_number, err)
         failures.push(`${vehicle.plate_number} release`)
+        await logStorageFailure({
+          isRelease: true,
+          plate: vehicle.plate_number,
+          errorText: errText,
+        })
       }
     }
     return { ok: failures.length === 0, failures }
@@ -983,8 +1053,14 @@ async function handleStorageOnPointCompleted(
           entryCustomerOrderNumber: tow.customer_order_number || null,
         })
       } catch (err) {
+        const errText = err instanceof Error ? err.message : String(err ?? 'unknown')
         console.error('[storage] add failed for plate', vehicle.plate_number, err)
         failures.push(`${vehicle.plate_number} add`)
+        await logStorageFailure({
+          isRelease: false,
+          plate: vehicle.plate_number,
+          errorText: errText,
+        })
       }
     }
     return { ok: failures.length === 0, failures }

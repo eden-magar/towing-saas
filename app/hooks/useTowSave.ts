@@ -37,6 +37,7 @@ import {
 } from '../lib/utils/price-change-confirm'
 import {
   MISSING_ROUTE_ADDRESSES_MESSAGE,
+  MISSING_STORAGE_DESTINATION_MESSAGE,
   MISSING_STORAGE_PLATE_MESSAGE,
   REQUIRED_TRUCK_TYPE_MESSAGE,
   STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
@@ -215,6 +216,8 @@ interface UseTowSaveParams {
   /** When set, mark the portal request converted after a successful create. */
   fromRequestId?: string
   setSaveWarning?: (msg: string) => void
+  /** Flush buffered storage-yard confirm audit logs after createTow. Never blocks save. */
+  flushStorageYardConfirmLogs?: (towId: string) => Promise<void>
 }
 
 export function useTowSave(params: UseTowSaveParams) {
@@ -350,6 +353,7 @@ export function useTowSave(params: UseTowSaveParams) {
     confirmPriceChange,
     fromRequestId,
     setSaveWarning,
+    flushStorageYardConfirmLogs,
   } = params
 
   const handleSave = async () => {
@@ -372,6 +376,16 @@ export function useTowSave(params: UseTowSaveParams) {
   // Validation - vehicle plate required for storage dropoff
   if (dropoffToStorage && !vehiclePlate) {
     setError(MISSING_STORAGE_PLATE_MESSAGE)
+    return
+  }
+
+  // Exchange: storage chosen for defective dropoff requires a destination address
+  if (
+    towType === 'exchange' &&
+    defectiveDestination === 'storage' &&
+    !defectiveDestinationAddress?.address?.trim()
+  ) {
+    setError(MISSING_STORAGE_DESTINATION_MESSAGE)
     return
   }
   
@@ -835,6 +849,12 @@ export function useTowSave(params: UseTowSaveParams) {
     router.push(`/dashboard/tows/${editTowId}`)
     } else {
       const result = await createTow(towData)
+
+      try {
+        await flushStorageYardConfirmLogs?.(result.id)
+      } catch (yardLogErr) {
+        console.error('[useTowSave] flush storage yard confirm logs failed:', yardLogErr)
+      }
 
       if (preSelectedDriverId && preSelectedTruckId) {
         try {

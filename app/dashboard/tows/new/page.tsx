@@ -152,6 +152,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
     handlePinDropConfirm,
     copyFromCustomer,
     handleSave,
+    recordStorageYardAnswer,
   } = useTowForm(editTowId)
 
   useEffect(() => {
@@ -379,6 +380,7 @@ function NewTowForm({ editTowId }: { editTowId?: string }) {
                 onLocationSurchargesChange={setSelectedLocationSurcharges}
                 onPinDropClick={(field) => setPinDropModal({ isOpen: true, field })}
                 storageAddress={basePriceList?.base_address || ''}
+                onStorageYardAnswer={recordStorageYardAnswer}
               />
             )}
 

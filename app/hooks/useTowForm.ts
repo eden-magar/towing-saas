@@ -36,6 +36,13 @@ import { getFullCustomerTowRequest } from '../lib/queries/customer-tow-requests'
 import { lookupVehicle } from '../lib/vehicle-lookup'
 import { hydrateDefectsFromTowReason, parseTowReasonToDefects } from '../lib/constants/defects'
 import {
+  logStorageYardConfirmAnswer,
+  storageYardConfirmLogEntry,
+  type StorageYardConfirmAnswer,
+  type StorageYardConfirmOutcome,
+} from '../lib/utils/storage-yard-confirm-log'
+import { logTowAction } from '../lib/queries/tow-change-log'
+import {
   getCustomerStoredVehiclesForDisplay,
   getStoredVehicleById,
   getVehiclesReservedForTow,
@@ -976,6 +983,8 @@ export function useTowForm(
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
   const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
+  /** Yard-confirm answers collected before create (no tow id yet). */
+  const pendingStorageYardAnswersRef = useRef<StorageYardConfirmAnswer[]>([])
   const [hasStorageFollowUp, setHasStorageFollowUp] = useState(false)
   const [inheritCustomerOrderNumber, setInheritCustomerOrderNumber] = useState(false)
   const [followUpAddress, setFollowUpAddress] = useState<AddressData>({ address: '' })
@@ -3703,6 +3712,46 @@ export function useTowForm(
     return workingVehicleAddress
   }
 
+  /**
+   * Record a storage-yard confirm answer.
+   * Edit: write to tow history immediately. Create: buffer until flush after createTow.
+   */
+  const recordStorageYardAnswer = useCallback(
+    (
+      fieldKey: string,
+      role: 'pickup' | 'dropoff',
+      outcome: StorageYardConfirmOutcome,
+      address: string,
+    ) => {
+      const answer: StorageYardConfirmAnswer = {
+        fieldKey,
+        role,
+        outcome,
+        address,
+      }
+      if (editTowId) {
+        void logStorageYardConfirmAnswer(editTowId, answer)
+        return
+      }
+      pendingStorageYardAnswersRef.current = [
+        ...pendingStorageYardAnswersRef.current,
+        answer,
+      ]
+    },
+    [editTowId],
+  )
+
+  /** Flush buffered yard-confirm answers after createTow. Never throws. */
+  const flushStorageYardConfirmLogs = useCallback(async (towId: string) => {
+    const pending = pendingStorageYardAnswersRef.current
+    if (pending.length === 0) return
+    pendingStorageYardAnswersRef.current = []
+    await logTowAction(
+      towId,
+      pending.map((a) => storageYardConfirmLogEntry(a)),
+    )
+  }, [])
+
   const captureExchangeFormState = (): ExchangeFormState => ({
     workingVehicleSource,
     selectedWorkingVehicleId,
@@ -4110,6 +4159,7 @@ export function useTowForm(
     confirmPriceChange,
     fromRequestId: isFromRequestLoad ? fromRequestId : undefined,
     setSaveWarning,
+    flushStorageYardConfirmLogs,
   })
 
   return {
@@ -4209,6 +4259,8 @@ export function useTowForm(
     customerStoredVehicles,
     selectedStoredVehicleId, setSelectedStoredVehicleId,
     dropoffToStorage, setDropoffToStorage,
+    recordStorageYardAnswer,
+    flushStorageYardConfirmLogs,
     hasStorageFollowUp, setHasStorageFollowUp,
     inheritCustomerOrderNumber, setInheritCustomerOrderNumber,
     followUpAddress, setFollowUpAddress,

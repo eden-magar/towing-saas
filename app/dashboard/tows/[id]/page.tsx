@@ -127,6 +127,11 @@ import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../../
 import { getCustomersLite, CustomerListItem } from '../../../lib/queries/customers'
 import { createInvoiceFromTow, towHasInvoice } from '../../../lib/queries/invoices'
 import { DriverWithDetails, TruckWithDetails } from '../../../lib/types'
+import {
+  getOpenManualActionItemsForTow,
+  resolveManualActionItem,
+  type ManualActionItem,
+} from '../../../lib/queries/manual-action-items'
 
 type RoutePointLite = { point_type: string; point_order: number }
 
@@ -335,6 +340,8 @@ export default function TowDetailsPage() {
   const [scheduleDate, setScheduleDate] = useState(new Date())
 
   const [changeLogs, setChangeLogs] = useState<any[]>([])
+  const [towManualItems, setTowManualItems] = useState<ManualActionItem[]>([])
+  const [resolvingManualItemId, setResolvingManualItemId] = useState<string | null>(null)
   const [childTows, setChildTows] = useState<
     { id: string; order_number: string | null; status: string; scheduled_at: string | null; created_at: string }[]
   >([])
@@ -381,7 +388,7 @@ export default function TowDetailsPage() {
     if (isInitial) setLoading(true)
     else setIsRefreshing(true)
     try {
-      const [towData, rejections, childrenRes, companySettings] = await Promise.all([
+      const [towData, rejections, childrenRes, companySettings, openManualItems] = await Promise.all([
         getTowWithPoints(towId),
         getRejectionRequestsForTow(towId),
         supabase
@@ -391,6 +398,7 @@ export default function TowDetailsPage() {
           .eq('company_id', companyId)
           .order('created_at', { ascending: true }),
         getCompanySettings(companyId),
+        getOpenManualActionItemsForTow(towId),
       ])
       if (companySettings?.default_vat_percent != null) {
         setVatRate(companySettings.default_vat_percent / 100)
@@ -398,6 +406,7 @@ export default function TowDetailsPage() {
       setTow(towData)
       setRejectionRequests(rejections)
       setChildTows(childrenRes.error ? [] : childrenRes.data || [])
+      setTowManualItems(openManualItems)
       if (towData) {
         const invoiceExists = await towHasInvoice(towId)
         setHasInvoice(invoiceExists)
@@ -1998,6 +2007,50 @@ export default function TowDetailsPage() {
                   />
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {towManualItems.length > 0 && (
+        <div className="max-w-6xl mx-auto px-4 mt-4">
+          <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 border-r-4 border-r-amber-500 rounded-xl text-amber-900">
+            <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0 space-y-2">
+              <p className="font-bold text-amber-900 text-sm">דורש טיפול ידני</p>
+              {towManualItems.map((item) => {
+                const resolving = resolvingManualItemId === item.id
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-2 min-w-0"
+                  >
+                    <p className="flex-1 text-sm text-amber-900 whitespace-normal break-words">
+                      {item.message}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={resolving}
+                      onClick={async () => {
+                        setResolvingManualItemId(item.id)
+                        try {
+                          const { ok } = await resolveManualActionItem(item.id)
+                          if (ok) {
+                            setTowManualItems((prev) =>
+                              prev.filter((x) => x.id !== item.id),
+                            )
+                          }
+                        } finally {
+                          setResolvingManualItemId(null)
+                        }
+                      }}
+                      className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 disabled:opacity-50 shrink-0"
+                    >
+                      {resolving ? '...' : 'טופל'}
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>

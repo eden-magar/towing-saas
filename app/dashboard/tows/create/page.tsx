@@ -74,7 +74,7 @@ import {
   vehicleActionTriggerClass,
   ManualVehicleEntryTrigger,
 } from '../../../components/tow-forms/shared'
-import { REQUIRED_TRUCK_TYPE_MESSAGE } from '../../../lib/utils/tow-save-blocking'
+import { REQUIRED_TRUCK_TYPE_MESSAGE, MISSING_STORAGE_DESTINATION_MESSAGE } from '../../../lib/utils/tow-save-blocking'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { StorageFollowUpSection } from '../../../components/tow-forms/StorageFollowUpSection'
@@ -335,6 +335,8 @@ function CreateTowForm({
     setSelectedStoredVehicleId,
     dropoffToStorage,
     setDropoffToStorage,
+    recordStorageYardAnswer,
+    flushStorageYardConfirmLogs,
     hasStorageFollowUp,
     setHasStorageFollowUp,
     inheritCustomerOrderNumber,
@@ -2035,6 +2037,14 @@ function CreateTowForm({
     }
     setTruckTypeError(false)
     if (
+      towType === 'exchange' &&
+      defectiveDestination === 'storage' &&
+      !defectiveDestinationAddress?.address?.trim()
+    ) {
+      setError(MISSING_STORAGE_DESTINATION_MESSAGE)
+      return
+    }
+    if (
       isCustomTowEditWipeBlocked({
         editTowId,
         towType,
@@ -2255,6 +2265,11 @@ function CreateTowForm({
       } else {
         const quoteResult = await createTow({ ...towData, status: 'quote' as const })
         quoteTowId = quoteResult.id
+        try {
+          await flushStorageYardConfirmLogs(quoteTowId)
+        } catch (yardLogErr) {
+          console.error('[handleSaveAsQuote] flush storage yard confirm logs failed:', yardLogErr)
+        }
         if (quoteTowId) {
           try {
             if (towType === 'single' && selectedStoredVehicleId) {
@@ -2374,6 +2389,7 @@ function CreateTowForm({
     persistTowCustomerAddresses,
     setAddressNotice,
     exchangePointSplit,
+    flushStorageYardConfirmLogs,
   ])
 
   const totalDistanceKm =
@@ -2382,6 +2398,12 @@ function CreateTowForm({
       : (distance?.distanceKm ?? 0) +
         (startFromBase && baseToPickupDistance ? baseToPickupDistance.distanceKm : 0)
 
+  const yardAnswer =
+    (fieldKey: string, role: 'pickup' | 'dropoff') =>
+    (outcome: 'yes' | 'no' | 'dismissed', address: string) => {
+      recordStorageYardAnswer(fieldKey, role, outcome, address)
+    }
+
   const pickupYardConfirm = storageYard
     ? {
         role: 'pickup' as const,
@@ -2389,6 +2411,7 @@ function CreateTowForm({
         alreadyFlagged: startFromBase,
         onConfirm: () => setStartFromBase(true),
         fieldKey: 'create-pickup',
+        onAnswer: yardAnswer('create-pickup', 'pickup'),
       }
     : null
   const dropoffYardConfirm = storageYard
@@ -2412,6 +2435,7 @@ function CreateTowForm({
           }
         },
         fieldKey: 'create-dropoff',
+        onAnswer: yardAnswer('create-dropoff', 'dropoff'),
       }
     : null
   const workingPickupYardConfirm = storageYard
@@ -2425,6 +2449,7 @@ function CreateTowForm({
           setStartFromBase(true)
         },
         fieldKey: 'create-working-origin',
+        onAnswer: yardAnswer('create-working-origin', 'pickup'),
       }
     : null
   const workingDropoffYardConfirm = storageYard
@@ -2443,6 +2468,7 @@ function CreateTowForm({
           }
         },
         fieldKey: 'create-working-dest',
+        onAnswer: yardAnswer('create-working-dest', 'dropoff'),
       }
     : null
   const defectiveDropoffYardConfirm = storageYard
@@ -2461,6 +2487,7 @@ function CreateTowForm({
           }
         },
         fieldKey: 'create-defective-dest',
+        onAnswer: yardAnswer('create-defective-dest', 'dropoff'),
       }
     : null
 

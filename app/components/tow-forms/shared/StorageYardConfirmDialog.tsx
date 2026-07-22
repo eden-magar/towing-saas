@@ -4,6 +4,9 @@ interface StorageYardConfirmDialogProps {
   open: boolean
   role: 'pickup' | 'dropoff'
   onConfirm: () => void
+  /** Explicit "לא, רק כתובת" */
+  onDecline: () => void
+  /** Backdrop / outside click — distinct from decline for audit */
   onDismiss: () => void
 }
 
@@ -15,6 +18,7 @@ export function StorageYardConfirmDialog({
   open,
   role,
   onConfirm,
+  onDecline,
   onDismiss,
 }: StorageYardConfirmDialogProps) {
   if (!open) return null
@@ -54,7 +58,7 @@ export function StorageYardConfirmDialog({
           </button>
           <button
             type="button"
-            onClick={onDismiss}
+            onClick={onDecline}
             className="min-h-[44px] flex-1 rounded-xl border border-gt-border-field bg-white px-3 text-sm font-medium text-gt-text-secondary hover:bg-gt-surface-hover transition-colors"
           >
             לא, רק כתובת

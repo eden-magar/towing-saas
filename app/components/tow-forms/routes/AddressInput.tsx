@@ -66,6 +66,14 @@ export type StorageYardConfirmProp = {
   onConfirm: () => void
   /** Stable field id so "לא, רק כתובת" sticks for this point+address. */
   fieldKey: string
+  /**
+   * Audit callback — yes / no / backdrop dismiss.
+   * Does not change storage flags; parent owns form state + history.
+   */
+  onAnswer?: (
+    outcome: 'yes' | 'no' | 'dismissed',
+    address: string,
+  ) => void
 }
 
 interface AddressInputProps {
@@ -211,20 +219,36 @@ export function AddressInput({
     maybeAskYardConfirm,
   ])
 
-  const handleYardConfirm = () => {
-    setYardConfirmOpen(false)
-    storageYardConfirm?.onConfirm()
+  const currentAddressString = () => {
+    if (typeof value === 'string') return value
+    return value?.address || localValue
   }
 
-  const handleYardDismiss = () => {
-    const addr =
-      typeof value === 'string' ? value : value?.address || localValue
+  const rememberDismissKey = () => {
+    const addr = currentAddressString()
     if (storageYardConfirm && addr.trim()) {
       dismissedYardKeysRef.current.add(
         storageYardDismissKey(storageYardConfirm.fieldKey, addr),
       )
     }
+  }
+
+  const handleYardConfirm = () => {
     setYardConfirmOpen(false)
+    storageYardConfirm?.onAnswer?.('yes', currentAddressString())
+    storageYardConfirm?.onConfirm()
+  }
+
+  const handleYardDecline = () => {
+    rememberDismissKey()
+    setYardConfirmOpen(false)
+    storageYardConfirm?.onAnswer?.('no', currentAddressString())
+  }
+
+  const handleYardBackdropDismiss = () => {
+    rememberDismissKey()
+    setYardConfirmOpen(false)
+    storageYardConfirm?.onAnswer?.('dismissed', currentAddressString())
   }
 
   const handleAddressBlur = () => {
@@ -241,7 +265,8 @@ export function AddressInput({
       open={yardConfirmOpen}
       role={storageYardConfirm.role}
       onConfirm={handleYardConfirm}
-      onDismiss={handleYardDismiss}
+      onDecline={handleYardDecline}
+      onDismiss={handleYardBackdropDismiss}
     />
   ) : null
 

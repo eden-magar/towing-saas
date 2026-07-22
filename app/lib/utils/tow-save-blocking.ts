@@ -11,6 +11,10 @@ export const MISSING_ROUTE_ADDRESSES_MESSAGE = 'יש להזין כתובת מו�
 export const MISSING_STORAGE_PLATE_MESSAGE =
   'יש להזין מספר לוחית לרכב המיועד לאחסנה'
 
+/** Exchange: dispatcher chose storage for defective dropoff but left destination empty. */
+export const MISSING_STORAGE_DESTINATION_MESSAGE =
+  'נבחרה אחסנה ליעד הרכב התקול — יש להזין כתובת יעד'
+
 export const STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE =
   'גרירת ההמשך כבר שובצה — כדי לבטלה, פתח אותה ישירות'
 
@@ -18,6 +22,7 @@ const SAVE_BLOCKING_MESSAGES = new Set<string>([
   REQUIRED_TRUCK_TYPE_MESSAGE,
   MISSING_ROUTE_ADDRESSES_MESSAGE,
   MISSING_STORAGE_PLATE_MESSAGE,
+  MISSING_STORAGE_DESTINATION_MESSAGE,
   CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE,
   STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
 ])

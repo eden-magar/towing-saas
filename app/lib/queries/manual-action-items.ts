@@ -98,6 +98,25 @@ export async function getOpenManualActionItems(
   return (data || []) as ManualActionItem[]
 }
 
+/** Open manual-attention items for a single tow (dispatcher tow detail). */
+export async function getOpenManualActionItemsForTow(
+  towId: string
+): Promise<ManualActionItem[]> {
+  const { data, error } = await supabase
+    .from('manual_action_items')
+    .select('id, type, severity, status, message, tow_id, related_entity, created_at')
+    .eq('tow_id', towId)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching open manual action items for tow:', error)
+    return []
+  }
+
+  return (data || []) as ManualActionItem[]
+}
+
 export async function resolveManualActionItem(
   id: string
 ): Promise<{ ok: boolean }> {
