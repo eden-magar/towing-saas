@@ -9,6 +9,9 @@ import { usePortalRequestBootstrap } from '@/app/components/customer-portal/Port
 import { PortalRequestPageHeader } from '@/app/components/customer-portal/PortalRequestPageHeader'
 import { PortalContactPairFields } from '@/app/components/customer-portal/PortalContactPairFields'
 import { usePortalSavedContacts } from '@/app/components/customer-portal/usePortalSavedContacts'
+import { SavePortalAddressControl } from '@/app/components/customer-portal/SavePortalAddressControl'
+import { usePortalSavedAddresses } from '@/app/components/customer-portal/usePortalSavedAddresses'
+import { portalAddressesAsCustomerAddresses } from '@/app/lib/queries/customer-portal-addresses'
 import {
   PORTAL_CANCEL_LINK_CLASS,
   PORTAL_COLUMN_CARD_CLASS,
@@ -259,6 +262,12 @@ export default function NewCustomerExchangeRequestPage() {
     contactsLoading: portalContactsLoading,
     canEditContacts,
   } = usePortalSavedContacts(customerId)
+  const {
+    addresses: portalAddresses,
+    setAddresses: setPortalAddresses,
+    canEditAddresses,
+  } = usePortalSavedAddresses(customerId)
+  const savedAddressesForInput = portalAddressesAsCustomerAddresses(portalAddresses)
 
   const [header, setHeader] = useState<HeaderForm>({
     customerOrderNumber: '',
@@ -760,8 +769,18 @@ export default function NewCustomerExchangeRequestPage() {
             narrowColumn
             onPinDropClick={() => setPinDropModal({ isOpen: true, field: opts.pin })}
             storageYardConfirm={opts.storageYardConfirm}
+            savedAddresses={savedAddressesForInput}
           />
         </FormField>
+        <SavePortalAddressControl
+          addressData={address}
+          addresses={portalAddresses}
+          onAddressesChange={setPortalAddresses}
+          companyId={companyId}
+          customerId={customerId}
+          userId={userId}
+          canEdit={canEditAddresses}
+        />
 
         {showContacts && (
           <FormField

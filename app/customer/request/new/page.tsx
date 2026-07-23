@@ -43,6 +43,9 @@ import {
 } from '@/app/components/ui'
 import { PortalContactPairFields } from '@/app/components/customer-portal/PortalContactPairFields'
 import { usePortalSavedContacts } from '@/app/components/customer-portal/usePortalSavedContacts'
+import { SavePortalAddressControl } from '@/app/components/customer-portal/SavePortalAddressControl'
+import { usePortalSavedAddresses } from '@/app/components/customer-portal/usePortalSavedAddresses'
+import { portalAddressesAsCustomerAddresses } from '@/app/lib/queries/customer-portal-addresses'
 import { PortalDefectSelector } from '@/app/components/customer-portal/PortalDefectSelector'
 import { VehicleLookup } from '@/app/components/tow-forms/shared/VehicleLookup'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
@@ -179,6 +182,12 @@ export default function NewCustomerTowRequestPage() {
     contactsLoading: portalContactsLoading,
     canEditContacts,
   } = usePortalSavedContacts(customerId)
+  const {
+    addresses: portalAddresses,
+    setAddresses: setPortalAddresses,
+    canEditAddresses,
+  } = usePortalSavedAddresses(customerId)
+  const savedAddressesForInput = portalAddressesAsCustomerAddresses(portalAddresses)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [towDate, setTowDate] = useState(defaultTowDate)
   const [towTime, setTowTime] = useState(defaultTowTime)
@@ -1005,8 +1014,18 @@ export default function NewCustomerTowRequestPage() {
                       narrowColumn
                       onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'pickup' })}
                       storageYardConfirm={pickupYardConfirm}
+                      savedAddresses={savedAddressesForInput}
                     />
                   </FormField>
+                  <SavePortalAddressControl
+                    addressData={pickupAddress}
+                    addresses={portalAddresses}
+                    onAddressesChange={setPortalAddresses}
+                    companyId={companyId}
+                    customerId={customerId}
+                    userId={userId}
+                    canEdit={canEditAddresses}
+                  />
                   {showPickupContacts && (
                     <FormField
                       required
@@ -1077,8 +1096,18 @@ export default function NewCustomerTowRequestPage() {
                       narrowColumn
                       onPinDropClick={() => setPinDropModal({ isOpen: true, field: 'dropoff' })}
                       storageYardConfirm={dropoffYardConfirm}
+                      savedAddresses={savedAddressesForInput}
                     />
                   </FormField>
+                  <SavePortalAddressControl
+                    addressData={dropoffAddress}
+                    addresses={portalAddresses}
+                    onAddressesChange={setPortalAddresses}
+                    companyId={companyId}
+                    customerId={customerId}
+                    userId={userId}
+                    canEdit={canEditAddresses}
+                  />
                   {showDropoffContacts && (
                     <FormField
                       required
