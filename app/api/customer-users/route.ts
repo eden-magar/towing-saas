@@ -2,6 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
 import { Resend } from 'resend'
+import {
+  PORTAL_ADMIN_ASSIGNABLE_ROLES,
+  STAFF_ASSIGNABLE_ROLES,
+  isCustomerUserRole,
+} from '@/app/lib/utils/portal-roles'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -73,17 +78,21 @@ export async function POST(req: NextRequest) {
 
     let validatedRole: string
     if (authUser.role === 'customer') {
-      const portalAllowed = ['viewer', 'manager']
-      if (role && !portalAllowed.includes(role)) {
+      if (
+        role &&
+        (!isCustomerUserRole(role) || !PORTAL_ADMIN_ASSIGNABLE_ROLES.includes(role))
+      ) {
         return forbiddenResponse('אין הרשאה ליצור מנהל')
       }
-      validatedRole = role || 'viewer'
+      validatedRole = isCustomerUserRole(role) ? role : 'viewer'
     } else {
-      const dashboardAllowed = ['viewer', 'manager', 'admin']
-      if (role && !dashboardAllowed.includes(role)) {
+      if (
+        role &&
+        (!isCustomerUserRole(role) || !STAFF_ASSIGNABLE_ROLES.includes(role))
+      ) {
         return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
       }
-      validatedRole = role || 'viewer'
+      validatedRole = isCustomerUserRole(role) ? role : 'viewer'
     }
 
     // 1. צור user ב-Auth
@@ -338,16 +347,15 @@ export async function PATCH(req: NextRequest) {
 
     if (role !== undefined) {
       // Same allowlists as POST: portal admins cannot elevate to admin.
+      if (!isCustomerUserRole(role)) {
+        return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
+      }
       if (isDashboardAdmin) {
-        const dashboardAllowed = ['viewer', 'manager', 'admin']
-        if (!dashboardAllowed.includes(role)) {
+        if (!STAFF_ASSIGNABLE_ROLES.includes(role)) {
           return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
         }
-      } else {
-        const portalAllowed = ['viewer', 'manager']
-        if (!portalAllowed.includes(role)) {
-          return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
-        }
+      } else if (!PORTAL_ADMIN_ASSIGNABLE_ROLES.includes(role)) {
+        return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
       }
       updateData.role = role
     }

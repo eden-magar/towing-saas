@@ -1,8 +1,9 @@
 import { supabase } from '../supabase'
 import { normalizePhone } from '../utils/phone'
-import type { CustomerPortalContact, CustomerPortalContactInput } from '../types'
+import type { CustomerPortalContact, CustomerPortalContactInput, CustomerUserRole } from '../types'
+import { canEditPortalOrgData, isCustomerUserRole } from '../utils/portal-roles'
 
-export type PortalCustomerUserRole = 'admin' | 'manager' | 'viewer'
+export type PortalCustomerUserRole = CustomerUserRole
 
 /** Role for THIS customer_id (matches portal_user_may_* membership checks). */
 export async function getPortalMembershipRole(
@@ -23,14 +24,14 @@ export async function getPortalMembershipRole(
   }
 
   const role = data?.role
-  if (role === 'admin' || role === 'manager' || role === 'viewer') {
+  if (isCustomerUserRole(role)) {
     return role
   }
   return null
 }
 
 export function canEditPortalContacts(role: PortalCustomerUserRole | null | undefined): boolean {
-  return role === 'admin' || role === 'manager'
+  return canEditPortalOrgData(role)
 }
 
 /** Persistable phone: normalize; empty → NULL (never store ''). */

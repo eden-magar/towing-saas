@@ -844,7 +844,7 @@ export interface DriverActiveTow {
 
 // ==================== CUSTOMER PORTAL ====================
 
-export type CustomerUserRole = 'admin' | 'manager' | 'viewer'
+export type CustomerUserRole = 'admin' | 'manager' | 'viewer' | 'accountant'
 
 export interface CustomerUser {
   id: string

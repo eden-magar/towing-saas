@@ -10,6 +10,7 @@ import {
   resolvePortalVisibilityFlag,
   type PortalVisibilityFlag,
 } from '@/app/lib/utils/portal-visibility'
+import { canSeePortalExpandedStopDetails } from '@/app/lib/utils/portal-roles'
 import { getCustomerFacingCancellationReason } from '@/app/lib/utils/portal-cancellation'
 import {
   ArrowRight,
@@ -391,8 +392,8 @@ export default function CustomerTowDetail() {
                     </div>
                   </button>
 
-                  {/* Expanded Details */}
-                  {isExpanded && userRole !== 'viewer' && (
+                  {/* Expanded Details — operational only (admin | manager) */}
+                  {isExpanded && canSeePortalExpandedStopDetails(userRole) && (
                     <div className="mt-3 space-y-3 bg-gray-50 rounded-lg p-3">
                       {/* Times */}
                       <div className="grid grid-cols-2 gap-3 text-xs">
