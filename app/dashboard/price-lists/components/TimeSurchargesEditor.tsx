@@ -20,10 +20,10 @@ function isTechnicalSurchargeName(name: string | null | undefined): boolean {
 
 /** Display value for the name input — hides auto-generated new_* ids. */
 export function getTimeSurchargeEditorLabel(row: Pick<TimeSurchargeEditorRow, 'label' | 'name'>): string {
-  const label = row.label?.trim()
-  if (label) return label
-  const name = row.name?.trim()
-  if (name && !isTechnicalSurchargeName(name)) return name
+  const label = row.label
+  if (label?.trim()) return label
+  const name = row.name
+  if (name?.trim() && !isTechnicalSurchargeName(name.trim())) return name
   return ''
 }
 
