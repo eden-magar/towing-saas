@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { RotateCcw, X } from 'lucide-react'
+import { RotateCcw, Trash2, X } from 'lucide-react'
 import {
   isCustomerServiceSurchargeOverridden,
   resetCustomerServiceSurchargeToStandard,
@@ -20,10 +20,13 @@ type Props = {
 function CompactServiceRow({
   row,
   onChange,
+  onRemove,
   orphan,
 }: {
   row: CustomerServiceSurchargeRow
   onChange: (next: CustomerServiceSurchargeRow) => void
+  /** Orphan rows only — omit for company-catalog overrides. */
+  onRemove?: () => void
   orphan: boolean
 }) {
   const overridden = isCustomerServiceSurchargeOverridden(row)
@@ -107,6 +110,18 @@ function CompactServiceRow({
           </button>
         </>
       )}
+
+      {orphan && onRemove && (
+        <button
+          type="button"
+          title="מחק תוספת"
+          aria-label={`מחק את התוספת ${row.label}`}
+          onClick={onRemove}
+          className="p-1 text-gray-400 hover:text-red-500 shrink-0"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
     </div>
   )
 }
@@ -138,6 +153,19 @@ export function CustomerServiceSurchargesModal({
 
   const updateRow = (id: string, next: CustomerServiceSurchargeRow) => {
     setDraft((prev) => prev.map((r) => (r.id === id ? next : r)))
+  }
+
+  /** Local draft only — persists when the user presses שמור. */
+  const removeOrphanRow = (row: CustomerServiceSurchargeRow) => {
+    const label = row.label.trim() || 'תוספת זו'
+    const priceLabel = Number.isFinite(Number(row.price)) ? `₪${row.price}` : ''
+    const ok = window.confirm(
+      priceLabel
+        ? `למחוק את התוספת «${label}» (${priceLabel})?\nהשינוי יישמר רק לאחר לחיצה על שמור.`
+        : `למחוק את התוספת «${label}»?\nהשינוי יישמר רק לאחר לחיצה על שמור.`,
+    )
+    if (!ok) return
+    setDraft((prev) => prev.filter((r) => r.id !== row.id))
   }
 
   const handleSave = async () => {
@@ -201,7 +229,7 @@ export function CustomerServiceSurchargesModal({
               <div className="mb-2">
                 <h3 className="text-sm font-semibold text-gray-800">תוספות ייחודיות ללקוח</h3>
                 <p className="text-xs text-gray-400">
-                  שירותים שנשמרו ללקוח זה בלבד (לא מופיעים במחירון החברה הפעיל). ניתן להשאיר או לערוך את המחיר.
+                  שירותים שנשמרו ללקוח זה בלבד (לא מופיעים במחירון החברה הפעיל). ניתן להשאיר, לערוך או למחוק.
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -211,6 +239,7 @@ export function CustomerServiceSurchargesModal({
                     row={row}
                     orphan
                     onChange={(next) => updateRow(row.id, next)}
+                    onRemove={() => removeOrphanRow(row)}
                   />
                 ))}
               </div>
