@@ -10,6 +10,7 @@ import {
   resolvePortalVisibilityFlag,
   type PortalVisibilityFlag,
 } from '@/app/lib/utils/portal-visibility'
+import { getCustomerFacingCancellationReason } from '@/app/lib/utils/portal-cancellation'
 import {
   ArrowRight,
   Truck,
@@ -162,6 +163,13 @@ export default function CustomerTowDetail() {
   const progress = tow.points.length
     ? Math.round((tow.points.filter(p => p.status === 'completed').length / tow.points.length) * 100)
     : 0
+  const isCancelled = tow.status === 'cancelled' || tow.status === 'cancelled_charged'
+  const facingReason = isCancelled
+    ? getCustomerFacingCancellationReason(tow.cancellation_reason)
+    : null
+  const customerNote = isCancelled
+    ? tow.cancellation_customer_note?.trim() || null
+    : null
 
   return (
     <div className="space-y-6 pb-10">
@@ -177,7 +185,7 @@ export default function CustomerTowDetail() {
       {/* Header Card */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {tow.order_number && (
               <h1 className="text-xl font-bold text-gray-900">#{tow.order_number}{tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}</h1>
             )}
@@ -186,6 +194,31 @@ export default function CustomerTowDetail() {
             </span>
           </div>
         </div>
+
+        {isCancelled && (facingReason || customerNote) && (
+          <div
+            className={`mb-4 rounded-xl border px-3 py-2.5 ${
+              tow.status === 'cancelled_charged'
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-red-50 border-red-200'
+            }`}
+          >
+            {facingReason && (
+              <p
+                className={`text-sm font-medium ${
+                  tow.status === 'cancelled_charged' ? 'text-amber-900' : 'text-red-800'
+                }`}
+              >
+                {facingReason}
+              </p>
+            )}
+            {customerNote && (
+              <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap break-words">
+                {customerNote}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Info Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">

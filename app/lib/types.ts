@@ -812,6 +812,8 @@ export interface CustomerPortalTow {
   created_at: string
   started_at: string | null
   completed_at: string | null
+  cancellation_reason: string | null
+  cancellation_customer_note: string | null
   visibility_overrides?: Record<string, boolean> | null
   show_driver_info_override?: boolean | null
   vehicles: {

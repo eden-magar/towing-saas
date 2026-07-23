@@ -135,6 +135,8 @@ const CUSTOMER_TOW_LIST_SELECT = `
   created_at,
   started_at,
   completed_at,
+  cancellation_reason,
+  cancellation_customer_note,
   visibility_overrides,
   show_photos_override,
   show_price_override,
@@ -348,7 +350,11 @@ export async function getCustomerTows(
     .order('created_at', { ascending: false })
 
   if (options?.status && options.status !== 'all') {
-    query = query.eq('status', options.status)
+    if (options.status === 'cancelled') {
+      query = query.in('status', ['cancelled', 'cancelled_charged'])
+    } else {
+      query = query.eq('status', options.status)
+    }
   }
   if (options?.from) {
     query = query.gte('created_at', options.from)
@@ -395,6 +401,8 @@ export async function getCustomerTowDetail(
       created_at,
       started_at,
       completed_at,
+      cancellation_reason,
+      cancellation_customer_note,
       notes,
       visibility_overrides,
       show_photos_override,

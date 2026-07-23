@@ -8,6 +8,7 @@ import { getCustomerForUser, getCustomerTows, getCustomerStats, CUSTOMER_PORTAL_
 import { getCustomerTowRequests } from '@/app/lib/queries/customer-tow-requests'
 import type { CustomerPortalTow, CustomerTowRequest } from '@/app/lib/types'
 import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
+import { getCustomerFacingCancellationReason } from '@/app/lib/utils/portal-cancellation'
 import { normalizePlate } from '@/app/lib/utils/plate-number'
 import {
   Truck,
@@ -296,6 +297,7 @@ export default function CustomerDashboard() {
             { value: 'assigned', label: 'שובצו' },
             { value: 'in_progress', label: 'בביצוע' },
             { value: 'completed', label: 'הושלמו' },
+            { value: 'cancelled', label: 'בוטלו' },
           ].map(filter => (
             <button
               key={filter.value}
@@ -416,6 +418,11 @@ export default function CustomerDashboard() {
                     const showDriver =
                       !!tow.driver &&
                       resolvePortalVisibilityFlag('show_driver_info', portalSettings, tow)
+                    const isCancelled =
+                      tow.status === 'cancelled' || tow.status === 'cancelled_charged'
+                    const facingReason = isCancelled
+                      ? getCustomerFacingCancellationReason(tow.cancellation_reason)
+                      : null
 
                     return (
                       <button
@@ -439,6 +446,10 @@ export default function CustomerDashboard() {
                           </div>
                           <ChevronLeft size={16} className="text-gray-400 shrink-0" />
                         </div>
+
+                        {facingReason && (
+                          <p className="text-xs text-gray-500 mb-1.5 truncate">{facingReason}</p>
+                        )}
 
                         <div className="space-y-0.5 mb-1.5">
                           <div className="flex items-center gap-1.5 min-w-0">

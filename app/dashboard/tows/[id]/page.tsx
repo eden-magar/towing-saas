@@ -274,6 +274,7 @@ export default function TowDetailsPage() {
   const [cancellingLinked, setCancellingLinked] = useState(false)
   const [selectedCancellationReason, setSelectedCancellationReason] = useState('')
   const [cancellationDetails, setCancellationDetails] = useState('')
+  const [cancellationCustomerNote, setCancellationCustomerNote] = useState('')
   const [chargeCancellationFee, setChargeCancellationFee] = useState(false)
   const [cancellationPercent, setCancellationPercent] = useState('')
   const [notifyCustomer, setNotifyCustomer] = useState(true)
@@ -1518,6 +1519,7 @@ export default function TowDetailsPage() {
         cancelStatus,
         selectedCancellationReason,
         cancellationDetails.trim() || undefined,
+        cancellationCustomerNote.trim() || undefined,
         fee && fee > 0 ? fee : undefined,
         user?.id
       )
@@ -1562,6 +1564,7 @@ export default function TowDetailsPage() {
         setShowCancelModal(false)
         setSelectedCancellationReason('')
         setCancellationDetails('')
+        setCancellationCustomerNote('')
         setChargeCancellationFee(false)
         setCancellationPercent('')
         setCancelStep('reason')
@@ -1577,6 +1580,7 @@ export default function TowDetailsPage() {
     setShowCancelModal(false)
     setSelectedCancellationReason('')
     setCancellationDetails('')
+    setCancellationCustomerNote('')
     setChargeCancellationFee(false)
     setCancellationPercent('')
     setCancelStep('reason')
@@ -1596,11 +1600,13 @@ export default function TowDetailsPage() {
     setCancellingLinked(true)
     try {
       for (const candidate of linkedCancelCandidates) {
+        // Leave cancellation_customer_note NULL on cascade — do not copy customer note.
         await updateTowStatus(
           candidate.id,
           cancelStatusForCascade,
           selectedCancellationReason || 'ביטול גרירה מקושרת',
           cancellationDetails.trim() || undefined,
+          undefined,
           undefined,
           user?.id
         )
@@ -3984,14 +3990,33 @@ export default function TowDetailsPage() {
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">פירוט נוסף (אופציונלי)</label>
+                  <div className="rounded-xl border border-gray-300 bg-gray-50 p-3 space-y-1.5">
+                    <label className="block text-sm font-semibold text-gray-800">
+                      הערות פנימיות
+                      <span className="font-normal text-gray-500"> (אופציונלי)</span>
+                    </label>
+                    <p className="text-xs text-gray-500">לא יוצג ללקוח</p>
                     <textarea
                       value={cancellationDetails}
                       onChange={(e) => setCancellationDetails(e.target.value)}
-                      placeholder="נא לציין את סיבת הביטול..."
+                      placeholder="הערות פנימיות לצוות..."
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white"
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-blue-300 bg-blue-50 p-3 space-y-1.5">
+                    <label className="block text-sm font-semibold text-blue-900">
+                      הערה ללקוח
+                      <span className="font-normal text-blue-700/80"> (אופציונלי)</span>
+                    </label>
+                    <p className="text-xs text-blue-700">יוצג ללקוח בפורטל</p>
+                    <textarea
+                      value={cancellationCustomerNote}
+                      onChange={(e) => setCancellationCustomerNote(e.target.value)}
+                      placeholder="הסבר שיוצג ללקוח..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                     />
                   </div>
 

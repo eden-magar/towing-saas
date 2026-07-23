@@ -1329,6 +1329,7 @@ export async function updateTowStatus(
   status: 'quote' | 'pending' | 'assigned' | 'in_progress' | 'completed' | 'cancelled' | 'cancelled_charged',
   cancellationReason?: string,
   cancellationDetails?: string,
+  cancellationCustomerNote?: string,
   cancellationFee?: number,
   changedBy?: string
 ) {
@@ -1348,6 +1349,9 @@ export async function updateTowStatus(
   }
   if (cancellationDetails !== undefined) {
     updates.cancellation_details = cancellationDetails
+  }
+  if (cancellationCustomerNote !== undefined) {
+    updates.cancellation_customer_note = cancellationCustomerNote
   }
 
   if (status === 'in_progress') {
