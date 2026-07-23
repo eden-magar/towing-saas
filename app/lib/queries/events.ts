@@ -57,6 +57,7 @@ export interface EventWithDetails {
   cancelled_at: string | null
   cancellation_reason: string | null
   cancellation_details: string | null
+  cancellation_customer_note: string | null
   completed_at: string | null
   completed_by: string | null
   list_price: number | null
@@ -705,17 +706,20 @@ export async function completeEvent(
 export async function cancelEvent(
   eventId: string,
   reason: string,
-  details: string | null
+  details: string | null,
+  cancellationCustomerNote?: string | null
 ): Promise<void> {
-  const { error } = await supabase
-    .from('events')
-    .update({
-      status: 'cancelled',
-      cancelled_at: new Date().toISOString(),
-      cancellation_reason: reason,
-      cancellation_details: details,
-    })
-    .eq('id', eventId)
+  const updates: Record<string, unknown> = {
+    status: 'cancelled',
+    cancelled_at: new Date().toISOString(),
+    cancellation_reason: reason,
+    cancellation_details: details,
+  }
+  if (cancellationCustomerNote !== undefined) {
+    updates.cancellation_customer_note = cancellationCustomerNote
+  }
+
+  const { error } = await supabase.from('events').update(updates).eq('id', eventId)
 
   if (error) {
     console.error('Error cancelling event:', JSON.stringify(error, null, 2))

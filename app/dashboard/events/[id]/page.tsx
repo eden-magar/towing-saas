@@ -551,6 +551,7 @@ export default function EventDetailsPage() {
   const [cancelStep, setCancelStep] = useState<'reason' | 'confirm'>('reason')
   const [selectedCancellationReason, setSelectedCancellationReason] = useState('')
   const [cancellationDetails, setCancellationDetails] = useState('')
+  const [cancellationCustomerNote, setCancellationCustomerNote] = useState('')
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState('')
 
@@ -806,6 +807,7 @@ export default function EventDetailsPage() {
     setCancelStep('reason')
     setSelectedCancellationReason('')
     setCancellationDetails('')
+    setCancellationCustomerNote('')
     setCancelError('')
   }
 
@@ -878,7 +880,8 @@ export default function EventDetailsPage() {
     try {
       const previousStatus = event.status
       const details = cancellationDetails.trim() || null
-      await cancelEvent(eventId, selectedCancellationReason, details)
+      const customerNote = cancellationCustomerNote.trim() || null
+      await cancelEvent(eventId, selectedCancellationReason, details, customerNote)
       await saveEventChangeLog({
         eventId,
         companyId,
@@ -1374,6 +1377,12 @@ export default function EventDetailsPage() {
               )}
               {event.cancellation_details && (
                 <p className="text-red-400 text-xs mt-0.5">{event.cancellation_details}</p>
+              )}
+              {event.cancellation_customer_note && (
+                <p className="text-blue-700 text-xs mt-0.5">
+                  <span className="font-medium">הערה ללקוח: </span>
+                  {event.cancellation_customer_note}
+                </p>
               )}
             </div>
           </div>
@@ -2283,18 +2292,36 @@ export default function EventDetailsPage() {
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      פירוט נוסף (אופציונלי)
+                  <div className="rounded-xl border border-gray-300 bg-gray-50 p-3 space-y-1.5">
+                    <label className="block text-sm font-semibold text-gray-800">
+                      הערות פנימיות
+                      <span className="font-normal text-gray-500"> (אופציונלי)</span>
                     </label>
+                    <p className="text-xs text-gray-500">לא יוצג ללקוח</p>
                     <textarea
                       value={cancellationDetails}
                       onChange={(e) => setCancellationDetails(e.target.value)}
-                      placeholder="נא לציין פרטים נוספים..."
+                      placeholder="הערות פנימיות לצוות..."
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white resize-none"
                     />
                   </div>
+
+                  <div className="rounded-xl border border-blue-300 bg-blue-50 p-3 space-y-1.5">
+                    <label className="block text-sm font-semibold text-blue-900">
+                      הערה ללקוח
+                      <span className="font-normal text-blue-700/80"> (אופציונלי)</span>
+                    </label>
+                    <p className="text-xs text-blue-700">יוצג ללקוח בפורטל</p>
+                    <textarea
+                      value={cancellationCustomerNote}
+                      onChange={(e) => setCancellationCustomerNote(e.target.value)}
+                      placeholder="הסבר שיוצג ללקוח..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
+                    />
+                  </div>
+
                   {cancelError && (
                     <p className="text-sm text-red-600">{cancelError}</p>
                   )}
