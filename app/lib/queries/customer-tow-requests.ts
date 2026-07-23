@@ -6,6 +6,7 @@ import type {
   CreateCustomerTowRequestPointVehicleInput,
   CreateCustomerTowRequestVehicleInput,
   CreateFullCustomerTowRequestInput,
+  CustomerPortalRequestListItem,
   CustomerTowRequest,
   CustomerTowRequestFull,
   CustomerTowRequestPoint,
@@ -99,10 +100,31 @@ export async function createCustomerTowRequest(
   return data as CustomerTowRequest
 }
 
-export async function getCustomerTowRequests(customerId: string): Promise<CustomerTowRequest[]> {
+export async function getCustomerTowRequests(
+  customerId: string
+): Promise<CustomerPortalRequestListItem[]> {
   const { data, error } = await supabase
     .from('customer_tow_requests')
-    .select('*')
+    .select(
+      `
+      id,
+      tow_type,
+      customer_order_number,
+      scheduled_at,
+      status,
+      created_at,
+      vehicles:customer_tow_request_vehicles (
+        plate_number,
+        is_working,
+        order_index
+      ),
+      points:customer_tow_request_points (
+        point_order,
+        point_type,
+        address
+      )
+    `
+    )
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
 
@@ -111,7 +133,15 @@ export async function getCustomerTowRequests(customerId: string): Promise<Custom
     throw error
   }
 
-  return (data ?? []) as CustomerTowRequest[]
+  return ((data ?? []) as CustomerPortalRequestListItem[]).map((row) => ({
+    ...row,
+    vehicles: [...(row.vehicles ?? [])].sort(
+      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+    ),
+    points: [...(row.points ?? [])].sort(
+      (a, b) => (a.point_order ?? 0) - (b.point_order ?? 0)
+    ),
+  }))
 }
 
 export async function getPendingCustomerTowRequests(

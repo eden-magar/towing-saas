@@ -149,7 +149,8 @@ const CUSTOMER_TOW_LIST_SELECT = `
     plate_number,
     manufacturer,
     model,
-    color
+    color,
+    is_working
   ),
   points:tow_points (
     id,
@@ -417,7 +418,8 @@ export async function getCustomerTowDetail(
         plate_number,
         manufacturer,
         model,
-        color
+        color,
+        is_working
       ),
       points:tow_points (
         id,

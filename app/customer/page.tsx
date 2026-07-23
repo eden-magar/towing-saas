@@ -6,10 +6,19 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getCustomerForUser, getCustomerTows, getCustomerStats, CUSTOMER_PORTAL_TOW_PAGE_SIZE } from '@/app/lib/queries/customer-portal'
 import { getCustomerTowRequests } from '@/app/lib/queries/customer-tow-requests'
-import type { CustomerPortalTow, CustomerTowRequest } from '@/app/lib/types'
+import type {
+  CustomerPortalRequestListItem,
+  CustomerPortalTow,
+  TowType,
+} from '@/app/lib/types'
 import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 import { getCustomerFacingCancellationReason } from '@/app/lib/utils/portal-cancellation'
 import { normalizePlate } from '@/app/lib/utils/plate-number'
+import {
+  getFirstPickupLastDropoffAddress,
+  getPortalListPlates,
+} from '@/app/lib/utils/portal-list-route'
+import { PortalPlateBadge } from '@/app/components/shared/PortalPlateBadge'
 import {
   Truck,
   Clock,
@@ -21,6 +30,19 @@ import {
   Loader2,
   Package
 } from 'lucide-react'
+
+/** Non-simple tow types only — empty for ordinary simple tows. */
+function getPortalListTowTypeLabel(towType: TowType | string | null | undefined): string | null {
+  if (!towType || towType === 'simple') return null
+  const labels: Record<string, string> = {
+    exchange: 'תקין-תקול',
+    with_base: 'יציאה מבסיס',
+    transfer: 'העברה',
+    multi_vehicle: 'מרובת רכבים',
+    custom: 'מסלול מותאם',
+  }
+  return labels[towType] ?? null
+}
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   pending: { label: 'ממתינה', color: 'text-yellow-800', bg: 'bg-yellow-50 border-yellow-300', icon: Clock },
@@ -48,7 +70,7 @@ export default function CustomerDashboard() {
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
   const [tows, setTows] = useState<CustomerPortalTow[]>([])
-  const [pendingRequests, setPendingRequests] = useState<CustomerTowRequest[]>([])
+  const [pendingRequests, setPendingRequests] = useState<CustomerPortalRequestListItem[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
   const [pageLoading, setPageLoading] = useState(false)
@@ -227,11 +249,10 @@ export default function CustomerDashboard() {
     )
 
   const getFirstAndLast = (tow: CustomerPortalTow) => {
-    const pickup = tow.points.find(p => p.point_type === 'pickup')
-    const dropoff = [...tow.points].reverse().find(p => p.point_type === 'dropoff')
+    const { from, to } = getFirstPickupLastDropoffAddress(tow.points)
     return {
-      from: pickup?.address || 'לא צוין',
-      to: dropoff?.address || 'לא צוין',
+      from: from || 'לא צוין',
+      to: to || 'לא צוין',
     }
   }
 
@@ -335,32 +356,47 @@ export default function CustomerDashboard() {
             ) : (
               pendingRequests.map((req) => {
                 const PendingIcon = pendingRequestBadge.icon
-                const from = req.pickup_address?.trim() || null
-                const to = req.dropoff_address?.trim() || null
+                const { from, to } = getFirstPickupLastDropoffAddress(req.points)
+                const listPlates = getPortalListPlates(req.tow_type, req.vehicles)
+                const platesOnOwnLine = listPlates.length > 1
+                const requestTypeLabel = getPortalListTowTypeLabel(req.tow_type)
+                const hasRoute = !!(from || to)
 
                 return (
                   <button
                     key={req.id}
                     type="button"
                     onClick={() => router.push(`/customer/requests/${req.id}`)}
-                    className="w-full bg-white rounded-xl border border-gray-200 shadow-sm px-3.5 py-2.5 text-right hover:border-amber-300 hover:shadow-md transition-all"
+                    className="w-full bg-white rounded-xl border border-gray-200 shadow-sm px-3.5 py-2.5 text-right hover:border-amber-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 transition-all"
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                        {req.customer_order_number && (
-                          <span className="text-sm font-bold text-gray-900 truncate">
-                            {req.customer_order_number}
-                          </span>
-                        )}
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${pendingRequestBadge.bg} ${pendingRequestBadge.color}`}>
+                      <div className="flex items-center gap-1.5 min-w-0 flex-nowrap overflow-hidden">
+                        {!platesOnOwnLine &&
+                          listPlates.map((plate) => (
+                            <PortalPlateBadge key={plate} plate={plate} />
+                          ))}
+                        <span className={`inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${pendingRequestBadge.bg} ${pendingRequestBadge.color}`}>
                           <PendingIcon size={12} />
                           {pendingRequestBadge.label}
                         </span>
+                        {requestTypeLabel && (
+                          <span className="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                            {requestTypeLabel}
+                          </span>
+                        )}
                       </div>
                       <ChevronLeft size={16} className="text-gray-400 shrink-0" />
                     </div>
 
-                    {(from || to) && (
+                    {platesOnOwnLine && (
+                      <div className="flex items-center gap-1.5 mb-1.5 min-w-0 flex-nowrap overflow-hidden">
+                        {listPlates.map((plate) => (
+                          <PortalPlateBadge key={plate} plate={plate} />
+                        ))}
+                      </div>
+                    )}
+
+                    {hasRoute && (
                       <div className="space-y-0.5 mb-1.5">
                         {from && (
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -377,8 +413,13 @@ export default function CustomerDashboard() {
                       </div>
                     )}
 
-                    <div className="text-[11px] text-gray-500">
-                      <span>{formatDate(req.scheduled_at)}</span>
+                    <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap text-[11px] text-gray-500 min-w-0">
+                      {req.customer_order_number && (
+                        <span className="whitespace-nowrap truncate text-gray-400">
+                          {req.customer_order_number}
+                        </span>
+                      )}
+                      <span className="whitespace-nowrap">{formatDate(req.scheduled_at)}</span>
                     </div>
                   </button>
                 )
@@ -423,29 +464,50 @@ export default function CustomerDashboard() {
                     const facingReason = isCancelled
                       ? getCustomerFacingCancellationReason(tow.cancellation_reason)
                       : null
+                    const listPlates = getPortalListPlates(tow.tow_type, tow.vehicles)
+                    const platesOnOwnLine = listPlates.length > 1
+                    const showExtraVehicles =
+                      tow.tow_type !== 'exchange' &&
+                      listPlates.length === 1 &&
+                      tow.vehicles.length > 1
+                    const extraVehicleCount = showExtraVehicles
+                      ? tow.vehicles.length - 1
+                      : 0
+                    const typeLabel = getPortalListTowTypeLabel(tow.tow_type)
 
                     return (
                       <button
                         key={tow.id}
                         type="button"
                         onClick={() => router.push(`/customer/tows/${tow.id}`)}
-                        className="w-full bg-white rounded-xl border border-gray-200 shadow-sm px-3.5 py-2.5 text-right hover:border-blue-300 hover:shadow-md transition-all"
+                        className="w-full bg-white rounded-xl border border-gray-200 shadow-sm px-3.5 py-2.5 text-right hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 transition-all"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                            {tow.order_number && (
-                              <span className="text-sm font-bold text-gray-900 truncate">
-                                #{tow.order_number}
-                                {tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}
-                              </span>
-                            )}
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${config.bg} ${config.color}`}>
+                          <div className="flex items-center gap-1.5 min-w-0 flex-nowrap overflow-hidden">
+                            {!platesOnOwnLine &&
+                              listPlates.map((plate) => (
+                                <PortalPlateBadge key={plate} plate={plate} />
+                              ))}
+                            <span className={`inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${config.bg} ${config.color}`}>
                               <StatusIcon size={12} />
                               {config.label}
                             </span>
+                            {typeLabel && (
+                              <span className="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                                {typeLabel}
+                              </span>
+                            )}
                           </div>
                           <ChevronLeft size={16} className="text-gray-400 shrink-0" />
                         </div>
+
+                        {platesOnOwnLine && (
+                          <div className="flex items-center gap-1.5 mb-1.5 min-w-0 flex-nowrap overflow-hidden">
+                            {listPlates.map((plate) => (
+                              <PortalPlateBadge key={plate} plate={plate} />
+                            ))}
+                          </div>
+                        )}
 
                         {facingReason && (
                           <p className="text-xs text-gray-500 mb-1.5 truncate">{facingReason}</p>
@@ -464,9 +526,19 @@ export default function CustomerDashboard() {
 
                         <div className="flex items-center justify-between gap-2 text-[11px] text-gray-500">
                           <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
+                            {tow.order_number && (
+                              <span className="whitespace-nowrap truncate text-gray-400">
+                                #{tow.order_number}
+                                {tow.customer_order_number ? ` (${tow.customer_order_number})` : ''}
+                              </span>
+                            )}
                             <span className="whitespace-nowrap">{formatDate(tow.scheduled_at || tow.created_at)}</span>
-                            {tow.vehicles.length > 0 && (
-                              <span className="whitespace-nowrap">{tow.vehicles.length} רכבים</span>
+                            {extraVehicleCount > 0 && (
+                              <span className="whitespace-nowrap">
+                                {extraVehicleCount === 1
+                                  ? 'ורכב נוסף'
+                                  : `ועוד ${extraVehicleCount} רכבים`}
+                              </span>
                             )}
                             {showDriver && (
                               <span className="truncate">נהג: {tow.driver!.full_name}</span>

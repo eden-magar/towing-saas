@@ -277,6 +277,26 @@ export interface CustomerTowRequestPointVehicle {
   created_at: string
 }
 
+/** Portal list row: header fields + nested child slices (not legacy flat columns). */
+export type CustomerPortalRequestListItem = Pick<
+  CustomerTowRequest,
+  | 'id'
+  | 'tow_type'
+  | 'customer_order_number'
+  | 'scheduled_at'
+  | 'status'
+  | 'created_at'
+> & {
+  vehicles: Pick<
+    CustomerTowRequestVehicle,
+    'plate_number' | 'is_working' | 'order_index'
+  >[]
+  points: Pick<
+    CustomerTowRequestPoint,
+    'point_order' | 'point_type' | 'address'
+  >[]
+}
+
 export interface CreateCustomerTowRequestInput {
   companyId: string
   customerId: string
@@ -821,6 +841,7 @@ export interface CustomerPortalTow {
     manufacturer: string | null
     model: string | null
     color: string | null
+    is_working: boolean | null
   }[]
   points: {
     id: string
