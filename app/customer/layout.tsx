@@ -8,6 +8,7 @@ import {
   Truck,
   LayoutDashboard,
   Users,
+  BookUser,
   LogOut,
   Loader2,
   Menu,
@@ -90,6 +91,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       icon: PlusCircle,
       requiresSubmitOrders: true,
     },
+    { href: '/customer/contacts', label: 'אנשי קשר', icon: BookUser },
     { href: '/customer/users', label: 'משתמשים', icon: Users, adminOnly: true },
   ]
 
