@@ -2,7 +2,6 @@ import type { CustomerPortalTowExportRow, CustomerTowDateField } from '@/app/lib
 import { hebrewTowStatusLabel } from '@/app/lib/queries/tow-change-log'
 import { getTowTypeLabel } from '@/app/lib/utils/tow-type-labels'
 import { getFirstPickupLastDropoffAddress } from '@/app/lib/utils/portal-list-route'
-import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 
 const JERUSALEM = 'Asia/Jerusalem'
 
@@ -86,13 +85,9 @@ function formatPlates(vehicles: CustomerPortalTowExportRow['vehicles']): string 
     .join(', ')
 }
 
-function resolveExportPrice(
-  tow: CustomerPortalTowExportRow,
-  portalSettings: Record<string, boolean>
-): number | '' {
+function resolveExportPrice(tow: CustomerPortalTowExportRow): number | '' {
   const statusOk = tow.status === 'completed' || tow.status === 'cancelled_charged'
   if (!statusOk) return ''
-  if (!resolvePortalVisibilityFlag('show_price', portalSettings, tow)) return ''
   if (tow.final_price == null || Number.isNaN(Number(tow.final_price))) return ''
   return Number(tow.final_price)
 }
@@ -125,7 +120,7 @@ export async function downloadPortalTowsXlsx(input: BuildPortalTowWorkbookInput)
     const basisIso =
       input.dateField === 'scheduled_at' ? tow.scheduled_at : tow.created_at
     const { from, to } = getFirstPickupLastDropoffAddress(tow.points)
-    const price = resolveExportPrice(tow, input.portalSettings)
+    const price = resolveExportPrice(tow)
 
     return [
       tow.order_number ?? '',

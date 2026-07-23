@@ -20,6 +20,8 @@ import {
 } from '@/app/lib/utils/portal-list-route'
 import { PortalPlateBadge } from '@/app/components/shared/PortalPlateBadge'
 import { PortalTowExportModal } from '@/app/customer/components/PortalTowExportModal'
+import { canExportPortalTows, isCustomerUserRole } from '@/app/lib/utils/portal-roles'
+import type { CustomerUserRole } from '@/app/lib/types'
 import {
   Truck,
   Clock,
@@ -71,6 +73,7 @@ export default function CustomerDashboard() {
   const router = useRouter()
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
+  const [customerUserRole, setCustomerUserRole] = useState<CustomerUserRole | null>(null)
   const [tows, setTows] = useState<CustomerPortalTow[]>([])
   const [pendingRequests, setPendingRequests] = useState<CustomerPortalRequestListItem[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 })
@@ -96,6 +99,9 @@ export default function CustomerDashboard() {
       }
       setCustomerId(info.customerId)
       setPortalSettings(info.portalSettings || {})
+      setCustomerUserRole(
+        isCustomerUserRole(info.customerUserRole) ? info.customerUserRole : null
+      )
 
       const [statsData, requestsData] = await Promise.all([
         getCustomerStats(info.customerId),
@@ -338,7 +344,7 @@ export default function CustomerDashboard() {
           ))}
         </div>
 
-        {customerId && (
+        {customerId && canExportPortalTows(customerUserRole) && (
           <button
             type="button"
             onClick={() => setExportModalOpen(true)}
@@ -350,7 +356,7 @@ export default function CustomerDashboard() {
         )}
       </div>
 
-      {customerId && (
+      {customerId && canExportPortalTows(customerUserRole) && (
         <PortalTowExportModal
           open={exportModalOpen}
           onClose={() => setExportModalOpen(false)}

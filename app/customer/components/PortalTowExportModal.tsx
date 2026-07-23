@@ -28,7 +28,6 @@ import {
   dateToYyyyMmDd,
   yyyyMmDdToDate,
 } from '@/app/lib/utils/date-input-normalize'
-import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 
 /** Order matches the design brief (billable statuses first). */
 const EXPORT_STATUSES: { value: string; label: string }[] = [
@@ -101,12 +100,8 @@ function formatHebrewRangeLabel(fromYmd: string, toYmd: string): string {
   return `${formatHebrewDayMonth(from, true)} — ${formatHebrewDayMonth(to, true)}`
 }
 
-function towIncludesExportPrice(
-  tow: CustomerPortalTowExportRow,
-  portalSettings: Record<string, boolean>
-): boolean {
-  if (tow.status !== 'completed' && tow.status !== 'cancelled_charged') return false
-  return resolvePortalVisibilityFlag('show_price', portalSettings, tow)
+function towIncludesExportPrice(tow: CustomerPortalTowExportRow): boolean {
+  return tow.status === 'completed' || tow.status === 'cancelled_charged'
 }
 
 export function PortalTowExportModal({
@@ -173,13 +168,11 @@ export function PortalTowExportModal({
         ? fetchAllCustomerTowsForExport(customerId, filterOptions)
         : Promise.resolve({ tows: [] as CustomerPortalTowExportRow[], portalSettings: {} }),
     ])
-      .then(([n, { tows, portalSettings }]) => {
+      .then(([n, { tows }]) => {
         if (cancelled) return
         setMatchCount(n)
         setPriceCount(
-          needsPriceScan
-            ? tows.filter((t) => towIncludesExportPrice(t, portalSettings)).length
-            : 0
+          needsPriceScan ? tows.filter((t) => towIncludesExportPrice(t)).length : 0
         )
       })
       .catch(() => {

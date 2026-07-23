@@ -1,13 +1,16 @@
 import { supabase } from '../supabase'
 import type {
   CustomerUser,
+  CustomerUserRole,
   CustomerUserWithDetails,
   CustomerPortalTow,
   CustomerPortalTowDetail,
 } from '../types'
 import type { StoredVehicle } from './storage'
 import { resolvePortalVisibilityFlag } from '../utils/portal-visibility'
+import { canExportPortalTows, canSeePortalPrice } from '../utils/portal-roles'
 import { withSignedTowImageUrls } from './tow-images-storage'
+import { getPortalMembershipRole } from './customer-portal-contacts'
 
 /** Narrow portal-facing shape from get_my_stored_vehicles (no notes / internal fields). */
 export type CustomerPortalStoredVehicle = Pick<
@@ -385,7 +388,8 @@ function applyPortalVisibilityStripToListTow(
 
 async function applyPortalVisibilityStripToDetail(
   detail: CustomerPortalTowDetail,
-  portalSettings: Record<string, boolean>
+  portalSettings: Record<string, boolean>,
+  role: CustomerUserRole | null
 ): Promise<CustomerPortalTowDetail> {
   const listStripped = applyPortalVisibilityStripToListTow(detail, portalSettings)
 
@@ -402,7 +406,12 @@ async function applyPortalVisibilityStripToDetail(
     }),
   }
 
-  if (!resolvePortalVisibilityFlag('show_price', portalSettings, detail)) {
+  // Price: show_price AND role admin|accountant — strip in the query layer so the
+  // value never reaches the browser for manager/viewer (or when the flag is off).
+  const maySeePrice =
+    canSeePortalPrice(role) &&
+    resolvePortalVisibilityFlag('show_price', portalSettings, detail)
+  if (!maySeePrice) {
     next = { ...next, final_price: null }
   }
 
@@ -498,11 +507,23 @@ export async function countCustomerTows(
  * All matching tows for portal Excel export.
  * Pages via range/limit; does not strip vehicles (needed for plates/vehicle columns).
  * Does not attach driver contacts (never exported).
+ * Role-gated: admin | accountant only (UI hide is not sufficient).
  */
 export async function fetchAllCustomerTowsForExport(
   customerId: string,
   options: Omit<GetCustomerTowsOptions, 'limit' | 'offset'> = {}
 ): Promise<{ tows: CustomerPortalTowExportRow[]; portalSettings: Record<string, boolean> }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('אין הרשאה לייצוא')
+  }
+  const role = await getPortalMembershipRole(user.id, customerId)
+  if (!canExportPortalTows(role)) {
+    throw new Error('אין הרשאה לייצוא')
+  }
+
   if (options.statuses && options.statuses.length === 0) {
     return { tows: [], portalSettings: {} }
   }
@@ -628,7 +649,12 @@ export async function getCustomerTowDetail(
     images: tow.images || [],
   }
 
-  return applyPortalVisibilityStripToDetail(detail, portalSettings)
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const role = user ? await getPortalMembershipRole(user.id, customerId) : null
+
+  return applyPortalVisibilityStripToDetail(detail, portalSettings, role)
 }
 
 // שליפת משתמשי הלקוח (לניהול)
@@ -680,7 +706,7 @@ export async function createCustomerUser(
   fullName: string,
   phone: string | null,
   customerId: string,
-  role: 'admin' | 'manager' | 'viewer' = 'viewer'
+  role: CustomerUserRole = 'viewer'
 ) {
   // 1. צור user ב-auth דרך API route
   const { data: { session } } = await supabase.auth.getSession()
@@ -704,7 +730,7 @@ export async function createCustomerUser(
 // עדכון תפקיד משתמש לקוח
 export async function updateCustomerUserRole(
   customerUserId: string,
-  role: 'admin' | 'manager' | 'viewer'
+  role: CustomerUserRole
 ) {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
