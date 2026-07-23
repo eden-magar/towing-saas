@@ -9,23 +9,21 @@ import {
   updateCustomerUserRole,
   toggleCustomerUserActive,
 } from '@/app/lib/queries/customer-portal'
-import type { CustomerUserWithDetails } from '@/app/lib/types'
+import type { CustomerUserWithDetails, CustomerUserRole } from '@/app/lib/types'
+import {
+  PORTAL_ROLE_DISPLAY,
+  PORTAL_ADMIN_ASSIGNABLE_ROLES,
+  canManagePortalUsers,
+  isCustomerUserRole,
+} from '@/app/lib/utils/portal-roles'
 import {
   Users,
   User,
-  Shield,
-  Eye,
   UserCheck,
   UserX,
   Loader2,
-  Lock
+  Lock,
 } from 'lucide-react'
-
-const roleLabels: Record<string, { label: string; color: string; bg: string }> = {
-  admin: { label: 'מנהל', color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
-  manager: { label: 'מנהל תפעול', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-  viewer: { label: 'צפייה', color: 'text-gray-700', bg: 'bg-gray-50 border-gray-200' },
-}
 
 export default function CustomerUsersPage() {
   const { user, loading: authLoading } = useAuth()
@@ -44,8 +42,7 @@ export default function CustomerUsersPage() {
       const info = await getCustomerForUser(user.id)
       if (!info) return
 
-      // רק admin יכול לנהל משתמשים
-      if (info.customerUserRole !== 'admin') {
+      if (!canManagePortalUsers(info.customerUserRole)) {
         router.push('/customer')
         return
       }
@@ -59,7 +56,7 @@ export default function CustomerUsersPage() {
     load()
   }, [user, authLoading, router])
 
-  const handleRoleChange = async (customerUserId: string, newRole: 'admin' | 'manager' | 'viewer') => {
+  const handleRoleChange = async (customerUserId: string, newRole: CustomerUserRole) => {
     if (!customerInfo) return
     try {
       await updateCustomerUserRole(customerUserId, newRole)
@@ -79,6 +76,11 @@ export default function CustomerUsersPage() {
     } catch (err) {
       console.error('Error toggling active:', err)
     }
+  }
+
+  function roleChangeOptions(current: CustomerUserRole): CustomerUserRole[] {
+    if (current === 'admin') return ['admin', ...PORTAL_ADMIN_ASSIGNABLE_ROLES]
+    return PORTAL_ADMIN_ASSIGNABLE_ROLES
   }
 
   if (loading) {
@@ -111,7 +113,8 @@ export default function CustomerUsersPage() {
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100">
           {customerUsers.map((cu) => {
-            const roleCfg = roleLabels[cu.role] || roleLabels.viewer
+            const roleKey = isCustomerUserRole(cu.role) ? cu.role : 'viewer'
+            const roleCfg = PORTAL_ROLE_DISPLAY[roleKey]
             const isCurrentUser = cu.user_id === user?.id
 
             return (
@@ -124,7 +127,7 @@ export default function CustomerUsersPage() {
                       <User size={20} className={cu.is_active ? 'text-blue-600' : 'text-gray-400'} />
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`font-medium ${cu.is_active ? 'text-gray-800' : 'text-gray-400'}`}>
                           {cu.user.full_name}
                         </span>
@@ -142,6 +145,7 @@ export default function CustomerUsersPage() {
                           </span>
                         )}
                       </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{roleCfg.description}</p>
                       <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
                         <span>{cu.user.email}</span>
                         {cu.user.phone && <span>{cu.user.phone}</span>}
@@ -149,17 +153,18 @@ export default function CustomerUsersPage() {
                     </div>
                   </div>
 
-                  {/* Actions - don't allow editing yourself */}
                   {!isCurrentUser && (
                     <div className="flex items-center gap-2">
                       <select
-                        value={cu.role}
-                        onChange={(e) => handleRoleChange(cu.id, e.target.value as any)}
+                        value={roleKey}
+                        onChange={(e) => handleRoleChange(cu.id, e.target.value as CustomerUserRole)}
                         className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value="admin">מנהל</option>
-                        <option value="manager">מנהל תפעול</option>
-                        <option value="viewer">צפייה</option>
+                        {roleChangeOptions(roleKey).map((r) => (
+                          <option key={r} value={r} disabled={r === 'admin'}>
+                            {PORTAL_ROLE_DISPLAY[r].label}
+                          </option>
+                        ))}
                       </select>
 
                       <button

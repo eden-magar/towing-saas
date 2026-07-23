@@ -30,6 +30,7 @@ import {
   Briefcase,
   ClipboardList,
   UserPen,
+  Calculator,
 } from 'lucide-react'
 import { supabase } from '@/app/lib/supabase'
 import {
@@ -61,8 +62,14 @@ import type {
   CustomerAddress,
   CustomerContact,
   CustomerOrderer,
+  CustomerUserRole,
   CustomerUserWithDetails,
 } from '@/app/lib/types'
+import {
+  PORTAL_ROLE_DISPLAY,
+  STAFF_ASSIGNABLE_ROLES,
+  isCustomerUserRole,
+} from '@/app/lib/utils/portal-roles'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
 import { AddressInput, type AddressData } from '@/app/components/tow-forms/routes/AddressInput'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
@@ -87,10 +94,11 @@ interface CustomerDetail {
   } | null
 }
 
-const roleLabels: Record<string, { label: string; color: string; bg: string }> = {
-  admin: { label: 'מנהל', color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
-  manager: { label: 'מנהל תפעול', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-  viewer: { label: 'צפייה', color: 'text-gray-700', bg: 'bg-gray-50 border-gray-200' },
+const ROLE_ICONS: Record<CustomerUserRole, typeof Eye> = {
+  viewer: Eye,
+  manager: Shield,
+  admin: Shield,
+  accountant: Calculator,
 }
 
 export default function CustomerDetailPage() {
@@ -131,7 +139,7 @@ export default function CustomerDetailPage() {
     fullName: '',
     email: '',
     phone: '',
-    role: 'viewer' as 'admin' | 'manager' | 'viewer',
+    role: 'viewer' as CustomerUserRole,
   })
 
   const emptyContactForm = { name: '', phone: '', role_or_title: '', notes: '' }
@@ -234,7 +242,7 @@ export default function CustomerDetailPage() {
     }
   }
 
-  const handleRoleChange = async (customerUserId: string, newRole: 'admin' | 'manager' | 'viewer') => {
+  const handleRoleChange = async (customerUserId: string, newRole: CustomerUserRole) => {
     try {
       await updateCustomerUserRole(customerUserId, newRole)
       await loadData()
@@ -993,7 +1001,8 @@ export default function CustomerDetailPage() {
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="divide-y divide-gray-100">
                 {customerUsers.map((cu) => {
-                  const roleCfg = roleLabels[cu.role] || roleLabels.viewer
+                  const roleKey = isCustomerUserRole(cu.role) ? cu.role : 'viewer'
+                  const roleCfg = PORTAL_ROLE_DISPLAY[roleKey]
 
                   return (
                     <div key={cu.id} className="p-4 hover:bg-gray-50 transition-colors">
@@ -1005,7 +1014,7 @@ export default function CustomerDetailPage() {
                             <User size={20} className={cu.is_active ? 'text-blue-600' : 'text-gray-400'} />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className={`font-medium ${cu.is_active ? 'text-gray-800' : 'text-gray-400'}`}>
                                 {cu.user?.full_name || 'ללא שם'}
                               </span>
@@ -1018,6 +1027,7 @@ export default function CustomerDetailPage() {
                                 </span>
                               )}
                             </div>
+                            <p className="text-xs text-gray-500 mt-0.5">{roleCfg.description}</p>
                             <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
                               <span>{cu.user?.email}</span>
                               {cu.user?.phone && <span>{cu.user.phone}</span>}
@@ -1028,13 +1038,15 @@ export default function CustomerDetailPage() {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {/* Role Select */}
                           <select
-                            value={cu.role}
-                            onChange={(e) => handleRoleChange(cu.id, e.target.value as any)}
+                            value={roleKey}
+                            onChange={(e) => handleRoleChange(cu.id, e.target.value as CustomerUserRole)}
                             className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                           >
-                            <option value="admin">מנהל</option>
-                            <option value="manager">מנהל תפעול</option>
-                            <option value="viewer">צפייה</option>
+                            {STAFF_ASSIGNABLE_ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {PORTAL_ROLE_DISPLAY[r].label}
+                              </option>
+                            ))}
                           </select>
 
                           {/* Toggle Active */}
@@ -1178,27 +1190,32 @@ export default function CustomerDetailPage() {
 
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">הרשאה</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { value: 'viewer', label: 'צפייה', icon: Eye, desc: 'צפייה בגרירות' },
-                      { value: 'manager', label: 'מנהל תפעול', icon: Shield, desc: 'צפייה + דוחות' },
-                      { value: 'admin', label: 'מנהל', icon: Shield, desc: 'ניהול מלא' },
-                    ].map((opt) => {
-                      const Icon = opt.icon
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {STAFF_ASSIGNABLE_ROLES.map((value) => {
+                      const cfg = PORTAL_ROLE_DISPLAY[value]
+                      const Icon = ROLE_ICONS[value]
+                      const selected = newUserForm.role === value
                       return (
                         <button
-                          key={opt.value}
-                          onClick={() => setNewUserForm({ ...newUserForm, role: opt.value as any })}
-                          className={`p-3 rounded-xl border-2 text-center transition-all ${
-                            newUserForm.role === opt.value
+                          key={value}
+                          type="button"
+                          onClick={() => setNewUserForm({ ...newUserForm, role: value })}
+                          className={`p-3 rounded-xl border-2 text-right transition-all ${
+                            selected
                               ? 'border-[#33d4ff] bg-blue-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
-                          <Icon size={18} className={`mx-auto mb-1 ${
-                            newUserForm.role === opt.value ? 'text-[#33d4ff]' : 'text-gray-400'
-                          }`} />
-                          <p className="text-xs font-medium">{opt.label}</p>
+                          <div className="flex items-start gap-2">
+                            <Icon
+                              size={18}
+                              className={`mt-0.5 shrink-0 ${selected ? 'text-[#33d4ff]' : 'text-gray-400'}`}
+                            />
+                            <div>
+                              <p className="text-xs font-medium text-gray-900">{cfg.label}</p>
+                              <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{cfg.description}</p>
+                            </div>
+                          </div>
                         </button>
                       )
                     })}

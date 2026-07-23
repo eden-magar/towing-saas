@@ -10,13 +10,20 @@ import {
   toggleCustomerUserActive,
   deleteCustomerUser,
 } from '@/app/lib/queries/customer-portal'
-import type { CustomerUserWithDetails } from '@/app/lib/types'
+import type { CustomerUserRole, CustomerUserWithDetails } from '@/app/lib/types'
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
+import {
+  PORTAL_ADMIN_ASSIGNABLE_ROLES,
+  PORTAL_ROLE_DISPLAY,
+  canManagePortalUsers,
+  isCustomerUserRole,
+} from '@/app/lib/utils/portal-roles'
 import {
   Users,
   User,
   Shield,
   Eye,
+  Calculator,
   UserCheck,
   UserX,
   Plus,
@@ -25,10 +32,17 @@ import {
   Loader2,
 } from 'lucide-react'
 
-const roleLabels: Record<string, { label: string; color: string; bg: string }> = {
-  admin: { label: 'מנהל', color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
-  manager: { label: 'מנהל תפעול', color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-  viewer: { label: 'צפייה', color: 'text-gray-700', bg: 'bg-gray-50 border-gray-200' },
+const ROLE_ICONS: Record<CustomerUserRole, typeof Eye> = {
+  viewer: Eye,
+  manager: Shield,
+  admin: Shield,
+  accountant: Calculator,
+}
+
+function roleChangeOptions(current: CustomerUserRole): CustomerUserRole[] {
+  // Keep admin visible when the row is already admin (staff-created); portal cannot assign it.
+  if (current === 'admin') return ['admin', ...PORTAL_ADMIN_ASSIGNABLE_ROLES]
+  return PORTAL_ADMIN_ASSIGNABLE_ROLES
 }
 
 export default function CustomerUsersPage() {
@@ -48,7 +62,7 @@ export default function CustomerUsersPage() {
     fullName: '',
     email: '',
     phone: '',
-    role: 'viewer' as 'admin' | 'manager' | 'viewer',
+    role: 'viewer' as CustomerUserRole,
   })
 
   useEffect(() => {
@@ -97,7 +111,7 @@ export default function CustomerUsersPage() {
     }
   }
 
-  const handleRoleChange = async (customerUserId: string, newRole: 'admin' | 'manager' | 'viewer') => {
+  const handleRoleChange = async (customerUserId: string, newRole: CustomerUserRole) => {
     try {
       await updateCustomerUserRole(customerUserId, newRole)
       await loadUsers()
@@ -137,12 +151,12 @@ export default function CustomerUsersPage() {
     return null
   }
 
-  if (customerInfo.customerUserRole !== 'admin') {
+  if (!canManagePortalUsers(customerInfo.customerUserRole)) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
         <Shield size={40} className="mx-auto text-amber-600 mb-3" />
         <h2 className="text-lg font-bold text-amber-800 mb-2">אין הרשאה לניהול משתמשים</h2>
-        <p className="text-sm text-amber-700">רק מנהל פורטל יכול לנהל משתמשים.</p>
+        <p className="text-sm text-amber-700">רק מנהל חשבון יכול לנהל משתמשים.</p>
       </div>
     )
   }
@@ -159,9 +173,10 @@ export default function CustomerUsersPage() {
           משתמשים אלו יכולים להתחבר לפורטל הלקוח ולצפות בגרירות
         </p>
         <button
+          type="button"
           onClick={() => {
-            setShowAddUser(true)
             setError('')
+            setShowAddUser(true)
           }}
           className="flex items-center gap-2 bg-[#33d4ff] text-white px-4 py-2.5 rounded-xl hover:bg-[#21b8e6] transition-colors font-medium text-sm"
         >
@@ -174,27 +189,32 @@ export default function CustomerUsersPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Users size={48} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500 mb-1">אין משתמשי פורטל</p>
-          <p className="text-sm text-gray-400">הוסף משתמשים כדי לאפשר גישה לפורטל</p>
+          <p className="text-sm text-gray-400">הוסיפו משתמשים כדי לאפשר גישה לפורטל</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="divide-y divide-gray-100">
             {customerUsers.map((cu) => {
-              const roleCfg = roleLabels[cu.role] || roleLabels.viewer
+              const roleKey = isCustomerUserRole(cu.role) ? cu.role : 'viewer'
+              const roleCfg = PORTAL_ROLE_DISPLAY[roleKey]
               const isCurrentUser = cu.user_id === user?.id
 
               return (
                 <div key={cu.id} className="p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        cu.is_active ? 'bg-blue-100' : 'bg-gray-100'
-                      }`}>
+                  <div className="flex w-full items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          cu.is_active ? 'bg-blue-100' : 'bg-gray-100'
+                        }`}
+                      >
                         <User size={20} className={cu.is_active ? 'text-blue-600' : 'text-gray-400'} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`font-medium ${cu.is_active ? 'text-gray-800' : 'text-gray-400'}`}>
+                          <span
+                            className={`font-medium ${cu.is_active ? 'text-gray-800' : 'text-gray-400'}`}
+                          >
                             {cu.user?.full_name || 'ללא שם'}
                           </span>
                           {isCurrentUser && (
@@ -202,7 +222,9 @@ export default function CustomerUsersPage() {
                               את/ה
                             </span>
                           )}
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${roleCfg.bg} ${roleCfg.color}`}>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium border ${roleCfg.bg} ${roleCfg.color}`}
+                          >
                             {roleCfg.label}
                           </span>
                           {!cu.is_active && (
@@ -211,6 +233,7 @@ export default function CustomerUsersPage() {
                             </span>
                           )}
                         </div>
+                        <p className="text-xs text-gray-500 mt-0.5">{roleCfg.description}</p>
                         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mt-0.5">
                           <span>{cu.user?.email}</span>
                           {cu.user?.phone && <span>{cu.user.phone}</span>}
@@ -220,14 +243,18 @@ export default function CustomerUsersPage() {
 
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <select
-                        value={cu.role}
-                        onChange={(e) => handleRoleChange(cu.id, e.target.value as 'admin' | 'manager' | 'viewer')}
+                        value={roleKey}
+                        onChange={(e) =>
+                          handleRoleChange(cu.id, e.target.value as CustomerUserRole)
+                        }
                         className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
                         disabled={isCurrentUser}
                       >
-                        <option value="admin">מנהל</option>
-                        <option value="manager">מנהל תפעול</option>
-                        <option value="viewer">צפייה</option>
+                        {roleChangeOptions(roleKey).map((r) => (
+                          <option key={r} value={r} disabled={r === 'admin'}>
+                            {PORTAL_ROLE_DISPLAY[r].label}
+                          </option>
+                        ))}
                       </select>
 
                       <button
@@ -260,7 +287,6 @@ export default function CustomerUsersPage() {
         </div>
       )}
 
-      {/* Add User Modal */}
       {showAddUser && (
         <div className="fixed inset-0 bg-black/50 flex items-end lg:items-center justify-center z-50">
           <div className="bg-white w-full lg:max-w-md lg:rounded-2xl lg:mx-4 overflow-hidden rounded-t-2xl">
@@ -275,123 +301,115 @@ export default function CustomerUsersPage() {
             </div>
 
             <div className="p-5 space-y-4">
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">שם מלא *</label>
-                  <input
-                    type="text"
-                    value={newUserForm.fullName}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, fullName: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                  />
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
+                  {error}
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">אימייל *</label>
-                  <input
-                    type="email"
-                    value={newUserForm.email}
-                    onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                    dir="ltr"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">שם מלא *</label>
+                <input
+                  type="text"
+                  value={newUserForm.fullName}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, fullName: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">טלפון</label>
-                  <PhoneInput
-                    value={newUserForm.phone}
-                    onChange={(phone) => setNewUserForm({ ...newUserForm, phone })}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">אימייל *</label>
+                <input
+                  type="email"
+                  value={newUserForm.email}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                  dir="ltr"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">הרשאה</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { value: 'viewer', label: 'צפייה', icon: Eye },
-                      { value: 'manager', label: 'מנהל תפעול', icon: Shield },
-                      { value: 'admin', label: 'מנהל', icon: Shield },
-                    ].map((opt) => {
-                      const Icon = opt.icon
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setNewUserForm({ ...newUserForm, role: opt.value as 'admin' | 'manager' | 'viewer' })}
-                          className={`p-3 rounded-xl border-2 text-center transition-all ${
-                            newUserForm.role === opt.value
-                              ? 'border-[#33d4ff] bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <Icon size={18} className={`mx-auto mb-1 ${
-                            newUserForm.role === opt.value ? 'text-[#33d4ff]' : 'text-gray-400'
-                          }`} />
-                          <p className="text-xs font-medium">{opt.label}</p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">טלפון</label>
+                <PhoneInput
+                  value={newUserForm.phone}
+                  onChange={(phone) => setNewUserForm({ ...newUserForm, phone })}
+                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+                />
+              </div>
 
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddUser(false)}
-                    className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-100 transition-colors font-medium"
-                  >
-                    ביטול
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAddUser}
-                    disabled={!newUserForm.fullName || !newUserForm.email || saving}
-                    className="flex-1 py-3 bg-[#33d4ff] text-white rounded-xl hover:bg-[#21b8e6] disabled:bg-gray-300 transition-colors font-medium"
-                  >
-                    {saving ? (
-                      <Loader2 size={18} className="animate-spin mx-auto" />
-                    ) : (
-                      'צור משתמש'
-                    )}
-                  </button>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">הרשאה</label>
+                <div className="grid grid-cols-1 gap-2">
+                  {PORTAL_ADMIN_ASSIGNABLE_ROLES.map((value) => {
+                    const cfg = PORTAL_ROLE_DISPLAY[value]
+                    const Icon = ROLE_ICONS[value]
+                    const selected = newUserForm.role === value
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setNewUserForm({ ...newUserForm, role: value })}
+                        className={`p-3 rounded-xl border-2 text-right transition-all ${
+                          selected ? 'border-[#33d4ff] bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <Icon
+                            size={18}
+                            className={`mt-0.5 shrink-0 ${selected ? 'text-[#33d4ff]' : 'text-gray-400'}`}
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{cfg.label}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{cfg.description}</p>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleAddUser}
+                  disabled={saving || !newUserForm.fullName || !newUserForm.email}
+                  className="flex-1 bg-[#33d4ff] text-white py-2.5 rounded-xl font-medium hover:bg-[#21b8e6] transition-colors disabled:opacity-50"
+                >
+                  {saving ? 'שומר...' : 'צור משתמש'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddUser(false)}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50"
+                >
+                  ביטול
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 size={32} className="text-red-600" />
-              </div>
-              <h2 className="text-lg font-bold text-gray-800 mb-2">מחיקת משתמש</h2>
-              <p className="text-gray-600">המשתמש יאבד גישה לפורטל הלקוח. להמשיך?</p>
-            </div>
-            <div className="flex gap-3 px-5 pb-5">
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(null)}
-                className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors"
-              >
-                ביטול
-              </button>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4">
+            <h3 className="font-bold text-lg text-gray-900">מחיקת משתמש</h3>
+            <p className="text-sm text-gray-600">האם למחוק את המשתמש לצמיתות? פעולה זו אינה ניתנת לביטול.</p>
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => handleDeleteUser(showDeleteConfirm)}
-                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                className="flex-1 bg-red-600 text-white py-2.5 rounded-xl font-medium hover:bg-red-700"
               >
                 מחק
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(null)}
+                className="flex-1 border border-gray-200 py-2.5 rounded-xl text-gray-600 hover:bg-gray-50"
+              >
+                ביטול
               </button>
             </div>
           </div>
