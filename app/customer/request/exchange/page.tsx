@@ -7,6 +7,8 @@ import { serializeDefects } from '@/app/lib/constants/defects'
 import { createFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import { usePortalRequestBootstrap } from '@/app/components/customer-portal/PortalRequestBootstrap'
 import { PortalRequestPageHeader } from '@/app/components/customer-portal/PortalRequestPageHeader'
+import { PortalContactPairFields } from '@/app/components/customer-portal/PortalContactPairFields'
+import { usePortalSavedContacts } from '@/app/components/customer-portal/usePortalSavedContacts'
 import {
   PORTAL_CANCEL_LINK_CLASS,
   PORTAL_COLUMN_CARD_CLASS,
@@ -38,7 +40,6 @@ import {
   Input,
   TimeInput,
 } from '@/app/components/ui'
-import { PhoneInput } from '@/app/components/ui/PhoneInput'
 import { PortalDefectSelector } from '@/app/components/customer-portal/PortalDefectSelector'
 import { VehicleLookup } from '@/app/components/tow-forms/shared/VehicleLookup'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
@@ -252,6 +253,12 @@ export default function NewCustomerExchangeRequestPage() {
     storageLoading,
     userId,
   } = usePortalRequestBootstrap()
+  const {
+    contacts: portalContacts,
+    setContacts: setPortalContacts,
+    contactsLoading: portalContactsLoading,
+    canEditContacts,
+  } = usePortalSavedContacts(customerId)
 
   const [header, setHeader] = useState<HeaderForm>({
     customerOrderNumber: '',
@@ -757,40 +764,36 @@ export default function NewCustomerExchangeRequestPage() {
         </FormField>
 
         {showContacts && (
-          <div className="space-y-1.5">
-            <FormField
-              required
-              error={fieldErrors[opts.nameKey]}
-              className="min-w-0"
-            >
-              <Input
-                type="text"
-                value={contactName}
-                onChange={(e) => {
-                  if (opts.kind === 'origin') patch({ originContactName: e.target.value })
-                  else patch({ destinationContactName: e.target.value })
-                  clearFieldError(opts.nameKey)
-                }}
-                placeholder="שם איש קשר"
-                hasError={!!fieldErrors[opts.nameKey]}
-              />
-            </FormField>
-            <FormField
-              required
-              error={fieldErrors[opts.phoneKey]}
-              className="min-w-0"
-            >
-              <PhoneInput
-                value={contactPhone}
-                onChange={(phone) => {
-                  if (opts.kind === 'origin') patch({ originContactPhone: phone })
-                  else patch({ destinationContactPhone: phone })
-                  clearFieldError(opts.phoneKey)
-                }}
-                placeholder="טלפון"
-              />
-            </FormField>
-          </div>
+          <FormField
+            required
+            error={fieldErrors[opts.nameKey] || fieldErrors[opts.phoneKey]}
+            className="min-w-0"
+          >
+            <PortalContactPairFields
+              name={contactName}
+              phone={contactPhone}
+              onNameChange={(v) => {
+                if (opts.kind === 'origin') patch({ originContactName: v })
+                else patch({ destinationContactName: v })
+                clearFieldError(opts.nameKey)
+              }}
+              onPhoneChange={(v) => {
+                if (opts.kind === 'origin') patch({ originContactPhone: v })
+                else patch({ destinationContactPhone: v })
+                clearFieldError(opts.phoneKey)
+              }}
+              contacts={portalContacts}
+              onContactsChange={setPortalContacts}
+              contactsLoading={portalContactsLoading}
+              companyId={companyId}
+              customerId={customerId}
+              userId={userId}
+              canEdit={canEditContacts}
+              namePlaceholder="שם איש קשר"
+              phonePlaceholder="טלפון"
+              nameHasError={!!fieldErrors[opts.nameKey]}
+            />
+          </FormField>
         )}
       </div>
     )
@@ -896,24 +899,22 @@ export default function NewCustomerExchangeRequestPage() {
               />
             </FormField>
 
-            <FormField required error={fieldErrors.orderer}>
-              <Input
-                type="text"
-                value={header.orderer}
-                onChange={(e) => updateHeader('orderer', e.target.value)}
-                placeholder={fieldLabels.orderer}
-                hasError={!!fieldErrors.orderer}
-              />
-            </FormField>
-
-            <FormField
-              required
-              error={fieldErrors.ordererPhone}
-            >
-              <PhoneInput
-                value={header.ordererPhone}
-                onChange={(phone) => updateHeader('ordererPhone', phone)}
-                placeholder={fieldLabels.ordererPhone}
+            <FormField required error={fieldErrors.orderer || fieldErrors.ordererPhone}>
+              <PortalContactPairFields
+                name={header.orderer}
+                phone={header.ordererPhone}
+                onNameChange={(v) => updateHeader('orderer', v)}
+                onPhoneChange={(v) => updateHeader('ordererPhone', v)}
+                contacts={portalContacts}
+                onContactsChange={setPortalContacts}
+                contactsLoading={portalContactsLoading}
+                companyId={companyId}
+                customerId={customerId}
+                userId={userId}
+                canEdit={canEditContacts}
+                namePlaceholder={fieldLabels.orderer}
+                phonePlaceholder={fieldLabels.ordererPhone}
+                nameHasError={!!fieldErrors.orderer}
               />
             </FormField>
 

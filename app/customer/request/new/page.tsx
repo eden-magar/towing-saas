@@ -41,7 +41,8 @@ import {
   Input,
   TimeInput,
 } from '@/app/components/ui'
-import { PhoneInput } from '@/app/components/ui/PhoneInput'
+import { PortalContactPairFields } from '@/app/components/customer-portal/PortalContactPairFields'
+import { usePortalSavedContacts } from '@/app/components/customer-portal/usePortalSavedContacts'
 import { PortalDefectSelector } from '@/app/components/customer-portal/PortalDefectSelector'
 import { VehicleLookup } from '@/app/components/tow-forms/shared/VehicleLookup'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
@@ -172,6 +173,12 @@ export default function NewCustomerTowRequestPage() {
     storageLoading,
     userId,
   } = usePortalRequestBootstrap()
+  const {
+    contacts: portalContacts,
+    setContacts: setPortalContacts,
+    contactsLoading: portalContactsLoading,
+    canEditContacts,
+  } = usePortalSavedContacts(customerId)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [towDate, setTowDate] = useState(defaultTowDate)
   const [towTime, setTowTime] = useState(defaultTowTime)
@@ -708,21 +715,22 @@ export default function NewCustomerTowRequestPage() {
                   />
                 </FormField>
 
-                <FormField required error={fieldErrors.orderer}>
-                  <Input
-                    type="text"
-                    value={form.orderer}
-                    onChange={(e) => updateField('orderer', e.target.value)}
-                    placeholder={fieldLabels.orderer}
-                    hasError={!!fieldErrors.orderer}
-                  />
-                </FormField>
-
-                <FormField required error={fieldErrors.ordererPhone}>
-                  <PhoneInput
-                    value={form.ordererPhone}
-                    onChange={(phone) => updateField('ordererPhone', phone)}
-                    placeholder={fieldLabels.ordererPhone}
+                <FormField required error={fieldErrors.orderer || fieldErrors.ordererPhone}>
+                  <PortalContactPairFields
+                    name={form.orderer}
+                    phone={form.ordererPhone}
+                    onNameChange={(v) => updateField('orderer', v)}
+                    onPhoneChange={(v) => updateField('ordererPhone', v)}
+                    contacts={portalContacts}
+                    onContactsChange={setPortalContacts}
+                    contactsLoading={portalContactsLoading}
+                    companyId={companyId}
+                    customerId={customerId}
+                    userId={userId}
+                    canEdit={canEditContacts}
+                    namePlaceholder={fieldLabels.orderer}
+                    phonePlaceholder={fieldLabels.ordererPhone}
+                    nameHasError={!!fieldErrors.orderer}
                   />
                 </FormField>
 
@@ -1000,30 +1008,29 @@ export default function NewCustomerTowRequestPage() {
                     />
                   </FormField>
                   {showPickupContacts && (
-                    <div className="space-y-1.5">
-                      <FormField
-                        required
-                        error={fieldErrors.pickupContactName}
-                      >
-                        <Input
-                          type="text"
-                          value={form.pickupContactName}
-                          onChange={(e) => updateField('pickupContactName', e.target.value)}
-                          placeholder="שם איש קשר"
-                          hasError={!!fieldErrors.pickupContactName}
-                        />
-                      </FormField>
-                      <FormField
-                        required
-                        error={fieldErrors.pickupContactPhone}
-                      >
-                        <PhoneInput
-                          value={form.pickupContactPhone}
-                          onChange={(phone) => updateField('pickupContactPhone', phone)}
-                          placeholder="טלפון"
-                        />
-                      </FormField>
-                    </div>
+                    <FormField
+                      required
+                      error={
+                        fieldErrors.pickupContactName || fieldErrors.pickupContactPhone
+                      }
+                    >
+                      <PortalContactPairFields
+                        name={form.pickupContactName}
+                        phone={form.pickupContactPhone}
+                        onNameChange={(v) => updateField('pickupContactName', v)}
+                        onPhoneChange={(v) => updateField('pickupContactPhone', v)}
+                        contacts={portalContacts}
+                        onContactsChange={setPortalContacts}
+                        contactsLoading={portalContactsLoading}
+                        companyId={companyId}
+                        customerId={customerId}
+                        userId={userId}
+                        canEdit={canEditContacts}
+                        namePlaceholder="שם איש קשר"
+                        phonePlaceholder="טלפון"
+                        nameHasError={!!fieldErrors.pickupContactName}
+                      />
+                    </FormField>
                   )}
                 </div>
 
@@ -1073,30 +1080,29 @@ export default function NewCustomerTowRequestPage() {
                     />
                   </FormField>
                   {showDropoffContacts && (
-                    <div className="space-y-1.5">
-                      <FormField
-                        required
-                        error={fieldErrors.dropoffContactName}
-                      >
-                        <Input
-                          type="text"
-                          value={form.dropoffContactName}
-                          onChange={(e) => updateField('dropoffContactName', e.target.value)}
-                          placeholder="שם איש קשר"
-                          hasError={!!fieldErrors.dropoffContactName}
-                        />
-                      </FormField>
-                      <FormField
-                        required
-                        error={fieldErrors.dropoffContactPhone}
-                      >
-                        <PhoneInput
-                          value={form.dropoffContactPhone}
-                          onChange={(phone) => updateField('dropoffContactPhone', phone)}
-                          placeholder="טלפון"
-                        />
-                      </FormField>
-                    </div>
+                    <FormField
+                      required
+                      error={
+                        fieldErrors.dropoffContactName || fieldErrors.dropoffContactPhone
+                      }
+                    >
+                      <PortalContactPairFields
+                        name={form.dropoffContactName}
+                        phone={form.dropoffContactPhone}
+                        onNameChange={(v) => updateField('dropoffContactName', v)}
+                        onPhoneChange={(v) => updateField('dropoffContactPhone', v)}
+                        contacts={portalContacts}
+                        onContactsChange={setPortalContacts}
+                        contactsLoading={portalContactsLoading}
+                        companyId={companyId}
+                        customerId={customerId}
+                        userId={userId}
+                        canEdit={canEditContacts}
+                        namePlaceholder="שם איש קשר"
+                        phonePlaceholder="טלפון"
+                        nameHasError={!!fieldErrors.dropoffContactName}
+                      />
+                    </FormField>
                   )}
                 </div>
               </div>
