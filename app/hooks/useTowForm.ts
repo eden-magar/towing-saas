@@ -296,6 +296,15 @@ function exchangeRouteDistanceSignatureFromAddresses(
   )
 }
 
+/** Hub if any `exchange` point; four-point when exactly 4 pickup/dropoff-style points. */
+function deriveExchangeRouteLayoutFromPoints(
+  points: ReadonlyArray<{ point_type: string }>
+): 'hub' | 'four_point' {
+  if (points.some((p) => p.point_type === 'exchange')) return 'hub'
+  if (points.length === 4) return 'four_point'
+  return 'hub'
+}
+
 function commercialTypeUsesWeightBrackets(type: string): boolean {
   return type === 'van'
 }
@@ -2103,14 +2112,14 @@ export function useTowForm(
           }
 
           const hasExchangeHub = sortedPoints.some((p: any) => p.point_type === 'exchange')
-          let exchangeRouteLayout: 'four_point' | 'hub' = 'hub'
+          const exchangeRouteLayout: 'four_point' | 'hub' =
+            deriveExchangeRouteLayoutFromPoints(sortedPoints)
           let sigWorking: AddressData = { address: '' }
           let sigWorkingDest: AddressData = { address: '' }
           let sigExchange: AddressData = { address: '' }
           let sigDefective: AddressData = { address: '' }
 
           if (hasExchangeHub) {
-            exchangeRouteLayout = 'hub'
             const workingSource = sortedPoints.find(
               (p: any) => p.point_type === 'pickup' && linksOnlyWorking(p)
             )
@@ -2155,8 +2164,7 @@ export function useTowForm(
             if (defectiveDest?.is_storage) {
               setDefectiveDestination('storage')
             }
-          } else if (sortedPoints.length === 4) {
-            exchangeRouteLayout = 'four_point'
+          } else if (exchangeRouteLayout === 'four_point') {
             const [p0, p1, p2, p3] = sortedPoints
             sigWorking = pointToAddressData(p0)
             sigWorkingDest = pointToAddressData(p1)
@@ -2797,7 +2805,7 @@ export function useTowForm(
           )
           const findPointForVehicleAction = (
             vehicleId: string | undefined,
-            action: 'pickup' | 'dropoff'
+            action: 'pickup' | 'dropoff' | 'exchange'
           ): CustomerTowRequestPoint | undefined => {
             if (!vehicleId) return undefined
             const link = pointVehicles.find(
@@ -2807,25 +2815,6 @@ export function useTowForm(
             return points.find((p) => p.id === link.point_id)
           }
 
-          let p0 =
-            findPointForVehicleAction(workingRequestVehicle?.id, 'pickup') ??
-            sortedPoints[0]
-          let p1 =
-            findPointForVehicleAction(workingRequestVehicle?.id, 'dropoff') ??
-            sortedPoints[1]
-          let p2 =
-            findPointForVehicleAction(defectiveRequestVehicle?.id, 'pickup') ??
-            sortedPoints[2]
-          let p3 =
-            findPointForVehicleAction(defectiveRequestVehicle?.id, 'dropoff') ??
-            sortedPoints[3]
-
-          // If junction missed a side, fall back to order 0–3 (portal layout).
-          if (!p0) p0 = sortedPoints[0]
-          if (!p1) p1 = sortedPoints[1]
-          if (!p2) p2 = sortedPoints[2]
-          if (!p3) p3 = sortedPoints[3]
-
           const pointToAddressData = (
             p: CustomerTowRequestPoint | undefined
           ): AddressData => ({
@@ -2834,44 +2823,115 @@ export function useTowForm(
             lng: p?.lng != null ? Number(p.lng) : undefined,
           })
 
-          if (p0) {
-            setWorkingVehicleAddress(pointToAddressData(p0))
-            setWorkingVehicleContact(p0.contact_name || '')
-            setWorkingVehicleContactPhone(p0.contact_phone || '')
-            if (p0.is_storage) {
-              setWorkingVehicleSource('storage')
-            }
-          }
-          if (p1) {
-            setWorkingVehicleDestinationAddress(pointToAddressData(p1))
-            setWorkingDestinationContact(p1.contact_name || '')
-            setWorkingDestinationContactPhone(p1.contact_phone || '')
-            if (p1.is_storage) {
-              setWorkingVehicleDestinationIsStorage(true)
-            }
-          }
-          // Faulty origin → exchangeAddress (UI: מוצא הרכב התקול); keep distinct from p1.
-          if (p2) {
-            setExchangeAddress(pointToAddressData(p2))
-            setExchangeContactName(p2.contact_name || '')
-            setExchangeContactPhone(p2.contact_phone || '')
-          }
-          if (p3) {
-            setDefectiveDestinationAddress(pointToAddressData(p3))
-            setDefectiveDestinationContact(p3.contact_name || '')
-            setDefectiveDestinationContactPhone(p3.contact_phone || '')
-            if (p3.is_storage) {
-              setDefectiveDestination('storage')
-              setStorageVehicleCondition(
-                hydratedDefects.length > 0 || defectiveRequestVehicle?.is_working === false
-                  ? 'faulty'
-                  : 'operational'
-              )
-            }
-          }
+          const exchangeRouteLayout = deriveExchangeRouteLayoutFromPoints(sortedPoints)
 
-          // Portal always submits 4 points — open in split so both addresses stay visible.
-          setExchangePointSplit(true)
+          if (exchangeRouteLayout === 'hub') {
+            const workingSource =
+              findPointForVehicleAction(workingRequestVehicle?.id, 'pickup') ??
+              sortedPoints.find((p) => p.point_type === 'pickup') ??
+              sortedPoints[0]
+            const exchangeHub =
+              findPointForVehicleAction(workingRequestVehicle?.id, 'exchange') ??
+              findPointForVehicleAction(defectiveRequestVehicle?.id, 'exchange') ??
+              sortedPoints.find((p) => p.point_type === 'exchange') ??
+              sortedPoints[1]
+            const defectiveDest =
+              findPointForVehicleAction(defectiveRequestVehicle?.id, 'dropoff') ??
+              [...sortedPoints].reverse().find((p) => p.point_type === 'dropoff') ??
+              sortedPoints[sortedPoints.length - 1]
+
+            if (workingSource) {
+              setWorkingVehicleAddress(pointToAddressData(workingSource))
+              setWorkingVehicleContact(workingSource.contact_name || '')
+              setWorkingVehicleContactPhone(workingSource.contact_phone || '')
+              if (workingSource.is_storage) {
+                setWorkingVehicleSource('storage')
+              }
+            }
+            if (exchangeHub) {
+              const hubAddr = pointToAddressData(exchangeHub)
+              setExchangeAddress(hubAddr)
+              setWorkingVehicleDestinationAddress(hubAddr)
+              setExchangeContactName(exchangeHub.contact_name || '')
+              setExchangeContactPhone(exchangeHub.contact_phone || '')
+              setWorkingDestinationContact('')
+              setWorkingDestinationContactPhone('')
+            }
+            if (defectiveDest) {
+              setDefectiveDestinationAddress(pointToAddressData(defectiveDest))
+              setDefectiveDestinationContact(defectiveDest.contact_name || '')
+              setDefectiveDestinationContactPhone(defectiveDest.contact_phone || '')
+              if (defectiveDest.is_storage) {
+                setDefectiveDestination('storage')
+                setStorageVehicleCondition(
+                  hydratedDefects.length > 0 ||
+                    defectiveRequestVehicle?.is_working === false
+                    ? 'faulty'
+                    : 'operational'
+                )
+              }
+            }
+
+            setExchangePointSplit(false)
+          } else {
+            let p0 =
+              findPointForVehicleAction(workingRequestVehicle?.id, 'pickup') ??
+              sortedPoints[0]
+            let p1 =
+              findPointForVehicleAction(workingRequestVehicle?.id, 'dropoff') ??
+              sortedPoints[1]
+            let p2 =
+              findPointForVehicleAction(defectiveRequestVehicle?.id, 'pickup') ??
+              sortedPoints[2]
+            let p3 =
+              findPointForVehicleAction(defectiveRequestVehicle?.id, 'dropoff') ??
+              sortedPoints[3]
+
+            // If junction missed a side, fall back to order 0–3 (portal split layout).
+            if (!p0) p0 = sortedPoints[0]
+            if (!p1) p1 = sortedPoints[1]
+            if (!p2) p2 = sortedPoints[2]
+            if (!p3) p3 = sortedPoints[3]
+
+            if (p0) {
+              setWorkingVehicleAddress(pointToAddressData(p0))
+              setWorkingVehicleContact(p0.contact_name || '')
+              setWorkingVehicleContactPhone(p0.contact_phone || '')
+              if (p0.is_storage) {
+                setWorkingVehicleSource('storage')
+              }
+            }
+            if (p1) {
+              setWorkingVehicleDestinationAddress(pointToAddressData(p1))
+              setWorkingDestinationContact(p1.contact_name || '')
+              setWorkingDestinationContactPhone(p1.contact_phone || '')
+              if (p1.is_storage) {
+                setWorkingVehicleDestinationIsStorage(true)
+              }
+            }
+            // Faulty origin → exchangeAddress (UI: מוצא הרכב התקול); keep distinct from p1.
+            if (p2) {
+              setExchangeAddress(pointToAddressData(p2))
+              setExchangeContactName(p2.contact_name || '')
+              setExchangeContactPhone(p2.contact_phone || '')
+            }
+            if (p3) {
+              setDefectiveDestinationAddress(pointToAddressData(p3))
+              setDefectiveDestinationContact(p3.contact_name || '')
+              setDefectiveDestinationContactPhone(p3.contact_phone || '')
+              if (p3.is_storage) {
+                setDefectiveDestination('storage')
+                setStorageVehicleCondition(
+                  hydratedDefects.length > 0 ||
+                    defectiveRequestVehicle?.is_working === false
+                    ? 'faulty'
+                    : 'operational'
+                )
+              }
+            }
+
+            setExchangePointSplit(true)
+          }
 
           setRequestOriginalValues(
             buildRequestOriginalValuesFromRequest(request, vehicles, points, null),
