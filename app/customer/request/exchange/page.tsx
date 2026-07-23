@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { type CustomerPortalStoredVehicle } from '@/app/lib/queries/customer-portal'
 import { serializeDefects } from '@/app/lib/constants/defects'
@@ -59,6 +59,7 @@ import {
   Loader2,
   MapPin,
   Package,
+  Split,
   Truck,
 } from 'lucide-react'
 
@@ -286,6 +287,14 @@ export default function NewCustomerExchangeRequestPage() {
 
   const [selectedWorkingStoredId, setSelectedWorkingStoredId] = useState<string | null>(null)
   const [faultyToStorage, setFaultyToStorage] = useState(false)
+  /** Default hub (3 points). Split shows a distinct faulty origin (4 points). */
+  const [exchangePointSplit, setExchangePointSplit] = useState(false)
+  /** Same-session stash: מוצא התקול lost on collapse, restored on re-split. */
+  const faultyOriginStashRef = useRef<{
+    address: AddressData
+    contactName: string
+    contactPhone: string
+  } | null>(null)
 
   const [storageModalOpen, setStorageModalOpen] = useState(false)
 
@@ -422,6 +431,60 @@ export default function NewCustomerExchangeRequestPage() {
     !workingFromStorage && working.origin.address.trim().length > 0
   const showFaultyDestinationContacts =
     !faultyToStorage && faulty.destination.address.trim().length > 0
+  /** Hub: one contact pair on נקודת החלפה (working.destination). Split: dest + faulty origin. */
+  const showHubOrWorkingDestContacts = working.destination.address.trim().length > 0
+
+  const splitExchangePoint = () => {
+    const stash = faultyOriginStashRef.current
+    if (stash?.address?.address?.trim()) {
+      patchFaulty({
+        origin: stash.address,
+        originContactName: stash.contactName,
+        originContactPhone: stash.contactPhone,
+      })
+      faultyOriginStashRef.current = null
+    } else {
+      patchFaulty({
+        origin: emptyAddress(),
+        originContactName: '',
+        originContactPhone: '',
+      })
+    }
+    setExchangePointSplit(true)
+  }
+
+  const collapseExchangePoint = () => {
+    const hubAddr = working.destination.address.trim()
+    const faultyOriginAddress = faulty.origin.address.trim()
+    const wouldLoseFaultyOrigin =
+      (!!faultyOriginAddress && faultyOriginAddress !== hubAddr) ||
+      (!!faulty.originContactName.trim() &&
+        faulty.originContactName.trim() !== working.destinationContactName.trim())
+
+    if (wouldLoseFaultyOrigin) {
+      const ok = window.confirm(
+        'איבוד כתובת מוצא התקול — להמשיך?\n(פיצול מחדש באותו מסך ישחזר את הכתובת)',
+      )
+      if (!ok) return
+      faultyOriginStashRef.current = {
+        address: faulty.origin,
+        contactName: faulty.originContactName,
+        contactPhone: faulty.originContactPhone,
+      }
+    } else {
+      faultyOriginStashRef.current = null
+    }
+
+    patchFaulty({
+      origin: emptyAddress(),
+      originContactName: '',
+      originContactPhone: '',
+    })
+    clearFieldError('faultyOrigin')
+    clearFieldError('faultyOriginContactName')
+    clearFieldError('faultyOriginContactPhone')
+    setExchangePointSplit(false)
+  }
 
   const clearWorkingStoredSelection = () => {
     setSelectedWorkingStoredId(null)
@@ -522,8 +585,10 @@ export default function NewCustomerExchangeRequestPage() {
       require('workingOriginContactPhone', working.originContactPhone)
     }
     require('workingDestination', working.destination.address)
-    require('workingDestinationContactName', working.destinationContactName)
-    require('workingDestinationContactPhone', working.destinationContactPhone)
+    if (showHubOrWorkingDestContacts) {
+      require('workingDestinationContactName', working.destinationContactName)
+      require('workingDestinationContactPhone', working.destinationContactPhone)
+    }
 
     require('faultyPlate', faulty.plateNumber)
     if (faulty.vehicleLookupNotFound && !faulty.vehicleType) {
@@ -535,9 +600,11 @@ export default function NewCustomerExchangeRequestPage() {
     if (faultyDefects.length === 0) {
       errors.faultyDefects = 'יש לבחור לפחות תקלה אחת'
     }
-    require('faultyOrigin', faulty.origin.address)
-    require('faultyOriginContactName', faulty.originContactName)
-    require('faultyOriginContactPhone', faulty.originContactPhone)
+    if (exchangePointSplit) {
+      require('faultyOrigin', faulty.origin.address)
+      require('faultyOriginContactName', faulty.originContactName)
+      require('faultyOriginContactPhone', faulty.originContactPhone)
+    }
     require('faultyDestination', faulty.destination.address)
     if (showFaultyDestinationContacts) {
       require('faultyDestinationContactName', faulty.destinationContactName)
@@ -584,58 +651,110 @@ export default function NewCustomerExchangeRequestPage() {
             orderIndex: 1,
           }),
         ],
-        points: [
-          {
-            pointOrder: 0,
-            pointType: 'pickup',
-            address: working.origin.address.trim(),
-            lat: working.origin.lat ?? null,
-            lng: working.origin.lng ?? null,
-            contactName: showWorkingOriginContacts ? working.originContactName.trim() : '',
-            contactPhone: showWorkingOriginContacts ? working.originContactPhone.trim() : '',
-            isStorage: workingFromStorage,
-          },
-          {
-            pointOrder: 1,
-            pointType: 'dropoff',
-            address: working.destination.address.trim(),
-            lat: working.destination.lat ?? null,
-            lng: working.destination.lng ?? null,
-            contactName: working.destinationContactName.trim(),
-            contactPhone: working.destinationContactPhone.trim(),
-            isStorage: false,
-          },
-          {
-            pointOrder: 2,
-            pointType: 'pickup',
-            address: faulty.origin.address.trim(),
-            lat: faulty.origin.lat ?? null,
-            lng: faulty.origin.lng ?? null,
-            contactName: faulty.originContactName.trim(),
-            contactPhone: faulty.originContactPhone.trim(),
-            isStorage: false,
-          },
-          {
-            pointOrder: 3,
-            pointType: 'dropoff',
-            address: faulty.destination.address.trim(),
-            lat: faulty.destination.lat ?? null,
-            lng: faulty.destination.lng ?? null,
-            contactName: showFaultyDestinationContacts
-              ? faulty.destinationContactName.trim()
-              : '',
-            contactPhone: showFaultyDestinationContacts
-              ? faulty.destinationContactPhone.trim()
-              : '',
-            isStorage: faultyToStorage,
-          },
-        ],
-        pointVehicles: [
-          { vehicleIndex: 0, pointIndex: 0, action: 'pickup' },
-          { vehicleIndex: 0, pointIndex: 1, action: 'dropoff' },
-          { vehicleIndex: 1, pointIndex: 2, action: 'pickup' },
-          { vehicleIndex: 1, pointIndex: 3, action: 'dropoff' },
-        ],
+        points: exchangePointSplit
+          ? [
+              {
+                pointOrder: 0,
+                pointType: 'pickup' as const,
+                address: working.origin.address.trim(),
+                lat: working.origin.lat ?? null,
+                lng: working.origin.lng ?? null,
+                contactName: showWorkingOriginContacts
+                  ? working.originContactName.trim()
+                  : '',
+                contactPhone: showWorkingOriginContacts
+                  ? working.originContactPhone.trim()
+                  : '',
+                isStorage: workingFromStorage,
+              },
+              {
+                pointOrder: 1,
+                pointType: 'dropoff' as const,
+                address: working.destination.address.trim(),
+                lat: working.destination.lat ?? null,
+                lng: working.destination.lng ?? null,
+                contactName: working.destinationContactName.trim(),
+                contactPhone: working.destinationContactPhone.trim(),
+                isStorage: false,
+              },
+              {
+                pointOrder: 2,
+                pointType: 'pickup' as const,
+                address: faulty.origin.address.trim(),
+                lat: faulty.origin.lat ?? null,
+                lng: faulty.origin.lng ?? null,
+                contactName: faulty.originContactName.trim(),
+                contactPhone: faulty.originContactPhone.trim(),
+                isStorage: false,
+              },
+              {
+                pointOrder: 3,
+                pointType: 'dropoff' as const,
+                address: faulty.destination.address.trim(),
+                lat: faulty.destination.lat ?? null,
+                lng: faulty.destination.lng ?? null,
+                contactName: showFaultyDestinationContacts
+                  ? faulty.destinationContactName.trim()
+                  : '',
+                contactPhone: showFaultyDestinationContacts
+                  ? faulty.destinationContactPhone.trim()
+                  : '',
+                isStorage: faultyToStorage,
+              },
+            ]
+          : [
+              {
+                pointOrder: 0,
+                pointType: 'pickup' as const,
+                address: working.origin.address.trim(),
+                lat: working.origin.lat ?? null,
+                lng: working.origin.lng ?? null,
+                contactName: showWorkingOriginContacts
+                  ? working.originContactName.trim()
+                  : '',
+                contactPhone: showWorkingOriginContacts
+                  ? working.originContactPhone.trim()
+                  : '',
+                isStorage: workingFromStorage,
+              },
+              {
+                pointOrder: 1,
+                pointType: 'exchange' as const,
+                address: working.destination.address.trim(),
+                lat: working.destination.lat ?? null,
+                lng: working.destination.lng ?? null,
+                contactName: working.destinationContactName.trim(),
+                contactPhone: working.destinationContactPhone.trim(),
+                isStorage: false,
+              },
+              {
+                pointOrder: 2,
+                pointType: 'dropoff' as const,
+                address: faulty.destination.address.trim(),
+                lat: faulty.destination.lat ?? null,
+                lng: faulty.destination.lng ?? null,
+                contactName: showFaultyDestinationContacts
+                  ? faulty.destinationContactName.trim()
+                  : '',
+                contactPhone: showFaultyDestinationContacts
+                  ? faulty.destinationContactPhone.trim()
+                  : '',
+                isStorage: faultyToStorage,
+              },
+            ],
+        pointVehicles: exchangePointSplit
+          ? [
+              { vehicleIndex: 0, pointIndex: 0, action: 'pickup' as const },
+              { vehicleIndex: 0, pointIndex: 1, action: 'dropoff' as const },
+              { vehicleIndex: 1, pointIndex: 2, action: 'pickup' as const },
+              { vehicleIndex: 1, pointIndex: 3, action: 'dropoff' as const },
+            ]
+          : [
+              { vehicleIndex: 0, pointIndex: 0, action: 'pickup' as const },
+              { vehicleIndex: 0, pointIndex: 1, action: 'exchange' as const },
+              { vehicleIndex: 1, pointIndex: 1, action: 'exchange' as const },
+              { vehicleIndex: 1, pointIndex: 2, action: 'dropoff' as const },
+            ],
       })
       setSuccess(true)
     } catch (err: unknown) {
@@ -725,12 +844,18 @@ export default function NewCustomerExchangeRequestPage() {
             {opts.routeTitle}
           </h4>
           {opts.storageToggle && (
-            <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-secondary cursor-pointer">
+            <label
+              className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors select-none ${
+                opts.storageToggle.checked
+                  ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+                  : 'border-gt-border bg-white text-gt-text-secondary hover:border-gt-brand/50 hover:bg-gt-surface-subtle'
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={opts.storageToggle.checked}
                 onChange={(e) => opts.storageToggle!.onChange(e.target.checked)}
-                className="rounded border-gt-border text-gt-brand focus:ring-gt-brand"
+                className="h-3.5 w-3.5 rounded border-gt-border text-gt-brand focus:ring-gt-brand focus:ring-offset-0"
               />
               {opts.storageToggle.label}
             </label>
@@ -1070,13 +1195,19 @@ export default function NewCustomerExchangeRequestPage() {
                 })}
                 {renderRouteStack(working, patchWorking, {
                   kind: 'destination',
-                  routeTitle: 'יעד',
+                  routeTitle: exchangePointSplit ? 'יעד' : 'נקודת החלפה',
                   addressKey: 'workingDestination',
                   nameKey: 'workingDestinationContactName',
                   phoneKey: 'workingDestinationContactPhone',
                   pin: 'workingDestination',
+                  showContacts: showHubOrWorkingDestContacts,
                 })}
               </div>
+              {!exchangePointSplit && (
+                <p className="text-[11px] text-gt-text-tertiary -mt-1">
+                  התקין יורד כאן · התקול נאסף כאן
+                </p>
+              )}
             </div>
           </FormCard>
 
@@ -1091,10 +1222,27 @@ export default function NewCustomerExchangeRequestPage() {
             <div className={columnBodyClass}>
               <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className={sectionLabelClass}>פרטי רכב</h4>
-                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
-                    תקול
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    <h4 className={sectionLabelClass}>פרטי רכב</h4>
+                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
+                      תקול
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={
+                      exchangePointSplit ? collapseExchangePoint : splitExchangePoint
+                    }
+                    aria-pressed={exchangePointSplit}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${
+                      exchangePointSplit
+                        ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
+                        : 'border-gt-brand/60 bg-white text-gt-brand-text hover:bg-gt-brand-subtle hover:border-gt-brand'
+                    }`}
+                  >
+                    <Split className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {exchangePointSplit ? 'אחד נקודת החלפה' : 'פצל נקודת החלפה'}
+                  </button>
                 </div>
 
                 <FormField
@@ -1158,15 +1306,20 @@ export default function NewCustomerExchangeRequestPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-                {renderRouteStack(faulty, patchFaulty, {
-                  kind: 'origin',
-                  routeTitle: 'מוצא',
-                  addressKey: 'faultyOrigin',
-                  nameKey: 'faultyOriginContactName',
-                  phoneKey: 'faultyOriginContactPhone',
-                  pin: 'faultyOrigin',
-                })}
+              <div
+                className={`grid grid-cols-1 gap-3 min-w-0 ${
+                  exchangePointSplit ? 'sm:grid-cols-2' : ''
+                }`}
+              >
+                {exchangePointSplit &&
+                  renderRouteStack(faulty, patchFaulty, {
+                    kind: 'origin',
+                    routeTitle: 'מוצא',
+                    addressKey: 'faultyOrigin',
+                    nameKey: 'faultyOriginContactName',
+                    phoneKey: 'faultyOriginContactPhone',
+                    pin: 'faultyOrigin',
+                  })}
                 {renderRouteStack(faulty, patchFaulty, {
                   kind: 'destination',
                   routeTitle: 'יעד',
