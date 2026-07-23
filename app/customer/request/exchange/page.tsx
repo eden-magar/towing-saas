@@ -59,7 +59,6 @@ import {
   Loader2,
   MapPin,
   Package,
-  Split,
   Truck,
 } from 'lucide-react'
 
@@ -837,27 +836,27 @@ export default function NewCustomerExchangeRequestPage() {
     const showContacts = opts.showContacts !== false
 
     return (
-      <div className="space-y-1.5 min-w-0">
+      <div className="flex flex-col gap-1.5 min-w-0 h-full">
         <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
           <h4 className={`${sectionLabelClass} flex items-center gap-1.5`}>
             <MapPin size={12} className="text-gt-text-tertiary shrink-0" strokeWidth={1.75} />
             {opts.routeTitle}
           </h4>
           {opts.storageToggle && (
-            <label
-              className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-colors select-none ${
-                opts.storageToggle.checked
-                  ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-                  : 'border-gt-border bg-white text-gt-text-secondary hover:border-gt-brand/50 hover:bg-gt-surface-subtle'
-              }`}
-            >
+            <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-tertiary cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={opts.storageToggle.checked}
                 onChange={(e) => opts.storageToggle!.onChange(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-gt-border text-gt-brand focus:ring-gt-brand focus:ring-offset-0"
               />
-              {opts.storageToggle.label}
+              <span
+                className={
+                  opts.storageToggle.checked ? 'text-gt-text-secondary font-medium' : undefined
+                }
+              >
+                {opts.storageToggle.label}
+              </span>
             </label>
           )}
         </div>
@@ -895,22 +894,36 @@ export default function NewCustomerExchangeRequestPage() {
             onPinDropClick={() => setPinDropModal({ isOpen: true, field: opts.pin })}
             storageYardConfirm={opts.storageYardConfirm}
             savedAddresses={savedAddressesForInput}
+            extraActions={
+              <SavePortalAddressControl
+                variant="icon"
+                addressData={address}
+                addresses={portalAddresses}
+                onAddressesChange={setPortalAddresses}
+                companyId={companyId}
+                customerId={customerId}
+                userId={userId}
+                canEdit={canEditAddresses}
+              />
+            }
           />
         </FormField>
-        <SavePortalAddressControl
-          addressData={address}
-          addresses={portalAddresses}
-          onAddressesChange={setPortalAddresses}
-          companyId={companyId}
-          customerId={customerId}
-          userId={userId}
-          canEdit={canEditAddresses}
-        />
 
-        {showContacts && (
+        {/* Always reserve contact-pair height so storage / empty-address toggles do not reflow. */}
+        <div
+          className={`min-h-[4.75rem] transition-opacity duration-200 ease-out ${
+            showContacts ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden={!showContacts}
+          {...(!showContacts ? { inert: true } : {})}
+        >
           <FormField
-            required
-            error={fieldErrors[opts.nameKey] || fieldErrors[opts.phoneKey]}
+            required={showContacts}
+            error={
+              showContacts
+                ? fieldErrors[opts.nameKey] || fieldErrors[opts.phoneKey]
+                : undefined
+            }
             className="min-w-0"
           >
             <PortalContactPairFields
@@ -938,7 +951,7 @@ export default function NewCustomerExchangeRequestPage() {
               nameHasError={!!fieldErrors[opts.nameKey]}
             />
           </FormField>
-        )}
+        </div>
       </div>
     )
   }
@@ -1203,11 +1216,14 @@ export default function NewCustomerExchangeRequestPage() {
                   showContacts: showHubOrWorkingDestContacts,
                 })}
               </div>
-              {!exchangePointSplit && (
-                <p className="text-[11px] text-gt-text-tertiary -mt-1">
-                  התקין יורד כאן · התקול נאסף כאן
-                </p>
-              )}
+              <p
+                className={`text-[11px] text-gt-text-tertiary min-h-[1rem] transition-opacity duration-200 ease-out ${
+                  exchangePointSplit ? 'opacity-0' : 'opacity-100'
+                }`}
+                aria-hidden={exchangePointSplit}
+              >
+                התקין יורד כאן · התקול נאסף כאן
+              </p>
             </div>
           </FormCard>
 
@@ -1222,27 +1238,10 @@ export default function NewCustomerExchangeRequestPage() {
             <div className={columnBodyClass}>
               <div className="space-y-2 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    <h4 className={sectionLabelClass}>פרטי רכב</h4>
-                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
-                      תקול
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={
-                      exchangePointSplit ? collapseExchangePoint : splitExchangePoint
-                    }
-                    aria-pressed={exchangePointSplit}
-                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-colors ${
-                      exchangePointSplit
-                        ? 'border-gt-brand bg-gt-brand-subtle text-gt-brand-text'
-                        : 'border-gt-brand/60 bg-white text-gt-brand-text hover:bg-gt-brand-subtle hover:border-gt-brand'
-                    }`}
-                  >
-                    <Split className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    {exchangePointSplit ? 'אחד נקודת החלפה' : 'פצל נקודת החלפה'}
-                  </button>
+                  <h4 className={sectionLabelClass}>פרטי רכב</h4>
+                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
+                    תקול
+                  </span>
                 </div>
 
                 <FormField
@@ -1306,36 +1305,105 @@ export default function NewCustomerExchangeRequestPage() {
                 )}
               </div>
 
-              <div
-                className={`grid grid-cols-1 gap-3 min-w-0 ${
-                  exchangePointSplit ? 'sm:grid-cols-2' : ''
-                }`}
-              >
-                {exchangePointSplit &&
-                  renderRouteStack(faulty, patchFaulty, {
-                    kind: 'origin',
-                    routeTitle: 'מוצא',
-                    addressKey: 'faultyOrigin',
-                    nameKey: 'faultyOriginContactName',
-                    phoneKey: 'faultyOriginContactPhone',
-                    pin: 'faultyOrigin',
+              {/* Mode switch governs the address pair below — not a field-level action. */}
+              <div className="space-y-2 min-w-0">
+                <div
+                  className={PORTAL_SEGMENT_WRAP_CLASS}
+                  role="group"
+                  aria-label="מבנה נקודת החלפה"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (exchangePointSplit) collapseExchangePoint()
+                    }}
+                    aria-pressed={!exchangePointSplit}
+                    className={
+                      !exchangePointSplit
+                        ? PORTAL_SEGMENT_ACTIVE_CLASS
+                        : PORTAL_SEGMENT_INACTIVE_CLASS
+                    }
+                  >
+                    אחד נקודת החלפה
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!exchangePointSplit) splitExchangePoint()
+                    }}
+                    aria-pressed={exchangePointSplit}
+                    className={
+                      exchangePointSplit
+                        ? PORTAL_SEGMENT_ACTIVE_CLASS
+                        : PORTAL_SEGMENT_INACTIVE_CLASS
+                    }
+                  >
+                    פצל נקודת החלפה
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0 items-stretch">
+                  {/*
+                    sm+: always two columns so dest does not slide when origin appears.
+                    Mobile: collapse origin height in hub — a full-width empty block would be
+                    a permanent large gap (called out in the report).
+                  */}
+                  <div
+                    className={`relative min-w-0 transition-[max-height,opacity] duration-200 ease-out overflow-hidden sm:overflow-visible ${
+                      exchangePointSplit
+                        ? 'max-h-[40rem] opacity-100'
+                        : 'max-h-0 opacity-0 pointer-events-none sm:max-h-none sm:opacity-100 sm:pointer-events-auto'
+                    }`}
+                    aria-hidden={!exchangePointSplit}
+                    {...(!exchangePointSplit ? { inert: true } : {})}
+                  >
+                    <div
+                      className={`h-full transition-opacity duration-200 ease-out ${
+                        exchangePointSplit
+                          ? 'opacity-100'
+                          : 'opacity-0 sm:absolute sm:inset-0 sm:opacity-0'
+                      }`}
+                    >
+                      {renderRouteStack(faulty, patchFaulty, {
+                        kind: 'origin',
+                        routeTitle: 'מוצא',
+                        addressKey: 'faultyOrigin',
+                        nameKey: 'faultyOriginContactName',
+                        phoneKey: 'faultyOriginContactPhone',
+                        pin: 'faultyOrigin',
+                      })}
+                    </div>
+                    <div
+                      className={`hidden sm:flex h-full min-h-[12.5rem] items-center justify-center rounded-lg border border-dashed border-gt-border-subtle bg-gt-surface-subtle/40 px-3 transition-opacity duration-200 ease-out ${
+                        exchangePointSplit
+                          ? 'opacity-0 pointer-events-none absolute inset-0'
+                          : 'opacity-100'
+                      }`}
+                      aria-hidden={exchangePointSplit}
+                    >
+                      <p className="text-[11px] text-gt-text-tertiary text-center leading-snug">
+                        מוצא התקול בנקודת ההחלפה
+                      </p>
+                    </div>
+                  </div>
+
+                  {renderRouteStack(faulty, patchFaulty, {
+                    kind: 'destination',
+                    routeTitle: 'יעד',
+                    addressKey: 'faultyDestination',
+                    nameKey: 'faultyDestinationContactName',
+                    phoneKey: 'faultyDestinationContactPhone',
+                    pin: 'faultyDestination',
+                    showContacts: showFaultyDestinationContacts,
+                    clearContactsWhenAddressEmpty: true,
+                    storageToggle: {
+                      label: 'לאחסנה',
+                      checked: faultyToStorage,
+                      onChange: setFaultyDestinationToYard,
+                    },
+                    storageYardConfirm: faultyDestYardConfirm,
                   })}
-                {renderRouteStack(faulty, patchFaulty, {
-                  kind: 'destination',
-                  routeTitle: 'יעד',
-                  addressKey: 'faultyDestination',
-                  nameKey: 'faultyDestinationContactName',
-                  phoneKey: 'faultyDestinationContactPhone',
-                  pin: 'faultyDestination',
-                  showContacts: showFaultyDestinationContacts,
-                  clearContactsWhenAddressEmpty: true,
-                  storageToggle: {
-                    label: 'לאחסנה',
-                    checked: faultyToStorage,
-                    onChange: setFaultyDestinationToYard,
-                  },
-                  storageYardConfirm: faultyDestYardConfirm,
-                })}
+                </div>
               </div>
             </div>
           </FormCard>
