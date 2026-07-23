@@ -21,7 +21,8 @@
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.0",
     "resend": "^6.5.2",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@inquirer/prompts": "^8.4.3",
