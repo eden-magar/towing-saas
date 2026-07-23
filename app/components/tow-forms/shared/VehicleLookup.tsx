@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type ReactNode } from 'react'
 import { Search, Loader2, AlertTriangle, PenLine, Check } from 'lucide-react'
 import { lookupVehicle, getVehicleTypeIcon } from '../../../lib/vehicle-lookup'
 import { VehicleType, VehicleLookupResult } from '../../../lib/types'
@@ -244,11 +244,24 @@ export function VehicleLookup({
   const renderManualEntryRow = () => {
     const trigger = renderManualEntryTrigger()
     if (!trigger && !manualEntryTrailing && !manualEntryEnd) return null
-    const cells = [trigger, manualEntryTrailing, manualEntryEnd].filter(Boolean)
-    if (cells.length >= 2) {
-      return <VehicleCardActions>{cells}</VehicleCardActions>
+    const cells: { key: string; node: ReactNode }[] = []
+    if (trigger) cells.push({ key: 'vehicle-lookup-manual-entry', node: trigger })
+    if (manualEntryTrailing) {
+      cells.push({ key: 'vehicle-lookup-manual-trailing', node: manualEntryTrailing })
     }
-    return <div className="w-full">{cells[0]}</div>
+    if (manualEntryEnd) {
+      cells.push({ key: 'vehicle-lookup-manual-end', node: manualEntryEnd })
+    }
+    if (cells.length >= 2) {
+      return (
+        <VehicleCardActions>
+          {cells.map(({ key, node }) => (
+            <Fragment key={key}>{node}</Fragment>
+          ))}
+        </VehicleCardActions>
+      )
+    }
+    return <div className="w-full">{cells[0]?.node}</div>
   }
 
   return (
