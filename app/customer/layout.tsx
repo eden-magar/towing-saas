@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Users,
   BookUser,
+  MapPinned,
   LogOut,
   Loader2,
   Menu,
@@ -92,6 +93,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
       requiresSubmitOrders: true,
     },
     { href: '/customer/contacts', label: 'אנשי קשר', icon: BookUser },
+    { href: '/customer/addresses', label: 'כתובות', icon: MapPinned },
     { href: '/customer/users', label: 'משתמשים', icon: Users, adminOnly: true },
   ]
 
