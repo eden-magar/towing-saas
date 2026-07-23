@@ -78,6 +78,8 @@ interface UseTowSaveParams {
   setTruckTypeError: (v: boolean) => void
   truckTypeSectionRef: React.RefObject<HTMLDivElement>
   dropoffToStorage: boolean
+  /** fromRequest: request pickup was is_storage (OR'd with selectedStoredVehicleId at save). */
+  pickupFromStorage?: boolean
   hasStorageFollowUp?: boolean
   inheritCustomerOrderNumber?: boolean
   followUpAddress?: AddressData
@@ -234,6 +236,7 @@ export function useTowSave(params: UseTowSaveParams) {
     setTruckTypeError,
     truckTypeSectionRef,
     dropoffToStorage,
+    pickupFromStorage = false,
     hasStorageFollowUp,
     inheritCustomerOrderNumber,
     followUpAddress,
@@ -548,6 +551,7 @@ export function useTowSave(params: UseTowSaveParams) {
       paymentMethod: paymentMethod || undefined,
       invoiceName: invoiceName || undefined,
       dropoffToStorage,
+      pickupFromStorage,
       selectedStoredVehicleId,
       workingVehiclePlate: towType === 'exchange' ? workingVehiclePlate : undefined,
       workingVehicleCode: towType === 'exchange' ? workingVehicleCode : undefined,

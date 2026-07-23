@@ -154,6 +154,8 @@ export interface SaveTowInput {
   paymentMethod?: string
   invoiceName?: string
   dropoffToStorage?: boolean
+  /** fromRequest pickup is_storage — alongside selectedStoredVehicleId for first pickup. */
+  pickupFromStorage?: boolean
   selectedStoredVehicleId?: string | null
   existingPriceBreakdown?: PriceBreakdown | null
   // Exchange specific
@@ -1064,7 +1066,7 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
       order_notes: row.orderNotes?.trim() || null,
       vehicleIndices: isPickup || isDropoff ? [0] : [],
       isStorage: isFirstPickup
-        ? !!input.selectedStoredVehicleId
+        ? !!input.selectedStoredVehicleId || input.pickupFromStorage === true
         : isDropoff && dropoffIsLast
           ? input.dropoffToStorage === true
           : undefined,

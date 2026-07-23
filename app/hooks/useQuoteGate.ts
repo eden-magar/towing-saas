@@ -202,6 +202,7 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
         paymentMethod: form.paymentMethod || undefined,
         invoiceName: form.invoiceName || undefined,
         dropoffToStorage: form.dropoffToStorage,
+        pickupFromStorage: form.pickupFromStorage,
         selectedStoredVehicleId: form.selectedStoredVehicleId,
         workingVehiclePlate: towType === 'exchange' ? form.workingVehiclePlate : undefined,
         workingVehicleCode: towType === 'exchange' ? form.workingVehicleCode : undefined,

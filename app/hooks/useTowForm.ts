@@ -982,6 +982,8 @@ export function useTowForm(
   // Storage
   const [customerStoredVehicles, setCustomerStoredVehicles] = useState<StoredVehicleWithCustomer[]>([])
   const [selectedStoredVehicleId, setSelectedStoredVehicleId] = useState<string | null>(null)
+  /** fromRequest only: pickup point was flagged is_storage (mirrors dropoffToStorage). */
+  const [pickupFromStorage, setPickupFromStorage] = useState(false)
   const [dropoffToStorage, setDropoffToStorage] = useState(false)
   /** Yard-confirm answers collected before create (no tow id yet). */
   const pendingStorageYardAnswersRef = useRef<StorageYardConfirmAnswer[]>([])
@@ -2674,6 +2676,11 @@ export function useTowForm(
           })
           setRouteStops(hydratedStops)
 
+          const pickupPoint = points.find((p) => p.point_type === 'pickup')
+          if (pickupPoint?.is_storage) {
+            setPickupFromStorage(true)
+          }
+
           const dropoffPoint = points.find((p) => p.point_type === 'dropoff')
           if (dropoffPoint?.is_storage) {
             setDropoffToStorage(true)
@@ -4034,6 +4041,7 @@ export function useTowForm(
     requiredTruckTypes,
     setTruckTypeError,
     truckTypeSectionRef,
+    pickupFromStorage,
     dropoffToStorage,
     hasStorageFollowUp,
     inheritCustomerOrderNumber,
@@ -4258,6 +4266,7 @@ export function useTowForm(
     // Storage
     customerStoredVehicles,
     selectedStoredVehicleId, setSelectedStoredVehicleId,
+    pickupFromStorage, setPickupFromStorage,
     dropoffToStorage, setDropoffToStorage,
     recordStorageYardAnswer,
     flushStorageYardConfirmLogs,
