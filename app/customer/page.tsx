@@ -19,6 +19,7 @@ import {
   getPortalListPlates,
 } from '@/app/lib/utils/portal-list-route'
 import { PortalPlateBadge } from '@/app/components/shared/PortalPlateBadge'
+import { PortalTowExportModal } from '@/app/customer/components/PortalTowExportModal'
 import {
   Truck,
   Clock,
@@ -28,7 +29,8 @@ import {
   ChevronRight,
   Search,
   Loader2,
-  Package
+  Package,
+  Sheet,
 } from 'lucide-react'
 
 /** Non-simple tow types only — empty for ordinary simple tows. */
@@ -78,6 +80,7 @@ export default function CustomerDashboard() {
   const [totalTows, setTotalTows] = useState(0)
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [exportModalOpen, setExportModalOpen] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(totalTows / CUSTOMER_PORTAL_TOW_PAGE_SIZE))
 
@@ -334,7 +337,26 @@ export default function CustomerDashboard() {
             </button>
           ))}
         </div>
+
+        {customerId && (
+          <button
+            type="button"
+            onClick={() => setExportModalOpen(true)}
+            className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap bg-white border transition-colors text-[#217346] border-[#217346] hover:bg-[#217346] hover:text-white"
+          >
+            <Sheet size={16} />
+            ייצוא לאקסל
+          </button>
+        )}
       </div>
+
+      {customerId && (
+        <PortalTowExportModal
+          open={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
+          customerId={customerId}
+        />
+      )}
 
       {/*
         Columns fill remaining height (md+). Internal lists scroll.
