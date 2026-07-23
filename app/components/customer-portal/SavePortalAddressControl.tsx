@@ -9,6 +9,11 @@ import {
 } from '@/app/lib/queries/customer-portal-addresses'
 import type { CustomerPortalAddress } from '@/app/lib/types'
 import type { AddressData } from '@/app/components/tow-forms/routes/AddressInput'
+import {
+  ADDRESS_FIELD_ACTION_BTN_ACTIVE_CLASS,
+  ADDRESS_FIELD_ACTION_BTN_CLASS,
+  ADDRESS_FIELD_ACTION_ICON_SIZE,
+} from '@/app/components/tow-forms/routes/addressFieldActions'
 
 interface SavePortalAddressControlProps {
   addressData: AddressData
@@ -20,6 +25,11 @@ interface SavePortalAddressControlProps {
   canEdit: boolean
   disabled?: boolean
   className?: string
+  /**
+   * `pill` — standalone text control (default).
+   * `icon` — square field action matching pin / link (for AddressInput extraActions).
+   */
+  variant?: 'pill' | 'icon'
 }
 
 /**
@@ -35,6 +45,7 @@ export function SavePortalAddressControl({
   canEdit,
   disabled = false,
   className = '',
+  variant = 'pill',
 }: SavePortalAddressControlProps) {
   const [promptOpen, setPromptOpen] = useState(false)
   const [label, setLabel] = useState('')
@@ -56,21 +67,6 @@ export function SavePortalAddressControl({
     addresses,
     canEdit
   )
-
-  if (nearby && !savedFlash) {
-    return (
-      <p
-        className={`text-xs text-gt-text-tertiary ${className}`}
-        dir="rtl"
-      >
-        כבר שמור כ־&quot;{nearby.label}&quot;
-      </p>
-    )
-  }
-
-  if (!offerSave && !savedFlash) {
-    return null
-  }
 
   const handleConfirm = async () => {
     if (!companyId || !customerId || !userId) return
@@ -108,6 +104,127 @@ export function SavePortalAddressControl({
     }
   }
 
+  const promptModal = promptOpen ? (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden" dir="rtl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white">
+          <h3 className="font-bold text-lg">שמירת כתובת</h3>
+          <button
+            type="button"
+            onClick={() => setPromptOpen(false)}
+            className="p-2 hover:bg-white/20 rounded-lg"
+            disabled={saving}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-gray-600 break-words">{addressData.address}</p>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">תווית *</label>
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="למשל: מוסך אבי"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
+              autoFocus
+              disabled={saving}
+            />
+          </div>
+          {error && (
+            <p className="text-xs text-gt-danger" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => setPromptOpen(false)}
+              className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
+              disabled={saving}
+            >
+              ביטול
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              className="flex-1 py-2.5 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] disabled:bg-gray-300"
+              disabled={saving || !label.trim()}
+            >
+              {saving ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'שמור'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  if (variant === 'icon') {
+    const alreadySaved = !!(nearby && !savedFlash) || savedFlash
+    const canOffer = offerSave || savedFlash
+    const title = alreadySaved
+      ? nearby
+        ? `כבר שמור כ־"${nearby.label}"`
+        : 'נשמר ברשימה'
+      : canOffer
+        ? 'שמור לרשימה'
+        : 'שמור לרשימה'
+
+    if (!canOffer && !alreadySaved) {
+      // Reserve the action slot so pin/link do not shift when save becomes available.
+      return <span className={`inline-block h-9 w-9 shrink-0 ${className}`} aria-hidden />
+    }
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            if (alreadySaved || disabled || saving) return
+            setPromptOpen(true)
+            setError('')
+            setLabel('')
+          }}
+          disabled={
+            disabled ||
+            saving ||
+            alreadySaved ||
+            !companyId ||
+            !customerId ||
+            !userId
+          }
+          title={title}
+          aria-label={title}
+          className={`${ADDRESS_FIELD_ACTION_BTN_CLASS} ${
+            alreadySaved ? ADDRESS_FIELD_ACTION_BTN_ACTIVE_CLASS : ''
+          } ${className}`}
+        >
+          {saving ? (
+            <Loader2 size={ADDRESS_FIELD_ACTION_ICON_SIZE} className="animate-spin" aria-hidden />
+          ) : alreadySaved ? (
+            <Check size={ADDRESS_FIELD_ACTION_ICON_SIZE} aria-hidden />
+          ) : (
+            <Plus size={ADDRESS_FIELD_ACTION_ICON_SIZE} aria-hidden />
+          )}
+        </button>
+        {promptModal}
+      </>
+    )
+  }
+
+  if (nearby && !savedFlash) {
+    return (
+      <p className={`text-xs text-gt-text-tertiary ${className}`} dir="rtl">
+        כבר שמור כ־&quot;{nearby.label}&quot;
+      </p>
+    )
+  }
+
+  if (!offerSave && !savedFlash) {
+    return null
+  }
+
   return (
     <div className={className} dir="rtl">
       <button
@@ -133,62 +250,7 @@ export function SavePortalAddressControl({
         )}
         {savedFlash ? 'נשמר ברשימה' : 'שמור לרשימה'}
       </button>
-
-      {promptOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 bg-[#33d4ff] text-white">
-              <h3 className="font-bold text-lg">שמירת כתובת</h3>
-              <button
-                type="button"
-                onClick={() => setPromptOpen(false)}
-                className="p-2 hover:bg-white/20 rounded-lg"
-                disabled={saving}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 space-y-3">
-              <p className="text-sm text-gray-600 break-words">{addressData.address}</p>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">תווית *</label>
-                <input
-                  type="text"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder="למשל: מוסך אבי"
-                  className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#33d4ff]"
-                  autoFocus
-                  disabled={saving}
-                />
-              </div>
-              {error && (
-                <p className="text-xs text-gt-danger" role="alert">
-                  {error}
-                </p>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPromptOpen(false)}
-                  className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100"
-                  disabled={saving}
-                >
-                  ביטול
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  className="flex-1 py-2.5 bg-[#33d4ff] text-white rounded-xl font-medium hover:bg-[#21b8e6] disabled:bg-gray-300"
-                  disabled={saving || !label.trim()}
-                >
-                  {saving ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'שמור'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {promptModal}
     </div>
   )
 }
