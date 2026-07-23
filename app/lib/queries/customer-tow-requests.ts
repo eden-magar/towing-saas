@@ -1,5 +1,7 @@
 import { supabase } from '../supabase'
 import { canSubmitOrdersViaPortal } from '../utils/portal-settings'
+import { canSubmitPortalOrders } from '../utils/portal-roles'
+import { getPortalMembershipRole } from './customer-portal-contacts'
 import type {
   CreateCustomerTowRequestInput,
   CreateCustomerTowRequestPointInput,
@@ -37,6 +39,17 @@ async function assertCustomerCanSubmitOrders(customerId: string): Promise<void> 
 
   if (!data || !canSubmitOrdersViaPortal((data.portal_settings as Record<string, boolean> | null) ?? {})) {
     throw new Error('ללקוח זה אין הרשאה להזמין גרירות דרך הפורטל')
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('אין הרשאה להזמין גרירות דרך הפורטל')
+  }
+  const role = await getPortalMembershipRole(user.id, customerId)
+  if (!canSubmitPortalOrders(role)) {
+    throw new Error('אין הרשאה להזמין גרירות דרך הפורטל')
   }
 }
 

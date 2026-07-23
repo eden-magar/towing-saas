@@ -16,6 +16,10 @@ import {
   type CustomerPortalStoredVehicle,
 } from '@/app/lib/queries/customer-portal'
 import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
+import {
+  canSubmitPortalOrders,
+  isCustomerUserRole,
+} from '@/app/lib/utils/portal-roles'
 
 export type PortalRequestBaseAddress = {
   address: string
@@ -69,7 +73,11 @@ export function PortalRequestBootstrapProvider({ children }: { children: ReactNo
 
         setCustomerId(info.customerId)
         setCompanyId(info.companyId)
-        setCanSubmit(canSubmitOrdersViaPortal(info.portalSettings))
+        setCanSubmit(
+          canSubmitOrdersViaPortal(info.portalSettings) &&
+            isCustomerUserRole(info.customerUserRole) &&
+            canSubmitPortalOrders(info.customerUserRole)
+        )
 
         if (info.companyId) {
           const yard = await getCompanyBaseAddressForCustomer()

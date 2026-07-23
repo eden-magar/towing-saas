@@ -17,6 +17,11 @@ import {
   PlusCircle,
 } from 'lucide-react'
 import { canSubmitOrdersViaPortal } from '@/app/lib/utils/portal-settings'
+import {
+  canManagePortalUsers,
+  canSubmitPortalOrders,
+  isCustomerUserRole,
+} from '@/app/lib/utils/portal-roles'
 
 interface CustomerInfo {
   customerId: string
@@ -97,10 +102,13 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
     { href: '/customer/users', label: 'משתמשים', icon: Users, adminOnly: true },
   ]
 
-  const canSubmitOrders = canSubmitOrdersViaPortal(customerInfo.portalSettings)
+  const canSubmitOrders =
+    canSubmitOrdersViaPortal(customerInfo.portalSettings) &&
+    isCustomerUserRole(customerInfo.customerUserRole) &&
+    canSubmitPortalOrders(customerInfo.customerUserRole)
 
   const visibleNavItems = navItems.filter((item) => {
-    if (item.adminOnly && customerInfo.customerUserRole !== 'admin') return false
+    if (item.adminOnly && !canManagePortalUsers(customerInfo.customerUserRole)) return false
     if (item.requiresSubmitOrders && !canSubmitOrders) return false
     return true
   })
