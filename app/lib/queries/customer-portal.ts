@@ -164,6 +164,106 @@ const CUSTOMER_TOW_LIST_SELECT = `
   )
 `
 
+/** List-shaped select + final_price for export. Omits notes / cancellation free-text. */
+const CUSTOMER_TOW_EXPORT_SELECT = `
+  id,
+  order_number,
+  customer_order_number,
+  status,
+  tow_type,
+  scheduled_at,
+  created_at,
+  started_at,
+  completed_at,
+  final_price,
+  visibility_overrides,
+  show_photos_override,
+  show_price_override,
+  show_driver_info_override,
+  show_driver_phone_override,
+  show_status_history_override,
+  show_vehicles_override,
+  show_notes_override,
+  vehicles:tow_vehicles (
+    plate_number,
+    manufacturer,
+    model,
+    color,
+    is_working
+  ),
+  points:tow_points (
+    id,
+    point_order,
+    point_type,
+    stop_subtype,
+    address,
+    status,
+    arrived_at,
+    completed_at
+  )
+`
+
+export type CustomerTowDateField = 'created_at' | 'scheduled_at'
+
+export type GetCustomerTowsOptions = {
+  /** Single status (list page). `cancelled` expands to cancelled + cancelled_charged. */
+  status?: string
+  /** Multi-status filter (export). When set, takes precedence over `status`. */
+  statuses?: string[]
+  from?: string
+  to?: string
+  /**
+   * Which timestamp `from`/`to` apply to.
+   * Default `created_at` — preserves existing callers.
+   */
+  dateField?: CustomerTowDateField
+  limit?: number
+  offset?: number
+}
+
+export type CustomerPortalTowExportRow = CustomerPortalTow & {
+  final_price: number | null
+  show_price_override?: boolean | null
+  show_photos_override?: boolean | null
+  show_driver_phone_override?: boolean | null
+  show_status_history_override?: boolean | null
+  show_vehicles_override?: boolean | null
+  show_notes_override?: boolean | null
+}
+
+const EXPORT_PAGE_SIZE = 100
+
+function applyCustomerTowFilters<
+  Q extends {
+    eq: (column: string, value: string) => Q
+    in: (column: string, values: string[]) => Q
+    gte: (column: string, value: string) => Q
+    lte: (column: string, value: string) => Q
+  },
+>(query: Q, options: GetCustomerTowsOptions): Q {
+  let next = query
+
+  if (options.statuses && options.statuses.length > 0) {
+    next = next.in('status', options.statuses)
+  } else if (options.status && options.status !== 'all') {
+    if (options.status === 'cancelled') {
+      next = next.in('status', ['cancelled', 'cancelled_charged'])
+    } else {
+      next = next.eq('status', options.status)
+    }
+  }
+
+  const dateField: CustomerTowDateField = options.dateField ?? 'created_at'
+  if (options.from) {
+    next = next.gte(dateField, options.from)
+  }
+  if (options.to) {
+    next = next.lte(dateField, options.to)
+  }
+
+  return next
+}
+
 type PortalDriverContact = { full_name: string; phone: string | null }
 
 async function fetchPortalSettingsForCustomer(
@@ -332,16 +432,10 @@ export type CustomerTowsPage = {
 
 export async function getCustomerTows(
   customerId: string,
-  options?: {
-    status?: string
-    from?: string
-    to?: string
-    limit?: number
-    offset?: number
-  }
+  options: GetCustomerTowsOptions = {}
 ): Promise<CustomerTowsPage> {
-  const limit = options?.limit ?? CUSTOMER_PORTAL_TOW_PAGE_SIZE
-  const offset = options?.offset ?? 0
+  const limit = options.limit ?? CUSTOMER_PORTAL_TOW_PAGE_SIZE
+  const offset = options.offset ?? 0
 
   let query = supabase
     .from('tows')
@@ -350,19 +444,7 @@ export async function getCustomerTows(
     .order('scheduled_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
 
-  if (options?.status && options.status !== 'all') {
-    if (options.status === 'cancelled') {
-      query = query.in('status', ['cancelled', 'cancelled_charged'])
-    } else {
-      query = query.eq('status', options.status)
-    }
-  }
-  if (options?.from) {
-    query = query.gte('created_at', options.from)
-  }
-  if (options?.to) {
-    query = query.lte('created_at', options.to)
-  }
+  query = applyCustomerTowFilters(query, options)
 
   const { data, error, count } = await query.range(offset, offset + limit - 1)
 
@@ -384,6 +466,81 @@ export async function getCustomerTows(
   const hasMore = count != null ? offset + tows.length < count : tows.length === limit
 
   return { tows, hasMore, total }
+}
+
+/** Exact matching count only — no row payload. */
+export async function countCustomerTows(
+  customerId: string,
+  options: Omit<GetCustomerTowsOptions, 'limit' | 'offset'> = {}
+): Promise<number> {
+  if (options.statuses && options.statuses.length === 0) {
+    return 0
+  }
+
+  let query = supabase
+    .from('tows')
+    .select('id', { count: 'exact', head: true })
+    .eq('customer_id', customerId)
+
+  query = applyCustomerTowFilters(query, options)
+
+  const { count, error } = await query
+
+  if (error) {
+    console.error('Error counting customer tows:', error)
+    return 0
+  }
+
+  return count ?? 0
+}
+
+/**
+ * All matching tows for portal Excel export.
+ * Pages via range/limit; does not strip vehicles (needed for plates/vehicle columns).
+ * Does not attach driver contacts (never exported).
+ */
+export async function fetchAllCustomerTowsForExport(
+  customerId: string,
+  options: Omit<GetCustomerTowsOptions, 'limit' | 'offset'> = {}
+): Promise<{ tows: CustomerPortalTowExportRow[]; portalSettings: Record<string, boolean> }> {
+  if (options.statuses && options.statuses.length === 0) {
+    return { tows: [], portalSettings: {} }
+  }
+
+  const portalSettings = await fetchPortalSettingsForCustomer(customerId)
+  const all: CustomerPortalTowExportRow[] = []
+  let offset = 0
+
+  for (;;) {
+    let query = supabase
+      .from('tows')
+      .select(CUSTOMER_TOW_EXPORT_SELECT)
+      .eq('customer_id', customerId)
+      .order('scheduled_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+
+    query = applyCustomerTowFilters(query, options)
+
+    const { data, error } = await query.range(offset, offset + EXPORT_PAGE_SIZE - 1)
+
+    if (error) {
+      console.error('Error fetching customer tows for export:', error)
+      throw error
+    }
+
+    const rows = data ?? []
+    for (const tow of rows) {
+      const mapped = mapCustomerPortalTow(tow) as CustomerPortalTowExportRow
+      mapped.final_price =
+        typeof tow.final_price === 'number' ? tow.final_price : tow.final_price ?? null
+      all.push(mapped)
+    }
+
+    if (rows.length < EXPORT_PAGE_SIZE) break
+    offset += EXPORT_PAGE_SIZE
+  }
+
+  return { tows: all, portalSettings }
 }
 
 // שליפת גרירה בודדת עם כל הפרטים
