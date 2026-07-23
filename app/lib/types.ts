@@ -149,6 +149,25 @@ export interface CustomerContactInput {
   notes?: string | null
 }
 
+/** Portal org contacts (`customer_portal_contacts`) — no notes column. */
+export interface CustomerPortalContact {
+  id: string
+  company_id: string
+  customer_id: string
+  name: string
+  phone: string | null
+  role_or_title: string | null
+  created_by_user_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerPortalContactInput {
+  name: string
+  phone?: string | null
+  role_or_title?: string | null
+}
+
 export interface CustomerAddress {
   id: string
   company_id: string
