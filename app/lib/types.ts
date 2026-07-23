@@ -168,6 +168,29 @@ export interface CustomerPortalContactInput {
   role_or_title?: string | null
 }
 
+/** Portal org addresses (`customer_portal_addresses`) — no notes; lat/lng required. */
+export interface CustomerPortalAddress {
+  id: string
+  company_id: string
+  customer_id: string
+  label: string
+  address: string
+  place_id: string | null
+  lat: number
+  lng: number
+  created_by_user_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomerPortalAddressInput {
+  label: string
+  address: string
+  lat: number
+  lng: number
+  place_id?: string | null
+}
+
 export interface CustomerAddress {
   id: string
   company_id: string
