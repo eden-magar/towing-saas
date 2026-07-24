@@ -124,6 +124,8 @@ import {
   isPickableStoredVehicle,
 } from '../../../lib/queries/storage'
 import { logManualActionItem } from '../../../lib/queries/manual-action-items'
+import { linkConvertedTowOrCompensate } from '../../../lib/queries/customer-tow-requests'
+import { getPendingCancellationRequestForRequest } from '../../../lib/queries/customer-tow-cancellation-requests'
 import {
   CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE,
   isCustomTowEditWipeBlocked,
@@ -2086,6 +2088,19 @@ function CreateTowForm({
     setSaving(true)
     setError('')
     try {
+      // Same convert-flow guard as useTowSave: refuse BEFORE creating a quote
+      // if the customer has a pending Path-B withdrawal on this portal order.
+      if (fromRequestId && companyId) {
+        const pendingCancel = await getPendingCancellationRequestForRequest(fromRequestId)
+        if (pendingCancel) {
+          setError(
+            'לא ניתן להמיר לגרירה — יש בקשת ביטול ממתינה מהלקוח. יש לטפל בבקשת הביטול תחילה.'
+          )
+          setSaving(false)
+          return
+        }
+      }
+
       await persistTowCustomerContacts()
       const savedAddressCount = await persistTowCustomerAddresses()
 
@@ -2296,6 +2311,13 @@ function CreateTowForm({
       } else {
         const quoteResult = await createTow({ ...towData, status: 'quote' as const })
         quoteTowId = quoteResult.id
+        if (fromRequestId && companyId) {
+          await linkConvertedTowOrCompensate({
+            companyId,
+            requestId: fromRequestId,
+            towId: quoteResult.id,
+          })
+        }
         try {
           await flushStorageYardConfirmLogs(quoteTowId)
         } catch (yardLogErr) {
@@ -2349,12 +2371,13 @@ function CreateTowForm({
       }
     } catch (err) {
       console.error(err)
-      setError('שגיאה בשמירת ההצעה')
+      setError(err instanceof Error ? err.message : 'שגיאה בשמירת ההצעה')
     } finally {
       setSaving(false)
     }
   }, [
     companyId,
+    fromRequestId,
     user,
     towType,
     requiredTruckTypes,

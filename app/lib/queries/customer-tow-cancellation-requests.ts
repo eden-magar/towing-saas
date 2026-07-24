@@ -30,22 +30,34 @@ export type CustomerTowCancellationRequest = {
 /** Substring from prevent_assign_while_cancel_pending() RAISE EXCEPTION. */
 export const PENDING_CANCEL_ASSIGN_BLOCK_MARKER = 'יש בקשת ביטול ממתינה מהלקוח'
 
+/** Substring from prevent_convert_while_cancel_pending() RAISE EXCEPTION. */
+export const PENDING_CANCEL_CONVERT_BLOCK_MARKER = 'לא ניתן להמיר לגרירה'
+
+function errorTextBlob(err: unknown): string {
+  if (!err || typeof err !== 'object') {
+    return typeof err === 'string' ? err : ''
+  }
+  const e = err as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown }
+  return [e.message, e.details, e.hint]
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+}
+
 /**
  * Detect the assignment-block trigger specifically.
  * Matches the Hebrew marker (stable) and optionally Postgres check_violation (23514).
  * Does not treat every assign failure as a cancel block.
  */
 export function isPendingCancelAssignBlockError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return false
-  const e = err as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown }
-  const parts = [e.message, e.details, e.hint]
-    .filter((v): v is string => typeof v === 'string')
-    .join(' ')
-  if (!parts.includes(PENDING_CANCEL_ASSIGN_BLOCK_MARKER)) return false
-  if (typeof e.code === 'string' && e.code !== '' && e.code !== '23514') {
-    // Still accept if the marker is present — PostgREST sometimes remaps codes.
-  }
-  return true
+  return errorTextBlob(err).includes(PENDING_CANCEL_ASSIGN_BLOCK_MARKER)
+}
+
+/**
+ * Detect the convert-block trigger specifically (Path B withdrawal during convert).
+ * Matches the Hebrew marker from prevent_convert_while_cancel_pending().
+ */
+export function isPendingCancelConvertBlockError(err: unknown): boolean {
+  return errorTextBlob(err).includes(PENDING_CANCEL_CONVERT_BLOCK_MARKER)
 }
 
 export async function isPortalOriginTow(

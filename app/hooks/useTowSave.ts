@@ -29,7 +29,7 @@ import type { ManualSurcharge } from '../lib/utils/manual-surcharge'
 import { RoutePoint } from '../components/tow-forms/routes'
 import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib/queries/driver-truck-assignments'
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
-import { markCustomerTowRequestConverted } from '../lib/queries/customer-tow-requests'
+import { linkConvertedTowOrCompensate } from '../lib/queries/customer-tow-requests'
 import { getPendingCancellationRequestForRequest } from '../lib/queries/customer-tow-cancellation-requests'
 import { serializeDefects } from '../lib/constants/defects'
 import {
@@ -907,6 +907,16 @@ export function useTowSave(params: UseTowSaveParams) {
 
       const result = await createTow(towData)
 
+      // Link portal order before reservations / follow-up / calendar sync so a
+      // failed mark + compensate cancel does not leave those side effects behind.
+      if (fromRequestId && companyId) {
+        await linkConvertedTowOrCompensate({
+          companyId,
+          requestId: fromRequestId,
+          towId: result.id,
+        })
+      }
+
       try {
         await flushStorageYardConfirmLogs?.(result.id)
       } catch (yardLogErr) {
@@ -967,15 +977,6 @@ export function useTowSave(params: UseTowSaveParams) {
         (towData.driverId ? 'assigned' : 'pending')
       if (createdStatus !== 'quote') {
         void syncTowToLegacyCalendar(result.id)
-      }
-
-      if (fromRequestId && companyId) {
-        try {
-          await markCustomerTowRequestConverted(companyId, fromRequestId, result.id)
-        } catch (convertErr) {
-          console.error('Failed to mark customer tow request as converted:', convertErr)
-          setSaveWarning?.('הגרירה נוצרה, אך סימון הבקשה כטופלה נכשל — רענן ובדוק')
-        }
       }
 
       setSavedTowId(result.id)

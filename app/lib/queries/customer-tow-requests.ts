@@ -2,6 +2,9 @@ import { supabase } from '../supabase'
 import { canSubmitOrdersViaPortal } from '../utils/portal-settings'
 import { canSubmitPortalOrders } from '../utils/portal-roles'
 import { getPortalMembershipRole } from './customer-portal-contacts'
+import { isPendingCancelConvertBlockError } from './customer-tow-cancellation-requests'
+import { logManualActionItem } from './manual-action-items'
+import { updateTowStatus } from './tows'
 import type {
   CreateCustomerTowRequestInput,
   CreateCustomerTowRequestPointInput,
@@ -16,6 +19,14 @@ import type {
   CustomerTowRequestVehicle,
   CustomerTowRequestWithDetails,
 } from '../types'
+
+/** Mark failed because customer withdrew (prevent_convert_while_cancel_pending). */
+export const PORTAL_CONVERT_WITHDRAWAL_BLOCK_MESSAGE =
+  'הלקוח משך את ההזמנה (בקשת ביטול ממתינה) — הגרירה לא נוצרה.'
+
+/** Mark failed for any other reason; orphan tow was cancelled as compensation. */
+export const PORTAL_CONVERT_LINK_FAILED_MESSAGE =
+  'קישור הבקשה לגרירה נכשל — הגרירה שבוטלה. נסו שוב.'
 
 function requireTrimmed(value: string, fieldLabel: string): string {
   const trimmed = value.trim()
@@ -217,6 +228,92 @@ export async function markCustomerTowRequestConverted(
   }
 
   return data as CustomerTowRequest
+}
+
+function errMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object' && 'message' in err) {
+    const m = (err as { message?: unknown }).message
+    if (typeof m === 'string') return m
+  }
+  return String(err ?? 'unknown')
+}
+
+/**
+ * After createTow: link the portal order, or cancel the just-created tow so it
+ * cannot be dispatched / billed as an orphan. Throws a hard Error for the UI
+ * (never a dismissible warning). No-op concerns stay with the caller — only
+ * invoke when fromRequestId is set.
+ */
+export async function linkConvertedTowOrCompensate(params: {
+  companyId: string
+  requestId: string
+  towId: string
+}): Promise<void> {
+  const { companyId, requestId, towId } = params
+
+  try {
+    await markCustomerTowRequestConverted(companyId, requestId, towId)
+    return
+  } catch (convertErr) {
+    console.error(
+      '[linkConvertedTowOrCompensate] mark converted failed:',
+      convertErr
+    )
+
+    // Rare: PostgREST error after the UPDATE committed.
+    const { data: request } = await supabase
+      .from('customer_tow_requests')
+      .select('id, status, converted_tow_id')
+      .eq('id', requestId)
+      .eq('company_id', companyId)
+      .maybeSingle()
+
+    if (request?.status === 'converted' && request.converted_tow_id === towId) {
+      return
+    }
+
+    const isWithdrawal = isPendingCancelConvertBlockError(convertErr)
+    const cancelReason = isWithdrawal
+      ? 'הלקוח משך את הזמנת הפורטל לפני השלמת ההמרה'
+      : 'קישור לבקשת פורטל נכשל לאחר יצירת הגרירה'
+
+    try {
+      await updateTowStatus(towId, 'cancelled', cancelReason)
+    } catch (cancelErr) {
+      console.error(
+        '[linkConvertedTowOrCompensate] compensate cancel failed:',
+        cancelErr
+      )
+      await logManualActionItem({
+        type: 'portal_convert_link_failed',
+        severity: 'high',
+        companyId,
+        towId,
+        relatedEntity: requestId,
+        message:
+          'גרירה נוצרה אך לא קושרה לבקשת פורטל, וביטול הפיצוי נכשל — נדרש טיפול ידני',
+        details: {
+          requestId,
+          convertError: errMessage(convertErr),
+          cancelError: errMessage(cancelErr),
+          isWithdrawal,
+          source: 'linkConvertedTowOrCompensate',
+        },
+      })
+      throw new Error(
+        isWithdrawal
+          ? PORTAL_CONVERT_WITHDRAWAL_BLOCK_MESSAGE
+          : 'קישור הבקשה לגרירה נכשל והגרירה שנוצרה לא בוטלה אוטומטית — בדקו ברשימת הגרירות.'
+      )
+    }
+
+    throw new Error(
+      isWithdrawal
+        ? PORTAL_CONVERT_WITHDRAWAL_BLOCK_MESSAGE
+        : PORTAL_CONVERT_LINK_FAILED_MESSAGE
+    )
+  }
 }
 
 export async function dismissCustomerTowRequest(
