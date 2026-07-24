@@ -222,6 +222,72 @@ export async function getLatestCancellationRequestForTow(
   return (data as CustomerTowCancellationRequest) || null
 }
 
+/** Latest cancellation row for a portal order (Path B), any status. */
+export async function getLatestCancellationRequestForRequest(
+  customerTowRequestId: string
+): Promise<CustomerTowCancellationRequest | null> {
+  const { data, error } = await supabase
+    .from('customer_tow_cancellation_requests')
+    .select('*')
+    .eq('customer_tow_request_id', customerTowRequestId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching latest request cancellation:', error)
+    return null
+  }
+  return (data as CustomerTowCancellationRequest) || null
+}
+
+/**
+ * Pending Path-B cancellation request ids for a set of portal orders.
+ * Used by the portal home list to show "ממתינה לאישור ביטול" without N+1.
+ */
+export async function getPendingCancellationRequestIdsForOrders(
+  requestIds: string[]
+): Promise<Set<string>> {
+  if (requestIds.length === 0) return new Set()
+  const { data, error } = await supabase
+    .from('customer_tow_cancellation_requests')
+    .select('customer_tow_request_id')
+    .in('customer_tow_request_id', requestIds)
+    .eq('status', 'pending')
+
+  if (error) {
+    console.error('Error fetching pending order cancellation ids:', error)
+    return new Set()
+  }
+  return new Set(
+    (data ?? [])
+      .map((r) => r.customer_tow_request_id)
+      .filter((v): v is string => !!v)
+  )
+}
+
+/**
+ * Pending Path-A cancellation tow ids for the current page of portal tows.
+ */
+export async function getPendingCancellationTowIds(
+  towIds: string[]
+): Promise<Set<string>> {
+  if (towIds.length === 0) return new Set()
+  const { data, error } = await supabase
+    .from('customer_tow_cancellation_requests')
+    .select('tow_id')
+    .in('tow_id', towIds)
+    .eq('status', 'pending')
+
+  if (error) {
+    console.error('Error fetching pending tow cancellation ids:', error)
+    return new Set()
+  }
+  return new Set(
+    (data ?? []).map((r) => r.tow_id).filter((v): v is string => !!v)
+  )
+}
+
 export async function countPendingCancellationRequests(
   companyId: string
 ): Promise<number> {

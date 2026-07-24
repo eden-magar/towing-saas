@@ -14,7 +14,7 @@ import { getCustomerForUser } from '@/app/lib/queries/customer-portal'
 import { getFullCustomerTowRequest } from '@/app/lib/queries/customer-tow-requests'
 import {
   requestPendingCustomerTowRequestCancellation,
-  getPendingCancellationRequestForRequest,
+  getLatestCancellationRequestForRequest,
   withdrawCustomerTowCancellationRequest,
   type CustomerTowCancellationRequest,
 } from '@/app/lib/queries/customer-tow-cancellation-requests'
@@ -138,12 +138,13 @@ export default function CustomerRequestDetailPage() {
 
   const [userRole, setUserRole] = useState<string>('viewer')
   const [request, setRequest] = useState<CustomerTowRequestFull | null>(null)
-  const [pendingCancel, setPendingCancel] =
+  const [latestCancel, setLatestCancel] =
     useState<CustomerTowCancellationRequest | null>(null)
   const [loading, setLoading] = useState(true)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelBusy, setCancelBusy] = useState(false)
   const [cancelError, setCancelError] = useState('')
+  const [cancelReason, setCancelReason] = useState('')
   const [withdrawBusy, setWithdrawBusy] = useState(false)
 
   const canCancel = canSubmitPortalOrders(userRole)
@@ -152,10 +153,10 @@ export default function CustomerRequestDetailPage() {
     if (!requestId) return
     const [data, cancel] = await Promise.all([
       getFullCustomerTowRequest(requestId),
-      getPendingCancellationRequestForRequest(requestId),
+      getLatestCancellationRequestForRequest(requestId),
     ])
     setRequest(data)
-    setPendingCancel(cancel)
+    setLatestCancel(cancel)
   }, [requestId])
 
   useEffect(() => {
@@ -215,8 +216,10 @@ export default function CustomerRequestDetailPage() {
         customerId: request.request.customer_id,
         customerTowRequestId: requestId,
         requestedByUserId: user.id,
+        reasonNote: cancelReason,
       })
       setShowCancelConfirm(false)
+      setCancelReason('')
       await reload()
     } catch (err) {
       console.error('Error requesting pending cancellation:', err)
@@ -231,10 +234,10 @@ export default function CustomerRequestDetailPage() {
   }
 
   const handleWithdrawCancel = async () => {
-    if (!pendingCancel) return
+    if (!latestCancel || latestCancel.status !== 'pending') return
     setWithdrawBusy(true)
     try {
-      await withdrawCustomerTowCancellationRequest(pendingCancel.id)
+      await withdrawCustomerTowCancellationRequest(latestCancel.id)
       await reload()
     } catch (err) {
       console.error('Error withdrawing cancellation request:', err)
@@ -247,6 +250,10 @@ export default function CustomerRequestDetailPage() {
   const isPending = status === 'pending'
   const isDismissed = status === 'dismissed'
   const chip = statusChip(status)
+  const pendingCancel =
+    latestCancel?.status === 'pending' ? latestCancel : null
+  const rejectedCancel =
+    !pendingCancel && latestCancel?.status === 'rejected' ? latestCancel : null
   const hasPendingCancel = !!pendingCancel
   // Trigger only when withdrawable and not already awaiting a decision.
   const showCancelAction = isPending && canCancel && !hasPendingCancel
@@ -329,6 +336,7 @@ export default function CustomerRequestDetailPage() {
               type="button"
               onClick={() => {
                 setCancelError('')
+                setCancelReason('')
                 setShowCancelConfirm(true)
               }}
               className="inline-flex items-center gap-1.5 self-start shrink-0 px-3.5 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-colors"
@@ -342,12 +350,17 @@ export default function CustomerRequestDetailPage() {
 
       {isDismissed && (
         <div className={PORTAL_ERROR_BANNER_CLASS}>
-          <p>בקשה זו בוטלה ולא תומר לגרירה</p>
+          <p className="font-medium">החברה אישרה את הביטול — ההזמנה בוטלה ולא תומר לגרירה</p>
+          {latestCancel?.status === 'approved' && latestCancel.reason_note?.trim() && (
+            <p className="mt-1 text-sm opacity-90 whitespace-pre-wrap">
+              {latestCancel.reason_note.trim()}
+            </p>
+          )}
         </div>
       )}
 
       {/* Pending withdrawal — awaiting staff decision; offer to undo */}
-      {isPending && hasPendingCancel && (
+      {isPending && pendingCancel && (
         <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium text-amber-900">
@@ -356,6 +369,11 @@ export default function CustomerRequestDetailPage() {
             <p className="text-xs text-amber-800/80 mt-0.5">
               ההזמנה תיוותר פעילה עד שנציג יאשר את הביטול.
             </p>
+            {pendingCancel.reason_note?.trim() && (
+              <p className="text-sm text-amber-800 mt-1 whitespace-pre-wrap break-words">
+                {pendingCancel.reason_note.trim()}
+              </p>
+            )}
           </div>
           {canCancel && (
             <button
@@ -364,9 +382,20 @@ export default function CustomerRequestDetailPage() {
               disabled={withdrawBusy}
               className="shrink-0 self-start px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-xs font-medium text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50"
             >
-              {withdrawBusy ? 'מבטל...' : 'ביטול בקשת הביטול'}
+              {withdrawBusy ? 'מבטל...' : 'משיכת הבקשה'}
             </button>
           )}
+        </div>
+      )}
+
+      {isPending && rejectedCancel && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+          <p className="text-sm font-medium text-red-800">
+            בקשת הביטול נדחתה — ההזמנה עדיין פעילה
+          </p>
+          <p className="text-sm text-red-700 mt-1">
+            ניתן לפנות לחברה לבירור נוסף, או לשלוח בקשת ביטול חדשה.
+          </p>
         </div>
       )}
 
@@ -539,9 +568,17 @@ export default function CustomerRequestDetailPage() {
                 <Trash2 size={32} className="text-red-600" />
               </div>
               <h2 className="text-lg font-bold text-gray-800 mb-2">ביטול הבקשה</h2>
-              <p className="text-gray-600">
-                בקשת ביטול תישלח לחברה לאישור. ההזמנה תיוותר פעילה עד שנציג יאשר. להמשיך?
+              <p className="text-gray-600 mb-3">
+                בקשת ביטול תישלח לחברה לאישור. ההזמנה תיוותר פעילה עד שנציג יאשר.
               </p>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                placeholder="סיבה (אופציונלי)"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-right"
+                disabled={cancelBusy}
+              />
               {cancelError && (
                 <p className="mt-3 text-sm text-red-600">{cancelError}</p>
               )}
@@ -553,6 +590,7 @@ export default function CustomerRequestDetailPage() {
                   if (cancelBusy) return
                   setShowCancelConfirm(false)
                   setCancelError('')
+                  setCancelReason('')
                 }}
                 disabled={cancelBusy}
                 className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"

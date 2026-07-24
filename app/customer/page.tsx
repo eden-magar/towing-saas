@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getCustomerForUser, getCustomerTows, searchCustomerTows, getCustomerStats, CUSTOMER_PORTAL_TOW_PAGE_SIZE } from '@/app/lib/queries/customer-portal'
 import { getCustomerTowRequests } from '@/app/lib/queries/customer-tow-requests'
+import {
+  getPendingCancellationRequestIdsForOrders,
+  getPendingCancellationTowIds,
+} from '@/app/lib/queries/customer-tow-cancellation-requests'
 import type {
   CustomerPortalRequestListItem,
   CustomerPortalTow,
@@ -56,11 +60,28 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   cancelled_charged: { label: 'בוטל בחיוב', color: 'text-amber-900', bg: 'bg-amber-50 border-amber-300', icon: AlertCircle },
 }
 
-const pendingRequestBadge = {
-  label: 'ממתין לאישור החברה',
-  color: 'text-amber-800',
-  bg: 'bg-amber-50 border-amber-300',
-  icon: Clock,
+const portalOrderStatusBadge: Record<
+  string,
+  { label: string; color: string; bg: string; icon: typeof Clock }
+> = {
+  pending: {
+    label: 'ממתינה לאישור',
+    color: 'text-amber-800',
+    bg: 'bg-amber-50 border-amber-300',
+    icon: Clock,
+  },
+  cancel_pending: {
+    label: 'ממתינה לאישור ביטול',
+    color: 'text-amber-900',
+    bg: 'bg-amber-100 border-amber-400',
+    icon: AlertCircle,
+  },
+  dismissed: {
+    label: 'בוטלה',
+    color: 'text-red-800',
+    bg: 'bg-red-50 border-red-300',
+    icon: AlertCircle,
+  },
 }
 
 /** Scrollable card list — needs a height-bounded flex parent (see layout + page shell). */
@@ -105,7 +126,9 @@ export default function CustomerDashboard() {
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
   const [customerUserRole, setCustomerUserRole] = useState<CustomerUserRole | null>(null)
   const [tows, setTows] = useState<CustomerPortalTow[]>([])
-  const [pendingRequests, setPendingRequests] = useState<CustomerPortalRequestListItem[]>([])
+  const [portalOrders, setPortalOrders] = useState<CustomerPortalRequestListItem[]>([])
+  const [cancelPendingOrderIds, setCancelPendingOrderIds] = useState<Set<string>>(new Set())
+  const [cancelPendingTowIds, setCancelPendingTowIds] = useState<Set<string>>(new Set())
   const [stats, setStats] = useState({ total: 0, active: 0, completed: 0, pending: 0 })
   const [loading, setLoading] = useState(true)
   const [pageLoading, setPageLoading] = useState(false)
@@ -142,8 +165,17 @@ export default function CustomerDashboard() {
         getCustomerTowRequests(info.customerId),
       ])
 
+      // Keep pending + dismissed visible; converted orders live in the tows list.
+      const visibleOrders = requestsData.filter(
+        (r) => r.status === 'pending' || r.status === 'dismissed'
+      )
       setStats(statsData)
-      setPendingRequests(requestsData.filter((r) => r.status === 'pending'))
+      setPortalOrders(visibleOrders)
+      setCancelPendingOrderIds(
+        await getPendingCancellationRequestIdsForOrders(
+          visibleOrders.filter((r) => r.status === 'pending').map((r) => r.id)
+        )
+      )
       setLoading(false)
     }
 
@@ -181,6 +213,9 @@ export default function CustomerDashboard() {
         setTows(nextTows)
         setTotalTows(total)
         setSearchCapped(capped)
+        setCancelPendingTowIds(
+          await getPendingCancellationTowIds(nextTows.map((t) => t.id))
+        )
 
         const pages = Math.max(1, Math.ceil(total / CUSTOMER_PORTAL_TOW_PAGE_SIZE))
         if (page > pages) {
@@ -201,18 +236,28 @@ export default function CustomerDashboard() {
   useEffect(() => {
     if (!customerId) return
 
-    const refreshPendingRequests = () => {
-      getCustomerTowRequests(customerId).then((requests) => {
-        setPendingRequests(requests.filter((r) => r.status === 'pending'))
-      })
+    const refreshPortalOrders = async () => {
+      const requests = await getCustomerTowRequests(customerId)
+      const visibleOrders = requests.filter(
+        (r) => r.status === 'pending' || r.status === 'dismissed'
+      )
+      setPortalOrders(visibleOrders)
+      setCancelPendingOrderIds(
+        await getPendingCancellationRequestIdsForOrders(
+          visibleOrders.filter((r) => r.status === 'pending').map((r) => r.id)
+        )
+      )
     }
 
     const refreshTows = () => {
       fetchCustomerTowsPage(customerId, page, statusFilter, debouncedSearch).then(
-        ({ tows: nextTows, total, capped }) => {
+        async ({ tows: nextTows, total, capped }) => {
           setTows(nextTows)
           setTotalTows(total)
           setSearchCapped(capped)
+          setCancelPendingTowIds(
+            await getPendingCancellationTowIds(nextTows.map((t) => t.id))
+          )
         }
       )
       getCustomerStats(customerId).then(setStats)
@@ -224,8 +269,16 @@ export default function CustomerDashboard() {
         refreshTows()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_tow_requests' }, () => {
-        refreshPendingRequests()
+        void refreshPortalOrders()
       })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customer_tow_cancellation_requests' },
+        () => {
+          void refreshPortalOrders()
+          refreshTows()
+        }
+      )
       .subscribe()
 
     return () => {
@@ -397,21 +450,28 @@ export default function CustomerDashboard() {
         On mobile the page/main scrolls instead (no nested scroller).
       */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start md:min-h-0 md:flex-1 md:overflow-hidden md:items-stretch">
-        {/* Pending */}
+        {/* Portal orders — pending + dismissed (converted live in the tows list) */}
         <div className="min-w-0 flex flex-col gap-2 md:min-h-0 md:overflow-hidden">
           <h2 className="shrink-0 text-sm font-bold text-gray-900 px-1">
-            ממתין לאישור החברה
-            <span className="text-sm font-semibold text-amber-700 mr-2">({pendingRequests.length})</span>
+            הזמנות פורטל
+            <span className="text-sm font-semibold text-amber-700 mr-2">({portalOrders.length})</span>
           </h2>
           <div className={`${PORTAL_LIST_SCROLL} max-md:flex-none max-md:overflow-visible`}>
-            {pendingRequests.length === 0 ? (
+            {portalOrders.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
                 <Clock size={40} className="mx-auto text-gray-300 mb-2" />
-                <p className="text-gray-500 text-sm">אין בקשות ממתינות</p>
+                <p className="text-gray-500 text-sm">אין הזמנות פורטל</p>
               </div>
             ) : (
-              pendingRequests.map((req) => {
-                const PendingIcon = pendingRequestBadge.icon
+              portalOrders.map((req) => {
+                const badgeKey =
+                  req.status === 'dismissed'
+                    ? 'dismissed'
+                    : cancelPendingOrderIds.has(req.id)
+                      ? 'cancel_pending'
+                      : 'pending'
+                const badge = portalOrderStatusBadge[badgeKey]
+                const BadgeIcon = badge.icon
                 const { from, to } = getFirstPickupLastDropoffAddress(req.points)
                 const listPlates = getPortalListPlates(req.tow_type, req.vehicles)
                 const platesOnOwnLine = listPlates.length > 1
@@ -423,7 +483,11 @@ export default function CustomerDashboard() {
                     key={req.id}
                     type="button"
                     onClick={() => router.push(`/customer/requests/${req.id}`)}
-                    className="w-full bg-white rounded-xl border border-gray-200 shadow-sm px-3.5 py-2.5 text-right hover:border-amber-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 transition-all"
+                    className={`w-full bg-white rounded-xl border shadow-sm px-3.5 py-2.5 text-right hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 transition-all ${
+                      req.status === 'dismissed'
+                        ? 'border-red-200 hover:border-red-300 focus-visible:ring-red-500'
+                        : 'border-gray-200 hover:border-amber-300 focus-visible:ring-amber-500'
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center gap-1.5 min-w-0 flex-nowrap overflow-hidden">
@@ -431,9 +495,9 @@ export default function CustomerDashboard() {
                           listPlates.map((plate) => (
                             <PortalPlateBadge key={plate} plate={plate} />
                           ))}
-                        <span className={`inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${pendingRequestBadge.bg} ${pendingRequestBadge.color}`}>
-                          <PendingIcon size={12} />
-                          {pendingRequestBadge.label}
+                        <span className={`inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${badge.bg} ${badge.color}`}>
+                          <BadgeIcon size={12} />
+                          {badge.label}
                         </span>
                         {requestTypeLabel && (
                           <span className="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
@@ -560,6 +624,11 @@ export default function CustomerDashboard() {
                               <StatusIcon size={12} />
                               {config.label}
                             </span>
+                            {cancelPendingTowIds.has(tow.id) && !isCancelled && (
+                              <span className="inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-100 text-amber-900 border-amber-400">
+                                ממתינה לאישור ביטול
+                              </span>
+                            )}
                             {typeLabel && (
                               <span className="inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
                                 {typeLabel}
