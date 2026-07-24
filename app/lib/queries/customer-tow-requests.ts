@@ -2,7 +2,10 @@ import { supabase } from '../supabase'
 import { canSubmitOrdersViaPortal } from '../utils/portal-settings'
 import { canSubmitPortalOrders } from '../utils/portal-roles'
 import { getPortalMembershipRole } from './customer-portal-contacts'
-import { isPendingCancelConvertBlockError } from './customer-tow-cancellation-requests'
+import {
+  isPendingCancelConvertBlockError,
+  type CustomerTowCancellationRequest,
+} from './customer-tow-cancellation-requests'
 import { logManualActionItem } from './manual-action-items'
 import { updateTowStatus } from './tows'
 import type {
@@ -534,4 +537,125 @@ export async function getFullCustomerTowRequest(
     points: (points ?? []) as CustomerTowRequestPoint[],
     pointVehicles: (pointVehicles ?? []) as CustomerTowRequestPointVehicle[],
   }
+}
+
+/** Cancellation row with display names for the staff customer-card modal. */
+export type StaffPortalOrderCancellation = CustomerTowCancellationRequest & {
+  requesterName: string | null
+  reviewerName: string | null
+}
+
+/** One portal order for the staff customer card — all statuses. */
+export type StaffCustomerPortalOrder = {
+  request: CustomerTowRequest
+  vehicles: CustomerTowRequestVehicle[]
+  points: CustomerTowRequestPoint[]
+  cancellations: StaffPortalOrderCancellation[]
+  /** When converted: tow order_number for the link label. */
+  convertedTowOrderNumber: string | null
+}
+
+/**
+ * Staff: every portal order for a customer in this company, with vehicles,
+ * points, and the full cancellation history (requester + reviewer names).
+ * Relies on existing company-staff SELECT RLS — no new policies.
+ */
+export async function getStaffCustomerPortalOrders(
+  companyId: string,
+  customerId: string
+): Promise<StaffCustomerPortalOrder[]> {
+  const { data: requests, error } = await supabase
+    .from('customer_tow_requests')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching staff customer portal orders:', error)
+    throw error
+  }
+  if (!requests || requests.length === 0) return []
+
+  const requestIds = requests.map((r) => r.id)
+  const convertedTowIds = requests
+    .map((r) => r.converted_tow_id)
+    .filter((v): v is string => !!v)
+
+  const [
+    { data: vehicles },
+    { data: points },
+    { data: cancellations },
+    { data: tows },
+  ] = await Promise.all([
+    supabase
+      .from('customer_tow_request_vehicles')
+      .select('*')
+      .in('request_id', requestIds)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('customer_tow_request_points')
+      .select('*')
+      .in('request_id', requestIds)
+      .order('point_order', { ascending: true }),
+    supabase
+      .from('customer_tow_cancellation_requests')
+      .select('*')
+      .in('customer_tow_request_id', requestIds)
+      .order('created_at', { ascending: false }),
+    convertedTowIds.length
+      ? supabase
+          .from('tows')
+          .select('id, order_number')
+          .in('id', convertedTowIds)
+      : Promise.resolve({ data: [] as { id: string; order_number: string | null }[] }),
+  ])
+
+  const userIds = new Set<string>()
+  for (const c of cancellations ?? []) {
+    if (c.requested_by_user_id) userIds.add(c.requested_by_user_id)
+    if (c.reviewed_by) userIds.add(c.reviewed_by)
+  }
+
+  const { data: users } =
+    userIds.size > 0
+      ? await supabase
+          .from('users')
+          .select('id, full_name')
+          .in('id', [...userIds])
+      : { data: [] as { id: string; full_name: string | null }[] }
+
+  const nameById = new Map(
+    (users ?? []).map((u) => [u.id, u.full_name ?? null] as const)
+  )
+  const towNumberById = new Map(
+    (tows ?? []).map((t) => [t.id, t.order_number ?? null] as const)
+  )
+
+  return requests.map((row) => {
+    const id = row.id as string
+    const cancels = (cancellations ?? []).filter(
+      (c) => c.customer_tow_request_id === id
+    ) as CustomerTowCancellationRequest[]
+
+    return {
+      request: row as CustomerTowRequest,
+      vehicles: ((vehicles ?? []) as CustomerTowRequestVehicle[]).filter(
+        (v) => v.request_id === id
+      ),
+      points: ((points ?? []) as CustomerTowRequestPoint[]).filter(
+        (p) => p.request_id === id
+      ),
+      cancellations: cancels.map((c) => ({
+        ...c,
+        requesterName: nameById.get(c.requested_by_user_id) ?? null,
+        reviewerName: c.reviewed_by
+          ? nameById.get(c.reviewed_by) ?? null
+          : null,
+      })),
+      convertedTowOrderNumber: row.converted_tow_id
+        ? towNumberById.get(row.converted_tow_id) ?? null
+        : null,
+    }
+  })
 }

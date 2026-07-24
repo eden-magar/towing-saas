@@ -73,6 +73,11 @@ import {
 import { PhoneInput } from '@/app/components/ui/PhoneInput'
 import { AddressInput, type AddressData } from '@/app/components/tow-forms/routes/AddressInput'
 import { PinDropModal } from '@/app/components/tow-forms/shared/PinDropModal'
+import {
+  getStaffCustomerPortalOrders,
+  type StaffCustomerPortalOrder,
+} from '@/app/lib/queries/customer-tow-requests'
+import { PortalOrdersSection } from './PortalOrdersSection'
 
 interface CustomerDetail {
   id: string
@@ -112,9 +117,10 @@ export default function CustomerDetailPage() {
   const [customerContacts, setCustomerContacts] = useState<CustomerContact[]>([])
   const [customerAddresses, setCustomerAddresses] = useState<CustomerAddress[]>([])
   const [customerOrderers, setCustomerOrderers] = useState<CustomerOrderer[]>([])
+  const [portalOrders, setPortalOrders] = useState<StaffCustomerPortalOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<
-    'info' | 'contacts' | 'addresses' | 'orderers' | 'users' | 'settings'
+    'info' | 'contacts' | 'addresses' | 'orderers' | 'users' | 'settings' | 'portalOrders'
   >('info')
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
 
@@ -200,14 +206,16 @@ export default function CustomerDetailPage() {
       setCustomerUsers(users)
 
       if (companyId) {
-        const [contacts, addresses, orderers] = await Promise.all([
+        const [contacts, addresses, orderers, orders] = await Promise.all([
           getCustomerContacts(companyId, customerId),
           getCustomerAddresses(companyId, customerId),
           getCustomerOrderers(companyId, customerId),
+          getStaffCustomerPortalOrders(companyId, customerId),
         ])
         setCustomerContacts(contacts)
         setCustomerAddresses(addresses)
         setCustomerOrderers(orderers)
+        setPortalOrders(orders)
       }
     } catch (err) {
       console.error('Error loading customer:', err)
@@ -620,6 +628,24 @@ export default function CustomerDetailPage() {
               activeTab === 'users' ? 'bg-white/20' : 'bg-gray-200'
             }`}>
               {customerUsers.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('portalOrders')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'portalOrders'
+              ? 'bg-[#33d4ff] text-white'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <ClipboardList size={16} />
+          הזמנות פורטל
+          {portalOrders.length > 0 && (
+            <span className={`px-1.5 py-0.5 rounded-full text-xs ${
+              activeTab === 'portalOrders' ? 'bg-white/20' : 'bg-gray-200'
+            }`}>
+              {portalOrders.length}
             </span>
           )}
         </button>
@@ -1078,6 +1104,11 @@ export default function CustomerDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Portal orders tab — every request this customer submitted, any outcome */}
+      {activeTab === 'portalOrders' && (
+        <PortalOrdersSection orders={portalOrders} />
       )}
 
       {/* Settings Tab */}
