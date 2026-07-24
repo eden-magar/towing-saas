@@ -55,6 +55,8 @@ import {
   type AddressData,
   type StorageYardConfirmProp,
 } from '@/app/components/tow-forms/routes/AddressInput'
+import { hasAddressCoordinates } from '@/app/lib/utils/address-coordinates'
+import { MISSING_ADDRESS_COORDINATES_MESSAGE } from '@/app/lib/utils/tow-save-blocking'
 import type { VehicleLookupResult, VehicleType } from '@/app/lib/types'
 import {
   AlertCircle,
@@ -443,9 +445,13 @@ export default function NewCustomerTowRequestPage() {
     }
     if (!pickupAddress.address.trim()) {
       errors.pickupAddress = `${fieldLabels.pickupAddress} הוא שדה חובה`
+    } else if (!hasAddressCoordinates(pickupAddress)) {
+      errors.pickupAddress = MISSING_ADDRESS_COORDINATES_MESSAGE
     }
     if (!dropoffAddress.address.trim()) {
       errors.dropoffAddress = `${fieldLabels.dropoffAddress} הוא שדה חובה`
+    } else if (!hasAddressCoordinates(dropoffAddress)) {
+      errors.dropoffAddress = MISSING_ADDRESS_COORDINATES_MESSAGE
     }
     if (showPickupContacts) {
       if (!form.pickupContactName.trim()) {
@@ -522,7 +528,21 @@ export default function NewCustomerTowRequestPage() {
       return
     }
 
-    if (!validate()) return
+    if (!validate()) {
+      // Open pin-drop for the first address missing coordinates (escape hatch).
+      if (
+        pickupAddress.address.trim() &&
+        !hasAddressCoordinates(pickupAddress)
+      ) {
+        setPinDropModal({ isOpen: true, field: 'pickup' })
+      } else if (
+        dropoffAddress.address.trim() &&
+        !hasAddressCoordinates(dropoffAddress)
+      ) {
+        setPinDropModal({ isOpen: true, field: 'dropoff' })
+      }
+      return
+    }
 
     setSubmitting(true)
     try {

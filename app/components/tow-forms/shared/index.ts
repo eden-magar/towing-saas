@@ -15,8 +15,10 @@ export {
   MISSING_ROUTE_ADDRESSES_MESSAGE,
   MISSING_STORAGE_PLATE_MESSAGE,
   MISSING_STORAGE_DESTINATION_MESSAGE,
+  MISSING_ADDRESS_COORDINATES_MESSAGE,
   STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
   isRequiredTruckTypeError,
+  isMissingAddressCoordinatesError,
   isSaveBlockingValidationError,
 } from './RequiredTruckTypeMissingModal'
 export { VehicleCardActions, vehicleActionTriggerClass, useVehicleActionsCompact } from './VehicleCardActions'

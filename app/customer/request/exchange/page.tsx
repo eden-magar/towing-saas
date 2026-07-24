@@ -51,6 +51,8 @@ import {
   type AddressData,
   type StorageYardConfirmProp,
 } from '@/app/components/tow-forms/routes/AddressInput'
+import { hasAddressCoordinates } from '@/app/lib/utils/address-coordinates'
+import { MISSING_ADDRESS_COORDINATES_MESSAGE } from '@/app/lib/utils/tow-save-blocking'
 import type { VehicleLookupResult, VehicleType } from '@/app/lib/types'
 import {
   AlertCircle,
@@ -562,6 +564,11 @@ export default function NewCustomerExchangeRequestPage() {
     const require = (key: FieldErrorKey, value: string) => {
       if (!value.trim()) errors[key] = `${fieldLabels[key]} הוא שדה חובה`
     }
+    const requireCoords = (key: FieldErrorKey, addr: AddressData) => {
+      if (addr.address.trim() && !hasAddressCoordinates(addr)) {
+        errors[key] = MISSING_ADDRESS_COORDINATES_MESSAGE
+      }
+    }
 
     require('customerOrderNumber', header.customerOrderNumber)
     require('department', header.department)
@@ -579,11 +586,13 @@ export default function NewCustomerExchangeRequestPage() {
       errors.workingVehicleCode = 'קוד רכב הוא שדה חובה'
     }
     require('workingOrigin', working.origin.address)
+    requireCoords('workingOrigin', working.origin)
     if (showWorkingOriginContacts) {
       require('workingOriginContactName', working.originContactName)
       require('workingOriginContactPhone', working.originContactPhone)
     }
     require('workingDestination', working.destination.address)
+    requireCoords('workingDestination', working.destination)
     if (showHubOrWorkingDestContacts) {
       require('workingDestinationContactName', working.destinationContactName)
       require('workingDestinationContactPhone', working.destinationContactPhone)
@@ -601,10 +610,12 @@ export default function NewCustomerExchangeRequestPage() {
     }
     if (exchangePointSplit) {
       require('faultyOrigin', faulty.origin.address)
+      requireCoords('faultyOrigin', faulty.origin)
       require('faultyOriginContactName', faulty.originContactName)
       require('faultyOriginContactPhone', faulty.originContactPhone)
     }
     require('faultyDestination', faulty.destination.address)
+    requireCoords('faultyDestination', faulty.destination)
     if (showFaultyDestinationContacts) {
       require('faultyDestinationContactName', faulty.destinationContactName)
       require('faultyDestinationContactPhone', faulty.destinationContactPhone)
@@ -612,6 +623,23 @@ export default function NewCustomerExchangeRequestPage() {
 
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
+  }
+
+  const openPinForFirstMissingCoords = () => {
+    const candidates: Array<{ addr: AddressData; pin: PinField }> = [
+      { addr: working.origin, pin: 'workingOrigin' },
+      { addr: working.destination, pin: 'workingDestination' },
+    ]
+    if (exchangePointSplit) {
+      candidates.push({ addr: faulty.origin, pin: 'faultyOrigin' })
+    }
+    candidates.push({ addr: faulty.destination, pin: 'faultyDestination' })
+    for (const c of candidates) {
+      if (c.addr.address.trim() && !hasAddressCoordinates(c.addr)) {
+        setPinDropModal({ isOpen: true, field: c.pin })
+        return
+      }
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -623,7 +651,10 @@ export default function NewCustomerExchangeRequestPage() {
       return
     }
 
-    if (!validate()) return
+    if (!validate()) {
+      openPinForFirstMissingCoords()
+      return
+    }
 
     setSubmitting(true)
     try {

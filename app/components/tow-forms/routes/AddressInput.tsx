@@ -599,7 +599,8 @@ export function AddressInput({
     setIsFocused(true)
 
     if (isAddressDataMode) {
-      // Drop stale coordinates until user picks from autocomplete / pin / link
+      // Clear lat/lng/placeId on every keystroke so text and location cannot diverge.
+      // Save paths block coordinate-less addresses — user must re-pick, pin, or paste a link.
       ;(onChange as (data: AddressData) => void)({
         address: newValue,
       })
@@ -607,6 +608,23 @@ export function AddressInput({
       ;(onChange as (value: string) => void)(newValue)
     }
   }
+
+  const hasResolvedCoordinates =
+    isAddressDataMode &&
+    typeof value !== 'string' &&
+    value?.lat != null &&
+    value?.lng != null &&
+    Number.isFinite(Number(value.lat)) &&
+    Number.isFinite(Number(value.lng))
+
+  const showMissingCoordsHint =
+    isAddressDataMode && !!localValue.trim() && !hasResolvedCoordinates && !readOnly
+
+  const missingCoordsHint = showMissingCoordsHint ? (
+    <p className="mt-1 text-xs text-amber-700">
+      חסר מיקום מדויק — בחרו מההצעות, סמנו על המפה, או הדביקו קישור מגוגל מפות / Waze
+    </p>
+  ) : null
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showDropdown && e.key !== 'Escape') return
@@ -893,6 +911,7 @@ export function AddressInput({
                   readOnly ? 'bg-gray-50' : ''
                 }`,
         )}
+        {missingCoordsHint}
         {yardConfirmDialog}
       </div>
     )
@@ -908,6 +927,7 @@ export function AddressInput({
         </label>
       )}
       {renderInputRow(inputClassName)}
+      {missingCoordsHint}
       {yardConfirmDialog}
     </div>
   )

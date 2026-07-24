@@ -1109,6 +1109,8 @@ export function useTowForm(
   // Pin drop modal
   const [pinDropModal, setPinDropModal] = useState<{ isOpen: boolean; field: string | null }>({ isOpen: false, field: null })
   const [pinDropResult, setPinDropResult] = useState<{ pointId: string; data: AddressData } | null>(null)
+  const [coordsBlockPinField, setCoordsBlockPinField] = useState<string | null>(null)
+  const [coordsBlockFieldLabel, setCoordsBlockFieldLabel] = useState<string | null>(null)
 
 
   // ==================== Effects ====================
@@ -3556,6 +3558,41 @@ export function useTowForm(
     if (field?.startsWith('routestop:')) {
       const stopId = field.slice('routestop:'.length)
       updateStop(stopId, { address: data })
+    } else if (field === 'pickup') {
+      setRouteStops((prev) => {
+        const pickupId = findPickupRouteStop(prev)?.id
+        if (!pickupId) return prev
+        return prev.map((s) => (s.id === pickupId ? { ...s, address: data } : s))
+      })
+    } else if (field === 'dropoff') {
+      setRouteStops((prev) => {
+        const dropoffId = findDropoffRouteStop(prev)?.id
+        if (!dropoffId) return prev
+        return prev.map((s) => (s.id === dropoffId ? { ...s, address: data } : s))
+      })
+    } else if (field === 'workingVehicle' || field === 'workingVehicleAddress') {
+      setWorkingVehicleAddress(data)
+    } else if (field === 'workingDestination') {
+      setWorkingVehicleDestinationAddress(data)
+    } else if (field === 'exchange' || field === 'exchangeAddress') {
+      setExchangeAddress(data)
+      if (!exchangePointSplit) {
+        setWorkingVehicleDestinationAddress(data)
+      }
+    } else if (field === 'defectiveDestination' || field === 'defectiveDestinationAddress') {
+      setDefectiveDestinationAddress(data)
+    } else if (field === 'followUp') {
+      setFollowUpAddress(data)
+    } else if (field?.startsWith('stop-before-')) {
+      const stopId = field.slice('stop-before-'.length)
+      setStopsBeforeExchange((prev) =>
+        prev.map((s) => (s.id === stopId ? { ...s, address: data } : s)),
+      )
+    } else if (field?.startsWith('stop-after-')) {
+      const stopId = field.slice('stop-after-'.length)
+      setStopsAfterExchange((prev) =>
+        prev.map((s) => (s.id === stopId ? { ...s, address: data } : s)),
+      )
     } else if (field) {
       setPinDropResult({ pointId: field, data })
     }
@@ -4136,6 +4173,8 @@ export function useTowForm(
     vehiclePlate,
     setSaving,
     setError,
+    setCoordsBlockPinField,
+    setCoordsBlockFieldLabel,
     customers,
     selectedCustomerId,
     customerName,
@@ -4482,6 +4521,8 @@ export function useTowForm(
     // Pin drop
     pinDropModal, setPinDropModal,
     pinDropResult, setPinDropResult,
+    coordsBlockPinField, setCoordsBlockPinField,
+    coordsBlockFieldLabel, setCoordsBlockFieldLabel,
     // Computed
     recommendedPrice,
     finalPrice,

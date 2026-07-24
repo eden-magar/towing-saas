@@ -15,6 +15,13 @@ export const MISSING_STORAGE_PLATE_MESSAGE =
 export const MISSING_STORAGE_DESTINATION_MESSAGE =
   'נבחרה אחסנה ליעד הרכב התקול — יש להזין כתובת יעד'
 
+/**
+ * Address text without lat/lng — Distance Matrix would fall back to ambiguous
+ * string match. Escape hatch: Places pick, pin drop, or Maps/Waze link paste.
+ */
+export const MISSING_ADDRESS_COORDINATES_MESSAGE =
+  'לא ניתן לשמור כתובת ללא מיקום מדויק. בחרו כתובת מההצעות, סמנו סיכה על המפה, או הדביקו קישור מגוגל מפות / Waze'
+
 export const STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE =
   'גרירת ההמשך כבר שובצה — כדי לבטלה, פתח אותה ישירות'
 
@@ -23,12 +30,19 @@ const SAVE_BLOCKING_MESSAGES = new Set<string>([
   MISSING_ROUTE_ADDRESSES_MESSAGE,
   MISSING_STORAGE_PLATE_MESSAGE,
   MISSING_STORAGE_DESTINATION_MESSAGE,
+  MISSING_ADDRESS_COORDINATES_MESSAGE,
   CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE,
   STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
 ])
 
 export function isRequiredTruckTypeError(message: string | null | undefined): boolean {
   return message === REQUIRED_TRUCK_TYPE_MESSAGE
+}
+
+export function isMissingAddressCoordinatesError(
+  message: string | null | undefined,
+): boolean {
+  return message === MISSING_ADDRESS_COORDINATES_MESSAGE
 }
 
 /** Blocking validation that prevents save — show as modal, not top strip. */

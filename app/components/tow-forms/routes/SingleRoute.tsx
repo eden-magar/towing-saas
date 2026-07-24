@@ -544,6 +544,8 @@ export function SingleRoute({
                           if (next && storageAddress) {
                             onDropoffAddressChange({
                               address: storageAddress,
+                              lat: basePriceList?.base_lat ?? undefined,
+                              lng: basePriceList?.base_lng ?? undefined,
                               isPinDropped: false,
                             })
                           }
@@ -658,6 +660,8 @@ export function SingleRoute({
                     if (next && storageAddress) {
                       onDropoffAddressChange({
                         address: storageAddress,
+                        lat: basePriceList?.base_lat ?? undefined,
+                        lng: basePriceList?.base_lng ?? undefined,
                         isPinDropped: false,
                       })
                     }

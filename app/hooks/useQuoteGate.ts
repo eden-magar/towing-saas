@@ -15,7 +15,8 @@ import {
   isCustomTowEditWipeBlocked,
   prepareTowData,
 } from '../lib/utils/tow-save-handler'
-import { REQUIRED_TRUCK_TYPE_MESSAGE } from '../lib/utils/tow-save-blocking'
+import { REQUIRED_TRUCK_TYPE_MESSAGE, MISSING_ADDRESS_COORDINATES_MESSAGE } from '../lib/utils/tow-save-blocking'
+import { findStaffTowMissingCoordinates } from '../lib/utils/address-coordinates'
 import { canApproveQuote, isClosedTowStatus } from '../lib/utils/can-edit-closed-tow'
 
 type Form = ReturnType<typeof useTowForm>
@@ -108,6 +109,28 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
       form.setError(CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE)
       return
     }
+    const missingCoords = findStaffTowMissingCoordinates({
+      towType: form.towType,
+      routeStops: form.routeStops,
+      routePoints: form.routePoints,
+      workingVehicleAddress: form.workingVehicleAddress,
+      workingVehicleDestinationAddress: form.workingVehicleDestinationAddress,
+      exchangeAddress: form.exchangeAddress,
+      exchangePointSplit: form.exchangePointSplit,
+      defectiveDestinationAddress: form.defectiveDestinationAddress,
+      stopsBeforeExchange: form.stopsBeforeExchange,
+      stopsAfterExchange: form.stopsAfterExchange,
+      hasStorageFollowUp: form.hasStorageFollowUp,
+      followUpAddress: form.followUpAddress,
+    })
+    if (missingCoords) {
+      form.setCoordsBlockPinField(missingCoords.pinField)
+      form.setCoordsBlockFieldLabel(missingCoords.label)
+      form.setError(MISSING_ADDRESS_COORDINATES_MESSAGE)
+      return
+    }
+    form.setCoordsBlockPinField(null)
+    form.setCoordsBlockFieldLabel(null)
     form.setSaving(true)
     form.setError('')
     try {

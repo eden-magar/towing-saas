@@ -110,9 +110,22 @@ export function TowCreateWizard() {
           !isRequiredTruckTypeError(form.error)
         }
         message={form.error || ''}
+        fieldLabel={form.coordsBlockFieldLabel}
+        onOpenPinDrop={
+          form.coordsBlockPinField
+            ? () => {
+                form.setPinDropModal({
+                  isOpen: true,
+                  field: form.coordsBlockPinField,
+                })
+              }
+            : null
+        }
         onClose={() => {
           form.setError('')
           form.setTruckTypeError(false)
+          form.setCoordsBlockPinField(null)
+          form.setCoordsBlockFieldLabel(null)
         }}
       />
       <TowTruckTypeSelector

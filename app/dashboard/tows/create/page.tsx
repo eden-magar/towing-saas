@@ -74,7 +74,8 @@ import {
   vehicleActionTriggerClass,
   ManualVehicleEntryTrigger,
 } from '../../../components/tow-forms/shared'
-import { REQUIRED_TRUCK_TYPE_MESSAGE, MISSING_STORAGE_DESTINATION_MESSAGE } from '../../../lib/utils/tow-save-blocking'
+import { REQUIRED_TRUCK_TYPE_MESSAGE, MISSING_STORAGE_DESTINATION_MESSAGE, MISSING_ADDRESS_COORDINATES_MESSAGE } from '../../../lib/utils/tow-save-blocking'
+import { findStaffTowMissingCoordinates } from '../../../lib/utils/address-coordinates'
 import { DriverCalendarPicker } from '../../../components/DriverCalendarPicker'
 import { RouteBuilder } from '../../../components/tow-forms/routes/RouteBuilder'
 import { StorageFollowUpSection } from '../../../components/tow-forms/StorageFollowUpSection'
@@ -483,6 +484,10 @@ function CreateTowForm({
     setPinDropModal,
     pinDropResult,
     setPinDropResult,
+    coordsBlockPinField,
+    setCoordsBlockPinField,
+    coordsBlockFieldLabel,
+    setCoordsBlockFieldLabel,
     recommendedPrice,
     finalPrice,
     priceResult,
@@ -2056,6 +2061,28 @@ function CreateTowForm({
       setError(CUSTOM_TOW_EDIT_WIPE_BLOCKED_MESSAGE)
       return
     }
+    const missingCoords = findStaffTowMissingCoordinates({
+      towType,
+      routeStops,
+      routePoints,
+      workingVehicleAddress,
+      workingVehicleDestinationAddress,
+      exchangeAddress,
+      exchangePointSplit,
+      defectiveDestinationAddress,
+      stopsBeforeExchange,
+      stopsAfterExchange,
+      hasStorageFollowUp,
+      followUpAddress,
+    })
+    if (missingCoords) {
+      setCoordsBlockPinField(missingCoords.pinField)
+      setCoordsBlockFieldLabel(missingCoords.label)
+      setError(MISSING_ADDRESS_COORDINATES_MESSAGE)
+      return
+    }
+    setCoordsBlockPinField(null)
+    setCoordsBlockFieldLabel(null)
     setSaving(true)
     setError('')
     try {
@@ -2394,6 +2421,12 @@ function CreateTowForm({
     persistTowCustomerAddresses,
     setAddressNotice,
     exchangePointSplit,
+    setCoordsBlockPinField,
+    setCoordsBlockFieldLabel,
+    hasStorageFollowUp,
+    followUpAddress,
+    workingVehicleDestinationAddress,
+    workingVehicleAddress,
     flushStorageYardConfirmLogs,
   ])
 
@@ -2660,9 +2693,19 @@ function CreateTowForm({
           isSaveBlockingValidationError(error) && !isRequiredTruckTypeError(error)
         }
         message={error || ''}
+        fieldLabel={coordsBlockFieldLabel}
+        onOpenPinDrop={
+          coordsBlockPinField
+            ? () => {
+                setPinDropModal({ isOpen: true, field: coordsBlockPinField })
+              }
+            : null
+        }
         onClose={() => {
           setError('')
           setTruckTypeError(false)
+          setCoordsBlockPinField(null)
+          setCoordsBlockFieldLabel(null)
         }}
       />
       {/* Host picker for validation CTA — modal portaled; trigger hidden. */}

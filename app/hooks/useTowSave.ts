@@ -36,12 +36,14 @@ import {
   pricesMateriallyDiffer,
 } from '../lib/utils/price-change-confirm'
 import {
+  MISSING_ADDRESS_COORDINATES_MESSAGE,
   MISSING_ROUTE_ADDRESSES_MESSAGE,
   MISSING_STORAGE_DESTINATION_MESSAGE,
   MISSING_STORAGE_PLATE_MESSAGE,
   REQUIRED_TRUCK_TYPE_MESSAGE,
   STORAGE_FOLLOW_UP_LIVE_BLOCK_MESSAGE,
 } from '../lib/utils/tow-save-blocking'
+import { findStaffTowMissingCoordinates } from '../lib/utils/address-coordinates'
 
 const STORAGE_FOLLOW_UP_CANCELLED_ON_EDIT = 'בוטל מעריכת גרירת אב'
 
@@ -96,6 +98,9 @@ interface UseTowSaveParams {
   /** Optional: pass from parent for debug logging (e.g. current saving flag). */
   saving?: boolean
   setError: (v: string) => void
+  /** PinDropModal field id when save blocked for missing coordinates. */
+  setCoordsBlockPinField?: (field: string | null) => void
+  setCoordsBlockFieldLabel?: (label: string | null) => void
   // Customer
   customers: CustomerListItem[]
   selectedCustomerId: string | null
@@ -252,6 +257,8 @@ export function useTowSave(params: UseTowSaveParams) {
     setSaving,
     saving,
     setError,
+    setCoordsBlockPinField,
+    setCoordsBlockFieldLabel,
     customers,
     selectedCustomerId,
     customerName,
@@ -412,6 +419,29 @@ export function useTowSave(params: UseTowSaveParams) {
       return
     }
   }
+
+  const missingCoords = findStaffTowMissingCoordinates({
+    towType,
+    routeStops,
+    routePoints,
+    workingVehicleAddress: workingVehicleSourceAddress,
+    workingVehicleDestinationAddress,
+    exchangeAddress: exchangePointAddress,
+    exchangePointSplit,
+    defectiveDestinationAddress,
+    stopsBeforeExchange,
+    stopsAfterExchange,
+    hasStorageFollowUp,
+    followUpAddress,
+  })
+  if (missingCoords) {
+    setCoordsBlockPinField?.(missingCoords.pinField)
+    setCoordsBlockFieldLabel?.(missingCoords.label)
+    setError(MISSING_ADDRESS_COORDINATES_MESSAGE)
+    return
+  }
+  setCoordsBlockPinField?.(null)
+  setCoordsBlockFieldLabel?.(null)
 
   if (
     isCustomTowEditWipeBlocked({

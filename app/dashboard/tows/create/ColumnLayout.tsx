@@ -299,9 +299,22 @@ export function ColumnLayout({
           !isRequiredTruckTypeError(form.error)
         }
         message={form.error || ''}
+        fieldLabel={form.coordsBlockFieldLabel}
+        onOpenPinDrop={
+          form.coordsBlockPinField
+            ? () => {
+                form.setPinDropModal({
+                  isOpen: true,
+                  field: form.coordsBlockPinField,
+                })
+              }
+            : null
+        }
         onClose={() => {
           form.setError('')
           form.setTruckTypeError(false)
+          form.setCoordsBlockPinField(null)
+          form.setCoordsBlockFieldLabel(null)
         }}
       />
       <TowTruckTypeSelector
@@ -840,6 +853,8 @@ export function ColumnLayout({
                                         if (next && storageAddress) {
                                           form.setDropoffAddress({
                                             address: storageAddress,
+                                            lat: form.basePriceList?.base_lat ?? undefined,
+                                            lng: form.basePriceList?.base_lng ?? undefined,
                                             isPinDropped: false,
                                           })
                                         }
@@ -934,6 +949,8 @@ export function ColumnLayout({
                                           if (next && storageAddress) {
                                             form.setDropoffAddress({
                                               address: storageAddress,
+                                              lat: form.basePriceList?.base_lat ?? undefined,
+                                              lng: form.basePriceList?.base_lng ?? undefined,
                                               isPinDropped: false,
                                             })
                                           }
