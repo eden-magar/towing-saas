@@ -110,6 +110,9 @@ export interface RouteStop {
   address: AddressData
   contactName?: string
   contactPhone?: string
+  /** Pre-filled only when present on the source row; never invented from contact. */
+  recipientName?: string
+  recipientPhone?: string
   notes?: string
   orderNotes?: string
 }
@@ -658,6 +661,8 @@ function hydrateRouteStopsFromRequestPoints(
     },
     contactName: p.contact_name || '',
     contactPhone: p.contact_phone || '',
+    recipientName: p.recipient_name || '',
+    recipientPhone: p.recipient_phone || '',
     notes: p.notes || '',
     orderNotes: p.order_notes || '',
   }))
@@ -859,6 +864,8 @@ export function useTowForm(
   const [orderNumber, setOrderNumber] = useState<string | null>(null)
   const [department, setDepartment] = useState('')
   const [orderedBy, setOrderedBy] = useState('')
+  /** Carried from portal request / existing tow; not shown on staff UI yet. */
+  const [ordererPhone, setOrdererPhone] = useState('')
   
   // Customer info
   const [customerName, setCustomerName] = useState('')
@@ -1995,6 +2002,7 @@ export function useTowForm(
         }
         setDepartment(tow.department || '')
         setOrderedBy(tow.ordered_by || '')
+        setOrdererPhone((tow as { orderer_phone?: string | null }).orderer_phone || '')
         // Payment
         setPaymentMethod((tow as any).payment_method || 'cash')
         setInvoiceName((tow as any).invoice_name || '')
@@ -2347,6 +2355,8 @@ export function useTowForm(
               },
               contactName: p.contact_name || '',
               contactPhone: p.contact_phone || '',
+              recipientName: p.recipient_name || '',
+              recipientPhone: p.recipient_phone || '',
               notes: p.notes || '',
               orderNotes: p.order_notes || '',
             }))
@@ -2586,6 +2596,7 @@ export function useTowForm(
         setOrderNumber(null)
         setDepartment(request.department || '')
         setOrderedBy(request.orderer || '')
+        setOrdererPhone(request.orderer_phone || '')
         setNotes(request.notes || '')
         setStartFromBase(request.start_from_base || false)
         setDropoffToStorage(request.dropoff_to_storage || false)
@@ -2687,6 +2698,10 @@ export function useTowForm(
           const pickupPoint = points.find((p) => p.point_type === 'pickup')
           if (pickupPoint?.is_storage) {
             setPickupFromStorage(true)
+          }
+
+          if (requestVehicle?.stored_vehicle_id) {
+            setSelectedStoredVehicleId(requestVehicle.stored_vehicle_id)
           }
 
           const dropoffPoint = points.find((p) => p.point_type === 'dropoff')
@@ -2792,6 +2807,11 @@ export function useTowForm(
             setManualWeight: setDefectiveManualWeight,
             setManualChassis: setDefectiveManualChassis,
           })
+
+          if (workingRequestVehicle?.stored_vehicle_id) {
+            setSelectedWorkingVehicleId(workingRequestVehicle.stored_vehicle_id)
+            setWorkingVehicleSource('storage')
+          }
 
           const towReason = defectiveRequestVehicle?.tow_reason || ''
           const parsed = parseTowReasonToDefects(towReason)
@@ -4125,6 +4145,7 @@ export function useTowForm(
     customerOrderNumber,
     department,
     orderedBy,
+    ordererPhone,
     towDate,
     towTime,
     towEndDate,
@@ -4293,6 +4314,7 @@ export function useTowForm(
     editTowSnapshot,
     department, setDepartment,
     orderedBy, setOrderedBy,
+    ordererPhone, setOrdererPhone,
     customerName, setCustomerName,
     customerPhone, setCustomerPhone,
     customerEmail, setCustomerEmail,

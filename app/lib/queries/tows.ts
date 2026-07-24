@@ -964,6 +964,8 @@ export interface PreparedTowPoint {
   lng: number | null
   contact_name: string | null
   contact_phone: string | null
+  recipient_name?: string | null
+  recipient_phone?: string | null
   notes: string | null
   order_notes?: string | null
   driver_visited_at?: string | null
@@ -987,6 +989,7 @@ interface CreateTowInput {
   customerOrderNumber?: string
   department?: string | null
   ordered_by?: string | null
+  orderer_phone?: string | null
   customerId?: string
   driverId?: string
   truckId?: string
@@ -1057,6 +1060,7 @@ export async function createTow(input: CreateTowInput) {
       customer_order_number: input.customerOrderNumber || null,
       department: input.department ?? null,
       ordered_by: input.ordered_by ?? null,
+      orderer_phone: input.orderer_phone ?? null,
       customer_id: input.customerId || null,
       driver_id: input.driverId || null,
       truck_id: input.truckId || null,
@@ -1149,6 +1153,8 @@ export async function createTow(input: CreateTowInput) {
     lng: point.lng,
     contact_name: point.contact_name,
     contact_phone: point.contact_phone,
+    recipient_name: point.recipient_name ?? null,
+    recipient_phone: point.recipient_phone ?? null,
     notes: point.notes,
     order_notes: point.order_notes ?? null,
     driver_visited_at: point.driver_visited_at ?? null,
@@ -2139,6 +2145,7 @@ interface UpdateTowInput {
   customerOrderNumber?: string | null
   department?: string | null
   ordered_by?: string | null
+  orderer_phone?: string | null
   notes?: string | null
   priceMode?: string | null
   finalPrice?: number | null
@@ -2243,8 +2250,17 @@ function buildPointOfficeRow(point: PreparedTowPoint, towId: string, forInsert: 
   if (forInsert) {
     row.is_storage = point.isStorage === true
     row.notes = point.notes
+    row.recipient_name = point.recipient_name ?? null
+    row.recipient_phone = point.recipient_phone ?? null
   } else if (point.isStorage !== undefined) {
     row.is_storage = point.isStorage === true
+  }
+  // Preserve driver-filled recipients on edit unless the form explicitly carried values.
+  if (!forInsert && point.recipient_name !== undefined) {
+    row.recipient_name = point.recipient_name
+  }
+  if (!forInsert && point.recipient_phone !== undefined) {
+    row.recipient_phone = point.recipient_phone
   }
   return row
 }
@@ -2559,6 +2575,14 @@ export async function updateTow(input: UpdateTowInput) {
   if (input.ordered_by !== undefined) {
     towUpdates.ordered_by = input.ordered_by
     pushIfChanged('מזמין', existingTow?.ordered_by ?? null, input.ordered_by ?? null)
+  }
+  if (input.orderer_phone !== undefined) {
+    towUpdates.orderer_phone = input.orderer_phone
+    pushIfChanged(
+      'טלפון מזמין',
+      (existingTow as { orderer_phone?: string | null } | null)?.orderer_phone ?? null,
+      input.orderer_phone ?? null
+    )
   }
   if (input.notes !== undefined) {
     towUpdates.notes = input.notes

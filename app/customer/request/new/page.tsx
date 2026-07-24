@@ -476,6 +476,7 @@ export default function NewCustomerTowRequestPage() {
     const base = {
       plateNumber: plate,
       vehicleCode: vehicleCode.trim() || null,
+      storedVehicleId: selectedStoredVehicleId,
       towReason: selectedDefects.length
         ? serializeDefects(selectedDefects)
         : undefined,

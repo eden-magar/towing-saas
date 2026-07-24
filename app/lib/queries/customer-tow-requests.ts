@@ -337,6 +337,7 @@ export async function createFullCustomerTowRequest(
           ? Number(v.totalWeight)
           : null,
       vehicle_code: optionalTrim(v.vehicleCode ?? null),
+      stored_vehicle_id: optionalTrim(v.storedVehicleId ?? null),
       is_working: v.isWorking ?? true,
       tow_reason: optionalTrim(v.towReason ?? null),
       notes: optionalTrim(v.notes ?? null),

@@ -138,6 +138,7 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
         customerId: finalCustomerId,
         customerName: form.customerName,
         customerPhone: form.customerPhone,
+        ordererPhone: form.ordererPhone,
         towDate: form.towDate,
         towTime: form.towTime,
         towEndDate: form.towEndDate,
@@ -158,6 +159,8 @@ export function useQuoteGate(form: Form, options?: QuoteGateOptions) {
                 address: s.address,
                 contactName: s.contactName,
                 contactPhone: s.contactPhone,
+                recipientName: s.recipientName,
+                recipientPhone: s.recipientPhone,
                 notes: s.notes,
                 orderNotes: s.orderNotes,
               }))

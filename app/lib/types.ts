@@ -284,6 +284,7 @@ export interface CustomerTowRequestVehicle {
   chassis: string | null
   total_weight: number | null
   vehicle_code: string | null
+  stored_vehicle_id: string | null
   is_working: boolean
   tow_reason: string | null
   notes: string | null
@@ -381,6 +382,8 @@ export interface CreateCustomerTowRequestVehicleInput {
   totalWeight?: number | null
   /** Company-internal vehicle code (קוד רכב). */
   vehicleCode?: string | null
+  /** Yard vehicle picked on portal (מאחסנה); persisted for convert + reserve. */
+  storedVehicleId?: string | null
   isWorking?: boolean
   towReason?: string | null
   notes?: string | null
@@ -486,6 +489,7 @@ export interface Tow {
   customer_order_number: string | null
   department: string | null
   ordered_by: string | null
+  orderer_phone: string | null
   linked_tow_id: string | null
   payment_method: string | null
   cash_collected: number | null

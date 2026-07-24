@@ -106,6 +106,7 @@ interface UseTowSaveParams {
   customerOrderNumber: string
   department: string
   orderedBy: string
+  ordererPhone?: string
   towDate: string
   towTime: string
   towEndDate: string
@@ -260,6 +261,7 @@ export function useTowSave(params: UseTowSaveParams) {
     customerOrderNumber,
     department,
     orderedBy,
+    ordererPhone,
     towDate,
     towTime,
     towEndDate,
@@ -466,6 +468,7 @@ export function useTowSave(params: UseTowSaveParams) {
       customerPhone,
       department,
       orderedBy,
+      ordererPhone,
       isBusinessCustomer,
       towDate,
       towTime,
@@ -504,6 +507,8 @@ export function useTowSave(params: UseTowSaveParams) {
               address: s.address,
               contactName: s.contactName,
               contactPhone: s.contactPhone,
+              recipientName: s.recipientName,
+              recipientPhone: s.recipientPhone,
               notes: s.notes,
               orderNotes: s.orderNotes,
             }))

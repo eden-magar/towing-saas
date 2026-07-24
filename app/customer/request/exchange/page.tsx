@@ -638,10 +638,14 @@ export default function NewCustomerExchangeRequestPage() {
         orderer: header.orderer.trim(),
         ordererPhone: header.ordererPhone.trim(),
         notes: header.notes.trim() || null,
-        startFromBase: workingFromStorage,
+        // Header deadhead flag — not "working pickup from storage". Keep isStorage on the pickup point.
+        startFromBase: false,
         dropoffToStorage: faultyToStorage,
         vehicles: [
-          buildVehiclePayload(working, { isWorking: true, orderIndex: 0 }),
+          {
+            ...buildVehiclePayload(working, { isWorking: true, orderIndex: 0 }),
+            storedVehicleId: selectedWorkingStoredId,
+          },
           buildVehiclePayload(faulty, {
             isWorking: false,
             towReason: faultyDefects.length

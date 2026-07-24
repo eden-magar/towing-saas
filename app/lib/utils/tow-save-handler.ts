@@ -56,6 +56,8 @@ export interface SaveTowInput {
   customerPhone: string
   department?: string | null
   orderedBy?: string | null
+  /** Optional; carried from portal convert / existing tow. Empty → null. */
+  ordererPhone?: string | null
   /** When false, department/orderedBy are not persisted (saved as null). */
   isBusinessCustomer?: boolean
 
@@ -99,6 +101,8 @@ export interface SaveTowInput {
     address: AddressData
     contactName?: string
     contactPhone?: string
+    recipientName?: string
+    recipientPhone?: string
     notes?: string
     orderNotes?: string
   }[]
@@ -510,6 +514,8 @@ export interface PreparedTowPoint {
   lng: number | null
   contact_name: string | null
   contact_phone: string | null
+  recipient_name?: string | null
+  recipient_phone?: string | null
   notes: string | null
   order_notes?: string | null
   driver_visited_at?: string | null
@@ -542,6 +548,7 @@ export interface PreparedTowData {
   customerOrderNumber?: string
   department?: string | null
   ordered_by?: string | null
+  orderer_phone?: string | null
   customerId?: string
   driverId?: string
   truckId?: string
@@ -1062,6 +1069,8 @@ export function createSingleTowPoints(input: SaveTowInput): PreparedTowPoint[] {
       lng: row.address.lng ?? null,
       contact_name: row.contactName?.trim() || null,
       contact_phone: row.contactPhone?.trim() || null,
+      recipient_name: row.recipientName?.trim() || null,
+      recipient_phone: row.recipientPhone?.trim() || null,
       notes: row.notes?.trim() || null,
       order_notes: row.orderNotes?.trim() || null,
       vehicleIndices: isPickup || isDropoff ? [0] : [],
@@ -1541,6 +1550,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       ? new Date(`${input.towEndDate}T${input.towEndTime}:00`).toISOString()
       : null
   const businessFields = businessTowCustomerFields(input)
+  const ordererPhone = input.ordererPhone?.trim() || null
 
   // גרירה רגילה
   if (input.towType === 'single') {
@@ -1620,6 +1630,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       createdBy: input.userId,
       customerOrderNumber: input.customerOrderNumber,
       ...businessFields,
+      orderer_phone: ordererPhone,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
       truckId: input.preSelectedTruckId || undefined,
@@ -1679,6 +1690,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
       createdBy: input.userId,
       customerOrderNumber: input.customerOrderNumber,
       ...businessFields,
+      orderer_phone: ordererPhone,
       customerId: input.customerId || undefined,
       driverId: input.preSelectedDriverId || undefined,
       truckId: input.preSelectedTruckId || undefined,
@@ -1999,6 +2011,7 @@ export function prepareTowData(input: SaveTowInput): PreparedTowData {
     createdBy: input.userId,
     customerOrderNumber: input.customerOrderNumber,
     ...businessFields,
+    orderer_phone: ordererPhone,
     customerId: input.customerId || undefined,
     driverId: input.preSelectedDriverId || undefined,
     truckId: input.preSelectedTruckId || undefined,
