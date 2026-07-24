@@ -2273,6 +2273,11 @@ export default function TowDetailsPage() {
                             <button
                               type="button"
                               onClick={async () => {
+                                const ok = window.confirm(
+                                  'דחיית בקשת הביטול\n\n' +
+                                    'הלקוח ביקש לבטל את הגרירה. אישור ידחה את הבקשה והגרירה תישאר פעילה. להמשיך?'
+                                )
+                                if (!ok) return
                                 setProcessingCancellation(true)
                                 await rejectCustomerTowCancellationRequest(req.id, user?.id || '')
                                 setAssignBlockBanner(false)
@@ -2306,6 +2311,11 @@ export default function TowDetailsPage() {
                           onClick={async () => {
                             const pending = cancellationRequests.find((r) => r.status === 'pending')
                             if (!pending || !pendingAssignAfterReject) return
+                            const ok = window.confirm(
+                              'דחיית בקשת הביטול ושיבוץ הנהג\n\n' +
+                                'הלקוח ביקש לבטל את הגרירה. אישור ידחה את בקשת הביטול וישבץ את הנהג. להמשיך?'
+                            )
+                            if (!ok) return
                             setProcessingCancellation(true)
                             try {
                               const ok = await rejectCustomerTowCancellationRequest(

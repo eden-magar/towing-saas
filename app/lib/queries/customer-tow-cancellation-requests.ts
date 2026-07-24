@@ -352,6 +352,22 @@ export async function rejectCustomerTowCancellationRequest(
 }
 
 /**
+ * Find the pending customer cancellation for a tow and reject it.
+ * Shared reject step for the "reject-and-assign" escape (tow detail + calendar
+ * surfaces). Callers re-run their own assign afterward — this only handles the
+ * find-pending → reject part so the detection/reject logic is not duplicated.
+ * Returns false when no pending request exists or the reject failed.
+ */
+export async function rejectPendingCancellationForTow(
+  towId: string,
+  reviewerId: string
+): Promise<boolean> {
+  const pending = await getPendingCancellationRequestForTow(towId)
+  if (!pending) return false
+  return rejectCustomerTowCancellationRequest(pending.id, reviewerId)
+}
+
+/**
  * Approve: cancel the tow, then mark the request approved.
  * Staff pick cancelled vs cancelled_charged (+ optional fee) — same as staff cancel modal.
  * Never writes cancellation_details from the customer note.

@@ -23,7 +23,10 @@ import {
   formatPriceRecalcConfirmMessage,
   pricesMateriallyDiffer,
 } from '../../lib/utils/price-change-confirm'
-import { isPendingCancelAssignBlockError } from '../../lib/queries/customer-tow-cancellation-requests'
+import {
+  isPendingCancelAssignBlockError,
+  rejectPendingCancellationForTow,
+} from '../../lib/queries/customer-tow-cancellation-requests'
 import { supabase } from '../../lib/supabase'
 import { 
   ChevronRight,
@@ -562,7 +565,7 @@ function DriverFilterPanel({
 
 export default function CalendarPage() {
   const router = useRouter()
-  const { companyId, loading: authLoading } = useAuth()
+  const { companyId, loading: authLoading, user } = useAuth()
   const [view, setView] = useState<'week' | 'day'>('day')
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([])
   const [showAllDrivers, setShowAllDrivers] = useState(true)
@@ -606,6 +609,9 @@ export default function CalendarPage() {
   const [selectedAssignDriverId, setSelectedAssignDriverId] = useState<string | null>(null)
   const [selectedAssignTruckId, setSelectedAssignTruckId] = useState<string | null>(null)
   const [assigningTow, setAssigningTow] = useState(false)
+  /** Set when an assign is blocked by a pending customer cancellation — offers reject-and-assign inline. */
+  const [assignBlock, setAssignBlock] = useState<{ driverId: string; truckId: string } | null>(null)
+  const [rejectingAssign, setRejectingAssign] = useState(false)
 
   // מודל עדכון מחיר
   const [showPriceUpdateModal, setShowPriceUpdateModal] = useState(false)
@@ -1340,6 +1346,7 @@ const handleSkipPriceUpdate = () => {
   const handleConfirmTowAssign = async () => {
     if (!towToAssign || !selectedAssignDriverId || !selectedAssignTruckId) return
     setAssigningTow(true)
+    setAssignBlock(null)
     try {
       await updateTowSchedule(
         towToAssign.id,
@@ -1356,14 +1363,52 @@ const handleSkipPriceUpdate = () => {
     } catch (error) {
       console.error('Error assigning driver:', error)
       if (isPendingCancelAssignBlockError(error)) {
-        alert(
-          'לא ניתן לשבץ נהג — יש בקשת ביטול ממתינה מהלקוח. פתחו את הגרירה כדי לדחות את הבקשה ולשבץ, או לאשר את הביטול.'
-        )
+        // Keep the modal open and offer reject-and-assign inline (no navigation).
+        setAssignBlock({ driverId: selectedAssignDriverId, truckId: selectedAssignTruckId })
       } else {
         alert('שגיאה בשיבוץ הנהג')
       }
     } finally {
       setAssigningTow(false)
+    }
+  }
+
+  const handleRejectAndAssign = async () => {
+    if (!towToAssign || !assignBlock || !user) return
+    const ok = window.confirm(
+      'דחיית בקשת הביטול ושיבוץ הנהג\n\n' +
+        'הלקוח ביקש לבטל את הגרירה. אישור ידחה את בקשת הביטול וישבץ את הנהג. להמשיך?'
+    )
+    if (!ok) return
+    const { driverId, truckId } = assignBlock
+    setRejectingAssign(true)
+    try {
+      const rejected = await rejectPendingCancellationForTow(towToAssign.id, user.id)
+      if (!rejected) {
+        alert('שגיאה בדחיית בקשת הביטול')
+        return
+      }
+      setAssignBlock(null)
+      setAssigningTow(true)
+      try {
+        await updateTowSchedule(
+          towToAssign.id,
+          new Date(towToAssign.scheduled_at || towToAssign.created_at),
+          driverId,
+          truckId
+        )
+        setTows(tows.map(t =>
+          t.id === towToAssign.id ? { ...t, driver_id: driverId, truck_id: truckId } : t
+        ))
+        closeDriverModal()
+      } catch (err) {
+        console.error('Error assigning driver after reject:', err)
+        alert('הבקשה נדחתה אך השיבוץ נכשל — נסו לשבץ שוב')
+      } finally {
+        setAssigningTow(false)
+      }
+    } finally {
+      setRejectingAssign(false)
     }
   }
 
@@ -1374,6 +1419,7 @@ const handleSkipPriceUpdate = () => {
     setTowToAssign(null)
     setSelectedAssignDriverId(null)
     setSelectedAssignTruckId(null)
+    setAssignBlock(null)
   }
 
   // בחירת יום לתצוגה יומית
@@ -2403,6 +2449,22 @@ const handleSkipPriceUpdate = () => {
             </div>
 
             <div className="p-4 space-y-2">
+              {assignBlock && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-2">
+                  <h3 className="font-bold text-red-800">לא ניתן לשבץ נהג</h3>
+                  <p className="text-sm text-red-700">
+                    יש בקשת ביטול ממתינה מהלקוח. יש לדחות את הבקשה לפני שיבוץ, או לאשר את הביטול.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={rejectingAssign || assigningTow}
+                    onClick={handleRejectAndAssign}
+                    className="mt-1 px-4 py-2 bg-red-600 text-white text-sm rounded-xl font-medium hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {rejectingAssign || assigningTow ? 'מעבד...' : 'דחה בקשה ושובץ מיד'}
+                  </button>
+                </div>
+              )}
               {towToAssign && selectedAssignDriverId ? (() => {
                 const assignDriverTrucks = getDriverTrucks(selectedAssignDriverId)
                 const assignTruckOptions =
