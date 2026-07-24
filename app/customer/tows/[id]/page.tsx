@@ -81,6 +81,7 @@ export default function CustomerTowDetail() {
   }
 
   const canRequestCancel = canSubmitPortalOrders(userRole)
+  const canExpandStops = canSeePortalExpandedStopDetails(userRole)
 
   const refreshCancelRequest = useCallback(async (towId: string) => {
     const latest = await getLatestCancellationRequestForTow(towId)
@@ -545,10 +546,8 @@ export default function CustomerTowDetail() {
 
                 {/* Content */}
                 <div className={`flex-1 ${isLast ? 'pb-0' : 'pb-6'}`}>
-                  <button
-                    onClick={() => setExpandedPoint(isExpanded ? null : point.id)}
-                    className="w-full text-right"
-                  >
+                  {(() => {
+                    const stopHeader = (
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -580,17 +579,33 @@ export default function CustomerTowDetail() {
                         {point.arrived_at && (
                           <span className="text-xs text-gray-400">{formatTime(point.arrived_at)}</span>
                         )}
-                        {isExpanded ? (
-                          <ChevronUp size={16} className="text-gray-400" />
-                        ) : (
-                          <ChevronDown size={16} className="text-gray-400" />
-                        )}
+                        {canExpandStops &&
+                          (isExpanded ? (
+                            <ChevronUp size={16} className="text-gray-400" />
+                          ) : (
+                            <ChevronDown size={16} className="text-gray-400" />
+                          ))}
                       </div>
                     </div>
-                  </button>
+                    )
+
+                    // Roles that can't see the expanded operational details get a
+                    // static row — no toggle, no chevron, so nothing opens onto nothing.
+                    return canExpandStops ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedPoint(isExpanded ? null : point.id)}
+                        className="w-full text-right"
+                      >
+                        {stopHeader}
+                      </button>
+                    ) : (
+                      <div className="w-full text-right">{stopHeader}</div>
+                    )
+                  })()}
 
                   {/* Expanded Details — operational only (admin | manager) */}
-                  {isExpanded && canSeePortalExpandedStopDetails(userRole) && (
+                  {isExpanded && canExpandStops && (
                     <div className="mt-3 space-y-3 bg-gray-50 rounded-lg p-3">
                       {/* Times */}
                       <div className="grid grid-cols-2 gap-3 text-xs">

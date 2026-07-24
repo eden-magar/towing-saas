@@ -224,7 +224,7 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
         (md+). Other routes: main scrolls as usual. Mobile home still page-scrolls.
       */}
       <main
-        className={`mx-auto w-full flex-1 min-h-0 ${
+        className={`mx-auto w-full flex-1 min-h-0 overscroll-contain bg-gt-portal-canvas ${
           isRequestFlow
             ? 'max-w-6xl px-3 py-2 sm:px-4 sm:py-2.5 overflow-y-auto'
             : isHome

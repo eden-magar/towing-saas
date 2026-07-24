@@ -1,8 +1,32 @@
+import { normalizePlate } from '@/app/lib/utils/plate-number'
+
 /**
  * Miniature Israeli-style license plate for portal list rows.
  * LTR digits inside RTL layouts; height aligned with status chips (~22px).
+ *
+ * Israeli plates are 7-8 digits. A value whose digit count falls outside a
+ * tolerant 5-8 range is almost certainly junk data, so it is rendered as plain
+ * text rather than styled as an oversized plate badge.
  */
+const MIN_PLATE_DIGITS = 5
+const MAX_PLATE_DIGITS = 8
+
 export function PortalPlateBadge({ plate }: { plate: string }) {
+  const digitCount = normalizePlate(plate).length
+  const looksLikePlate = digitCount >= MIN_PLATE_DIGITS && digitCount <= MAX_PLATE_DIGITS
+
+  if (!looksLikePlate) {
+    return (
+      <span
+        dir="ltr"
+        title={plate}
+        className="inline-flex shrink-0 items-center max-w-[8.5rem] h-[22px] text-[12px] font-medium tabular-nums text-gray-600 truncate"
+      >
+        {plate}
+      </span>
+    )
+  }
+
   return (
     <span
       dir="ltr"
