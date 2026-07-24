@@ -23,6 +23,7 @@ import {
   formatPriceRecalcConfirmMessage,
   pricesMateriallyDiffer,
 } from '../../lib/utils/price-change-confirm'
+import { isPendingCancelAssignBlockError } from '../../lib/queries/customer-tow-cancellation-requests'
 import { supabase } from '../../lib/supabase'
 import { 
   ChevronRight,
@@ -1354,6 +1355,13 @@ const handleSkipPriceUpdate = () => {
       closeDriverModal()
     } catch (error) {
       console.error('Error assigning driver:', error)
+      if (isPendingCancelAssignBlockError(error)) {
+        alert(
+          'לא ניתן לשבץ נהג — יש בקשת ביטול ממתינה מהלקוח. פתחו את הגרירה כדי לדחות את הבקשה ולשבץ, או לאשר את הביטול.'
+        )
+      } else {
+        alert('שגיאה בשיבוץ הנהג')
+      }
     } finally {
       setAssigningTow(false)
     }

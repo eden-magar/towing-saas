@@ -120,6 +120,13 @@ import {
 } from '../../../lib/queries/tow-share-links'
 import { TowInternalNotesCard } from '../../../components/tows/TowInternalNotesCard'
 import { getRejectionRequestsForTow, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../../../lib/queries/rejection-requests'
+import {
+  getCancellationRequestsForTow,
+  approveCustomerTowCancellationRequest,
+  rejectCustomerTowCancellationRequest,
+  isPendingCancelAssignBlockError,
+  type CustomerTowCancellationRequest,
+} from '../../../lib/queries/customer-tow-cancellation-requests'
 import { supabase } from '../../../lib/supabase'
 import { getDrivers } from '../../../lib/queries/drivers'
 import { getTrucks } from '../../../lib/queries/trucks'
@@ -348,6 +355,18 @@ export default function TowDetailsPage() {
   >([])
   const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
   const [processingRejection, setProcessingRejection] = useState(false)
+  const [cancellationRequests, setCancellationRequests] = useState<CustomerTowCancellationRequest[]>([])
+  const [processingCancellation, setProcessingCancellation] = useState(false)
+  const [showCancelApproveModal, setShowCancelApproveModal] = useState(false)
+  const [cancelApproveCharge, setCancelApproveCharge] = useState(false)
+  const [cancelApprovePercent, setCancelApprovePercent] = useState('')
+  const [assignBlockBanner, setAssignBlockBanner] = useState(false)
+  const [pendingAssignAfterReject, setPendingAssignAfterReject] = useState<{
+    driverId: string
+    truckId: string
+    scheduledAt?: string
+    useNewPrice?: boolean
+  } | null>(null)
   const [timeSurchargesData, setTimeSurchargesData] = useState<TimeSurcharge[]>([])
   const [basePriceList, setBasePriceList] = useState<any>(null)
   const [vatRate, setVatRate] = useState(0.18)
@@ -389,9 +408,10 @@ export default function TowDetailsPage() {
     if (isInitial) setLoading(true)
     else setIsRefreshing(true)
     try {
-      const [towData, rejections, childrenRes, companySettings, openManualItems] = await Promise.all([
+      const [towData, rejections, cancellations, childrenRes, companySettings, openManualItems] = await Promise.all([
         getTowWithPoints(towId),
         getRejectionRequestsForTow(towId),
+        getCancellationRequestsForTow(towId),
         supabase
           .from('tows')
           .select('id, order_number, status, scheduled_at, created_at')
@@ -406,6 +426,7 @@ export default function TowDetailsPage() {
       }
       setTow(towData)
       setRejectionRequests(rejections)
+      setCancellationRequests(cancellations)
       setChildTows(childrenRes.error ? [] : childrenRes.data || [])
       setTowManualItems(openManualItems)
       if (towData) {
@@ -1307,6 +1328,7 @@ export default function TowDetailsPage() {
   const doAssign = async (useNewPrice?: boolean) => {
     if (!selectedDriverId || !selectedTruckId || !tow) return
     setAssigning(true)
+    setAssignBlockBanner(false)
     try {
       await assignDriver(tow.id, selectedDriverId, selectedTruckId, scheduleDate?.toISOString())
       try {
@@ -1329,10 +1351,22 @@ export default function TowDetailsPage() {
       }
       closeDriverModal()
       setPriceChangeModal(null)
+      setPendingAssignAfterReject(null)
       router.push('/dashboard')
     } catch (err) {
       console.error('Error assigning driver:', err)
-      alert('שגיאה בשיבוץ הנהג')
+      if (isPendingCancelAssignBlockError(err)) {
+        setPendingAssignAfterReject({
+          driverId: selectedDriverId,
+          truckId: selectedTruckId,
+          scheduledAt: scheduleDate?.toISOString(),
+          useNewPrice,
+        })
+        setAssignBlockBanner(true)
+        closeDriverModal()
+      } else {
+        alert('שגיאה בשיבוץ הנהג')
+      }
     } finally {
       setAssigning(false)
     }
@@ -2200,6 +2234,146 @@ export default function TowDetailsPage() {
                   </div>
                 </div>
               )}
+
+              {/* בקשת ביטול לקוח פעילה */}
+              {cancellationRequests.some((r) => r.status === 'pending') && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+                  <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-amber-200">
+                    <h2 className="font-bold text-amber-800">בקשת ביטול לקוח ממתינה לטיפול</h2>
+                  </div>
+                  <div className="p-4 sm:p-5 space-y-3">
+                    {cancellationRequests
+                      .filter((r) => r.status === 'pending')
+                      .map((req) => (
+                        <div key={req.id} className="space-y-2">
+                          <div className="text-sm font-medium text-amber-900">
+                            הלקוח ביקש לבטל את הגרירה
+                          </div>
+                          {req.reason_note && (
+                            <div className="text-sm text-amber-700 whitespace-pre-wrap">
+                              סיבה: {req.reason_note}
+                            </div>
+                          )}
+                          <p className="text-xs text-amber-700">
+                            שיבוץ נהג חסום כל עוד הבקשה ממתינה
+                          </p>
+                          <div className="flex gap-2 pt-1 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCancelApproveModal(true)
+                                setCancelApproveCharge(false)
+                                setCancelApprovePercent('')
+                              }}
+                              disabled={processingCancellation}
+                              className="px-4 py-2 bg-green-500 text-white text-sm rounded-xl font-medium hover:bg-green-600 disabled:opacity-50"
+                            >
+                              אשר ביטול
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setProcessingCancellation(true)
+                                await rejectCustomerTowCancellationRequest(req.id, user?.id || '')
+                                setAssignBlockBanner(false)
+                                await refreshTow()
+                                setProcessingCancellation(false)
+                              }}
+                              disabled={processingCancellation}
+                              className="px-4 py-2 bg-red-500 text-white text-sm rounded-xl font-medium hover:bg-red-600 disabled:opacity-50"
+                            >
+                              דחה בקשה
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {assignBlockBanner && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl overflow-hidden">
+                  <div className="px-4 sm:px-5 py-3 sm:py-4">
+                    <h2 className="font-bold text-red-800">לא ניתן לשבץ נהג</h2>
+                    <p className="text-sm text-red-700 mt-1">
+                      יש בקשת ביטול ממתינה מהלקוח. יש לדחות את הבקשה לפני שיבוץ, או לאשר את הביטול.
+                    </p>
+                    {pendingAssignAfterReject &&
+                      cancellationRequests.some((r) => r.status === 'pending') && (
+                        <button
+                          type="button"
+                          disabled={processingCancellation || assigning}
+                          onClick={async () => {
+                            const pending = cancellationRequests.find((r) => r.status === 'pending')
+                            if (!pending || !pendingAssignAfterReject) return
+                            setProcessingCancellation(true)
+                            try {
+                              const ok = await rejectCustomerTowCancellationRequest(
+                                pending.id,
+                                user?.id || ''
+                              )
+                              if (!ok) {
+                                alert('שגיאה בדחיית בקשת הביטול')
+                                return
+                              }
+                              setAssignBlockBanner(false)
+                              await refreshTow()
+                              setSelectedDriverId(pendingAssignAfterReject.driverId)
+                              setSelectedTruckId(pendingAssignAfterReject.truckId)
+                              if (pendingAssignAfterReject.scheduledAt) {
+                                setScheduleDate(new Date(pendingAssignAfterReject.scheduledAt))
+                              }
+                              setAssigning(true)
+                              try {
+                                await assignDriver(
+                                  tow!.id,
+                                  pendingAssignAfterReject.driverId,
+                                  pendingAssignAfterReject.truckId,
+                                  pendingAssignAfterReject.scheduledAt
+                                )
+                                if (
+                                  !(await driverHasCurrentAssignment(
+                                    pendingAssignAfterReject.driverId
+                                  ))
+                                ) {
+                                  await insertDriverTruckAssignments(
+                                    pendingAssignAfterReject.driverId,
+                                    [pendingAssignAfterReject.truckId]
+                                  )
+                                }
+                                if (
+                                  pendingAssignAfterReject.useNewPrice &&
+                                  priceChangeModal
+                                ) {
+                                  await updateTow({
+                                    towId: tow!.id,
+                                    finalPrice: priceChangeModal.newPrice,
+                                    recommendedPrice: priceChangeModal.newPrice,
+                                    priceBreakdown: priceChangeModal.newBreakdown,
+                                  })
+                                }
+                                setPendingAssignAfterReject(null)
+                                setPriceChangeModal(null)
+                                router.push('/dashboard')
+                              } catch (assignErr) {
+                                console.error(assignErr)
+                                alert('הבקשה נדחתה אך השיבוץ נכשל — נסו לשבץ שוב')
+                              } finally {
+                                setAssigning(false)
+                              }
+                            } finally {
+                              setProcessingCancellation(false)
+                            }
+                          }}
+                          className="mt-3 px-4 py-2 bg-red-600 text-white text-sm rounded-xl font-medium hover:bg-red-700 disabled:opacity-50"
+                        >
+                          דחה בקשה ושובץ מיד
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+
               {/* פרטי לקוח */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
@@ -3901,6 +4075,96 @@ export default function TowDetailsPage() {
                 className="flex-1 py-3 bg-violet-600 text-white rounded-xl font-medium hover:bg-violet-700 transition-colors disabled:opacity-50"
               >
                 {manualClosing ? 'סוגר...' : 'כן, התאריך נכון — סגור גרירה'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelApproveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-800">אישור בקשת ביטול לקוח</h3>
+              <p className="text-sm text-gray-500 mt-1">הגרירה תבוטל. ניתן לחייב דמי ביטול.</p>
+            </div>
+            <div className="p-5 space-y-4">
+              <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                <input
+                  type="checkbox"
+                  checked={cancelApproveCharge}
+                  onChange={(e) => setCancelApproveCharge(e.target.checked)}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <div>
+                  <div className="font-medium text-gray-800">חיוב דמי ביטול</div>
+                  <div className="text-sm text-gray-500">סטטוס: בוטל בחיוב</div>
+                </div>
+              </label>
+              {cancelApproveCharge && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">אחוז דמי ביטול</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={cancelApprovePercent}
+                    onChange={(e) => setCancelApprovePercent(e.target.value)}
+                    className="w-full p-3 border border-gray-200 rounded-xl"
+                    placeholder="לדוגמה 50"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCancelApproveModal(false)}
+                disabled={processingCancellation}
+                className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                disabled={processingCancellation}
+                onClick={async () => {
+                  const pending = cancellationRequests.find((r) => r.status === 'pending')
+                  if (!pending || !tow) return
+                  const pct = parseFloat(cancelApprovePercent)
+                  if (cancelApproveCharge && (!Number.isFinite(pct) || pct <= 0)) {
+                    alert('יש להזין אחוז דמי ביטול')
+                    return
+                  }
+                  setProcessingCancellation(true)
+                  try {
+                    const fee =
+                      cancelApproveCharge
+                        ? computeCancellationFee(tow, pct, vatRate)
+                        : undefined
+                    const ok = await approveCustomerTowCancellationRequest(
+                      pending.id,
+                      user?.id || '',
+                      {
+                        charge: cancelApproveCharge,
+                        cancellationFee: fee,
+                      }
+                    )
+                    if (!ok) {
+                      alert('שגיאה באישור בקשת הביטול')
+                      return
+                    }
+                    setShowCancelApproveModal(false)
+                    setAssignBlockBanner(false)
+                    setPendingAssignAfterReject(null)
+                    await refreshTow()
+                  } finally {
+                    setProcessingCancellation(false)
+                  }
+                }}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium disabled:opacity-50"
+              >
+                {processingCancellation ? 'מעבד...' : 'אשר וביטל'}
               </button>
             </div>
           </div>

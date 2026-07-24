@@ -13,7 +13,15 @@
     type ManualActionItem,
   } from '../lib/queries/manual-action-items'
   import { getPendingRejectionRequests, approveRejectionRequest, denyRejectionRequest, REJECTION_REASONS } from '../lib/queries/rejection-requests'
+  import {
+    getPendingCancellationRequests,
+    approveCustomerTowCancellationRequest,
+    rejectCustomerTowCancellationRequest,
+    type PendingCancellationRequestRow,
+  } from '../lib/queries/customer-tow-cancellation-requests'
   import { getPendingCustomerTowRequests } from '../lib/queries/customer-tow-requests'
+  import { getCompanySettings } from '../lib/queries/settings'
+  import { computeCancellationFee } from '../lib/utils/cancellation-fee'
   import { CustomerTowRequestDetailsPanel } from '../components/tow-forms/CustomerTowRequestDetailsPanel'
   import { SelectorModalShell } from '../components/tow-forms/shared/SelectorModalShell'
   import { getAvailableDrivers, getDrivers } from '../lib/queries/drivers'
@@ -208,12 +216,19 @@
     const [manualItems, setManualItems] = useState<ManualActionItem[]>([])
     const [resolvingManualItemId, setResolvingManualItemId] = useState<string | null>(null)
     const [rejectionRequests, setRejectionRequests] = useState<any[]>([])
+    const [cancellationRequests, setCancellationRequests] = useState<PendingCancellationRequestRow[]>([])
     const [incomingRequests, setIncomingRequests] = useState<any[]>([])
     const [viewingIncomingRequest, setViewingIncomingRequest] = useState<{
       id: string
       customerName: string | null
     } | null>(null)
     const [denyConfirmRequest, setDenyConfirmRequest] = useState<typeof rejectionRequests[0] | null>(null)
+    const [cancelApproveRequest, setCancelApproveRequest] = useState<PendingCancellationRequestRow | null>(null)
+    const [cancelDenyRequest, setCancelDenyRequest] = useState<PendingCancellationRequestRow | null>(null)
+    const [cancelChargeFee, setCancelChargeFee] = useState(false)
+    const [cancelFeePercent, setCancelFeePercent] = useState('')
+    const [processingCancelRequest, setProcessingCancelRequest] = useState(false)
+    const [cancelVatRate, setCancelVatRate] = useState(0.18)
     const [availableDrivers, setAvailableDrivers] = useState<any[]>([])
     const [overtimeDrivers, setOvertimeDrivers] = useState<any[]>([])
     const [driversWithLocation, setDriversWithLocation] = useState<any[]>([])
@@ -332,28 +347,36 @@
           alertsData,
           manualItemsData,
           rejectionsData,
+          cancellationsData,
           incomingData,
           driversData,
           overtimeData,
           activeDriversData,
           allDriversData,
+          companySettings,
         ] = await Promise.all([
           getExpiryAlerts(companyId),
           getOpenManualActionItems(companyId),
           getPendingRejectionRequests(companyId),
+          getPendingCancellationRequests(companyId),
           getPendingCustomerTowRequests(companyId),
           getAvailableDrivers(companyId),
           getDriversOvertime(companyId),
           getActiveDriversWithLocation(companyId),
           getDrivers(companyId),
+          getCompanySettings(companyId),
         ])
 
         setAlerts(alertsData)
         setManualItems(manualItemsData)
         setRejectionRequests(rejectionsData)
+        setCancellationRequests(cancellationsData)
         setIncomingRequests(incomingData)
         setAvailableDrivers(driversData)
         setOvertimeDrivers(overtimeData)
+        if (companySettings?.default_vat_percent != null) {
+          setCancelVatRate(companySettings.default_vat_percent / 100)
+        }
 
         const mappedDrivers = activeDriversData
           .map((d: any) => ({
@@ -390,6 +413,16 @@
         setRejectionRequests(rejectionsData)
       } catch (err) {
         console.error('Dashboard rejections refresh error:', err)
+      }
+    }, [companyId])
+
+    const refreshCancellations = useCallback(async () => {
+      if (!companyId) return
+      try {
+        const cancellationsData = await getPendingCancellationRequests(companyId)
+        setCancellationRequests(cancellationsData)
+      } catch (err) {
+        console.error('Dashboard cancellations refresh error:', err)
       }
     }, [companyId])
 
@@ -477,6 +510,7 @@
     const dashboardRealtimeHandlersRef = useRef({
       debouncedRefreshEssential,
       refreshRejections,
+      refreshCancellations,
       refreshIncoming,
       refreshDriversAndMap,
       refreshShiftsAndOvertime,
@@ -485,6 +519,7 @@
     dashboardRealtimeHandlersRef.current = {
       debouncedRefreshEssential,
       refreshRejections,
+      refreshCancellations,
       refreshIncoming,
       refreshDriversAndMap,
       refreshShiftsAndOvertime,
@@ -595,6 +630,9 @@
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_rejection_requests', filter: `company_id=eq.${companyId}` }, () => {
             void dashboardRealtimeHandlersRef.current.refreshRejections()
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_tow_cancellation_requests', filter: `company_id=eq.${companyId}` }, () => {
+            void dashboardRealtimeHandlersRef.current.refreshCancellations()
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_tow_requests', filter: `company_id=eq.${companyId}` }, () => {
             void dashboardRealtimeHandlersRef.current.refreshIncoming()
@@ -992,6 +1030,62 @@
                       </div>
                     )
                   })}
+                </div>
+              </div>
+            )}
+
+            {cancellationRequests.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
+                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                    <span className="leading-snug">בקשות ביטול לקוח</span>
+                  </div>
+                  <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full shrink-0">
+                    {cancellationRequests.length}
+                  </span>
+                </div>
+                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
+                  {cancellationRequests.map((req) => (
+                    <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-700 truncate">
+                          {req.tow?.customer?.name || 'לקוח'}
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">
+                          {req.reason_note?.trim() || 'ללא סיבה'}
+                          {req.tow?.order_number ? ` · #${req.tow.order_number}` : ''}
+                        </div>
+                        <Link
+                          href={`/dashboard/tows/${req.tow_id}`}
+                          className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600"
+                        >
+                          {req.tow?.customer?.name || 'פרטי גרירה'} ←
+                        </Link>
+                        <span className="text-xs text-gray-300 mt-0.5 block">לחץ לטופס הגרירה</span>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCancelApproveRequest(req)
+                            setCancelChargeFee(false)
+                            setCancelFeePercent('')
+                          }}
+                          className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100"
+                        >
+                          אשר
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCancelDenyRequest(req)}
+                          className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
+                        >
+                          דחה
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -1685,6 +1779,158 @@
                     void refreshRejections()
                   }}
                   className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700"
+                >
+                  דחה בקשה
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {cancelApproveRequest && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] overflow-y-auto">
+              <div className="p-5 border-b border-gray-100">
+                <h3 className="text-lg font-bold text-gray-800">אישור בקשת ביטול</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {cancelApproveRequest.tow?.customer?.name || 'לקוח'}
+                  {cancelApproveRequest.tow?.order_number
+                    ? ` · #${cancelApproveRequest.tow.order_number}`
+                    : ''}
+                </p>
+              </div>
+              <div className="p-5 space-y-4">
+                {cancelApproveRequest.reason_note && (
+                  <div className="rounded-xl bg-gray-50 border border-gray-100 p-3 text-sm text-gray-700 whitespace-pre-wrap">
+                    {cancelApproveRequest.reason_note}
+                  </div>
+                )}
+                <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={cancelChargeFee}
+                    onChange={(e) => setCancelChargeFee(e.target.checked)}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-800">חיוב דמי ביטול</div>
+                    <div className="text-sm text-gray-500">הגרירה תסומן כבוטל בחיוב</div>
+                  </div>
+                </label>
+                {cancelChargeFee && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">אחוז דמי ביטול</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={cancelFeePercent}
+                      onChange={(e) => setCancelFeePercent(e.target.value)}
+                      className="w-full p-3 border border-gray-200 rounded-xl"
+                      placeholder="לדוגמה 50"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelApproveRequest(null)
+                    setCancelChargeFee(false)
+                    setCancelFeePercent('')
+                  }}
+                  disabled={processingCancelRequest}
+                  className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!cancelApproveRequest) return
+                    const pct = parseFloat(cancelFeePercent)
+                    if (cancelChargeFee && (!Number.isFinite(pct) || pct <= 0)) {
+                      alert('יש להזין אחוז דמי ביטול')
+                      return
+                    }
+                    setProcessingCancelRequest(true)
+                    try {
+                      const fee =
+                        cancelChargeFee && cancelApproveRequest.tow
+                          ? computeCancellationFee(
+                              cancelApproveRequest.tow,
+                              pct,
+                              cancelVatRate
+                            )
+                          : undefined
+                      const ok = await approveCustomerTowCancellationRequest(
+                        cancelApproveRequest.id,
+                        user?.id || '',
+                        {
+                          charge: cancelChargeFee,
+                          cancellationFee: fee,
+                        }
+                      )
+                      if (!ok) {
+                        alert('שגיאה באישור בקשת הביטול')
+                        return
+                      }
+                      setCancelApproveRequest(null)
+                      setCancelChargeFee(false)
+                      setCancelFeePercent('')
+                      void refreshEssential()
+                      void refreshCancellations()
+                    } catch {
+                      alert('שגיאה באישור בקשת הביטול')
+                    } finally {
+                      setProcessingCancelRequest(false)
+                    }
+                  }}
+                  disabled={processingCancelRequest}
+                  className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium disabled:opacity-50"
+                >
+                  {processingCancelRequest ? 'מעבד...' : 'אשר וביטל'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {cancelDenyRequest && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+              <h3 className="text-lg font-bold text-gray-800 mb-2">דחיית בקשת ביטול</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                האם לדחות את בקשת הביטול של {cancelDenyRequest.tow?.customer?.name || 'הלקוח'}?
+                הגרירה תישאר פעילה.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCancelDenyRequest(null)}
+                  className="flex-1 py-3 border border-gray-200 bg-white text-gray-600 rounded-xl font-medium"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!cancelDenyRequest) return
+                    setProcessingCancelRequest(true)
+                    try {
+                      await rejectCustomerTowCancellationRequest(
+                        cancelDenyRequest.id,
+                        user?.id || ''
+                      )
+                      setCancelDenyRequest(null)
+                      void refreshCancellations()
+                    } finally {
+                      setProcessingCancelRequest(false)
+                    }
+                  }}
+                  disabled={processingCancelRequest}
+                  className="flex-1 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:opacity-50"
                 >
                   דחה בקשה
                 </button>

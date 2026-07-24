@@ -7,6 +7,7 @@ import { TowWithDetails } from '../lib/queries/tows'
 import { DriverWithDetails } from '../lib/types'
 import { recalculateTowPrice, updateTow } from '../lib/queries/tows'
 import { pricesMateriallyDiffer } from '../lib/utils/price-change-confirm'
+import { isPendingCancelAssignBlockError } from '../lib/queries/customer-tow-cancellation-requests'
 import { 
   ChevronRight,
   ChevronLeft,
@@ -538,6 +539,13 @@ const handleSkipPriceUpdate = () => {
         setTowToAssign(null)
       } catch (error) {
         console.error('Error assigning driver:', error)
+        if (isPendingCancelAssignBlockError(error)) {
+          alert(
+            'לא ניתן לשבץ נהג — יש בקשת ביטול ממתינה מהלקוח. פתחו את הגרירה כדי לדחות את הבקשה ולשבץ, או לאשר את הביטול.'
+          )
+        } else {
+          alert('שגיאה בשיבוץ הנהג')
+        }
       }
     }
   }
