@@ -823,12 +823,20 @@
       )
     }
 
-    // Orders with a pending customer withdrawal (Path B) — convert is blocked.
-    const withdrawingOrderIds = new Set(
+    // Path A (tow) cancels stay as their own rows. Path B (order) cancels merge
+    // into the matching incoming-order row so one job is not listed twice.
+    const pathACancellationRequests = cancellationRequests.filter((r) => !!r.tow_id)
+    const pathBCancelByOrderId = new Map(
       cancellationRequests
-        .map((r) => r.customer_tow_request_id)
-        .filter((v): v is string => !!v)
+        .filter((r) => !!r.customer_tow_request_id)
+        .map((r) => [r.customer_tow_request_id as string, r] as const)
     )
+    const sortedIncomingRequests = [...incomingRequests].sort((a, b) => {
+      const aWithdraw = pathBCancelByOrderId.has(a.id) ? 0 : 1
+      const bWithdraw = pathBCancelByOrderId.has(b.id) ? 0 : 1
+      if (aWithdraw !== bWithdraw) return aWithdraw - bWithdraw
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    })
 
     return (
       <div className="flex flex-col gap-3 h-full overflow-hidden" dir="rtl">
@@ -1549,24 +1557,17 @@
                   )}
                 </div>
                 <div className="divide-y divide-gray-50 overflow-y-auto flex-1 min-h-0">
-                  {cancellationRequests.length === 0 && incomingRequests.length === 0 ? (
+                  {pathACancellationRequests.length === 0 &&
+                  sortedIncomingRequests.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות נכנסות</div>
                   ) : (
                     <>
-                      {cancellationRequests.map((req) => {
-                        // Path B (order withdrawal) has no tow — link to the order, not a tow.
-                        const isOrderCancel = !req.tow_id
-                        const custName =
-                          (isOrderCancel
-                            ? req.order?.customer?.name
-                            : req.tow?.customer?.name) || 'לקוח'
-                        const refLabel = isOrderCancel
-                          ? req.order?.customer_order_number
-                            ? ` · ${req.order.customer_order_number}`
-                            : ''
-                          : req.tow?.order_number
-                            ? ` · #${req.tow.order_number}`
-                            : ''
+                      {pathACancellationRequests.map((req) => {
+                        const custName = req.tow?.customer?.name || 'לקוח'
+                        const reason = req.reason_note?.trim() || ''
+                        const refLabel = req.tow?.order_number
+                          ? ` · #${req.tow.order_number}`
+                          : ''
                         return (
                           <div
                             key={`cancel-${req.id}`}
@@ -1578,40 +1579,23 @@
                                   ביטול
                                 </span>
                                 <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-900 border border-amber-200 leading-none">
-                                  {isOrderCancel ? 'הזמנה' : 'גרירה'}
+                                  גרירה
                                 </span>
                                 <span className="text-sm font-medium text-amber-950 truncate">
                                   {custName}
                                 </span>
                               </div>
                               <div className="text-xs text-amber-800/80 truncate">
-                                {req.reason_note?.trim() || 'ללא סיבה'}
-                                {refLabel}
+                                {reason ? `${reason}${refLabel}` : refLabel.replace(/^ · /, '') || 'בקשת ביטול גרירה'}
                               </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              {isOrderCancel ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    req.order &&
-                                    setViewingIncomingRequest({
-                                      id: req.order.id,
-                                      customerName: req.order.customer?.name ?? null,
-                                    })
-                                  }
-                                  className="px-2 py-1 rounded-md border border-amber-200 bg-white text-[10px] font-medium text-amber-900 hover:bg-amber-50 transition-colors whitespace-nowrap"
-                                >
-                                  פרטים
-                                </button>
-                              ) : (
-                                <Link
-                                  href={`/dashboard/tows/${req.tow_id}`}
-                                  className="px-2 py-1 rounded-md border border-amber-200 bg-white text-[10px] font-medium text-amber-900 hover:bg-amber-50 transition-colors whitespace-nowrap"
-                                >
-                                  גרירה
-                                </Link>
-                              )}
+                              <Link
+                                href={`/dashboard/tows/${req.tow_id}`}
+                                className="px-2 py-1 rounded-md border border-amber-200 bg-white text-[10px] font-medium text-amber-900 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                              >
+                                גרירה
+                              </Link>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1634,27 +1618,27 @@
                           </div>
                         )
                       })}
-                      {incomingRequests.map((req) => {
-                        // A customer withdrawal is pending on this order — a rep must
-                        // not convert it. Convert is also blocked in the DB (trigger).
-                        const withdrawing = withdrawingOrderIds.has(req.id)
+                      {sortedIncomingRequests.map((req) => {
+                        const pathBCancel = pathBCancelByOrderId.get(req.id) ?? null
+                        const withdrawing = !!pathBCancel
+                        const reason = pathBCancel?.reason_note?.trim() || ''
                         return (
                           <div
                             key={`order-${req.id}`}
                             className={`px-3 py-2 flex items-center gap-2 min-w-0 ${
-                              withdrawing ? 'bg-amber-50/60' : ''
+                              withdrawing ? 'bg-amber-50/80' : ''
                             }`}
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 min-w-0">
+                                {withdrawing && (
+                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white leading-none">
+                                    ביטול
+                                  </span>
+                                )}
                                 <span className="text-sm font-medium text-gray-700 truncate">
                                   {req.customer?.name || '—'}
                                 </span>
-                                {withdrawing && (
-                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-200">
-                                    בקשת ביטול
-                                  </span>
-                                )}
                                 {req.tow_type === 'exchange' && (
                                   <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-800 border border-violet-200">
                                     תקין תקול
@@ -1667,6 +1651,9 @@
                                 )}
                               </div>
                               <div className="text-xs text-gray-400 truncate">
+                                {withdrawing && reason ? (
+                                  <span className="text-amber-800/80">{reason} · </span>
+                                ) : null}
                                 {formatIncomingScheduledAt(req.scheduled_at)}
                                 {req.customer_order_number ? ` · ${req.customer_order_number}` : ''}
                               </div>
@@ -1685,13 +1672,27 @@
                               >
                                 צפה
                               </button>
-                              {withdrawing ? (
-                                <span
-                                  title="הלקוח ביקש לבטל — יש לטפל בבקשת הביטול תחילה"
-                                  className="px-2 py-1 rounded-md border border-amber-200 bg-amber-50 text-[10px] font-medium text-amber-700 whitespace-nowrap cursor-default"
-                                >
-                                  ממתין לביטול
-                                </span>
+                              {withdrawing && pathBCancel ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCancelApproveRequest(pathBCancel)
+                                      setCancelChargeFee(false)
+                                      setCancelFeePercent('')
+                                    }}
+                                    className="px-2 py-1 rounded-md bg-green-600 text-[10px] font-medium text-white hover:bg-green-700 transition-colors whitespace-nowrap"
+                                  >
+                                    אשר
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCancelDenyRequest(pathBCancel)}
+                                    className="px-2 py-1 rounded-md border border-red-200 bg-white text-[10px] font-medium text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                                  >
+                                    דחה
+                                  </button>
+                                </>
                               ) : (
                                 <button
                                   type="button"
@@ -1919,7 +1920,7 @@
                   </>
                 ) : (
                   <p className="text-sm text-gray-500">
-                    אישור יבטל את ההזמנה הממתינה. ההזמנה תוסר מהתור ותסומן כבוטלה.
+                    אישור יבטל את ההזמנה הממתינה. היא תוסר מתור הבקשות ותישאר בכרטיס הלקוח תחת הזמנות פורטל.
                   </p>
                 )}
               </div>
