@@ -60,6 +60,7 @@ import { MISSING_ADDRESS_COORDINATES_MESSAGE } from '@/app/lib/utils/tow-save-bl
 import type { VehicleLookupResult, VehicleType } from '@/app/lib/types'
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   ClipboardList,
   Loader2,
@@ -1077,14 +1078,29 @@ export default function NewCustomerTowRequestPage() {
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex items-center justify-between gap-2 min-h-[1.25rem]">
                     <h4 className={PORTAL_SECTION_LABEL_CLASS}>יעד</h4>
-                    <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-secondary cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={dropoffToStorage}
-                        onChange={(e) => handleDropoffToStorageChange(e.target.checked)}
-                        className="rounded border-gt-border text-gt-brand focus:ring-gt-brand"
-                      />
-                      לאחסנה
+                    <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                      <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={dropoffToStorage}
+                          onChange={(e) => handleDropoffToStorageChange(e.target.checked)}
+                          className="peer h-4 w-4 appearance-none rounded-[5px] border border-gt-border-field bg-white transition-colors hover:border-gt-border checked:border-gt-brand checked:bg-gt-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gt-brand/30"
+                        />
+                        <Check
+                          size={11}
+                          strokeWidth={3}
+                          className="pointer-events-none absolute text-white opacity-0 peer-checked:opacity-100"
+                        />
+                      </span>
+                      <span
+                        className={
+                          dropoffToStorage
+                            ? 'text-gt-text-secondary font-medium'
+                            : 'text-gt-text-tertiary'
+                        }
+                      >
+                        לאחסנה
+                      </span>
                     </label>
                   </div>
                   <FormField

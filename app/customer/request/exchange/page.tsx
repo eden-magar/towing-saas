@@ -56,6 +56,7 @@ import { MISSING_ADDRESS_COORDINATES_MESSAGE } from '@/app/lib/utils/tow-save-bl
 import type { VehicleLookupResult, VehicleType } from '@/app/lib/types'
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
   ClipboardList,
   Loader2,
@@ -878,16 +879,25 @@ export default function NewCustomerExchangeRequestPage() {
             {opts.routeTitle}
           </h4>
           {opts.storageToggle && (
-            <label className="inline-flex items-center gap-1.5 text-xs text-gt-text-tertiary cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={opts.storageToggle.checked}
-                onChange={(e) => opts.storageToggle!.onChange(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-gt-border text-gt-brand focus:ring-gt-brand focus:ring-offset-0"
-              />
+            <label className="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none">
+              <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={opts.storageToggle.checked}
+                  onChange={(e) => opts.storageToggle!.onChange(e.target.checked)}
+                  className="peer h-4 w-4 appearance-none rounded-[5px] border border-gt-border-field bg-white transition-colors hover:border-gt-border checked:border-gt-brand checked:bg-gt-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gt-brand/30"
+                />
+                <Check
+                  size={11}
+                  strokeWidth={3}
+                  className="pointer-events-none absolute text-white opacity-0 peer-checked:opacity-100"
+                />
+              </span>
               <span
                 className={
-                  opts.storageToggle.checked ? 'text-gt-text-secondary font-medium' : undefined
+                  opts.storageToggle.checked
+                    ? 'text-gt-text-secondary font-medium'
+                    : 'text-gt-text-tertiary'
                 }
               >
                 {opts.storageToggle.label}
@@ -1409,7 +1419,7 @@ export default function NewCustomerExchangeRequestPage() {
                       })}
                     </div>
                     <div
-                      className={`hidden sm:flex h-full min-h-[12.5rem] items-center justify-center rounded-lg border border-dashed border-gt-border-subtle bg-gt-surface-subtle/40 px-3 transition-opacity duration-200 ease-out ${
+                      className={`hidden sm:flex h-full items-center justify-center rounded-lg border border-dashed border-gt-border-subtle bg-gt-surface-subtle/40 px-3 transition-opacity duration-200 ease-out ${
                         exchangePointSplit
                           ? 'opacity-0 pointer-events-none absolute inset-0'
                           : 'opacity-100'
