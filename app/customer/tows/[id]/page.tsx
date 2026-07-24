@@ -22,6 +22,7 @@ import {
   withdrawCustomerTowCancellationRequest,
   type CustomerTowCancellationRequest,
 } from '@/app/lib/queries/customer-tow-cancellation-requests'
+import { PortalPlateBadge } from '@/app/components/shared/PortalPlateBadge'
 import {
   ArrowRight,
   Truck,
@@ -342,7 +343,7 @@ export default function CustomerTowDetail() {
               בקשת הביטול נדחתה — הגרירה עדיין פעילה
             </p>
             <p className="text-sm text-red-700 mt-1">
-              לפנייתכם לחברה לבירור נוסף
+              ניתן לפנות לחברה לבירור נוסף.
             </p>
           </div>
         )}
@@ -499,9 +500,9 @@ export default function CustomerTowDetail() {
                 <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center">
                   <Car size={16} className="text-gray-500" />
                 </div>
-                <div>
-                  <p className="font-medium text-sm text-gray-900">{vehicle.plate_number}</p>
-                  <p className="text-xs text-gray-500">
+                <div className="min-w-0">
+                  <PortalPlateBadge plate={vehicle.plate_number} />
+                  <p className="text-xs text-gray-500 mt-1">
                     {[vehicle.manufacturer, vehicle.model, vehicle.color].filter(Boolean).join(' · ')}
                   </p>
                 </div>

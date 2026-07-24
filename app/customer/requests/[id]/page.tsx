@@ -27,6 +27,7 @@ import type {
 } from '@/app/lib/types'
 import { supabase } from '@/app/lib/supabase'
 import { PORTAL_ERROR_BANNER_CLASS } from '@/app/components/customer-portal/portalRequestActionStyles'
+import { PortalPlateBadge } from '@/app/components/shared/PortalPlateBadge'
 
 /**
  * Narrow the content column (layout caps at max-w-6xl, far wider than this
@@ -440,9 +441,7 @@ export default function CustomerRequestDetailPage() {
                 return (
                   <li key={vehicle.id}>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[15px] font-semibold text-gray-900">
-                        {vehicle.plate_number}
-                      </span>
+                      <PortalPlateBadge plate={vehicle.plate_number} />
                       {makeModel ? (
                         <span className="text-sm text-gray-600">{makeModel}</span>
                       ) : null}
