@@ -220,6 +220,8 @@ export type GetCustomerTowsOptions = {
    * Default `created_at` — preserves existing callers.
    */
   dateField?: CustomerTowDateField
+  /** Restrict to these tow IDs (portal search: IDs come from search_customer_tow_ids). */
+  ids?: string[]
   limit?: number
   offset?: number
 }
@@ -245,6 +247,10 @@ function applyCustomerTowFilters<
   },
 >(query: Q, options: GetCustomerTowsOptions): Q {
   let next = query
+
+  if (options.ids) {
+    next = next.in('id', options.ids)
+  }
 
   if (options.statuses && options.statuses.length > 0) {
     next = next.in('status', options.statuses)
@@ -476,6 +482,62 @@ export async function getCustomerTows(
   const hasMore = count != null ? offset + tows.length < count : tows.length === limit
 
   return { tows, hasMore, total }
+}
+
+export type CustomerTowSearchPage = {
+  tows: CustomerPortalTow[]
+  /** Exact total after status filter over the matched set (for pagination). */
+  total: number
+  /** True when the search matched more rows than the RPC cap returned. */
+  capped: boolean
+}
+
+/**
+ * Portal search across ALL of the customer's tows (not just the loaded page).
+ * Step 1 — search_customer_tow_ids RPC returns matching tow IDs scoped to the
+ * caller's own customer (resolved server-side from auth.uid()) plus the full
+ * DISTINCT match count. Step 2 — fetch those IDs through the existing list path
+ * so columns, customer scoping and the visibility strip stay identical to the
+ * normal list. The status filter and pagination combine over the matched set.
+ */
+export async function searchCustomerTows(
+  customerId: string,
+  options: { query: string; status?: string; limit?: number; offset?: number }
+): Promise<CustomerTowSearchPage> {
+  const limit = options.limit ?? CUSTOMER_PORTAL_TOW_PAGE_SIZE
+  const offset = options.offset ?? 0
+  const query = options.query.trim()
+
+  if (query.length < 2) {
+    return { tows: [], total: 0, capped: false }
+  }
+
+  const { data, error } = await supabase.rpc('search_customer_tow_ids', {
+    p_query: query,
+  })
+
+  if (error) {
+    console.error('Error searching customer tows:', error)
+    return { tows: [], total: 0, capped: false }
+  }
+
+  const rows = (data ?? []) as Array<{ tow_id: string; total_matches: number | string }>
+  const ids = rows.map((r) => r.tow_id)
+  const totalMatches = rows.length > 0 ? Number(rows[0].total_matches) : 0
+  const capped = totalMatches > ids.length
+
+  if (ids.length === 0) {
+    return { tows: [], total: 0, capped: false }
+  }
+
+  const { tows, total } = await getCustomerTows(customerId, {
+    ids,
+    status: options.status,
+    limit,
+    offset,
+  })
+
+  return { tows, total, capped }
 }
 
 /** Exact matching count only — no row payload. */

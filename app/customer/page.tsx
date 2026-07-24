@@ -4,7 +4,7 @@ import { supabase } from '@/app/lib/supabase'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
-import { getCustomerForUser, getCustomerTows, getCustomerStats, CUSTOMER_PORTAL_TOW_PAGE_SIZE } from '@/app/lib/queries/customer-portal'
+import { getCustomerForUser, getCustomerTows, searchCustomerTows, getCustomerStats, CUSTOMER_PORTAL_TOW_PAGE_SIZE } from '@/app/lib/queries/customer-portal'
 import { getCustomerTowRequests } from '@/app/lib/queries/customer-tow-requests'
 import type {
   CustomerPortalRequestListItem,
@@ -13,7 +13,6 @@ import type {
 } from '@/app/lib/types'
 import { resolvePortalVisibilityFlag } from '@/app/lib/utils/portal-visibility'
 import { getCustomerFacingCancellationReason } from '@/app/lib/utils/portal-cancellation'
-import { normalizePlate } from '@/app/lib/utils/plate-number'
 import {
   getFirstPickupLastDropoffAddress,
   getPortalListPlates,
@@ -68,6 +67,37 @@ const pendingRequestBadge = {
 const PORTAL_LIST_SCROLL =
   'space-y-2 min-h-0 flex-1 overflow-y-auto overscroll-contain pe-0.5 pb-1 [scrollbar-width:thin] [scrollbar-color:rgb(209_213_219)_transparent]'
 
+/** Minimum query length before a server-side search fires (mirrors the RPC guard). */
+const PORTAL_SEARCH_MIN_LENGTH = 2
+
+/**
+ * One page of tows. A query of >= 2 chars searches ALL the customer's tows
+ * server-side (combined with the status filter); otherwise the normal paged list.
+ */
+async function fetchCustomerTowsPage(
+  customerId: string,
+  page: number,
+  statusFilter: string,
+  query: string
+): Promise<{ tows: CustomerPortalTow[]; total: number; capped: boolean }> {
+  const offset = (page - 1) * CUSTOMER_PORTAL_TOW_PAGE_SIZE
+  const q = query.trim()
+  if (q.length >= PORTAL_SEARCH_MIN_LENGTH) {
+    return searchCustomerTows(customerId, {
+      query: q,
+      status: statusFilter,
+      limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
+      offset,
+    })
+  }
+  const { tows, total } = await getCustomerTows(customerId, {
+    status: statusFilter,
+    limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
+    offset,
+  })
+  return { tows, total, capped: false }
+}
+
 export default function CustomerDashboard() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -83,7 +113,11 @@ export default function CustomerDashboard() {
   const [totalTows, setTotalTows] = useState(0)
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchCapped, setSearchCapped] = useState(false)
   const [exportModalOpen, setExportModalOpen] = useState(false)
+
+  const isSearching = debouncedSearch.trim().length >= PORTAL_SEARCH_MIN_LENGTH
 
   const totalPages = Math.max(1, Math.ceil(totalTows / CUSTOMER_PORTAL_TOW_PAGE_SIZE))
 
@@ -116,7 +150,18 @@ export default function CustomerDashboard() {
     void load()
   }, [user, authLoading])
 
-  // Server-side page of tows (limit + offset)
+  // Debounce the search box — every keystroke must not hit PostgREST.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchQuery), 350)
+    return () => clearTimeout(id)
+  }, [searchQuery])
+
+  // A new search starts from the first page of results.
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
+
+  // Server-side page of tows (limit + offset), or a server-side search across all pages
   useEffect(() => {
     if (!customerId) return
 
@@ -125,16 +170,17 @@ export default function CustomerDashboard() {
     const loadPage = async () => {
       setPageLoading(true)
       try {
-        const offset = (page - 1) * CUSTOMER_PORTAL_TOW_PAGE_SIZE
-        const { tows: nextTows, total } = await getCustomerTows(customerId, {
-          status: statusFilter,
-          limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
-          offset,
-        })
+        const { tows: nextTows, total, capped } = await fetchCustomerTowsPage(
+          customerId,
+          page,
+          statusFilter,
+          debouncedSearch
+        )
         if (cancelled) return
 
         setTows(nextTows)
         setTotalTows(total)
+        setSearchCapped(capped)
 
         const pages = Math.max(1, Math.ceil(total / CUSTOMER_PORTAL_TOW_PAGE_SIZE))
         if (page > pages) {
@@ -149,7 +195,7 @@ export default function CustomerDashboard() {
     return () => {
       cancelled = true
     }
-  }, [customerId, statusFilter, page])
+  }, [customerId, statusFilter, page, debouncedSearch])
 
   // Realtime
   useEffect(() => {
@@ -162,15 +208,13 @@ export default function CustomerDashboard() {
     }
 
     const refreshTows = () => {
-      const offset = (page - 1) * CUSTOMER_PORTAL_TOW_PAGE_SIZE
-      getCustomerTows(customerId, {
-        status: statusFilter,
-        limit: CUSTOMER_PORTAL_TOW_PAGE_SIZE,
-        offset,
-      }).then(({ tows: nextTows, total }) => {
-        setTows(nextTows)
-        setTotalTows(total)
-      })
+      fetchCustomerTowsPage(customerId, page, statusFilter, debouncedSearch).then(
+        ({ tows: nextTows, total, capped }) => {
+          setTows(nextTows)
+          setTotalTows(total)
+          setSearchCapped(capped)
+        }
+      )
       getCustomerStats(customerId).then(setStats)
     }
 
@@ -187,28 +231,12 @@ export default function CustomerDashboard() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [customerId, statusFilter, page])
+  }, [customerId, statusFilter, page, debouncedSearch])
 
   const handleStatusFilter = (value: string) => {
     setStatusFilter(value)
     setPage(1)
   }
-
-  // Client search within the current page only
-  const filteredTows = tows.filter(tow => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    const plateQuery = normalizePlate(searchQuery)
-    return (
-      tow.order_number?.toLowerCase().includes(q) ||
-      tow.customer_order_number?.toLowerCase().includes(q) ||
-      (plateQuery.length > 0 &&
-        tow.vehicles.some((v) =>
-          normalizePlate(v.plate_number).includes(plateQuery)
-        )) ||
-      tow.points.some(p => p.address?.toLowerCase().includes(q))
-    )
-  })
 
   const getListHeaderText = () => {
     if (totalTows === 0) return 'אין גרירות להצגה'
@@ -216,8 +244,8 @@ export default function CustomerDashboard() {
     const from = (page - 1) * CUSTOMER_PORTAL_TOW_PAGE_SIZE + 1
     const to = Math.min(page * CUSTOMER_PORTAL_TOW_PAGE_SIZE, totalTows)
 
-    if (searchQuery) {
-      return `מציג ${filteredTows.length} בעמוד זה · גרירות ${from}–${to} מתוך ${totalTows}`
+    if (isSearching) {
+      return `תוצאות חיפוש ${from}–${to} מתוך ${totalTows}`
     }
 
     return `מציג ${from}–${to} מתוך ${totalTows} גרירות`
@@ -460,11 +488,28 @@ export default function CustomerDashboard() {
         <div className="min-w-0 flex flex-col gap-2 md:min-h-0 md:overflow-hidden">
           {tows.length === 0 && !pageLoading ? (
             <div className="text-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
-              <Package size={40} className="mx-auto text-gray-300 mb-2" />
-              <p className="text-gray-500 text-sm">לא נמצאו גרירות</p>
+              {isSearching ? (
+                <>
+                  <Search size={40} className="mx-auto text-gray-300 mb-2" />
+                  <p className="text-gray-500 text-sm">לא נמצאו גרירות התואמות לחיפוש</p>
+                </>
+              ) : (
+                <>
+                  <Package size={40} className="mx-auto text-gray-300 mb-2" />
+                  <p className="text-gray-500 text-sm">לא נמצאו גרירות</p>
+                </>
+              )}
             </div>
           ) : (
             <>
+              {isSearching && searchCapped && (
+                <div className="shrink-0 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>
+                    מוצגות 300 התוצאות הראשונות בלבד — צמצמו את החיפוש (מספר הזמנה או מספר רישוי מלא) לתוצאות מדויקות.
+                  </span>
+                </div>
+              )}
               <div className="shrink-0">{paginationBar}</div>
 
               <div className={`${PORTAL_LIST_SCROLL} max-md:flex-none max-md:overflow-visible`}>
@@ -472,13 +517,8 @@ export default function CustomerDashboard() {
                   <div className="flex items-center justify-center py-12 bg-white rounded-xl border border-gray-200 shadow-sm">
                     <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
                   </div>
-                ) : filteredTows.length === 0 ? (
-                  <div className="text-center py-10 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <Search size={32} className="mx-auto text-gray-300 mb-2" />
-                    <p className="text-gray-500 text-sm">לא נמצאו גרירות התואמות לחיפוש</p>
-                  </div>
                 ) : (
-                  filteredTows.map(tow => {
+                  tows.map(tow => {
                     const { from, to } = getFirstAndLast(tow)
                     const progress = getProgress(tow)
                     const stopCount = tow.points.filter((p) => p.point_type === 'stop').length
