@@ -13,7 +13,10 @@ export type CustomerTowCancellationRequest = {
   id: string
   company_id: string
   customer_id: string
-  tow_id: string
+  /** Path A target: converted, unassigned portal tow. XOR with customer_tow_request_id. */
+  tow_id: string | null
+  /** Path B target: pending portal order (no tow yet). XOR with tow_id. */
+  customer_tow_request_id: string | null
   requested_by_user_id: string
   reason_note: string | null
   status: CustomerCancellationRequestStatus
@@ -87,6 +90,56 @@ export async function createCustomerTowCancellationRequest(input: {
 
   if (error) throw error
   return data as CustomerTowCancellationRequest
+}
+
+/**
+ * Portal withdrawal of a pending order (Path B — no tow yet).
+ * INSERTs a cancellation request linked to the ORDER; staff must approve before
+ * the order is dismissed. The order stays in the staff "בקשות נכנסות" queue,
+ * marked as having a pending withdrawal, until a rep approves or rejects.
+ */
+export async function requestPendingCustomerTowRequestCancellation(input: {
+  companyId: string
+  customerId: string
+  customerTowRequestId: string
+  requestedByUserId: string
+  reasonNote?: string | null
+}): Promise<CustomerTowCancellationRequest> {
+  const note = input.reasonNote?.trim() || null
+  const { data, error } = await supabase
+    .from('customer_tow_cancellation_requests')
+    .insert({
+      company_id: input.companyId,
+      customer_id: input.customerId,
+      tow_id: null,
+      customer_tow_request_id: input.customerTowRequestId,
+      requested_by_user_id: input.requestedByUserId,
+      reason_note: note,
+      status: 'pending',
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data as CustomerTowCancellationRequest
+}
+
+/** Pending withdrawal for a specific portal order (Path B), if any. */
+export async function getPendingCancellationRequestForRequest(
+  customerTowRequestId: string
+): Promise<CustomerTowCancellationRequest | null> {
+  const { data, error } = await supabase
+    .from('customer_tow_cancellation_requests')
+    .select('*')
+    .eq('customer_tow_request_id', customerTowRequestId)
+    .eq('status', 'pending')
+    .maybeSingle()
+
+  if (error) {
+    console.error('Error fetching pending request cancellation:', error)
+    return null
+  }
+  return (data as CustomerTowCancellationRequest) || null
 }
 
 /** Customer withdraw: pending → cancelled. */
@@ -173,11 +226,6 @@ export async function countPendingCancellationRequests(
   return count || 0
 }
 
-export type PendingCancellationRequestRow = CustomerTowCancellationRequest & {
-  requesterName: string | null
-  tow: CancellationRequestTow | null
-}
-
 export type CancellationRequestTow = {
   id: string
   order_number: string | null
@@ -188,6 +236,22 @@ export type CancellationRequestTow = {
     distance_price?: number
   } | null
   customer: { id: string; name: string } | null
+}
+
+export type CancellationRequestOrder = {
+  id: string
+  customer_order_number: string | null
+  tow_type: string | null
+  scheduled_at: string | null
+  customer: { id: string; name: string } | null
+}
+
+export type PendingCancellationRequestRow = CustomerTowCancellationRequest & {
+  requesterName: string | null
+  /** Path A target (tow-linked); null for Path B. */
+  tow: CancellationRequestTow | null
+  /** Path B target (pending order); null for Path A. */
+  order: CancellationRequestOrder | null
 }
 
 export async function getPendingCancellationRequests(
@@ -207,24 +271,33 @@ export async function getPendingCancellationRequests(
   if (!data || data.length === 0) return []
 
   const requesterIds = [...new Set(data.map((r) => r.requested_by_user_id).filter(Boolean))]
-  const towIds = data.map((r) => r.tow_id).filter(Boolean)
+  const towIds = data.map((r) => r.tow_id).filter((v): v is string => !!v)
+  const orderIds = data
+    .map((r) => r.customer_tow_request_id)
+    .filter((v): v is string => !!v)
 
-  const [{ data: users }, { data: tows }] = await Promise.all([
+  const [{ data: users }, { data: tows }, { data: orders }] = await Promise.all([
     supabase.from('users').select('id, full_name').in('id', requesterIds.length ? requesterIds : ['none']),
     supabase
       .from('tows')
       .select('id, order_number, final_price, price_mode, price_breakdown, customer:customers(id, name)')
       .in('id', towIds.length ? towIds : ['none']),
+    supabase
+      .from('customer_tow_requests')
+      .select('id, customer_order_number, tow_type, scheduled_at, customer:customers(id, name)')
+      .in('id', orderIds.length ? orderIds : ['none']),
   ])
 
+  const pickCustomer = (raw: unknown): { id: string; name: string } | null => {
+    if (Array.isArray(raw)) return (raw[0] as { id: string; name: string }) ?? null
+    return (raw as { id: string; name: string } | null) ?? null
+  }
+
   return data.map((request) => {
-    const tow = tows?.find((t) => t.id === request.tow_id) || null
-    const customerRaw = tow?.customer as
-      | { id: string; name: string }
-      | { id: string; name: string }[]
-      | null
-      | undefined
-    const customer = Array.isArray(customerRaw) ? customerRaw[0] ?? null : customerRaw ?? null
+    const tow = request.tow_id ? tows?.find((t) => t.id === request.tow_id) || null : null
+    const order = request.customer_tow_request_id
+      ? orders?.find((o) => o.id === request.customer_tow_request_id) || null
+      : null
 
     return {
       ...(request as CustomerTowCancellationRequest),
@@ -235,8 +308,19 @@ export async function getPendingCancellationRequests(
             order_number: tow.order_number,
             final_price: tow.final_price != null ? Number(tow.final_price) : null,
             price_mode: (tow as { price_mode?: string | null }).price_mode ?? null,
-            price_breakdown: (tow as { price_breakdown?: CancellationRequestTow['price_breakdown'] }).price_breakdown ?? null,
-            customer,
+            price_breakdown:
+              (tow as { price_breakdown?: CancellationRequestTow['price_breakdown'] })
+                .price_breakdown ?? null,
+            customer: pickCustomer(tow.customer),
+          }
+        : null,
+      order: order
+        ? {
+            id: order.id,
+            customer_order_number: order.customer_order_number ?? null,
+            tow_type: (order as { tow_type?: string | null }).tow_type ?? null,
+            scheduled_at: (order as { scheduled_at?: string | null }).scheduled_at ?? null,
+            customer: pickCustomer(order.customer),
           }
         : null,
     }
@@ -269,7 +353,7 @@ export async function rejectCustomerTowCancellationRequest(
 
 /**
  * Approve: cancel the tow, then mark the request approved.
- * Staff pick cancelled vs cancelled_charged (+ optional fee) — same semantics as staff cancel modal.
+ * Staff pick cancelled vs cancelled_charged (+ optional fee) — same as staff cancel modal.
  * Never writes cancellation_details from the customer note.
  */
 export async function approveCustomerTowCancellationRequest(
@@ -291,6 +375,56 @@ export async function approveCustomerTowCancellationRequest(
   if (fetchError || !request) {
     console.error('Error fetching cancellation request:', fetchError)
     return false
+  }
+
+  // Path B: pending order, no tow. Approve = dismiss the order (no charge).
+  if (request.customer_tow_request_id && !request.tow_id) {
+    const nowIso = new Date().toISOString()
+    const { data: dismissed, error: dismissError } = await supabase
+      .from('customer_tow_requests')
+      .update({ status: 'dismissed', updated_at: nowIso })
+      .eq('id', request.customer_tow_request_id)
+      .eq('status', 'pending')
+      .is('converted_tow_id', null)
+      .select('id')
+      .maybeSingle()
+
+    if (dismissError || !dismissed) {
+      console.error('Error dismissing order on cancellation approve:', dismissError)
+      return false
+    }
+
+    const { error: rowError } = await supabase
+      .from('customer_tow_cancellation_requests')
+      .update({
+        status: 'approved',
+        reviewed_by: reviewerId,
+        reviewed_at: nowIso,
+        staff_note: options?.staffNote?.trim() || null,
+        updated_at: nowIso,
+      })
+      .eq('id', requestId)
+      .eq('status', 'pending')
+
+    if (rowError) {
+      console.error('Order dismissed but request approve update failed:', rowError)
+      await logManualActionItem({
+        type: 'cancellation_approve_request_update_failed',
+        severity: 'high',
+        message:
+          'הזמנת פורטל בוטלה אך עדכון בקשת הביטול נכשל — נדרש סימון ידני של הבקשה כמאושרת',
+        relatedEntity: request.customer_tow_request_id,
+        details: {
+          error: rowError.message,
+          requestId,
+          customerTowRequestId: request.customer_tow_request_id,
+          source: 'approveCustomerTowCancellationRequest:pathB',
+        },
+      })
+      return false
+    }
+
+    return true
   }
 
   const charge = !!options?.charge && (options.cancellationFee ?? 0) > 0
