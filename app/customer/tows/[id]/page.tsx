@@ -1,7 +1,7 @@
 'use client'
 
 import { supabase } from '@/app/lib/supabase'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/app/lib/AuthContext'
 import { getCustomerForUser, getCustomerTowDetail } from '@/app/lib/queries/customer-portal'
@@ -10,8 +10,18 @@ import {
   resolvePortalVisibilityFlag,
   type PortalVisibilityFlag,
 } from '@/app/lib/utils/portal-visibility'
-import { canSeePortalExpandedStopDetails } from '@/app/lib/utils/portal-roles'
+import {
+  canSeePortalExpandedStopDetails,
+  canSubmitPortalOrders,
+} from '@/app/lib/utils/portal-roles'
 import { getCustomerFacingCancellationReason } from '@/app/lib/utils/portal-cancellation'
+import {
+  createCustomerTowCancellationRequest,
+  getLatestCancellationRequestForTow,
+  isPortalOriginTow,
+  withdrawCustomerTowCancellationRequest,
+  type CustomerTowCancellationRequest,
+} from '@/app/lib/queries/customer-tow-cancellation-requests'
 import {
   ArrowRight,
   Truck,
@@ -55,13 +65,27 @@ export default function CustomerTowDetail() {
   const [expandedPoint, setExpandedPoint] = useState<string | null>(null)
   const [showImages, setShowImages] = useState(false)
   const [customerId, setCustomerId] = useState<string | null>(null)
+  const [companyId, setCompanyId] = useState<string | null>(null)
   const [portalSettings, setPortalSettings] = useState<Record<string, boolean>>({})
   const [userRole, setUserRole] = useState<string>('viewer')
+  const [isPortalOrigin, setIsPortalOrigin] = useState(false)
+  const [cancelRequest, setCancelRequest] = useState<CustomerTowCancellationRequest | null>(null)
+  const [cancelReason, setCancelReason] = useState('')
+  const [showCancelForm, setShowCancelForm] = useState(false)
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [cancelError, setCancelError] = useState('')
 
   const canShow = (flag: PortalVisibilityFlag): boolean => {
     if (!tow) return portalSettings[flag] === true
     return resolvePortalVisibilityFlag(flag, portalSettings, tow)
   }
+
+  const canRequestCancel = canSubmitPortalOrders(userRole)
+
+  const refreshCancelRequest = useCallback(async (towId: string) => {
+    const latest = await getLatestCancellationRequestForTow(towId)
+    setCancelRequest(latest)
+  }, [])
 
   useEffect(() => {
     if (authLoading || !user) return
@@ -69,17 +93,26 @@ export default function CustomerTowDetail() {
     const load = async () => {
       const info = await getCustomerForUser(user.id)
       if (!info) return
-       setCustomerId(info.customerId)
-       setPortalSettings(info.portalSettings || {})
-       setUserRole(info.customerUserRole || 'viewer')
+      setCustomerId(info.customerId)
+      setCompanyId(info.companyId)
+      setPortalSettings(info.portalSettings || {})
+      setUserRole(info.customerUserRole || 'viewer')
 
-      const data = await getCustomerTowDetail(params.id as string, info.customerId)
+      const towId = params.id as string
+      const [data, portalOrigin] = await Promise.all([
+        getCustomerTowDetail(towId, info.customerId),
+        isPortalOriginTow(towId, info.customerId),
+      ])
       setTow(data)
+      setIsPortalOrigin(portalOrigin)
+      if (data) {
+        await refreshCancelRequest(towId)
+      }
       setLoading(false)
     }
 
     load()
-  }, [user, authLoading, params.id])
+  }, [user, authLoading, params.id, refreshCancelRequest])
 
   // Realtime — עדכון חי של פרטי הגרירה
   useEffect(() => {
@@ -97,12 +130,25 @@ export default function CustomerTowDetail() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tow_images' }, () => {
         getCustomerTowDetail(towId, customerId).then(setTow)
       })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customer_tow_cancellation_requests',
+          filter: `tow_id=eq.${towId}`,
+        },
+        () => {
+          void refreshCancelRequest(towId)
+          getCustomerTowDetail(towId, customerId).then(setTow)
+        }
+      )
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [customerId, params.id])
+  }, [customerId, params.id, refreshCancelRequest])
 
   const formatDate = (date: string | null) => {
     if (!date) return '—'
@@ -138,6 +184,44 @@ export default function CustomerTowDetail() {
     return null
   }
 
+  const handleSubmitCancelRequest = async () => {
+    if (!tow || !user || !customerId || !companyId) return
+    setCancelBusy(true)
+    setCancelError('')
+    try {
+      await createCustomerTowCancellationRequest({
+        companyId,
+        customerId,
+        towId: tow.id,
+        requestedByUserId: user.id,
+        reasonNote: cancelReason,
+      })
+      setShowCancelForm(false)
+      setCancelReason('')
+      await refreshCancelRequest(tow.id)
+    } catch (err) {
+      console.error('Error creating cancellation request:', err)
+      setCancelError('לא ניתן לשלוח את בקשת הביטול. נסו שוב או פנו לחברה.')
+    } finally {
+      setCancelBusy(false)
+    }
+  }
+
+  const handleWithdrawCancelRequest = async () => {
+    if (!cancelRequest || cancelRequest.status !== 'pending') return
+    setCancelBusy(true)
+    setCancelError('')
+    try {
+      await withdrawCustomerTowCancellationRequest(cancelRequest.id)
+      await refreshCancelRequest(tow!.id)
+    } catch (err) {
+      console.error('Error withdrawing cancellation request:', err)
+      setCancelError('לא ניתן לבטל את הבקשה. נסו שוב.')
+    } finally {
+      setCancelBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -171,6 +255,13 @@ export default function CustomerTowDetail() {
   const customerNote = isCancelled
     ? tow.cancellation_customer_note?.trim() || null
     : null
+
+  const isAssigned = tow.driver_id != null
+  const isActiveForCancel = !isCancelled && tow.status !== 'completed'
+  const pendingCancel = cancelRequest?.status === 'pending' ? cancelRequest : null
+  const rejectedCancel =
+    !pendingCancel && cancelRequest?.status === 'rejected' ? cancelRequest : null
+  const showCancelSection = isPortalOrigin && isActiveForCancel
 
   return (
     <div className="space-y-6 pb-10">
@@ -219,6 +310,112 @@ export default function CustomerTowDetail() {
               </p>
             )}
           </div>
+        )}
+
+        {showCancelSection && pendingCancel && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <p className="text-sm font-medium text-amber-900">
+              בקשת ביטול נשלחה וממתינה לאישור החברה
+            </p>
+            {pendingCancel.reason_note && (
+              <p className="text-sm text-amber-800 mt-1 whitespace-pre-wrap break-words">
+                {pendingCancel.reason_note}
+              </p>
+            )}
+            {canRequestCancel && (
+              <button
+                type="button"
+                onClick={() => void handleWithdrawCancelRequest()}
+                disabled={cancelBusy}
+                className="mt-2 text-sm font-medium text-amber-900 underline disabled:opacity-50"
+              >
+                משיכת הבקשה
+              </button>
+            )}
+          </div>
+        )}
+
+        {showCancelSection && rejectedCancel && !isCancelled && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5">
+            <p className="text-sm font-medium text-red-800">
+              בקשת הביטול נדחתה — הגרירה עדיין פעילה
+            </p>
+            <p className="text-sm text-red-700 mt-1">
+              לפנייתכם לחברה לבירור נוסף
+            </p>
+          </div>
+        )}
+
+        {showCancelSection && isAssigned && !pendingCancel && !isCancelled && (
+          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+            <p className="text-sm font-medium text-blue-900">
+              הגרירה כבר שובצה לנהג
+            </p>
+            <p className="text-sm text-blue-800 mt-1">
+              לא ניתן לבקש ביטול דרך הפורטל — יש ליצור קשר עם החברה
+            </p>
+          </div>
+        )}
+
+        {showCancelSection &&
+          !isAssigned &&
+          !pendingCancel &&
+          !isCancelled &&
+          canRequestCancel && (
+            <div className="mb-4">
+              {!showCancelForm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCancelForm(true)
+                    setCancelError('')
+                  }}
+                  className="text-sm font-medium text-red-700 hover:text-red-800 underline"
+                >
+                  בקשת ביטול גרירה
+                </button>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-3">
+                  <p className="text-sm font-medium text-gray-800">בקשת ביטול</p>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    rows={3}
+                    placeholder="סיבה (אופציונלי)"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  />
+                  {cancelError && (
+                    <p className="text-sm text-red-600">{cancelError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleSubmitCancelRequest()}
+                      disabled={cancelBusy}
+                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm font-medium disabled:opacity-50"
+                    >
+                      {cancelBusy ? 'שולח...' : 'שליחת בקשה'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCancelForm(false)
+                        setCancelReason('')
+                        setCancelError('')
+                      }}
+                      disabled={cancelBusy}
+                      className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600"
+                    >
+                      ביטול
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+        {cancelError && !showCancelForm && (
+          <p className="mb-4 text-sm text-red-600">{cancelError}</p>
         )}
 
         {/* Info Grid */}

@@ -906,6 +906,8 @@ export interface CustomerPortalTow {
 }
 
 export interface CustomerPortalTowDetail extends CustomerPortalTow {
+  /** Raw assignment flag for portal cancel UX — not stripped by visibility. */
+  driver_id: string | null
   notes: string | null
   visibility_overrides: Record<string, boolean> | null
   show_photos_override: boolean | null

@@ -396,6 +396,7 @@ async function applyPortalVisibilityStripToDetail(
   let next: CustomerPortalTowDetail = {
     ...detail,
     ...listStripped,
+    driver_id: detail.driver_id,
     points: detail.points.map((p) => {
       const strippedPoint = listStripped.points.find((sp) => sp.id === p.id)
       return {
@@ -574,6 +575,8 @@ export async function getCustomerTowDetail(
     .select(`
       id,
       order_number,
+      customer_order_number,
+      driver_id,
       status,
       tow_type,
       scheduled_at,
@@ -635,6 +638,7 @@ export async function getCustomerTowDetail(
 
   const detail: CustomerPortalTowDetail = {
     ...mapCustomerPortalTow(tow, driverByTowId),
+    driver_id: tow.driver_id ?? null,
     notes: tow.notes,
     visibility_overrides: tow.visibility_overrides,
     show_photos_override: tow.show_photos_override,
