@@ -1,12 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser, unauthorizedResponse } from '@/app/lib/auth'
+import { getAuthUser, unauthorizedResponse, forbiddenResponse } from '@/app/lib/auth'
 import type { VehicleLookupResult } from '@/app/lib/types'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+/** Staff/driver only — portal customers must not write the shared MoT cache. */
+const CACHE_WRITE_ROLES = new Set([
+  'dispatcher',
+  'company_admin',
+  'driver',
+  'super_admin',
+])
+
+/**
+ * Server-side ceiling for negative-cache TTL.
+ * Default client miss is 24h; 7d still bounds plate-suppression DoS without
+ * letting a caller pass an effectively unbounded missTtlMs.
+ */
+const MAX_MISS_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 type CacheVehicleBody = {
   licenseNumber?: string
@@ -29,6 +44,9 @@ type CacheVehicleBody = {
 export async function POST(request: NextRequest) {
   const currentUser = await getAuthUser(request)
   if (!currentUser) return unauthorizedResponse()
+  if (!CACHE_WRITE_ROLES.has(currentUser.role)) {
+    return forbiddenResponse()
+  }
 
   let body: CacheVehicleBody
   try {
@@ -66,6 +84,7 @@ export async function POST(request: NextRequest) {
     } else if (Number.isFinite(missTtlDays) && (missTtlDays ?? 0) > 0) {
       ttlMs = missTtlDays! * 24 * 60 * 60 * 1000
     }
+    ttlMs = Math.min(ttlMs, MAX_MISS_TTL_MS)
 
     const now = new Date()
     const expiresAt = new Date(now.getTime() + ttlMs)

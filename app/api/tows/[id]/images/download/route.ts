@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   getAuthUser,
   unauthorizedResponse,
+  forbiddenResponse,
 } from '@/app/lib/auth'
 import { getSupabaseAdmin } from '@/app/lib/server/supabase-admin'
 import { buildTowImagesZip } from '@/app/lib/server/tow-images-zip'
@@ -10,7 +11,16 @@ import { buildTowImagesZip } from '@/app/lib/server/tow-images-zip'
  * Auth + company scope mirrored from:
  * app/api/integrations/legacy-calendar/sync/route.ts
  * (getAuthUser → load tow via service role → same-company check; cross-tenant → 404)
+ *
+ * Role gate: dashboard staff only. Portal customers do not call this route
+ * (ZIP download lives on /dashboard/tows/[id]); public share uses
+ * /api/share/tow/[token]/download instead.
  */
+const IMAGE_DOWNLOAD_ROLES = new Set([
+  'dispatcher',
+  'company_admin',
+  'super_admin',
+])
 
 export async function GET(
   request: NextRequest,
@@ -19,6 +29,9 @@ export async function GET(
   try {
     const currentUser = await getAuthUser(request)
     if (!currentUser) return unauthorizedResponse()
+    if (!IMAGE_DOWNLOAD_ROLES.has(currentUser.role)) {
+      return forbiddenResponse()
+    }
 
     const { id: towId } = await context.params
     if (!towId?.trim()) {
