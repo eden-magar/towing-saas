@@ -30,6 +30,7 @@ import { RoutePoint } from '../components/tow-forms/routes'
 import { insertDriverTruckAssignments, driverHasCurrentAssignment } from '../lib/queries/driver-truck-assignments'
 import { syncTowToLegacyCalendar } from '../lib/integrations/legacy-calendar/client-sync'
 import { markCustomerTowRequestConverted } from '../lib/queries/customer-tow-requests'
+import { getPendingCancellationRequestForRequest } from '../lib/queries/customer-tow-cancellation-requests'
 import { serializeDefects } from '../lib/constants/defects'
 import {
   formatPriceRecalcConfirmMessage,
@@ -887,6 +888,23 @@ export function useTowSave(params: UseTowSaveParams) {
 
     router.push(`/dashboard/tows/${editTowId}`)
     } else {
+      // Convert-flow guard: refuse BEFORE creating the tow if the customer has a
+      // pending withdrawal on this order. Runs ahead of createTow so the failure
+      // mode is "nothing was created" rather than an orphan tow with the order
+      // still pending (which is what the DB trigger would leave if it fired
+      // inside markCustomerTowRequestConverted after the tow already existed).
+      // This is the code-level backstop the UI block cannot guarantee.
+      if (fromRequestId && companyId) {
+        const pendingCancel = await getPendingCancellationRequestForRequest(fromRequestId)
+        if (pendingCancel) {
+          setError(
+            'לא ניתן להמיר לגרירה — יש בקשת ביטול ממתינה מהלקוח. יש לטפל בבקשת הביטול תחילה.'
+          )
+          setSaving(false)
+          return
+        }
+      }
+
       const result = await createTow(towData)
 
       try {

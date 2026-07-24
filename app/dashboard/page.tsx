@@ -823,6 +823,13 @@
       )
     }
 
+    // Orders with a pending customer withdrawal (Path B) — convert is blocked.
+    const withdrawingOrderIds = new Set(
+      cancellationRequests
+        .map((r) => r.customer_tow_request_id)
+        .filter((v): v is string => !!v)
+    )
+
     return (
       <div className="flex flex-col gap-3 h-full overflow-hidden" dir="rtl">
 
@@ -1030,62 +1037,6 @@
                       </div>
                     )
                   })}
-                </div>
-              </div>
-            )}
-
-            {cancellationRequests.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 flex-shrink-0">
-                <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                    <span className="leading-snug">בקשות ביטול לקוח</span>
-                  </div>
-                  <span className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded-full shrink-0">
-                    {cancellationRequests.length}
-                  </span>
-                </div>
-                <div className="divide-y divide-gray-50 overflow-y-auto max-h-40 min-h-0">
-                  {cancellationRequests.map((req) => (
-                    <div key={req.id} className="px-3 py-2 flex items-start gap-2 min-w-0">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-700 truncate">
-                          {req.tow?.customer?.name || 'לקוח'}
-                        </div>
-                        <div className="text-xs text-gray-400 truncate">
-                          {req.reason_note?.trim() || 'ללא סיבה'}
-                          {req.tow?.order_number ? ` · #${req.tow.order_number}` : ''}
-                        </div>
-                        <Link
-                          href={`/dashboard/tows/${req.tow_id}`}
-                          className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600"
-                        >
-                          {req.tow?.customer?.name || 'פרטי גרירה'} ←
-                        </Link>
-                        <span className="text-xs text-gray-300 mt-0.5 block">לחץ לטופס הגרירה</span>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCancelApproveRequest(req)
-                            setCancelChargeFee(false)
-                            setCancelFeePercent('')
-                          }}
-                          className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-lg hover:bg-green-100"
-                        >
-                          אשר
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCancelDenyRequest(req)}
-                          className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"
-                        >
-                          דחה
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}
@@ -1565,75 +1516,200 @@
                 </div>
               </div>
 
-              {/* בקשות נכנסות */}
+              {/* בקשות נכנסות — הזמנות חדשות + בקשות ביטול (ביטולים ראשונים) */}
               <div className="bg-white border border-gray-200 rounded-xl flex flex-col min-w-0 min-h-0">
                 <div className="flex items-start justify-between gap-2 px-3 py-2 border-b border-gray-100 shrink-0">
                   <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 min-w-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#33d4ff] shrink-0" />
+                    <div
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        cancellationRequests.length > 0 ? 'bg-amber-500' : 'bg-[#33d4ff]'
+                      }`}
+                    />
                     <span className="leading-snug">בקשות נכנסות</span>
                   </div>
-                  {incomingRequests.length > 0 && (
-                    <span className="text-sm font-bold px-2 py-0.5 bg-cyan-500 text-white rounded-full shrink-0 min-w-[1.5rem] text-center">
-                      {incomingRequests.length}
-                    </span>
+                  {(cancellationRequests.length > 0 || incomingRequests.length > 0) && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      {cancellationRequests.length > 0 && (
+                        <span
+                          title="בקשות ביטול ממתינות"
+                          className="text-sm font-bold px-2 py-0.5 bg-amber-500 text-white rounded-full min-w-[1.5rem] text-center"
+                        >
+                          {cancellationRequests.length}
+                        </span>
+                      )}
+                      {incomingRequests.length > 0 && (
+                        <span
+                          title="הזמנות חדשות"
+                          className="text-sm font-bold px-2 py-0.5 bg-cyan-500 text-white rounded-full min-w-[1.5rem] text-center"
+                        >
+                          {incomingRequests.length}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="divide-y divide-gray-50 overflow-y-auto flex-1 min-h-0">
-                  {incomingRequests.length === 0 ? (
+                  {cancellationRequests.length === 0 && incomingRequests.length === 0 ? (
                     <div className="px-3 py-3 text-xs text-gray-300 text-center">אין בקשות נכנסות</div>
-                  ) : incomingRequests.map((req) => (
-                    <div
-                      key={req.id}
-                      className="px-3 py-2 flex items-center gap-2 min-w-0"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-sm font-medium text-gray-700 truncate">
-                            {req.customer?.name || '—'}
-                          </span>
-                          {req.tow_type === 'exchange' && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-800 border border-violet-200">
-                              תקין תקול
-                            </span>
-                          )}
-                          {req.tow_type === 'custom' && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-50 text-slate-700 border border-slate-200">
-                              מותאם
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-400 truncate">
-                          {formatIncomingScheduledAt(req.scheduled_at)}
-                          {req.customer_order_number ? ` · ${req.customer_order_number}` : ''}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          title="צפה בפרטי גרירה"
-                          onClick={() =>
-                            setViewingIncomingRequest({
-                              id: req.id,
-                              customerName: req.customer?.name ?? null,
-                            })
-                          }
-                          className="px-2 py-1 rounded-md border border-gray-200 bg-white text-[10px] font-medium text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
-                        >
-                          צפה
-                        </button>
-                        <button
-                          type="button"
-                          title="השלם פרטי גרירה ושגר"
-                          onClick={() =>
-                            router.push(`/dashboard/tows/create?fromRequest=${req.id}`)
-                          }
-                          className="px-2 py-1 rounded-md bg-gt-brand text-[10px] font-medium text-white hover:bg-gt-brand-hover transition-colors whitespace-nowrap"
-                        >
-                          השלם ושגר
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  ) : (
+                    <>
+                      {cancellationRequests.map((req) => {
+                        // Path B (order withdrawal) has no tow — link to the order, not a tow.
+                        const isOrderCancel = !req.tow_id
+                        const custName =
+                          (isOrderCancel
+                            ? req.order?.customer?.name
+                            : req.tow?.customer?.name) || 'לקוח'
+                        const refLabel = isOrderCancel
+                          ? req.order?.customer_order_number
+                            ? ` · ${req.order.customer_order_number}`
+                            : ''
+                          : req.tow?.order_number
+                            ? ` · #${req.tow.order_number}`
+                            : ''
+                        return (
+                          <div
+                            key={`cancel-${req.id}`}
+                            className="px-3 py-2 flex items-center gap-2 min-w-0 bg-amber-50/80"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white leading-none">
+                                  ביטול
+                                </span>
+                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-900 border border-amber-200 leading-none">
+                                  {isOrderCancel ? 'הזמנה' : 'גרירה'}
+                                </span>
+                                <span className="text-sm font-medium text-amber-950 truncate">
+                                  {custName}
+                                </span>
+                              </div>
+                              <div className="text-xs text-amber-800/80 truncate">
+                                {req.reason_note?.trim() || 'ללא סיבה'}
+                                {refLabel}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {isOrderCancel ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    req.order &&
+                                    setViewingIncomingRequest({
+                                      id: req.order.id,
+                                      customerName: req.order.customer?.name ?? null,
+                                    })
+                                  }
+                                  className="px-2 py-1 rounded-md border border-amber-200 bg-white text-[10px] font-medium text-amber-900 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                                >
+                                  פרטים
+                                </button>
+                              ) : (
+                                <Link
+                                  href={`/dashboard/tows/${req.tow_id}`}
+                                  className="px-2 py-1 rounded-md border border-amber-200 bg-white text-[10px] font-medium text-amber-900 hover:bg-amber-50 transition-colors whitespace-nowrap"
+                                >
+                                  גרירה
+                                </Link>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCancelApproveRequest(req)
+                                  setCancelChargeFee(false)
+                                  setCancelFeePercent('')
+                                }}
+                                className="px-2 py-1 rounded-md bg-green-600 text-[10px] font-medium text-white hover:bg-green-700 transition-colors whitespace-nowrap"
+                              >
+                                אשר
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCancelDenyRequest(req)}
+                                className="px-2 py-1 rounded-md border border-red-200 bg-white text-[10px] font-medium text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                              >
+                                דחה
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {incomingRequests.map((req) => {
+                        // A customer withdrawal is pending on this order — a rep must
+                        // not convert it. Convert is also blocked in the DB (trigger).
+                        const withdrawing = withdrawingOrderIds.has(req.id)
+                        return (
+                          <div
+                            key={`order-${req.id}`}
+                            className={`px-3 py-2 flex items-center gap-2 min-w-0 ${
+                              withdrawing ? 'bg-amber-50/60' : ''
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-sm font-medium text-gray-700 truncate">
+                                  {req.customer?.name || '—'}
+                                </span>
+                                {withdrawing && (
+                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-200">
+                                    בקשת ביטול
+                                  </span>
+                                )}
+                                {req.tow_type === 'exchange' && (
+                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-800 border border-violet-200">
+                                    תקין תקול
+                                  </span>
+                                )}
+                                {req.tow_type === 'custom' && (
+                                  <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-50 text-slate-700 border border-slate-200">
+                                    מותאם
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-400 truncate">
+                                {formatIncomingScheduledAt(req.scheduled_at)}
+                                {req.customer_order_number ? ` · ${req.customer_order_number}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                title="צפה בפרטי גרירה"
+                                onClick={() =>
+                                  setViewingIncomingRequest({
+                                    id: req.id,
+                                    customerName: req.customer?.name ?? null,
+                                  })
+                                }
+                                className="px-2 py-1 rounded-md border border-gray-200 bg-white text-[10px] font-medium text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                              >
+                                צפה
+                              </button>
+                              {withdrawing ? (
+                                <span
+                                  title="הלקוח ביקש לבטל — יש לטפל בבקשת הביטול תחילה"
+                                  className="px-2 py-1 rounded-md border border-amber-200 bg-amber-50 text-[10px] font-medium text-amber-700 whitespace-nowrap cursor-default"
+                                >
+                                  ממתין לביטול
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  title="השלם פרטי גרירה ושגר"
+                                  onClick={() =>
+                                    router.push(`/dashboard/tows/create?fromRequest=${req.id}`)
+                                  }
+                                  className="px-2 py-1 rounded-md bg-gt-brand text-[10px] font-medium text-white hover:bg-gt-brand-hover transition-colors whitespace-nowrap"
+                                >
+                                  השלם ושגר
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1793,10 +1869,17 @@
               <div className="p-5 border-b border-gray-100">
                 <h3 className="text-lg font-bold text-gray-800">אישור בקשת ביטול</h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  {cancelApproveRequest.tow?.customer?.name || 'לקוח'}
-                  {cancelApproveRequest.tow?.order_number
-                    ? ` · #${cancelApproveRequest.tow.order_number}`
-                    : ''}
+                  {cancelApproveRequest.tow
+                    ? `${cancelApproveRequest.tow.customer?.name || 'לקוח'}${
+                        cancelApproveRequest.tow.order_number
+                          ? ` · #${cancelApproveRequest.tow.order_number}`
+                          : ''
+                      }`
+                    : `${cancelApproveRequest.order?.customer?.name || 'לקוח'}${
+                        cancelApproveRequest.order?.customer_order_number
+                          ? ` · ${cancelApproveRequest.order.customer_order_number}`
+                          : ''
+                      }`}
                 </p>
               </div>
               <div className="p-5 space-y-4">
@@ -1805,31 +1888,39 @@
                     {cancelApproveRequest.reason_note}
                   </div>
                 )}
-                <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={cancelChargeFee}
-                    onChange={(e) => setCancelChargeFee(e.target.checked)}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <div>
-                    <div className="font-medium text-gray-800">חיוב דמי ביטול</div>
-                    <div className="text-sm text-gray-500">הגרירה תסומן כבוטל בחיוב</div>
-                  </div>
-                </label>
-                {cancelChargeFee && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">אחוז דמי ביטול</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={cancelFeePercent}
-                      onChange={(e) => setCancelFeePercent(e.target.value)}
-                      className="w-full p-3 border border-gray-200 rounded-xl"
-                      placeholder="לדוגמה 50"
-                    />
-                  </div>
+                {cancelApproveRequest.tow ? (
+                  <>
+                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={cancelChargeFee}
+                        onChange={(e) => setCancelChargeFee(e.target.checked)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <div>
+                        <div className="font-medium text-gray-800">חיוב דמי ביטול</div>
+                        <div className="text-sm text-gray-500">הגרירה תסומן כבוטל בחיוב</div>
+                      </div>
+                    </label>
+                    {cancelChargeFee && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">אחוז דמי ביטול</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={cancelFeePercent}
+                          onChange={(e) => setCancelFeePercent(e.target.value)}
+                          className="w-full p-3 border border-gray-200 rounded-xl"
+                          placeholder="לדוגמה 50"
+                        />
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    אישור יבטל את ההזמנה הממתינה. ההזמנה תוסר מהתור ותסומן כבוטלה.
+                  </p>
                 )}
               </div>
               <div className="p-5 border-t border-gray-100 bg-gray-50 flex gap-3">
@@ -1881,6 +1972,7 @@
                       setCancelFeePercent('')
                       void refreshEssential()
                       void refreshCancellations()
+                      void refreshIncoming()
                     } catch {
                       alert('שגיאה באישור בקשת הביטול')
                     } finally {
@@ -1902,8 +1994,11 @@
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-2">דחיית בקשת ביטול</h3>
               <p className="text-sm text-gray-600 mb-6">
-                האם לדחות את בקשת הביטול של {cancelDenyRequest.tow?.customer?.name || 'הלקוח'}?
-                הגרירה תישאר פעילה.
+                האם לדחות את בקשת הביטול של{' '}
+                {cancelDenyRequest.tow?.customer?.name ||
+                  cancelDenyRequest.order?.customer?.name ||
+                  'הלקוח'}
+                ? {cancelDenyRequest.tow ? 'הגרירה תישאר פעילה.' : 'ההזמנה תישאר פעילה וניתנת להמרה.'}
               </p>
               <div className="flex gap-3">
                 <button
